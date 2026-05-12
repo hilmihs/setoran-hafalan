@@ -59,6 +59,7 @@ export interface Peserta {
   gender: Gender;
   kelas_id: string;
   whatsapp_number: string;
+  password_hash: string | null;
   active: boolean;
   created_at: string;
 }
@@ -99,6 +100,14 @@ export interface PesertaWithKelas extends Peserta {
 }
 
 // Session types
+export interface PesertaSession {
+  role: 'peserta';
+  peserta_id: string;
+  name: string;
+  gender: Gender;
+  kelas_id: string;
+}
+
 export interface MusyrifSession {
   role: 'musyrif';
   musyrif_id: string;
@@ -112,4 +121,5 @@ export interface KoordinatorSession {
   name: string;
 }
 
-export type Session = MusyrifSession | KoordinatorSession;
+export type Session = PesertaSession | MusyrifSession | KoordinatorSession;
+export type Role = Session['role'];

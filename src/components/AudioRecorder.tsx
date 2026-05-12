@@ -1,8 +1,9 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import { Icon, Waveform } from './icons';
 
-const MAX_DURATION_SEC = 5 * 60;
+const MAX_DURATION_SEC = 15 * 60;
 
 type State =
   | { kind: 'idle' }
@@ -21,10 +22,13 @@ export function AudioRecorder({
   const [state, setState] = useState<State>({ kind: 'idle' });
   const [elapsed, setElapsed] = useState(0);
   const [error, setError] = useState<string | null>(null);
+  const [playing, setPlaying] = useState(false);
+  const [playPos, setPlayPos] = useState(0);
   const recorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
   const streamRef = useRef<MediaStream | null>(null);
   const tickRef = useRef<number | null>(null);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
 
   useEffect(() => {
     return () => {
@@ -71,9 +75,10 @@ export function AudioRecorder({
         setElapsed(e);
         if (e >= MAX_DURATION_SEC) stop();
       }, 250);
-    } catch (e: any) {
+    } catch (e: unknown) {
+      const name = (e as { name?: string } | null)?.name;
       setError(
-        e?.name === 'NotAllowedError'
+        name === 'NotAllowedError'
           ? 'Izin mikrofon ditolak. Aktifkan di pengaturan browser.'
           : 'Tidak bisa mengakses mikrofon.'
       );
@@ -91,66 +96,158 @@ export function AudioRecorder({
   }
 
   function reset() {
+    audioRef.current?.pause();
+    setPlaying(false);
+    setPlayPos(0);
     if (state.kind === 'recorded') URL.revokeObjectURL(state.url);
     setState({ kind: 'idle' });
     setElapsed(0);
     onChange(null, null);
   }
 
-  const isRecording = state.kind === 'recording';
-  const isDone = state.kind === 'recorded';
+  function togglePlay() {
+    const a = audioRef.current;
+    if (!a) return;
+    if (a.paused) {
+      a.play();
+    } else {
+      a.pause();
+    }
+  }
 
   return (
-    <div className="border border-stone-200 rounded-lg p-4 space-y-3 bg-white">
-      <div className="flex items-baseline justify-between">
-        <h3 className="font-medium text-stone-800">{label}</h3>
-        {isDone && (
-          <span className="text-xs text-green-700">
-            ✓ direkam ({formatTime(state.durationSec)})
-          </span>
-        )}
-        {isRecording && (
-          <span className="text-xs text-red-600">● merekam {formatTime(elapsed)}</span>
-        )}
+    <div className="rec">
+      <div className="rec-head">
+        <div className="title">{label}</div>
+        <Status state={state.kind} elapsed={elapsed} durationSec={state.kind === 'recorded' ? state.durationSec : 0} />
       </div>
 
-      {error && <p className="text-sm text-red-600">{error}</p>}
+      {error && (
+        <p style={{ color: 'var(--merah-ink)', fontSize: 12, marginBottom: 8 }}>{error}</p>
+      )}
 
       {state.kind === 'idle' && (
         <button
           type="button"
           onClick={start}
           disabled={disabled}
-          className="w-full py-2 px-4 bg-stone-800 text-white rounded hover:bg-stone-700 disabled:opacity-50"
+          className="rec-start"
         >
-          Mulai Rekam
+          <span className="ic">{Icon.mic(16)}</span>
+          <span className="txt">Mulai rekam</span>
+          <span className="hint">maks 15 min</span>
         </button>
       )}
 
       {state.kind === 'recording' && (
-        <button
-          type="button"
-          onClick={stop}
-          className="w-full py-2 px-4 bg-red-600 text-white rounded hover:bg-red-700"
-        >
-          Berhenti
-        </button>
+        <div>
+          <div className="wave rec">
+            <Waveform full progress={1} height={36} />
+          </div>
+          <div className="rec-action">
+            <button
+              type="button"
+              className="play"
+              onClick={stop}
+              style={{ background: 'var(--merah)' }}
+              aria-label="Berhenti merekam"
+            >
+              <span
+                style={{
+                  width: 10,
+                  height: 10,
+                  background: '#fff',
+                  borderRadius: 2,
+                  display: 'inline-block',
+                }}
+              />
+            </button>
+            <span className="time">{formatTime(elapsed)}</span>
+            <button type="button" className="stop" onClick={stop}>
+              ● berhenti
+            </button>
+          </div>
+        </div>
       )}
 
       {state.kind === 'recorded' && (
-        <div className="space-y-2">
-          <audio src={state.url} controls className="w-full" />
-          <button
-            type="button"
-            onClick={reset}
-            disabled={disabled}
-            className="w-full py-2 px-4 bg-stone-200 text-stone-800 rounded hover:bg-stone-300 disabled:opacity-50 text-sm"
-          >
-            Rekam Ulang
-          </button>
+        <div>
+          <audio
+            ref={audioRef}
+            src={state.url}
+            onPlay={() => setPlaying(true)}
+            onPause={() => setPlaying(false)}
+            onEnded={() => {
+              setPlaying(false);
+              setPlayPos(0);
+            }}
+            onTimeUpdate={(e) => {
+              const el = e.currentTarget;
+              if (el.duration > 0) setPlayPos(el.currentTime / el.duration);
+            }}
+            style={{ display: 'none' }}
+          />
+          <div className={`wave ${playing ? 'done' : 'done'}`}>
+            <Waveform progress={playPos || 1} height={36} />
+          </div>
+          <div className="rec-action">
+            <button
+              type="button"
+              className="play"
+              onClick={togglePlay}
+              aria-label={playing ? 'Jeda' : 'Putar'}
+            >
+              {playing ? (
+                <svg width={12} height={12} viewBox="0 0 12 12" fill="currentColor" aria-hidden>
+                  <rect x="3" y="2.5" width="2.2" height="7" rx="0.6" />
+                  <rect x="6.8" y="2.5" width="2.2" height="7" rx="0.6" />
+                </svg>
+              ) : (
+                Icon.play(12)
+              )}
+            </button>
+            <span className="time">
+              {formatTime(Math.round(playPos * state.durationSec))} / {formatTime(state.durationSec)}
+            </span>
+            <button type="button" className="redo" onClick={reset} disabled={disabled}>
+              {Icon.redo()} rekam ulang
+            </button>
+          </div>
         </div>
       )}
     </div>
+  );
+}
+
+function Status({
+  state,
+  elapsed,
+  durationSec,
+}: {
+  state: 'idle' | 'recording' | 'recorded';
+  elapsed: number;
+  durationSec: number;
+}) {
+  if (state === 'recording') {
+    return (
+      <span className="status rec">
+        <span className="dot" />
+        <span className="t-mono">{formatTime(elapsed)}</span>
+      </span>
+    );
+  }
+  if (state === 'recorded') {
+    return (
+      <span className="status done">
+        <span className="dot" />
+        <span className="t-mono">{formatTime(durationSec)}</span>
+      </span>
+    );
+  }
+  return (
+    <span className="status">
+      <span className="dot" /> belum direkam
+    </span>
   );
 }
 

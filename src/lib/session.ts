@@ -26,6 +26,14 @@ export async function getSession() {
   return getIronSession<SessionData>(cookies(), sessionOptions);
 }
 
+export async function requirePeserta() {
+  const s = await getSession();
+  if (!s.session || s.session.role !== 'peserta') {
+    throw new Error('UNAUTHORIZED');
+  }
+  return s.session;
+}
+
 export async function requireMusyrif() {
   const s = await getSession();
   if (!s.session || s.session.role !== 'musyrif') {

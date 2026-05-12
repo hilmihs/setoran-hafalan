@@ -4,6 +4,7 @@ import { getSession } from '@/lib/session';
 import { supabaseAdmin } from '@/lib/supabase-admin';
 import { signedAudioUrl } from '@/lib/storage';
 import { CekForm, type RekamanView } from '@/components/CekForm';
+import { Icon } from '@/components/icons';
 import { formatWeekRange } from '@/lib/week';
 import { JENIS_REKAMAN, type JenisRekaman } from '@/types/db';
 
@@ -25,7 +26,11 @@ export default async function CekPage({ params }: { params: { id: string } }) {
     .maybeSingle();
 
   if (!setoran) {
-    return <Wrap><p>Setoran tidak ditemukan.</p></Wrap>;
+    return (
+      <Wrap>
+        <p className="t-body">Setoran tidak ditemukan.</p>
+      </Wrap>
+    );
   }
   const peserta = setoran.peserta as unknown as {
     id: string;
@@ -35,16 +40,19 @@ export default async function CekPage({ params }: { params: { id: string } }) {
   if (peserta.kelas.musyrif_id !== musyrifId) {
     return (
       <Wrap>
-        <p className="text-red-700">
-          Setoran ini berasal dari kelas yang bukan Anda ampu.
-        </p>
+        <div className="banner banner-error">
+          <div>
+            <div className="title">Tidak punya akses</div>
+            <div className="desc">Setoran ini berasal dari kelas yang bukan Anda ampu.</div>
+          </div>
+        </div>
       </Wrap>
     );
   }
 
   const { data: rekaman } = await supabaseAdmin
     .from('rekaman')
-    .select('jenis, audio_url, nilai, masukan')
+    .select('jenis, audio_url, duration_seconds, nilai, masukan')
     .eq('setoran_id', params.id);
 
   const rekamanByJenis = new Map(
@@ -65,6 +73,7 @@ export default async function CekPage({ params }: { params: { id: string } }) {
       return {
         jenis: j,
         audioUrl,
+        durationSec: r?.duration_seconds ?? null,
         nilai: (r?.nilai ?? null) as RekamanView['nilai'],
         masukan: r?.masukan ?? null,
       };
@@ -73,30 +82,49 @@ export default async function CekPage({ params }: { params: { id: string } }) {
 
   return (
     <Wrap>
-      <header className="space-y-1">
-        <Link href="/musyrif" className="text-xs text-stone-500 hover:text-stone-700">
-          ← dashboard
+      <div className="topbar">
+        <Link href="/musyrif" className="back">
+          {Icon.back(12)} dashboard
         </Link>
-        <h1 className="text-xl font-semibold text-stone-800">
-          Pemeriksaan: {peserta.name}
+        <span className="pekan-tag">
+          <span className="dot" />
+          Pekan {formatWeekRange(setoran.week_start)}
+        </span>
+      </div>
+      <div className="page">
+        <h1 className="t-h1" style={{ marginBottom: 2 }}>
+          Periksa setoran
         </h1>
-        <p className="text-sm text-stone-600">
-          Kelas {peserta.kelas.name} • pekan {formatWeekRange(setoran.week_start)}
+        <p className="t-small" style={{ marginBottom: 16 }}>
+          <strong style={{ color: 'var(--ink)', fontWeight: 600 }}>{peserta.name}</strong> ·
+          Kelas {peserta.kelas.name}
+          {setoran.submitted_at && (
+            <> · disetor {formatTime(setoran.submitted_at)}</>
+          )}
         </p>
-      </header>
-      <CekForm
-        setoranId={setoran.id}
-        rekamanList={rekamanList}
-        alreadyChecked={setoran.status === 'checked'}
-      />
+        <CekForm
+          setoranId={setoran.id}
+          rekamanList={rekamanList}
+          alreadyChecked={setoran.status === 'checked'}
+        />
+      </div>
     </Wrap>
   );
 }
 
 function Wrap({ children }: { children: React.ReactNode }) {
   return (
-    <main className="min-h-screen p-4 bg-stone-50">
-      <div className="max-w-xl mx-auto space-y-6 py-6">{children}</div>
+    <main style={{ minHeight: '100vh' }}>
+      <div style={{ maxWidth: 520, margin: '0 auto' }}>{children}</div>
     </main>
   );
+}
+
+function formatTime(iso: string): string {
+  return new Date(iso).toLocaleString('id-ID', {
+    timeZone: 'Asia/Jakarta',
+    weekday: 'short',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
 }

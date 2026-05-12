@@ -1,7 +1,5 @@
-import { PesertaPage } from '@/components/PesertaPage';
-
-export const dynamic = 'force-dynamic';
+import { redirect } from 'next/navigation';
 
 export default function Page() {
-  return <PesertaPage gender="ikhwan" />;
+  redirect('/');
 }

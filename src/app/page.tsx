@@ -1,55 +1,39 @@
-import Link from 'next/link';
+import { redirect } from 'next/navigation';
+import { LoginForm } from '@/components/LoginForm';
+import { getSession } from '@/lib/session';
+import { currentWeekStart, formatWeekRange } from '@/lib/week';
 
-export default function HomePage() {
+export const dynamic = 'force-dynamic';
+
+export default async function HomePage() {
+  const s = await getSession();
+  if (s.session?.role === 'peserta') redirect('/peserta');
+  if (s.session?.role === 'musyrif') redirect('/musyrif');
+  if (s.session?.role === 'koordinator') redirect('/koordinator');
+
   return (
-    <main className="min-h-screen flex items-center justify-center p-6 bg-stone-50">
-      <div className="max-w-md w-full space-y-8">
-        <header className="text-center space-y-2">
-          <h1 className="text-2xl font-semibold text-stone-800">
-            Setoran Hafalan
-          </h1>
-          <p className="text-sm text-stone-600">
-            Pilih jalur sesuai peran Anda
+    <main style={{ minHeight: '100vh' }}>
+      <div style={{ maxWidth: 420, margin: '0 auto' }}>
+        <div className="page" style={{ paddingTop: 56 }}>
+          <div className="wordmark" style={{ marginBottom: 24 }}>
+            <span className="mark">M</span>
+            Maahir
+          </div>
+
+          <h1 className="t-h1" style={{ marginBottom: 6 }}>Setoran Hafalan</h1>
+          <p className="t-body" style={{ marginBottom: 26 }}>
+            Masuk dengan nomor WhatsApp dan password Anda.
           </p>
-        </header>
 
-        <section className="space-y-3">
-          <h2 className="text-sm font-medium text-stone-700">Peserta</h2>
-          <div className="grid grid-cols-2 gap-3">
-            <Link
-              href="/ikhwan"
-              className="block text-center py-4 px-4 bg-white border border-stone-200 rounded-lg hover:bg-stone-100 transition"
-            >
-              Ikhwan
-            </Link>
-            <Link
-              href="/akhwat"
-              className="block text-center py-4 px-4 bg-white border border-stone-200 rounded-lg hover:bg-stone-100 transition"
-            >
-              Akhwat
-            </Link>
-          </div>
-        </section>
+          <LoginForm />
 
-        <section className="space-y-3">
-          <h2 className="text-sm font-medium text-stone-700">
-            Musyrif & Koordinator
-          </h2>
-          <div className="space-y-2">
-            <Link
-              href="/musyrif/login"
-              className="block text-center py-3 px-4 bg-white border border-stone-200 rounded-lg hover:bg-stone-100 transition text-sm"
-            >
-              Login Musyrif
-            </Link>
-            <Link
-              href="/koordinator/login"
-              className="block text-center py-3 px-4 bg-white border border-stone-200 rounded-lg hover:bg-stone-100 transition text-sm"
-            >
-              Login Koordinator
-            </Link>
-          </div>
-        </section>
+          <p
+            className="t-small"
+            style={{ textAlign: 'center', marginTop: 22, color: 'var(--muted-2)' }}
+          >
+            Pekan {formatWeekRange(currentWeekStart())}
+          </p>
+        </div>
       </div>
     </main>
   );

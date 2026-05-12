@@ -3,7 +3,7 @@ const nextConfig = {
   reactStrictMode: true,
   experimental: {
     serverActions: {
-      bodySizeLimit: '20mb', // untuk upload audio multipart
+      bodySizeLimit: '60mb', // 3 audio × ~15 menit (opus ~64kbps ≈ 7 MB/audio)
     },
   },
 };

@@ -1,29 +1,23 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase-admin';
+import { getSession } from '@/lib/session';
 import { ensureAudioBucket, uploadAudio } from '@/lib/storage';
 import { currentWeekStart } from '@/lib/week';
 import { buildWaMeUrl, tplPesertaSubmitToMusyrif } from '@/lib/whatsapp';
-import {
-  JENIS_REKAMAN,
-  type JenisRekaman,
-  type Gender,
-} from '@/types/db';
+import { JENIS_REKAMAN, type JenisRekaman } from '@/types/db';
 
 export const runtime = 'nodejs';
-export const maxDuration = 60;
+export const maxDuration = 300;
 
 export async function POST(req: NextRequest) {
   try {
-    const form = await req.formData();
-    const pesertaId = String(form.get('peserta_id') ?? '').trim();
-    const gender = String(form.get('gender') ?? '').trim() as Gender;
-    if (!pesertaId) {
-      return NextResponse.json({ error: 'peserta_id wajib' }, { status: 400 });
+    const s = await getSession();
+    if (!s.session || s.session.role !== 'peserta') {
+      return NextResponse.json({ error: 'Anda harus login sebagai peserta.' }, { status: 401 });
     }
-    if (gender !== 'ikhwan' && gender !== 'akhwat') {
-      return NextResponse.json({ error: 'gender invalid' }, { status: 400 });
-    }
+    const pesertaId = s.session.peserta_id;
 
+    const form = await req.formData();
     const files: Record<JenisRekaman, File | null> = {
       tuhfatul_athfal: form.get('audio_tuhfatul_athfal') as File | null,
       jazariyyah: form.get('audio_jazariyyah') as File | null,
@@ -34,7 +28,6 @@ export async function POST(req: NextRequest) {
       jazariyyah: numOrNull(form.get('duration_jazariyyah')),
       syawahid: numOrNull(form.get('duration_syawahid')),
     };
-
     for (const j of JENIS_REKAMAN) {
       if (!files[j] || files[j]!.size === 0) {
         return NextResponse.json(
@@ -46,20 +39,16 @@ export async function POST(req: NextRequest) {
 
     const { data: peserta, error: pErr } = await supabaseAdmin
       .from('peserta')
-      .select('id, name, gender, whatsapp_number, kelas:kelas_id(id, name, gender, musyrif:musyrif_id(id, name, whatsapp_number))')
+      .select('id, name, kelas:kelas_id(id, name, musyrif:musyrif_id(id, name, whatsapp_number))')
       .eq('id', pesertaId)
       .eq('active', true)
       .single();
     if (pErr || !peserta) {
       return NextResponse.json({ error: 'Peserta tidak ditemukan' }, { status: 404 });
     }
-    if (peserta.gender !== gender) {
-      return NextResponse.json({ error: 'Gender tidak cocok' }, { status: 400 });
-    }
     const kelas = peserta.kelas as unknown as {
       id: string;
       name: string;
-      gender: Gender;
       musyrif: { id: string; name: string; whatsapp_number: string };
     };
     const musyrif = kelas.musyrif;
@@ -160,9 +149,9 @@ export async function POST(req: NextRequest) {
       musyrif_name: musyrif.name,
       wa_url: waUrl,
     });
-  } catch (e: any) {
+  } catch (e: unknown) {
     return NextResponse.json(
-      { error: e?.message ?? 'Internal error' },
+      { error: e instanceof Error ? e.message : 'Internal error' },
       { status: 500 }
     );
   }
