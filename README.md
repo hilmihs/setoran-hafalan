@@ -65,11 +65,17 @@ Buka [http://localhost:3000](http://localhost:3000)
 src/
   app/                  # Next.js App Router pages
     page.tsx            # Landing page
-    ikhwan/             # Halaman peserta ikhwan (akan dibuat)
-    akhwat/             # Halaman peserta akhwat (akan dibuat)
-    musyrif/            # Login & dashboard musyrif (akan dibuat)
-    koordinator/        # Login & dashboard koordinator (akan dibuat)
-  components/           # Komponen reusable (AudioRecorder, dll)
+    ikhwan/             # Halaman peserta ikhwan
+    akhwat/             # Halaman peserta akhwat
+    musyrif/            # Login, dashboard, dan /musyrif/cek/[id]
+    koordinator/        # Login & dashboard monitoring
+    api/setoran/submit/ # Endpoint upload 3 audio + create setoran
+  components/
+    AudioRecorder.tsx   # MediaRecorder UI dengan play/re-record
+    SetoranForm.tsx     # Form peserta (kelas → nama → 3 rekaman)
+    CekForm.tsx         # Form pemeriksaan musyrif
+    LoginForm.tsx       # Form login (musyrif & koordinator)
+    PesertaPage.tsx     # Wrapper untuk halaman /ikhwan dan /akhwat
   lib/
     supabase-admin.ts   # Supabase client server-side (service role)
     supabase-browser.ts # Supabase client browser
@@ -82,7 +88,7 @@ src/
 scripts/
   seed.ts               # Seed data dummy
   set-password.ts       # Set password musyrif/koordinator
-  cleanup-audio.ts      # (Akan dibuat) Hapus audio > 12 pekan
+  cleanup-audio.ts      # Hapus audio > 12 pekan setelah checked
 
 supabase/
   migrations/           # SQL migrations
@@ -92,12 +98,12 @@ supabase/
 
 - [x] Schema database + migration
 - [x] Project setup, types, helpers
-- [ ] Komponen `<AudioRecorder>` dengan MediaRecorder API
-- [ ] Halaman setoran peserta (pilih kelas → nama → rekam 3 audio → submit)
-- [ ] Halaman login + pemeriksaan musyrif
-- [ ] Integrasi wa.me untuk notifikasi (4 skenario)
-- [ ] Dashboard koordinator + tombol reminder
-- [ ] Cron job retensi audio (hapus > 12 pekan setelah checked)
+- [x] Komponen `<AudioRecorder>` dengan MediaRecorder API
+- [x] Halaman setoran peserta (pilih kelas → nama → rekam 3 audio → submit)
+- [x] Halaman login + pemeriksaan musyrif
+- [x] Integrasi wa.me untuk notifikasi (4 skenario)
+- [x] Dashboard koordinator + tombol reminder
+- [x] Script retensi audio (`pnpm cleanup-audio`) — pasang sendiri ke cron
 
 ## Catatan Teknis
 
