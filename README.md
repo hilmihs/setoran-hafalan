@@ -124,7 +124,13 @@ WhatsApp Business API atau third-party seperti Fonnte.
 
 ### Retensi audio
 
-Rekaman peserta dihapus 12 pekan setelah status setoran `checked`. Script
-`cleanup-audio.ts` akan dipanggil via cron (Supabase Edge Function atau
-GitHub Actions scheduled workflow).
+Dua aturan retensi (lihat `scripts/cleanup-audio.ts`):
+
+- **Belum dicek** — audio dihapus jika sudah 3 pekan sejak `recorded_at`
+  dan musyrif belum cek (`checked_at IS NULL`).
+- **Sudah dicek** — audio dihapus 1 pekan setelah `checked_at`.
+
+Audit trail (nilai + masukan) tetap di tabel `rekaman`, hanya file
+storage yang dihapus + `audio_url` di-null-kan. Script dipanggil via
+cron (mis. tiap hari).
 # setoran-hafalan
