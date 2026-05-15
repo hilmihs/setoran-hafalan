@@ -10,6 +10,7 @@
     "typecheck": "tsc --noEmit",
     "seed": "tsx --env-file=.env.local scripts/seed.ts",
     "seed-maahir": "tsx --env-file=.env.local scripts/seed-maahir.ts",
+    "seed-itsnain": "tsx --env-file=.env.local scripts/seed-itsnain.ts",
     "seed-koordinator": "tsx --env-file=.env.local scripts/seed-koordinator.ts",
     "seed-peserta-password": "tsx --env-file=.env.local scripts/seed-peserta-password.ts",
     "set-password": "tsx --env-file=.env.local scripts/set-password.ts",
