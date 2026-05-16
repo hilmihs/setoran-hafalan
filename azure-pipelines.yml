@@ -9,7 +9,7 @@ pr:
       - main
 
 variables:
-  - group: Maaher-Prod # Gunakan prefix ENV_
+  - group: Maahir-Prod # Gunakan prefix ENV_
 
 pool:
   vmImage: ubuntu-latest
@@ -62,6 +62,9 @@ steps:
 
         echo "⚙️ Build Web Maahir"
         nvm exec 24.15.0 npm run build
+
+        echo "📁 Copy static files to standalone folder"
+        cp -r .next/static .next/standalone/.next/
 
         echo "🔄 Restart systemd service"
         sudo systemctl restart next-maahir
