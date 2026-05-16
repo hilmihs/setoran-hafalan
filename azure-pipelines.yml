@@ -1,0 +1,70 @@
+trigger:
+  branches:
+    include:
+      - main
+
+pr:
+  branches:
+    include:
+      - main
+
+variables:
+  - group: Maaher-Prod # Gunakan prefix ENV_
+
+pool:
+  vmImage: ubuntu-latest
+
+steps:
+  - task: Bash@3
+    displayName: "🔧 Generate exportable ENV from Variable Group"
+    inputs:
+      targetType: "inline"
+      script: |
+        echo "🔄 Export Azure DevOps Variable Group with prefix ENV_"
+        printenv | grep '^ENV_' | while IFS='=' read -r key value; do
+          safe_value=$(python3 -c "import json, os; print(json.dumps(os.getenv('$key')))")
+          echo "export $key=$safe_value"
+        done > env_vars.sh
+
+        chmod +x env_vars.sh
+        cat env_vars.sh
+  #⬇️ Kirim env_vars.sh ke server via SCP
+  - task: CopyFilesOverSSH@0
+    displayName: "📤 Upload env_vars.sh to server"
+    inputs:
+      sshEndpoint: "server-staging@103.181.142.223"
+      sourceFolder: "."
+      contents: "env_vars.sh"
+      targetFolder: "/var/www/html/maahir"
+      cleanTargetFolder: false
+      overwrite: true
+  - task: Ssh@0
+    displayName: "🚀 Deploy Next.js Frontend"
+    inputs:
+      sshEndpoint: "server-staging@103.181.142.223"
+      runOptions: "inline"
+      failOnStdErr: false
+      inline: |
+        echo "🚀 START: Deploy Next.js Frontend"
+        set -euo pipefail 2>/dev/null || set -eu
+
+        export NVM_DIR="$HOME/.nvm"
+        [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
+
+        cd /var/www/html/maahir
+        echo "📂 Current folder: $(pwd)"
+
+        echo "⬇️ Git pull Web Maaher"
+        git pull origin main || true
+
+        echo "📦 Install dependency Web Maahir"
+        nvm exec 24.15.0 npm install
+
+        echo "⚙️ Build Web Maahir"
+        nvm exec 24.15.0 npm run build
+
+        echo "🔄 Restart systemd service"
+        sudo systemctl restart next-maahir
+        sudo systemctl status next-maahir --no-pager
+
+        echo "✅ Next.js frontend deployment selesai"
