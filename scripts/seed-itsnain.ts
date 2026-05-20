@@ -1,25 +1,21 @@
 /**
- * Seed data real: program akhwat "Itsnain Fi Wahid" — 2 kelompok.
+ * Seed data real: program akhwat "Itsnain Fi Wahid" — 5 kelas paralel
+ * dengan ikhwan (Maahir): Maahir Alif, Maahir Ba, Maahir Dal,
+ * Maahir Ha pagi, Maahir Ha siang.
  *
- * ADITIF: tidak menghapus data ikhwan (Maahir) yang sudah ada.
+ * Strategi: WIPE akhwat-only lalu re-seed. Ikhwan (Maahir) tidak disentuh
+ * karena semua filter pakai gender='akhwat'. Koordinator Ustadzah Salma
+ * di-handle aditif (skip kalau WA-nya sudah ada).
  *
- * Yang ditambahkan:
- *   - 1 koordinator akhwat (Ustadzah Salma) — di-skip jika WA sudah ada
- *   - 2 musyrifah (PJ Kelompok 1 & 2) — di-skip per nomor jika WA sudah ada
- *   - 2 kelas akhwat: "Kelompok 1", "Kelompok 2"
- *   - Peserta tiap kelompok (PJ di-skip dari list peserta karena sudah jadi
- *     musyrifah dengan WA sama; auth memilih peserta dulu sehingga akan
- *     menghalangi login musyrifah)
+ * Cara pakai:
+ *   npm run seed-itsnain
  *
  * Default password musyrifah/koordinator: "password123"
  * Default password peserta:               "itsnain123"
  * Ganti via `npm run set-password`.
- *
- * Cara pakai:
- *   npm run seed-itsnain
  */
 import bcrypt from 'bcryptjs';
-import { supabaseAdmin } from '../src/lib/supabase-admin';
+import { supabaseAdmin, AUDIO_BUCKET } from '../src/lib/supabase-admin';
 import { normalizeWhatsApp } from '../src/lib/whatsapp';
 
 const DEFAULT_PASSWORD_MUSYRIF = 'password123';
@@ -34,47 +30,53 @@ interface PesertaEntry {
   name: string;
   wa: string;
 }
-interface KelompokEntry {
+interface KelasEntry {
   name: string;
-  pj: { name: string; wa: string };
+  musyrif: { name: string; wa: string };
   peserta: PesertaEntry[];
 }
 
-const KELOMPOK: KelompokEntry[] = [
+// Catatan: musyrifah tiap kelas TIDAK dimasukkan ulang di list `peserta`
+// karena auth memprioritaskan akun peserta — kalau WA-nya juga ada di tabel
+// peserta, login musyrifah akan ke-block. Lihat seed-itsnain.ts versi lama.
+const KELAS_AKHWAT: KelasEntry[] = [
   {
-    name: 'Kelompok 1',
-    pj: { name: 'Tasmiah Siti Salamah', wa: '895322125069' },
+    name: 'Maahir Alif',
+    musyrif: { name: 'Risa Afrianti', wa: '87751645069' },
     peserta: [
-      { name: 'Risa Afrianti', wa: '87751645069' },
       { name: 'Farha Sholihah', wa: '82249582671' },
       { name: 'Fathia Alya', wa: '81281192703' },
       { name: 'Cahlina Kinasih', wa: '87883985090' },
       { name: 'Rafika Salma', wa: '85280159698' },
       { name: 'Wildatun Uyun', wa: '81353430149' },
-      { name: 'Nur Fidha Alifa', wa: '85710711676' },
-      { name: 'Nur Layla', wa: '89673092288' },
-      // Tasmiah Siti Salamah — sudah jadi musyrifah (PJ K1), skip dari peserta
-      { name: 'Nadiyah Alamanda', wa: '87889284677' },
-      { name: 'Annisa Rizkya', wa: '82154905557' },
-      { name: 'Andi Hikmah Amaliyah', wa: '85157886962' },
-      { name: 'Jesi Alya', wa: '82287440105' },
-      { name: 'Umi Hidayati', wa: '81280683665' },
-      { name: 'Silmi Muthmainnah Alumni', wa: '89517315052' },
-      { name: 'Nabilla Putri Hasdar', wa: '85107012760' },
-      { name: 'Royhana Safira Pardiani', wa: '82391571790' },
-      { name: 'Annidaul Jannah', wa: '85788064547' },
-      { name: 'Rika Ramadhona', wa: '85373700618' },
-      { name: 'Zakia Annajah', wa: '6282137600976' },
       { name: 'Siti Haerun Nisa Zain', wa: '85973281100' },
       { name: 'Ruqayyah', wa: '89653402400' },
       { name: 'Nafilatullatifah', wa: '85394650595' },
-      { name: 'Putri Ramadhani Austi', wa: '628992852672' },
-      { name: 'Atikah Az Zahwa', wa: '83143228400' },
-      { name: 'Ismi Khoiriyah', wa: '6285784824142' },
-      { name: 'Vita Oktaviani', wa: '081272958629' },
       { name: 'Nyayu Safira Rahma', wa: '085964232366' },
+    ],
+  },
+  {
+    name: 'Maahir Ba',
+    musyrif: { name: 'Jesi Alya', wa: '82287440105' },
+    peserta: [
+      { name: 'Nur Fidha Alifa', wa: '85710711676' },
+      { name: 'Nur Layla', wa: '89673092288' },
+      { name: 'Tasmiah Siti Salamah', wa: '895322125069' },
+      { name: 'Nadiyah Alamanda', wa: '87889284677' },
+      { name: 'Annisa Rizkya', wa: '82154905557' },
+      { name: 'Andi Hikmah Amaliyah', wa: '85157886962' },
+      { name: 'Umi Hidayati', wa: '81280683665' },
+      { name: 'Silmi Muthmainnah', wa: '89517315052' },
+      { name: 'Nabilla Putri Hasdar', wa: '85107012760' },
+      { name: 'Royhana Safira Pardiani', wa: '82391571790' },
+      { name: 'Annidaul Jannah', wa: '85788064547' },
+    ],
+  },
+  {
+    name: 'Maahir Dal',
+    musyrif: { name: 'Baiq Miftahul Husna', wa: '87855729712' },
+    peserta: [
       { name: 'Adhwa Khoirunnisa', wa: '81233271258' },
-      { name: 'Baiq Miftahul Husna', wa: '87855729712' },
       { name: 'Nurul Azizah', wa: '81341334870' },
       { name: 'Miftahul Amalia', wa: '82252660165' },
       { name: 'Siti Rohana', wa: '81358145992' },
@@ -86,20 +88,24 @@ const KELOMPOK: KelompokEntry[] = [
     ],
   },
   {
-    name: 'Kelompok 2',
-    pj: { name: 'Aulia Khairunnisa Mahbengi', wa: '8116800702' },
+    name: 'Maahir Ha pagi',
+    musyrif: { name: 'Feni Damayanti', wa: '62895327649242' },
     peserta: [
       { name: 'Asiyah Annaajiyah', wa: '81615636276' },
-      { name: 'Feni Damayanti', wa: '62895327649242' },
       { name: 'Fitria Khairunnisa', wa: '87840533822' },
       { name: 'Putri Wahyuningsih', wa: '85215266117' },
       { name: 'Asri Dewi Lestari', wa: '87824132291' },
-      { name: 'Shofiyyah Azzah', wa: '82134316482' },
       { name: 'Puteri Chamelia Ulfah', wa: '85161428186' },
       { name: 'Fanny Anastasiah', wa: '87728977800' },
       { name: 'Zerina Br Singarimbun', wa: '85297464367' },
       { name: 'Laura Rachima', wa: '81293559403' },
       { name: 'Salma Suhailah Nizzati', wa: '82131217655' },
+    ],
+  },
+  {
+    name: 'Maahir Ha siang',
+    musyrif: { name: 'Aulia Khairunnisa', wa: '8116800702' },
+    peserta: [
       { name: 'Annisa Nurrahmah', wa: '89527038238' },
       { name: 'Talida Jihan Nabila', wa: '81994771197' },
       { name: 'Laila Safira', wa: '85211379646' },
@@ -108,7 +114,6 @@ const KELOMPOK: KelompokEntry[] = [
       { name: 'Zulfa Masitoh', wa: '83103727282' },
       { name: 'Salma Rifdatul Husna', wa: '81296978844' },
       { name: 'Aulia Azizah', wa: '82337495351' },
-      // Aulia Khairunnisa Mahbengi — sudah jadi musyrifah (PJ K2), skip dari peserta
       { name: 'Putri Nur Sarjiari', wa: '85899409895' },
       { name: 'Atalika Khairunnisa', wa: '85797820878' },
       { name: 'Dzakiyyah Rahmah', wa: '81344941255' },
@@ -121,8 +126,8 @@ async function main() {
   const hashMusyrif = await bcrypt.hash(DEFAULT_PASSWORD_MUSYRIF, 12);
   const hashPeserta = await bcrypt.hash(DEFAULT_PASSWORD_PESERTA, 12);
 
-  // ─── [1/4] Koordinator akhwat ────────────────────────────────────
-  console.log('\n[1/4] Insert koordinator akhwat (Ustadzah Salma)…');
+  // ─── [1/5] Koordinator akhwat (aditif) ───────────────────────────
+  console.log('\n[1/5] Insert koordinator akhwat (Ustadzah Salma)…');
   const koorWa = normalizeWhatsApp(KOORDINATOR_AKHWAT.wa);
   const { data: existingKoor } = await supabaseAdmin
     .from('koordinator')
@@ -145,25 +150,95 @@ async function main() {
     console.log(`  ✓ ${data.name} (${data.whatsapp_number})`);
   }
 
-  // ─── [2/4] Musyrifah (PJ tiap kelompok) ──────────────────────────
-  console.log('\n[2/4] Insert musyrifah (PJ Kelompok 1 & 2)…');
-  const musyrifByKelompok = new Map<string, { id: string; name: string }>();
-  for (const k of KELOMPOK) {
-    const wa = normalizeWhatsApp(k.pj.wa);
-    const { data: existing } = await supabaseAdmin
-      .from('musyrif')
-      .select('id, name')
-      .eq('whatsapp_number', wa)
-      .maybeSingle();
-    if (existing) {
-      console.log(`  ⊘ Sudah ada: ${existing.name} (${wa}) — pakai existing untuk ${k.name}`);
-      musyrifByKelompok.set(k.name, existing);
-      continue;
+  // ─── [2/5] Wipe data akhwat (storage + DB) ───────────────────────
+  console.log('\n[2/5] Wipe data akhwat lama…');
+
+  const { data: akhwatPeserta, error: pSelErr } = await supabaseAdmin
+    .from('peserta')
+    .select('id')
+    .eq('gender', 'akhwat');
+  if (pSelErr) throw pSelErr;
+  const akhwatPesertaIds = (akhwatPeserta ?? []).map((p) => p.id);
+  console.log(`  · ${akhwatPesertaIds.length} peserta akhwat ditemukan`);
+
+  if (akhwatPesertaIds.length > 0) {
+    // Hapus file audio dari storage dulu sebelum row rekaman dihapus.
+    const { data: akhwatSetoran, error: sSelErr } = await supabaseAdmin
+      .from('setoran')
+      .select('id')
+      .in('peserta_id', akhwatPesertaIds);
+    if (sSelErr) throw sSelErr;
+    const akhwatSetoranIds = (akhwatSetoran ?? []).map((s) => s.id);
+
+    if (akhwatSetoranIds.length > 0) {
+      const { data: akhwatRekaman, error: rSelErr } = await supabaseAdmin
+        .from('rekaman')
+        .select('id, audio_url')
+        .in('setoran_id', akhwatSetoranIds);
+      if (rSelErr) throw rSelErr;
+
+      const audioPaths = (akhwatRekaman ?? [])
+        .map((r) => r.audio_url)
+        .filter((p): p is string => !!p);
+      if (audioPaths.length > 0) {
+        const { error: storageErr } = await supabaseAdmin.storage
+          .from(AUDIO_BUCKET)
+          .remove(audioPaths);
+        if (storageErr) throw storageErr;
+        console.log(`  · ${audioPaths.length} file audio dihapus dari storage`);
+      }
     }
+
+    // Cascade dari peserta akan menghapus setoran + rekaman, tapi kita
+    // hapus eksplisit supaya log jelas.
+    if (akhwatSetoranIds.length > 0) {
+      const { error: rDelErr, count: rCount } = await supabaseAdmin
+        .from('rekaman')
+        .delete({ count: 'exact' })
+        .in('setoran_id', akhwatSetoranIds);
+      if (rDelErr) throw rDelErr;
+      console.log(`  · ${rCount ?? 0} row rekaman dihapus`);
+
+      const { error: sDelErr, count: sCount } = await supabaseAdmin
+        .from('setoran')
+        .delete({ count: 'exact' })
+        .in('id', akhwatSetoranIds);
+      if (sDelErr) throw sDelErr;
+      console.log(`  · ${sCount ?? 0} row setoran dihapus`);
+    }
+
+    const { error: pDelErr, count: pCount } = await supabaseAdmin
+      .from('peserta')
+      .delete({ count: 'exact' })
+      .eq('gender', 'akhwat');
+    if (pDelErr) throw pDelErr;
+    console.log(`  · ${pCount ?? 0} row peserta dihapus`);
+  }
+
+  // Kelas akhwat — FK ke musyrif ON DELETE RESTRICT, harus didelete sebelum musyrif.
+  const { error: kDelErr, count: kCount } = await supabaseAdmin
+    .from('kelas')
+    .delete({ count: 'exact' })
+    .eq('gender', 'akhwat');
+  if (kDelErr) throw kDelErr;
+  console.log(`  · ${kCount ?? 0} row kelas dihapus`);
+
+  const { error: mDelErr, count: mCount } = await supabaseAdmin
+    .from('musyrif')
+    .delete({ count: 'exact' })
+    .eq('gender', 'akhwat');
+  if (mDelErr) throw mDelErr;
+  console.log(`  · ${mCount ?? 0} row musyrif dihapus`);
+
+  // ─── [3/5] Insert 5 musyrifah ────────────────────────────────────
+  console.log('\n[3/5] Insert 5 musyrifah…');
+  const musyrifByKelas = new Map<string, { id: string; name: string }>();
+  for (const k of KELAS_AKHWAT) {
+    const wa = normalizeWhatsApp(k.musyrif.wa);
     const { data, error } = await supabaseAdmin
       .from('musyrif')
       .insert({
-        name: k.pj.name,
+        name: k.musyrif.name,
         gender: 'akhwat',
         whatsapp_number: wa,
         password_hash: hashMusyrif,
@@ -171,27 +246,15 @@ async function main() {
       .select('id, name')
       .single();
     if (error) throw error;
-    console.log(`  ✓ ${data.name} → PJ ${k.name}`);
-    musyrifByKelompok.set(k.name, data);
+    console.log(`  ✓ ${data.name} → ${k.name}`);
+    musyrifByKelas.set(k.name, data);
   }
 
-  // ─── [3/4] Kelas akhwat ──────────────────────────────────────────
-  console.log('\n[3/4] Insert kelas akhwat…');
+  // ─── [4/5] Insert 5 kelas akhwat ─────────────────────────────────
+  console.log('\n[4/5] Insert 5 kelas akhwat…');
   const kelasIdByName = new Map<string, string>();
-  for (const k of KELOMPOK) {
-    const musyrif = musyrifByKelompok.get(k.name)!;
-    // Cek apakah kelas (name, gender) sudah ada — unique constraint di schema.
-    const { data: existingKelas } = await supabaseAdmin
-      .from('kelas')
-      .select('id, name, musyrif_id')
-      .eq('name', k.name)
-      .eq('gender', 'akhwat')
-      .maybeSingle();
-    if (existingKelas) {
-      console.log(`  ⊘ Sudah ada: kelas "${k.name}" (akhwat) — pakai existing`);
-      kelasIdByName.set(k.name, existingKelas.id);
-      continue;
-    }
+  for (const k of KELAS_AKHWAT) {
+    const musyrif = musyrifByKelas.get(k.name)!;
     const { data, error } = await supabaseAdmin
       .from('kelas')
       .insert({
@@ -206,43 +269,26 @@ async function main() {
     kelasIdByName.set(k.name, data.id);
   }
 
-  // ─── [4/4] Peserta akhwat ────────────────────────────────────────
-  console.log('\n[4/4] Insert peserta akhwat…');
-  let totalInserted = 0;
-  let totalSkipped = 0;
-  for (const k of KELOMPOK) {
+  // ─── [5/5] Insert peserta akhwat ─────────────────────────────────
+  console.log('\n[5/5] Insert peserta akhwat…');
+  let totalPeserta = 0;
+  for (const k of KELAS_AKHWAT) {
     const kelasId = kelasIdByName.get(k.name)!;
-    let inserted = 0;
-    let skipped = 0;
-    for (const p of k.peserta) {
-      const wa = normalizeWhatsApp(p.wa);
-      const { data: existing } = await supabaseAdmin
-        .from('peserta')
-        .select('id, name')
-        .eq('whatsapp_number', wa)
-        .maybeSingle();
-      if (existing) {
-        console.log(`    ⊘ ${p.name} (${wa}) sudah ada — skip`);
-        skipped++;
-        continue;
-      }
-      const { error } = await supabaseAdmin.from('peserta').insert({
-        name: p.name,
-        gender: 'akhwat',
-        kelas_id: kelasId,
-        whatsapp_number: wa,
-        password_hash: hashPeserta,
-      });
-      if (error) throw error;
-      inserted++;
-    }
-    console.log(`  ✓ ${k.name}: ${inserted} peserta baru, ${skipped} skip`);
-    totalInserted += inserted;
-    totalSkipped += skipped;
+    const rows = k.peserta.map((p) => ({
+      name: p.name,
+      gender: 'akhwat' as const,
+      kelas_id: kelasId,
+      whatsapp_number: normalizeWhatsApp(p.wa),
+      password_hash: hashPeserta,
+    }));
+    const { error } = await supabaseAdmin.from('peserta').insert(rows);
+    if (error) throw error;
+    console.log(`  ✓ ${k.name}: ${rows.length} peserta`);
+    totalPeserta += rows.length;
   }
 
   console.log(
-    `\n✓ Selesai. Total peserta baru: ${totalInserted} (skip ${totalSkipped}).`
+    `\n✓ Selesai. ${KELAS_AKHWAT.length} musyrifah, ${KELAS_AKHWAT.length} kelas, ${totalPeserta} peserta akhwat.`
   );
   console.log(`Default password musyrifah/koordinator: "${DEFAULT_PASSWORD_MUSYRIF}"`);
   console.log(`Default password peserta:               "${DEFAULT_PASSWORD_PESERTA}"`);
