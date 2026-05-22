@@ -35,10 +35,14 @@ export function PesertaSetoranForm({
   musyrifName,
   musyrifInitials,
   existing,
+  endpoint = '/api/setoran/submit',
+  targetRoleLabel = 'Musyrif kelas Anda',
 }: {
   musyrifName: string;
   musyrifInitials: string;
   existing: ExistingSetoran | null;
+  endpoint?: string;
+  targetRoleLabel?: string;
 }) {
   const [recordings, setRecordings] = useState<Recordings>(EMPTY);
   const [submitting, setSubmitting] = useState(false);
@@ -62,7 +66,7 @@ export function PesertaSetoranForm({
         fd.append(`audio_${j}`, r.blob, `${j}.webm`);
         fd.append(`duration_${j}`, String(r.durationSec));
       }
-      const res = await fetch('/api/setoran/submit', { method: 'POST', body: fd });
+      const res = await fetch(endpoint, { method: 'POST', body: fd });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error ?? 'Gagal submit');
       setResultWaUrl(json.wa_url);
@@ -136,7 +140,7 @@ export function PesertaSetoranForm({
             <div className="avatar">{musyrifInitials}</div>
             <div style={{ flex: 1 }}>
               <div style={{ fontSize: 14, fontWeight: 600 }}>{musyrifName}</div>
-              <div className="t-small">Musyrif kelas Anda</div>
+              <div className="t-small">{targetRoleLabel}</div>
             </div>
           </div>
         </div>

@@ -1,7 +1,7 @@
 import { redirect } from 'next/navigation';
 import { LoginForm } from '@/components/LoginForm';
 import { getSession } from '@/lib/session';
-import { currentWeekStart, formatWeekRange } from '@/lib/week';
+import { currentCycleStart, formatCycleRange } from '@/lib/week';
 
 export const dynamic = 'force-dynamic';
 
@@ -10,6 +10,7 @@ export default async function HomePage() {
   if (s.session?.role === 'peserta') redirect('/peserta');
   if (s.session?.role === 'musyrif') redirect('/musyrif');
   if (s.session?.role === 'koordinator') redirect('/koordinator');
+  if (s.session?.role === 'syaikh') redirect('/syaikh');
 
   return (
     <main style={{ minHeight: '100vh' }}>
@@ -31,7 +32,7 @@ export default async function HomePage() {
             className="t-small"
             style={{ textAlign: 'center', marginTop: 22, color: 'var(--muted-2)' }}
           >
-            Pekan {formatWeekRange(currentWeekStart())}
+            Pekan {formatCycleRange(currentCycleStart())}
           </p>
         </div>
       </div>

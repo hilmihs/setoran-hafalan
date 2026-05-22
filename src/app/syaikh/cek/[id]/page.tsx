@@ -6,22 +6,23 @@ import { signedAudioUrl } from '@/lib/storage';
 import { CekForm, type RekamanView } from '@/components/CekForm';
 import { Icon } from '@/components/icons';
 import { formatCycleRange } from '@/lib/week';
-import { JENIS_REKAMAN, type JenisRekaman } from '@/types/db';
-import { submitCek } from './actions';
+import { salutation } from '@/lib/whatsapp';
+import { JENIS_REKAMAN, type JenisRekaman, type Gender } from '@/types/db';
+import { submitCekSyaikh } from './actions';
 
 export const dynamic = 'force-dynamic';
 
-export default async function CekPage({ params }: { params: { id: string } }) {
+export default async function SyaikhCekPage({ params }: { params: { id: string } }) {
   const s = await getSession();
-  if (!s.session || s.session.role !== 'musyrif') {
-    redirect(`/musyrif/login?next=/musyrif/cek/${params.id}`);
+  if (!s.session || s.session.role !== 'syaikh') {
+    redirect('/');
   }
-  const musyrifId = s.session.musyrif_id;
+  const syaikhGender = s.session.gender;
 
   const { data: setoran } = await supabaseAdmin
-    .from('setoran')
+    .from('setoran_musyrif')
     .select(
-      'id, status, week_start, submitted_at, peserta:peserta_id(id, name, kelas:kelas_id(id, name, musyrif_id))'
+      'id, status, week_start, submitted_at, musyrif:musyrif_id(id, name, gender)'
     )
     .eq('id', params.id)
     .maybeSingle();
@@ -33,18 +34,18 @@ export default async function CekPage({ params }: { params: { id: string } }) {
       </Wrap>
     );
   }
-  const peserta = setoran.peserta as unknown as {
+  const musyrif = setoran.musyrif as unknown as {
     id: string;
     name: string;
-    kelas: { id: string; name: string; musyrif_id: string };
+    gender: Gender;
   };
-  if (peserta.kelas.musyrif_id !== musyrifId) {
+  if (musyrif.gender !== syaikhGender) {
     return (
       <Wrap>
         <div className="banner banner-error">
           <div>
             <div className="title">Tidak punya akses</div>
-            <div className="desc">Setoran ini berasal dari kelas yang bukan Anda ampu.</div>
+            <div className="desc">Setoran ini bukan untuk gender Anda.</div>
           </div>
         </div>
       </Wrap>
@@ -52,9 +53,9 @@ export default async function CekPage({ params }: { params: { id: string } }) {
   }
 
   const { data: rekaman } = await supabaseAdmin
-    .from('rekaman')
+    .from('rekaman_musyrif')
     .select('jenis, audio_url, duration_seconds, nilai, masukan')
-    .eq('setoran_id', params.id);
+    .eq('setoran_musyrif_id', params.id);
 
   const rekamanByJenis = new Map(
     (rekaman ?? []).map((r) => [r.jenis as JenisRekaman, r])
@@ -81,10 +82,12 @@ export default async function CekPage({ params }: { params: { id: string } }) {
     })
   );
 
+  const sapaan = salutation(musyrif.gender);
+
   return (
     <Wrap>
       <div className="topbar">
-        <Link href="/musyrif" className="back">
+        <Link href="/syaikh" className="back">
           {Icon.back(12)} dashboard
         </Link>
         <span className="pekan-tag">
@@ -94,11 +97,12 @@ export default async function CekPage({ params }: { params: { id: string } }) {
       </div>
       <div className="page">
         <h1 className="t-h1" style={{ marginBottom: 2 }}>
-          Periksa setoran
+          Periksa setoran musyrif
         </h1>
         <p className="t-small" style={{ marginBottom: 16 }}>
-          <strong style={{ color: 'var(--ink)', fontWeight: 600 }}>{peserta.name}</strong> ·
-          Kelas {peserta.kelas.name}
+          <strong style={{ color: 'var(--ink)', fontWeight: 600 }}>
+            {sapaan} {musyrif.name}
+          </strong>
           {setoran.submitted_at && (
             <> · disetor {formatTime(setoran.submitted_at)}</>
           )}
@@ -107,9 +111,9 @@ export default async function CekPage({ params }: { params: { id: string } }) {
           setoranId={setoran.id}
           rekamanList={rekamanList}
           alreadyChecked={setoran.status === 'checked'}
-          action={submitCek}
-          backHref="/musyrif"
-          forwardLabel="Kirim hasil ke peserta"
+          action={submitCekSyaikh}
+          backHref="/syaikh"
+          forwardLabel="Kirim hasil ke musyrif"
         />
       </div>
     </Wrap>

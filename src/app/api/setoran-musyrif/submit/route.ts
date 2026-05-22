@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase-admin';
 import { getSession } from '@/lib/session';
-import { ensureAudioBucket, uploadAudio } from '@/lib/storage';
+import { ensureAudioBucket, uploadAudioMusyrif } from '@/lib/storage';
 import { currentCycleStart } from '@/lib/week';
-import { buildWaMeUrl, tplPesertaSubmitToMusyrif } from '@/lib/whatsapp';
+import { buildWaMeUrl, tplMusyrifSubmitToSyaikh } from '@/lib/whatsapp';
 import { absUrl } from '@/lib/url';
-import { JENIS_REKAMAN, type JenisRekaman } from '@/types/db';
+import { JENIS_REKAMAN, type JenisRekaman, type Gender } from '@/types/db';
 
 export const runtime = 'nodejs';
 export const maxDuration = 300;
@@ -13,10 +13,15 @@ export const maxDuration = 300;
 export async function POST(req: NextRequest) {
   try {
     const s = await getSession();
-    if (!s.session || s.session.role !== 'peserta') {
-      return NextResponse.json({ error: 'Anda harus login sebagai peserta.' }, { status: 401 });
+    if (!s.session || s.session.role !== 'musyrif') {
+      return NextResponse.json(
+        { error: 'Anda harus login sebagai musyrif.' },
+        { status: 401 }
+      );
     }
-    const pesertaId = s.session.peserta_id;
+    const musyrifId = s.session.musyrif_id;
+    const musyrifGender = s.session.gender;
+    const musyrifName = s.session.name;
 
     const form = await req.formData();
     const files: Record<JenisRekaman, File | null> = {
@@ -38,34 +43,32 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    const { data: peserta, error: pErr } = await supabaseAdmin
-      .from('peserta')
-      .select('id, name, gender, kelas:kelas_id(id, name, musyrif:musyrif_id(id, name, gender, whatsapp_number))')
-      .eq('id', pesertaId)
+    // Resolve syaikh aktif untuk gender ini
+    const { data: syaikh, error: syaikhErr } = await supabaseAdmin
+      .from('syaikh')
+      .select('id, name, gender, whatsapp_number')
+      .eq('gender', musyrifGender)
       .eq('active', true)
-      .single();
-    if (pErr || !peserta) {
-      return NextResponse.json({ error: 'Peserta tidak ditemukan' }, { status: 404 });
+      .maybeSingle();
+    if (syaikhErr || !syaikh) {
+      return NextResponse.json(
+        { error: 'Belum ada Syaikh/Ustadzah aktif untuk gender Anda.' },
+        { status: 404 }
+      );
     }
-    const kelas = peserta.kelas as unknown as {
-      id: string;
-      name: string;
-      musyrif: { id: string; name: string; gender: 'ikhwan' | 'akhwat'; whatsapp_number: string };
-    };
-    const musyrif = kelas.musyrif;
 
     const weekStart = currentCycleStart();
 
     const { data: existing } = await supabaseAdmin
-      .from('setoran')
+      .from('setoran_musyrif')
       .select('id, status')
-      .eq('peserta_id', pesertaId)
+      .eq('musyrif_id', musyrifId)
       .eq('week_start', weekStart)
       .maybeSingle();
 
     if (existing && existing.status === 'checked') {
       return NextResponse.json(
-        { error: 'Setoran pekan ini sudah dicek musyrif, tidak bisa diubah.' },
+        { error: 'Setoran cycle ini sudah dicek, tidak bisa diubah.' },
         { status: 409 }
       );
     }
@@ -75,8 +78,8 @@ export async function POST(req: NextRequest) {
       setoranId = existing.id;
     } else {
       const { data: inserted, error: insErr } = await supabaseAdmin
-        .from('setoran')
-        .insert({ peserta_id: pesertaId, week_start: weekStart, status: 'draft' })
+        .from('setoran_musyrif')
+        .insert({ musyrif_id: musyrifId, week_start: weekStart, status: 'draft' })
         .select('id')
         .single();
       if (insErr || !inserted) {
@@ -94,18 +97,18 @@ export async function POST(req: NextRequest) {
     for (const jenis of JENIS_REKAMAN) {
       const file = files[jenis]!;
       const buffer = Buffer.from(await file.arrayBuffer());
-      const path = await uploadAudio({
-        pesertaId,
+      const path = await uploadAudioMusyrif({
+        musyrifId,
         weekStart,
         jenis,
         blob: buffer,
         contentType: file.type || 'audio/webm',
       });
       const { error: rErr } = await supabaseAdmin
-        .from('rekaman')
+        .from('rekaman_musyrif')
         .upsert(
           {
-            setoran_id: setoranId,
+            setoran_musyrif_id: setoranId,
             jenis,
             audio_url: path,
             duration_seconds: durations[jenis],
@@ -114,7 +117,7 @@ export async function POST(req: NextRequest) {
             masukan: null,
             checked_at: null,
           },
-          { onConflict: 'setoran_id,jenis' }
+          { onConflict: 'setoran_musyrif_id,jenis' }
         );
       if (rErr) {
         return NextResponse.json(
@@ -125,7 +128,7 @@ export async function POST(req: NextRequest) {
     }
 
     const { error: sErr } = await supabaseAdmin
-      .from('setoran')
+      .from('setoran_musyrif')
       .update({ status: 'submitted' })
       .eq('id', setoranId);
     if (sErr) {
@@ -135,20 +138,19 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const cekUrl = absUrl(`/musyrif/cek/${setoranId}`);
-    const waText = tplPesertaSubmitToMusyrif({
-      pesertaName: peserta.name,
-      pesertaGender: peserta.gender as 'ikhwan' | 'akhwat',
-      kelasName: kelas.name,
-      musyrifGender: musyrif.gender,
+    const cekUrl = absUrl(`/syaikh/cek/${setoranId}`);
+    const waText = tplMusyrifSubmitToSyaikh({
+      musyrifName,
+      musyrifGender,
+      syaikhGender: syaikh.gender as Gender,
       cekUrl,
     });
-    const waUrl = buildWaMeUrl(musyrif.whatsapp_number, waText);
+    const waUrl = buildWaMeUrl(syaikh.whatsapp_number, waText);
 
     return NextResponse.json({
       ok: true,
       setoran_id: setoranId,
-      musyrif_name: musyrif.name,
+      syaikh_name: syaikh.name,
       wa_url: waUrl,
     });
   } catch (e: unknown) {

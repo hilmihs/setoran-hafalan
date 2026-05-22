@@ -5,15 +5,19 @@ import { supabaseAdmin } from '@/lib/supabase-admin';
 import { logout } from '@/lib/auth';
 import { Icon, Initials } from '@/components/icons';
 import {
-  currentWeekStart,
-  formatWeekRange,
-  previousWeeks,
+  currentCycleStart,
+  formatCycleRange,
+  previousCycles,
 } from '@/lib/week';
 import {
   buildWaMeUrl,
+  salutation,
   tplReminderPesertaBelumSetor,
   tplReminderMusyrifBelumCek,
+  tplReminderMusyrifBelumSetor,
 } from '@/lib/whatsapp';
+import { absUrl, appOrigin } from '@/lib/url';
+import { KoordinatorFilterBar } from '@/components/KoordinatorFilterBar';
 import type { Gender, NilaiRekaman, StatusSetoran } from '@/types/db';
 
 export const dynamic = 'force-dynamic';
@@ -29,20 +33,25 @@ export default async function KoordinatorDashboard({
   if (!s.session || s.session.role !== 'koordinator') {
     redirect('/koordinator/login');
   }
+  const koordinatorGender = s.session.gender;
 
-  const week = searchParams.week ?? currentWeekStart();
-  const genderFilter = (searchParams.gender as Gender | undefined) ?? null;
+  const week = searchParams.week ?? currentCycleStart();
+  // View cross-gender penuh: koordinator (ikhwan & akhwat) lihat semua data.
+  // Aksi (kirim reminder) tetap di-gating same-gender di UI bawah.
+  const genderFilter: Gender | null =
+    searchParams.gender === 'ikhwan' || searchParams.gender === 'akhwat'
+      ? (searchParams.gender as Gender)
+      : null;
   const kelasFilter = searchParams.kelas ?? null;
   const statusFilter = searchParams.status ?? null;
   const q = (searchParams.q ?? '').trim().toLowerCase();
 
-  const appOrigin = process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, '') ?? '';
+  const origin = appOrigin();
 
-  // Fetch all kelas (for filter dropdowns) + filtered set for query
+  // Fetch semua kelas (kedua gender). Dropdown filter ada opsi gender + kelas.
   const { data: allKelas } = await supabaseAdmin
     .from('kelas')
-    .select('id, name, gender, musyrif:musyrif_id(id, name, whatsapp_number)')
-    .order('gender')
+    .select('id, name, gender, musyrif:musyrif_id(id, name, gender, whatsapp_number)')
     .order('name');
 
   const kelasList = (allKelas ?? []).filter((k) => {
@@ -107,7 +116,7 @@ export default async function KoordinatorDashboard({
         id: string;
         name: string;
         gender: Gender;
-        musyrif: { id: string; name: string; whatsapp_number: string };
+        musyrif: { id: string; name: string; gender: Gender; whatsapp_number: string };
       },
     ])
   );
@@ -140,7 +149,48 @@ export default async function KoordinatorDashboard({
     selesai: rowsAll.filter((r) => r.statusKey === 'selesai').length,
   };
 
-  const weekOptions = [currentWeekStart(), ...previousWeeks(8)];
+  const weekOptions = [currentCycleStart(), ...previousCycles(8)];
+
+  // Status setoran musyrif → syaikh untuk cycle yang dipilih (read-only,
+  // koordinator tidak meminder; itu tugas syaikh).
+  const allMusyrifIds = Array.from(
+    new Set(
+      (allKelas ?? [])
+        .map((k) => (k.musyrif as unknown as { id: string } | null)?.id)
+        .filter((id): id is string => typeof id === 'string')
+    )
+  );
+  const { data: musyrifSetoranList } = await supabaseAdmin
+    .from('setoran_musyrif')
+    .select('musyrif_id, status, submitted_at, checked_at')
+    .in(
+      'musyrif_id',
+      allMusyrifIds.length ? allMusyrifIds : ['00000000-0000-0000-0000-000000000000']
+    )
+    .eq('week_start', week);
+  const musyrifSetoranByMusyrif = new Map(
+    (musyrifSetoranList ?? []).map((m) => [m.musyrif_id, m])
+  );
+  // Daftar musyrif unik dari kelasList (deduped by id)
+  const musyrifMap = new Map<
+    string,
+    { id: string; name: string; gender: Gender; whatsapp_number: string }
+  >();
+  for (const k of allKelas ?? []) {
+    const m = k.musyrif as unknown as
+      | { id: string; name: string; gender: Gender; whatsapp_number: string }
+      | null;
+    if (m?.id && !musyrifMap.has(m.id)) {
+      musyrifMap.set(m.id, m);
+    }
+  }
+  const musyrifSummaryRows = Array.from(musyrifMap.values()).map((m) => {
+    const st = musyrifSetoranByMusyrif.get(m.id);
+    let statusKey: 'belum' | 'menunggu' | 'selesai' = 'belum';
+    if (st?.status === 'checked') statusKey = 'selesai';
+    else if (st?.status === 'submitted') statusKey = 'menunggu';
+    return { musyrif: m, statusKey };
+  });
 
   return (
     <main style={{ minHeight: '100vh' }}>
@@ -161,13 +211,13 @@ export default async function KoordinatorDashboard({
           </Link>
           <span style={{ width: 1, height: 16, background: 'var(--line-2)' }} />
           <span className="t-small" style={{ color: 'var(--ink-2)', fontWeight: 500 }}>
-            Koordinator
+            Koordinator {koordinatorGender === 'ikhwan' ? 'Ikhwan' : 'Akhwat'}
           </span>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
           <span className="pekan-tag">
             <span className="dot" />
-            Pekan {formatWeekRange(week)}
+            Pekan {formatCycleRange(week)}
           </span>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <div
@@ -184,6 +234,20 @@ export default async function KoordinatorDashboard({
             </div>
             <span style={{ fontSize: 13, fontWeight: 600 }}>{s.session.name}</span>
           </div>
+          <Link
+            href="/laporan"
+            className="btn btn-sm btn-ghost"
+            style={{ height: 30, padding: '0 12px', textDecoration: 'none' }}
+          >
+            Laporan
+          </Link>
+          <Link
+            href="/koordinator/admin"
+            className="btn btn-sm btn-ghost"
+            style={{ height: 30, padding: '0 12px', textDecoration: 'none' }}
+          >
+            Admin
+          </Link>
           <Link
             href="/akun"
             className="btn btn-sm btn-ghost"
@@ -251,46 +315,25 @@ export default async function KoordinatorDashboard({
           </div>
         </div>
 
-        {/* Filter bar */}
-        <form method="get" className="filter-bar">
-          <div className="search">
-            {Icon.search(13)}
-            <input
-              name="q"
-              defaultValue={q}
-              placeholder="Cari peserta…"
-            />
-          </div>
-          <select name="week" defaultValue={week} className="chip-select">
-            {weekOptions.map((w) => (
-              <option key={w} value={w}>
-                {formatWeekRange(w)}
-              </option>
-            ))}
-          </select>
-          <select name="gender" defaultValue={genderFilter ?? ''} className="chip-select">
-            <option value="">Semua gender</option>
-            <option value="ikhwan">Ikhwan</option>
-            <option value="akhwat">Akhwat</option>
-          </select>
-          <select name="kelas" defaultValue={kelasFilter ?? ''} className="chip-select">
-            <option value="">Semua kelas</option>
-            {(allKelas ?? []).map((k) => (
-              <option key={k.id} value={k.id}>
-                {k.name} ({k.gender})
-              </option>
-            ))}
-          </select>
-          <select name="status" defaultValue={statusFilter ?? ''} className="chip-select">
-            <option value="">Semua status</option>
-            <option value="belum">Belum setor</option>
-            <option value="menunggu">Menunggu cek</option>
-            <option value="selesai">Selesai</option>
-          </select>
-          <span className="grow" />
-          <button type="submit" className="act-btn">Terapkan</button>
-          <Link href="/koordinator" className="act-btn">Reset</Link>
-        </form>
+        {/* Filter bar (auto-apply on change) */}
+        <KoordinatorFilterBar
+          kelasOptions={(allKelas ?? []).map((k) => ({
+            id: k.id,
+            name: k.name,
+            gender: k.gender as Gender,
+          }))}
+          weekOptions={weekOptions.map((w) => ({
+            value: w,
+            label: formatCycleRange(w),
+          }))}
+          current={{
+            q: searchParams.q ?? '',
+            week,
+            kelas: kelasFilter,
+            status: statusFilter,
+            gender: genderFilter,
+          }}
+        />
 
         {/* Table */}
         <div className="card-flat" style={{ padding: 0, overflow: 'hidden' }}>
@@ -300,7 +343,7 @@ export default async function KoordinatorDashboard({
                 <tr>
                   <th style={{ width: '26%' }}>Peserta</th>
                   <th style={{ width: '12%' }}>Kelas</th>
-                  <th style={{ width: '18%' }}>Musyrif</th>
+                  <th style={{ width: '18%' }}>Musyrif/Musyrifah</th>
                   <th style={{ width: '14%' }}>Status</th>
                   <th style={{ width: '12%' }}>Nilai</th>
                   <th style={{ width: '18%' }}>Aksi</th>
@@ -356,7 +399,7 @@ export default async function KoordinatorDashboard({
                           peserta={peserta}
                           setoranId={setoran?.id ?? null}
                           kelas={kelas}
-                          appOrigin={appOrigin}
+                          origin={origin}
                         />
                       </td>
                     </tr>
@@ -369,6 +412,62 @@ export default async function KoordinatorDashboard({
 
         <div className="t-small">
           Menampilkan {rows.length} dari {counters.total} peserta
+        </div>
+
+        {/* Status setoran musyrif → syaikh */}
+        <div style={{ marginTop: 12 }}>
+          <div className="section-row">
+            <div className="t-tiny">Setoran musyrif → Syaikh/Ustadzah</div>
+            <div className="t-small">{musyrifSummaryRows.length} musyrif</div>
+          </div>
+          <div className="card-flat" style={{ overflow: 'hidden' }}>
+            {musyrifSummaryRows.length === 0 ? (
+              <div style={{ padding: 14 }}>
+                <p className="t-small">Belum ada musyrif terdaftar.</p>
+              </div>
+            ) : (
+              musyrifSummaryRows.map(({ musyrif, statusKey }) => {
+                const sameGender = musyrif.gender === koordinatorGender;
+                const setorUrl = absUrl('/musyrif/setor');
+                const reminderWa =
+                  sameGender && statusKey === 'belum'
+                    ? buildWaMeUrl(
+                        musyrif.whatsapp_number,
+                        tplReminderMusyrifBelumSetor({
+                          musyrifName: musyrif.name,
+                          musyrifGender: musyrif.gender,
+                          setorUrl,
+                        })
+                      )
+                    : null;
+                return (
+                  <div key={musyrif.id} className="row">
+                    <div className="avatar">
+                      <Initials name={musyrif.name} />
+                    </div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 14, fontWeight: 600 }}>{musyrif.name}</div>
+                      <div style={{ fontSize: 12, color: 'var(--muted)' }}>
+                        {salutation(musyrif.gender)}
+                      </div>
+                    </div>
+                    {reminderWa && (
+                      <a
+                        href={reminderWa}
+                        target="_blank"
+                        rel="noopener"
+                        className="act-btn wa"
+                        style={{ textDecoration: 'none', marginRight: 8 }}
+                      >
+                        {Icon.wa(11)} Ingatkan
+                      </a>
+                    )}
+                    <StatusBadge status={statusKey} />
+                  </div>
+                );
+              })
+            )}
+          </div>
         </div>
       </div>
     </main>
@@ -405,7 +504,7 @@ function ActionCell({
   peserta,
   setoranId,
   kelas,
-  appOrigin,
+  origin,
 }: {
   statusKey: 'belum' | 'menunggu' | 'selesai';
   peserta: { name: string; whatsapp_number: string; gender: Gender };
@@ -414,16 +513,20 @@ function ActionCell({
     | {
         name: string;
         gender: Gender;
-        musyrif: { name: string; whatsapp_number: string };
+        musyrif: { name: string; gender: Gender; whatsapp_number: string };
       }
     | undefined;
-  appOrigin: string;
+  origin: string;
 }) {
   if (statusKey === 'belum') {
-    const setorUrl = `${appOrigin}/`;
+    const setorUrl = `${origin}/peserta`;
     const waUrl = buildWaMeUrl(
       peserta.whatsapp_number,
-      tplReminderPesertaBelumSetor({ pesertaName: peserta.name, setorUrl })
+      tplReminderPesertaBelumSetor({
+        pesertaName: peserta.name,
+        pesertaGender: peserta.gender,
+        setorUrl,
+      })
     );
     return (
       <a href={waUrl} target="_blank" rel="noopener" className="act-btn wa">
@@ -432,11 +535,12 @@ function ActionCell({
     );
   }
   if (statusKey === 'menunggu' && setoranId && kelas) {
-    const cekUrl = `${appOrigin}/musyrif/cek/${setoranId}`;
+    const cekUrl = absUrl(`/musyrif/cek/${setoranId}`);
     const waUrl = buildWaMeUrl(
       kelas.musyrif.whatsapp_number,
       tplReminderMusyrifBelumCek({
         musyrifName: kelas.musyrif.name,
+        musyrifGender: kelas.musyrif.gender,
         pesertaName: peserta.name,
         kelasName: kelas.name,
         cekUrl,

@@ -2,13 +2,21 @@
 
 import { useFormState, useFormStatus } from 'react-dom';
 import { useRef, useState } from 'react';
-import { submitCek, type CekResult } from '@/app/musyrif/cek/[id]/actions';
 import { Icon, Waveform } from '@/components/icons';
 import {
   JENIS_REKAMAN_LABEL,
   type JenisRekaman,
   type NilaiRekaman,
 } from '@/types/db';
+
+export type CekResult =
+  | { ok: true; waUrl: string }
+  | { ok?: false; error: string };
+
+type CekAction = (
+  prev: CekResult | undefined,
+  formData: FormData
+) => Promise<CekResult>;
 
 const JENIS_LABEL_CEK: Record<JenisRekaman, string> = {
   tuhfatul_athfal: 'Tuhfatul Athfal',
@@ -28,13 +36,19 @@ export function CekForm({
   setoranId,
   rekamanList,
   alreadyChecked,
+  action,
+  backHref = '/musyrif',
+  forwardLabel = 'Kirim hasil ke peserta',
 }: {
   setoranId: string;
   rekamanList: RekamanView[];
   alreadyChecked: boolean;
+  action: CekAction;
+  backHref?: string;
+  forwardLabel?: string;
 }) {
   const [state, formAction] = useFormState<CekResult | undefined, FormData>(
-    submitCek,
+    action,
     undefined
   );
   const [selected, setSelected] = useState<Record<JenisRekaman, NilaiRekaman | null>>(
@@ -68,9 +82,9 @@ export function CekForm({
           </div>
         </div>
         <a href={state.waUrl} target="_blank" rel="noopener" className="btn btn-wa btn-block">
-          {Icon.wa(14)} Kirim hasil ke peserta
+          {Icon.wa(14)} {forwardLabel}
         </a>
-        <a href="/musyrif" className="btn btn-ghost btn-block" style={{ marginTop: 12 }}>
+        <a href={backHref} className="btn btn-ghost btn-block" style={{ marginTop: 12 }}>
           Kembali ke dashboard
         </a>
       </div>

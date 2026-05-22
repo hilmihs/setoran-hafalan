@@ -1,10 +1,14 @@
 /**
  * Hapus audio dengan dua aturan retensi:
  *
- *   1. BELUM DICEK : audio_url dihapus kalau recorded_at > 3 pekan lalu
- *      (musyrif terlalu lama tidak cek; setoran ditinggalkan)
- *   2. SUDAH DICEK : audio_url dihapus kalau checked_at > 1 pekan lalu
+ *   1. BELUM DICEK : audio_url dihapus kalau recorded_at > 4 pekan lalu
+ *      (di atas 1 cycle 2-pekan + buffer; musyrif/syaikh terlalu lama tidak cek)
+ *   2. SUDAH DICEK : audio_url dihapus kalau checked_at > 2 pekan lalu
  *      (sudah dinilai, audio tidak perlu disimpan lama-lama)
+ *
+ * Diterapkan untuk:
+ *   - rekaman (peserta → musyrif)
+ *   - rekaman_musyrif (musyrif → syaikh)
  *
  * Audit trail tetap di tabel rekaman (nilai + masukan), hanya file storage
  * yang dihapus + kolom audio_url di-null-kan.
@@ -13,8 +17,8 @@
  */
 import { supabaseAdmin, AUDIO_BUCKET } from '../src/lib/supabase-admin';
 
-const RETENTION_UNCHECKED_WEEKS = 3;
-const RETENTION_CHECKED_WEEKS = 1;
+const RETENTION_UNCHECKED_WEEKS = 4;
+const RETENTION_CHECKED_WEEKS = 2;
 const BATCH_SIZE = 100;
 
 function weeksAgoIso(weeks: number): string {
@@ -28,7 +32,10 @@ interface Row {
   audio_url: string | null;
 }
 
-async function deleteBatch(rows: Row[]): Promise<{ deleted: number; failed: number }> {
+async function deleteBatch(
+  table: 'rekaman' | 'rekaman_musyrif',
+  rows: Row[]
+): Promise<{ deleted: number; failed: number }> {
   if (rows.length === 0) return { deleted: 0, failed: 0 };
 
   let failed = 0;
@@ -45,7 +52,7 @@ async function deleteBatch(rows: Row[]): Promise<{ deleted: number; failed: numb
 
   const ids = rows.map((r) => r.id);
   const { error: upErr } = await supabaseAdmin
-    .from('rekaman')
+    .from(table)
     .update({ audio_url: null })
     .in('id', ids);
   if (upErr) {
@@ -58,15 +65,17 @@ async function deleteBatch(rows: Row[]): Promise<{ deleted: number; failed: numb
 
 async function sweep(args: {
   label: string;
-  query: () => Promise<{ data: Row[] | null; error: Error | null }>;
+  table: 'rekaman' | 'rekaman_musyrif';
+  query: () => PromiseLike<{ data: unknown; error: { message: string } | null }>;
 }): Promise<{ total: number; failed: number }> {
   let total = 0;
   let failed = 0;
   while (true) {
-    const { data: rows, error } = await args.query();
-    if (error) throw error;
-    if (!rows || rows.length === 0) break;
-    const r = await deleteBatch(rows);
+    const { data, error } = await args.query();
+    if (error) throw new Error(error.message);
+    const rows = (data ?? []) as Row[];
+    if (rows.length === 0) break;
+    const r = await deleteBatch(args.table, rows);
     total += r.deleted;
     failed += r.failed;
     if (rows.length < BATCH_SIZE) break;
@@ -84,31 +93,53 @@ async function main() {
   console.log(`  • Sudah dicek + checked_at  < ${checkedCutoff}`);
   console.log();
 
-  const r1 = await sweep({
-    label: 'Belum dicek (>3 pekan)',
-    query: async () =>
-      supabaseAdmin
-        .from('rekaman')
-        .select('id, audio_url')
-        .not('audio_url', 'is', null)
-        .is('checked_at', null)
-        .lt('recorded_at', uncheckedCutoff)
-        .limit(BATCH_SIZE),
-  });
+  let totalAll = 0;
+  let failedAll = 0;
 
-  const r2 = await sweep({
-    label: 'Sudah dicek (>1 pekan)',
-    query: async () =>
-      supabaseAdmin
-        .from('rekaman')
-        .select('id, audio_url')
-        .not('audio_url', 'is', null)
-        .not('checked_at', 'is', null)
-        .lt('checked_at', checkedCutoff)
-        .limit(BATCH_SIZE),
-  });
+  const accumulate = async (label: string, table: 'rekaman' | 'rekaman_musyrif', q: () => PromiseLike<{ data: unknown; error: { message: string } | null }>) => {
+    const r = await sweep({ label, table, query: q });
+    totalAll += r.total;
+    failedAll += r.failed;
+  };
 
-  console.log(`\n✓ Total: ${r1.total + r2.total} file dihapus, ${r1.failed + r2.failed} gagal.`);
+  await accumulate('Peserta belum dicek (>4 pekan)', 'rekaman', () =>
+    supabaseAdmin
+      .from('rekaman')
+      .select('id, audio_url')
+      .not('audio_url', 'is', null)
+      .is('checked_at', null)
+      .lt('recorded_at', uncheckedCutoff)
+      .limit(BATCH_SIZE)
+  );
+  await accumulate('Peserta sudah dicek (>2 pekan)', 'rekaman', () =>
+    supabaseAdmin
+      .from('rekaman')
+      .select('id, audio_url')
+      .not('audio_url', 'is', null)
+      .not('checked_at', 'is', null)
+      .lt('checked_at', checkedCutoff)
+      .limit(BATCH_SIZE)
+  );
+  await accumulate('Musyrif belum dicek (>4 pekan)', 'rekaman_musyrif', () =>
+    supabaseAdmin
+      .from('rekaman_musyrif')
+      .select('id, audio_url')
+      .not('audio_url', 'is', null)
+      .is('checked_at', null)
+      .lt('recorded_at', uncheckedCutoff)
+      .limit(BATCH_SIZE)
+  );
+  await accumulate('Musyrif sudah dicek (>2 pekan)', 'rekaman_musyrif', () =>
+    supabaseAdmin
+      .from('rekaman_musyrif')
+      .select('id, audio_url')
+      .not('audio_url', 'is', null)
+      .not('checked_at', 'is', null)
+      .lt('checked_at', checkedCutoff)
+      .limit(BATCH_SIZE)
+  );
+
+  console.log(`\n✓ Total: ${totalAll} file dihapus, ${failedAll} gagal.`);
 }
 
 main().catch((err) => {

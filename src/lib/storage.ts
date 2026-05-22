@@ -38,6 +38,32 @@ export async function signedAudioUrl(
   return data.signedUrl;
 }
 
+export function audioObjectPathMusyrif(args: {
+  musyrifId: string;
+  weekStart: string;
+  jenis: JenisRekaman;
+}): string {
+  return `musyrif/${args.musyrifId}/${args.weekStart}/${args.jenis}.webm`;
+}
+
+export async function uploadAudioMusyrif(args: {
+  musyrifId: string;
+  weekStart: string;
+  jenis: JenisRekaman;
+  blob: Blob | Buffer;
+  contentType?: string;
+}): Promise<string> {
+  const path = audioObjectPathMusyrif(args);
+  const { error } = await supabaseAdmin.storage
+    .from(AUDIO_BUCKET)
+    .upload(path, args.blob as Blob, {
+      upsert: true,
+      contentType: args.contentType ?? 'audio/webm',
+    });
+  if (error) throw error;
+  return path;
+}
+
 export async function ensureAudioBucket(): Promise<void> {
   const { data, error } = await supabaseAdmin.storage.getBucket(AUDIO_BUCKET);
   if (data) return;

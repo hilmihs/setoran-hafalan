@@ -7,104 +7,93 @@ import { logout } from '@/lib/auth';
 import { Icon, Initials } from '@/components/icons';
 import {
   buildWaMeUrl,
-  salutation,
   syaikhTitle,
-  tplReminderPesertaBelumSetor,
+  tplReminderMusyrifBelumSetor,
 } from '@/lib/whatsapp';
 import { absUrl } from '@/lib/url';
 import type { Gender, NilaiRekaman, StatusSetoran } from '@/types/db';
 
 export const dynamic = 'force-dynamic';
 
-type PesertaRow = {
+type MusyrifRow = {
   id: string;
   name: string;
   gender: Gender;
-  kelas_id: string;
   whatsapp_number: string;
 };
 
-type SetoranRow = {
+type SetoranMusyrifRow = {
   id: string;
-  peserta_id: string;
+  musyrif_id: string;
   status: StatusSetoran;
   submitted_at: string | null;
   checked_at: string | null;
 };
 
-export default async function MusyrifDashboard() {
+export default async function SyaikhDashboard() {
   const s = await getSession();
-  if (!s.session || s.session.role !== 'musyrif') redirect('/musyrif/login');
-  const musyrifId = s.session.musyrif_id;
-  const musyrifGender = s.session.gender;
-  const sapaan = salutation(musyrifGender);
+  if (!s.session || s.session.role !== 'syaikh') redirect('/');
+  const syaikhId = s.session.syaikh_id;
+  const syaikhGender = s.session.gender;
+  const titel = syaikhTitle(syaikhGender);
 
   const cycle = currentCycleStart();
 
-  const { data: kelasList } = await supabaseAdmin
-    .from('kelas')
-    .select('id, name, gender')
-    .eq('musyrif_id', musyrifId);
-
-  const kelasIds = (kelasList ?? []).map((k) => k.id);
-
-  const { data: pesertaListRaw } = await supabaseAdmin
-    .from('peserta')
-    .select('id, name, gender, kelas_id, whatsapp_number')
+  // View cross-gender: tarik semua musyrif aktif. Aksi (cek/ingatkan)
+  // tetap di-gating same-gender di UI di bawah.
+  const { data: musyrifListRaw } = await supabaseAdmin
+    .from('musyrif')
+    .select('id, name, gender, whatsapp_number')
     .eq('active', true)
-    .in(
-      'kelas_id',
-      kelasIds.length ? kelasIds : ['00000000-0000-0000-0000-000000000000']
-    )
     .order('name');
-  const pesertaList = (pesertaListRaw ?? []) as PesertaRow[];
+  const musyrifList = (musyrifListRaw ?? []) as MusyrifRow[];
 
-  const pesertaIds = pesertaList.map((p) => p.id);
+  const musyrifIds = musyrifList.map((m) => m.id);
   const { data: setoranListRaw } = await supabaseAdmin
-    .from('setoran')
-    .select('id, peserta_id, status, submitted_at, checked_at')
+    .from('setoran_musyrif')
+    .select('id, musyrif_id, status, submitted_at, checked_at')
     .in(
-      'peserta_id',
-      pesertaIds.length ? pesertaIds : ['00000000-0000-0000-0000-000000000000']
+      'musyrif_id',
+      musyrifIds.length ? musyrifIds : ['00000000-0000-0000-0000-000000000000']
     )
     .eq('week_start', cycle);
-  const setoranList = (setoranListRaw ?? []) as SetoranRow[];
-  const setoranByPeserta = new Map(setoranList.map((st) => [st.peserta_id, st]));
+  const setoranList = (setoranListRaw ?? []) as SetoranMusyrifRow[];
+  const setoranByMusyrif = new Map(setoranList.map((st) => [st.musyrif_id, st]));
 
   const checkedIds = setoranList
     .filter((st) => st.status === 'checked')
     .map((st) => st.id);
   const { data: rekamanList } = await supabaseAdmin
-    .from('rekaman')
-    .select('setoran_id, jenis, nilai')
+    .from('rekaman_musyrif')
+    .select('setoran_musyrif_id, nilai')
     .in(
-      'setoran_id',
+      'setoran_musyrif_id',
       checkedIds.length ? checkedIds : ['00000000-0000-0000-0000-000000000000']
     );
 
   const rekamanBySetoran = new Map<string, NilaiRekaman[]>();
   for (const r of rekamanList ?? []) {
-    const arr = rekamanBySetoran.get(r.setoran_id) ?? [];
+    const arr = rekamanBySetoran.get(r.setoran_musyrif_id) ?? [];
     if (r.nilai) arr.push(r.nilai as NilaiRekaman);
-    rekamanBySetoran.set(r.setoran_id, arr);
+    rekamanBySetoran.set(r.setoran_musyrif_id, arr);
   }
-
-  const kelasById = new Map((kelasList ?? []).map((k) => [k.id, k]));
+  // suppress unused warning for syaikhId — kept for future audit logging
+  void syaikhId;
 
   type StatusKey = 'belum' | 'menunggu' | 'selesai';
   type Row = {
-    peserta: PesertaRow;
-    setoran: SetoranRow | undefined;
+    musyrif: MusyrifRow;
+    setoran: SetoranMusyrifRow | undefined;
     rekaman: NilaiRekaman[];
     statusKey: StatusKey;
   };
-  const rows: Row[] = pesertaList.map((p) => {
-    const setoran = setoranByPeserta.get(p.id);
+  const rows: Row[] = musyrifList.map((m) => {
+    const setoran = setoranByMusyrif.get(m.id);
     const rekaman = setoran ? rekamanBySetoran.get(setoran.id) ?? [] : [];
     let statusKey: StatusKey = 'belum';
     if (setoran?.status === 'submitted') statusKey = 'menunggu';
     else if (setoran?.status === 'checked') statusKey = 'selesai';
-    return { peserta: p, setoran, rekaman, statusKey };
+    return { musyrif: m, setoran, rekaman, statusKey };
   });
 
   const counters = {
@@ -114,25 +103,21 @@ export default async function MusyrifDashboard() {
     selesai: rows.filter((r) => r.statusKey === 'selesai').length,
   };
 
-  // Setoran musyrif → syaikh untuk cycle ini
-  const { data: selfSetoranRaw } = await supabaseAdmin
-    .from('setoran_musyrif')
-    .select('id, status')
-    .eq('musyrif_id', musyrifId)
-    .eq('week_start', cycle)
-    .maybeSingle();
-  const selfSetoran = selfSetoranRaw as
-    | { id: string; status: StatusSetoran }
-    | null;
-
   return (
     <main style={{ minHeight: '100vh' }}>
-      <div style={{ maxWidth: 480, margin: '0 auto' }}>
+      <div style={{ maxWidth: 720, margin: '0 auto' }}>
         <div className="topbar">
           <div className="wordmark">
             <span className="mark">M</span>Maahir
           </div>
           <div style={{ display: 'flex', gap: 8 }}>
+            <Link
+              href="/laporan"
+              className="btn btn-sm btn-ghost"
+              style={{ height: 30, padding: '0 10px', textDecoration: 'none' }}
+            >
+              Laporan
+            </Link>
             <Link
               href="/akun"
               className="btn btn-sm btn-ghost"
@@ -141,7 +126,11 @@ export default async function MusyrifDashboard() {
               Akun
             </Link>
             <form action={logout}>
-              <button type="submit" className="btn btn-sm btn-ghost" style={{ height: 30, padding: '0 10px' }}>
+              <button
+                type="submit"
+                className="btn btn-sm btn-ghost"
+                style={{ height: 30, padding: '0 10px' }}
+              >
                 {Icon.logout(12)} Keluar
               </button>
             </form>
@@ -157,7 +146,7 @@ export default async function MusyrifDashboard() {
               <Initials name={s.session.name} />
             </div>
             <div style={{ flex: 1 }}>
-              <div style={{ fontSize: 12, color: 'var(--muted)' }}>{sapaan}</div>
+              <div style={{ fontSize: 12, color: 'var(--muted)' }}>{titel}</div>
               <div style={{ fontSize: 16, fontWeight: 600 }}>{s.session.name}</div>
             </div>
             <span className="pekan-tag">
@@ -166,20 +155,6 @@ export default async function MusyrifDashboard() {
             </span>
           </div>
 
-          {/* Setoran musyrif → syaikh */}
-          <div className="section-row">
-            <div className="t-tiny">Setoran saya ke {syaikhTitle(musyrifGender)}</div>
-            <SelfSetoranBadge status={selfSetoran?.status} />
-          </div>
-          <div className="card-flat" style={{ padding: 14, marginBottom: 16 }}>
-            <SelfSetoranAction
-              status={selfSetoran?.status ?? null}
-              setoranId={selfSetoran?.id ?? null}
-              musyrifGender={musyrifGender}
-            />
-          </div>
-
-          {/* Stats peserta */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10, marginBottom: 14 }}>
             <div className="stat">
               <div className="v" style={{ color: 'var(--merah-ink)' }}>{counters.belum}</div>
@@ -205,46 +180,45 @@ export default async function MusyrifDashboard() {
           </div>
 
           <div className="section-row">
-            <div className="t-tiny">Peserta saya</div>
+            <div className="t-tiny">Musyrif &amp; Musyrifah</div>
             <div className="t-small">{counters.total} orang</div>
           </div>
 
           {rows.length === 0 ? (
             <div className="card-flat" style={{ padding: 18 }}>
-              <p className="t-small">Belum ada peserta di kelas Anda.</p>
+              <p className="t-small">Belum ada musyrif/musyrifah terdaftar.</p>
             </div>
           ) : (
             <div className="card-flat" style={{ overflow: 'hidden' }}>
-              {rows.map(({ peserta, setoran, rekaman, statusKey }) => {
-                const k = kelasById.get(peserta.kelas_id);
-                const setorUrl = absUrl('/peserta');
+              {rows.map(({ musyrif, setoran, rekaman, statusKey }) => {
+                const setorUrl = absUrl('/musyrif/setor');
                 const reminderWa = buildWaMeUrl(
-                  peserta.whatsapp_number,
-                  tplReminderPesertaBelumSetor({
-                    pesertaName: peserta.name,
-                    pesertaGender: peserta.gender,
+                  musyrif.whatsapp_number,
+                  tplReminderMusyrifBelumSetor({
+                    musyrifName: musyrif.name,
+                    musyrifGender: musyrif.gender,
                     setorUrl,
                   })
                 );
                 return (
                   <div
-                    key={peserta.id}
+                    key={musyrif.id}
                     className="row"
                     style={{ color: 'var(--ink)' }}
                   >
                     <div className="avatar">
-                      <Initials name={peserta.name} />
+                      <Initials name={musyrif.name} />
                     </div>
                     <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontSize: 14, fontWeight: 600 }}>{peserta.name}</div>
+                      <div style={{ fontSize: 14, fontWeight: 600 }}>{musyrif.name}</div>
                       <div style={{ fontSize: 12, color: 'var(--muted)' }}>
-                        Kelas {k?.name ?? '-'}
+                        <StatusLabel statusKey={statusKey} />
                         {setoran?.submitted_at && statusKey !== 'belum' && (
                           <> · {formatTime(setoran.submitted_at)}</>
                         )}
                       </div>
                     </div>
-                    {statusKey === 'belum' && (
+                    {statusKey === 'belum' && musyrif.gender === syaikhGender && (
                       <a
                         href={reminderWa}
                         target="_blank"
@@ -255,15 +229,20 @@ export default async function MusyrifDashboard() {
                         {Icon.wa(11)} Ingatkan
                       </a>
                     )}
-                    {statusKey === 'menunggu' && setoran && (
+                    {statusKey === 'menunggu' && setoran && musyrif.gender === syaikhGender && (
                       <Link
-                        href={`/musyrif/cek/${setoran.id}`}
+                        href={`/syaikh/cek/${setoran.id}`}
                         className="badge badge-kuning"
                         style={{ textDecoration: 'none' }}
                       >
                         <span className="dot" />
                         Cek
                       </Link>
+                    )}
+                    {musyrif.gender !== syaikhGender && (
+                      <span className="t-tiny" style={{ color: 'var(--muted)' }}>
+                        {musyrif.gender === 'ikhwan' ? 'ikhwan' : 'akhwat'}
+                      </span>
                     )}
                     {statusKey === 'selesai' && (
                       <span className="nilai-trio">
@@ -286,67 +265,10 @@ export default async function MusyrifDashboard() {
   );
 }
 
-function SelfSetoranBadge({ status }: { status: StatusSetoran | undefined }) {
-  if (status === 'checked') {
-    return (
-      <span className="badge badge-hijau">
-        <span className="dot" />
-        sudah dinilai
-      </span>
-    );
-  }
-  if (status === 'submitted') {
-    return (
-      <span className="badge badge-kuning">
-        <span className="dot" />
-        menunggu cek
-      </span>
-    );
-  }
-  return (
-    <span className="badge badge-merah">
-      <span className="dot" />
-      belum setor
-    </span>
-  );
-}
-
-function SelfSetoranAction({
-  status,
-  setoranId: _setoranId,
-  musyrifGender,
-}: {
-  status: StatusSetoran | null;
-  setoranId: string | null;
-  musyrifGender: Gender;
-}) {
-  if (status === 'checked') {
-    return (
-      <div className="t-small">
-        Antum sudah dinilai cycle ini. Barakallahu fiik.
-      </div>
-    );
-  }
-  if (status === 'submitted') {
-    return (
-      <Link
-        href="/musyrif/setor"
-        className="btn btn-block btn-ghost"
-        style={{ textDecoration: 'none' }}
-      >
-        Lihat / rekam ulang setoran saya
-      </Link>
-    );
-  }
-  return (
-    <Link
-      href="/musyrif/setor"
-      className="btn btn-block btn-primary"
-      style={{ textDecoration: 'none' }}
-    >
-      {Icon.mic(14)} Setor ke {syaikhTitle(musyrifGender)} sekarang
-    </Link>
-  );
+function StatusLabel({ statusKey }: { statusKey: 'belum' | 'menunggu' | 'selesai' }) {
+  if (statusKey === 'belum') return <span style={{ color: 'var(--merah-ink)' }}>belum setor</span>;
+  if (statusKey === 'menunggu') return <span style={{ color: 'var(--kuning-ink)' }}>menunggu cek</span>;
+  return <span style={{ color: 'var(--hijau-ink)' }}>selesai</span>;
 }
 
 function formatTime(iso: string | null): string {

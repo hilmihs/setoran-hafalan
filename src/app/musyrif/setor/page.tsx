@@ -9,60 +9,66 @@ import {
 import { Icon } from '@/components/icons';
 import { logout } from '@/lib/auth';
 import { currentCycleStart, formatCycleRange } from '@/lib/week';
-import { buildWaMeUrl, musyrifTitle, tplPesertaSubmitToMusyrif } from '@/lib/whatsapp';
+import {
+  buildWaMeUrl,
+  salutation,
+  syaikhTitle,
+  tplMusyrifSubmitToSyaikh,
+} from '@/lib/whatsapp';
 import { absUrl } from '@/lib/url';
-import type { JenisRekaman, NilaiRekaman } from '@/types/db';
+import type { JenisRekaman, NilaiRekaman, Gender } from '@/types/db';
 
 export const dynamic = 'force-dynamic';
 
-export default async function PesertaPage() {
+export default async function MusyrifSetorPage() {
   const s = await getSession();
-  if (!s.session || s.session.role !== 'peserta') redirect('/');
-  const session = s.session;
+  if (!s.session || s.session.role !== 'musyrif') redirect('/musyrif/login');
+  const musyrifId = s.session.musyrif_id;
+  const musyrifGender = s.session.gender;
 
-  const { data: kelas } = await supabaseAdmin
-    .from('kelas')
-    .select('id, name, musyrif:musyrif_id(id, name, gender, whatsapp_number)')
-    .eq('id', session.kelas_id)
+  // Resolve syaikh untuk gender ini
+  const { data: syaikhRaw } = await supabaseAdmin
+    .from('syaikh')
+    .select('id, name, gender, whatsapp_number')
+    .eq('gender', musyrifGender)
+    .eq('active', true)
     .maybeSingle();
+  const syaikh = syaikhRaw as
+    | { id: string; name: string; gender: Gender; whatsapp_number: string }
+    | null;
 
-  const musyrif = kelas?.musyrif as
-    | { id: string; name: string; gender: 'ikhwan' | 'akhwat'; whatsapp_number: string }
-    | undefined;
-
-  const week = currentCycleStart();
+  const cycle = currentCycleStart();
 
   const { data: setoran } = await supabaseAdmin
-    .from('setoran')
+    .from('setoran_musyrif')
     .select('id, status')
-    .eq('peserta_id', session.peserta_id)
-    .eq('week_start', week)
+    .eq('musyrif_id', musyrifId)
+    .eq('week_start', cycle)
     .maybeSingle();
 
   let existing: ExistingSetoran | null = null;
   if (setoran && (setoran.status === 'submitted' || setoran.status === 'checked')) {
     const { data: rekaman } = await supabaseAdmin
-      .from('rekaman')
+      .from('rekaman_musyrif')
       .select('jenis, nilai, masukan')
-      .eq('setoran_id', setoran.id);
+      .eq('setoran_musyrif_id', setoran.id);
 
-    let musyrifWaUrl: string | null = null;
-    if (setoran.status === 'submitted' && musyrif) {
-      const cekUrl = absUrl(`/musyrif/cek/${setoran.id}`);
-      const waText = tplPesertaSubmitToMusyrif({
-        pesertaName: session.name,
-        pesertaGender: session.gender,
-        kelasName: kelas?.name ?? '',
-        musyrifGender: musyrif.gender,
+    let syaikhWaUrl: string | null = null;
+    if (setoran.status === 'submitted' && syaikh) {
+      const cekUrl = absUrl(`/syaikh/cek/${setoran.id}`);
+      const waText = tplMusyrifSubmitToSyaikh({
+        musyrifName: s.session.name,
+        musyrifGender,
+        syaikhGender: syaikh.gender,
         cekUrl,
       });
-      musyrifWaUrl = buildWaMeUrl(musyrif.whatsapp_number, waText);
+      syaikhWaUrl = buildWaMeUrl(syaikh.whatsapp_number, waText);
     }
 
     existing = {
       id: setoran.id,
       status: setoran.status,
-      musyrifWaUrl,
+      musyrifWaUrl: syaikhWaUrl,
       rekaman: (rekaman ?? []).map((r) => ({
         jenis: r.jenis as JenisRekaman,
         nilai: (r.nilai as NilaiRekaman | null) ?? null,
@@ -70,6 +76,9 @@ export default async function PesertaPage() {
       })),
     };
   }
+
+  const sapaan = salutation(musyrifGender);
+  const titel = syaikh ? syaikhTitle(syaikh.gender) : musyrifGender === 'ikhwan' ? 'Syaikh' : 'Ustadzah';
 
   return (
     <main style={{ minHeight: '100vh' }}>
@@ -80,18 +89,14 @@ export default async function PesertaPage() {
           </div>
           <div style={{ display: 'flex', gap: 8 }}>
             <Link
-              href="/akun"
+              href="/musyrif"
               className="btn btn-sm btn-ghost"
-              style={{ height: 30, padding: '0 10px' }}
+              style={{ height: 30, padding: '0 10px', textDecoration: 'none' }}
             >
-              Akun
+              {Icon.back(12)} Dashboard
             </Link>
             <form action={logout}>
-              <button
-                type="submit"
-                className="btn btn-sm btn-ghost"
-                style={{ height: 30, padding: '0 10px' }}
-              >
+              <button type="submit" className="btn btn-sm btn-ghost" style={{ height: 30, padding: '0 10px' }}>
                 {Icon.logout(12)} Keluar
               </button>
             </form>
@@ -100,40 +105,34 @@ export default async function PesertaPage() {
 
         <div className="page">
           <div className="row" style={{ padding: '4px 0 14px' }}>
-            <div
-              className="avatar"
-              style={{ background: 'var(--accent-tint)', color: 'var(--accent-2)' }}
-            >
-              {initialsOf(session.name)}
-            </div>
             <div style={{ flex: 1 }}>
-              <div style={{ fontSize: 12, color: 'var(--muted)' }}>Peserta</div>
-              <div style={{ fontSize: 16, fontWeight: 600 }}>{session.name}</div>
+              <div style={{ fontSize: 12, color: 'var(--muted)' }}>{sapaan}</div>
+              <div style={{ fontSize: 16, fontWeight: 600 }}>{s.session.name}</div>
             </div>
             <span className="pekan-tag">
               <span className="dot" />
-              Pekan {formatCycleRange(week)}
+              Pekan {formatCycleRange(cycle)}
             </span>
           </div>
 
           <h1 className="t-h1" style={{ marginBottom: 2 }}>
-            Setoran cycle ini
+            Setoran ke {titel}
           </h1>
           <p className="t-small" style={{ marginBottom: 18 }}>
-            Kelas {kelas?.name ?? '—'}
-            {musyrif && <> · disampaikan ke {musyrif.name}</>}
+            {syaikh ? <>disampaikan ke {titel} {syaikh.name}</> : 'belum ada Syaikh/Ustadzah aktif'}
           </p>
 
-          {musyrif ? (
+          {syaikh ? (
             <PesertaSetoranForm
-              musyrifName={musyrif.name}
-              musyrifInitials={initialsOf(musyrif.name)}
+              musyrifName={`${titel} ${syaikh.name}`}
+              musyrifInitials={initialsOf(syaikh.name)}
               existing={existing}
-              targetRoleLabel={`${musyrifTitle(musyrif.gender)} kelas Anda`}
+              endpoint="/api/setoran-musyrif/submit"
+              targetRoleLabel={`${titel} Anda`}
             />
           ) : (
             <p className="t-body">
-              Belum ada musyrif untuk kelas Anda. Hubungi koordinator.
+              Tidak ada {titel.toLowerCase()} aktif untuk gender ini. Hubungi koordinator.
             </p>
           )}
         </div>

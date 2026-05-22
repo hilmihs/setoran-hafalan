@@ -9,7 +9,7 @@ import { normalizeWhatsApp } from './whatsapp';
 const BCRYPT_COST = 12;
 
 /**
- * Unified login: cari nomor WA berurutan di peserta → musyrif → koordinator.
+ * Unified login: cari nomor WA berurutan di peserta → musyrif → koordinator → syaikh.
  * Set session sesuai role yang ketemu, lalu redirect ke landing role tsb.
  */
 export async function login(
@@ -72,7 +72,7 @@ export async function login(
   // 3. Koordinator
   const { data: koor } = await supabaseAdmin
     .from('koordinator')
-    .select('id, name, password_hash, active')
+    .select('id, name, gender, password_hash, active')
     .eq('whatsapp_number', wa)
     .maybeSingle();
   if (koor && koor.active) {
@@ -87,9 +87,35 @@ export async function login(
         role: 'koordinator',
         koordinator_id: koor.id,
         name: koor.name,
+        gender: koor.gender,
       };
       await s.save();
       redirect('/koordinator');
+    }
+  }
+
+  // 4. Syaikh / Ustadzah
+  const { data: syaikh } = await supabaseAdmin
+    .from('syaikh')
+    .select('id, name, gender, password_hash, active')
+    .eq('whatsapp_number', wa)
+    .maybeSingle();
+  if (syaikh && syaikh.active) {
+    const ok = await bcrypt.compare(password, syaikh.password_hash);
+    if (ok) {
+      await supabaseAdmin
+        .from('syaikh')
+        .update({ last_login_at: new Date().toISOString() })
+        .eq('id', syaikh.id);
+      const s = await getSession();
+      s.session = {
+        role: 'syaikh',
+        syaikh_id: syaikh.id,
+        name: syaikh.name,
+        gender: syaikh.gender,
+      };
+      await s.save();
+      redirect('/syaikh');
     }
   }
 
@@ -123,12 +149,27 @@ export async function changePassword(
   const s = await getSession();
   if (!s.session) return { error: 'Anda belum login.' };
 
-  const { table, id } =
-    s.session.role === 'peserta'
-      ? { table: 'peserta' as const, id: s.session.peserta_id }
-      : s.session.role === 'musyrif'
-        ? { table: 'musyrif' as const, id: s.session.musyrif_id }
-        : { table: 'koordinator' as const, id: s.session.koordinator_id };
+  const session = s.session;
+  let table: 'peserta' | 'musyrif' | 'koordinator' | 'syaikh';
+  let id: string;
+  switch (session.role) {
+    case 'peserta':
+      table = 'peserta';
+      id = session.peserta_id;
+      break;
+    case 'musyrif':
+      table = 'musyrif';
+      id = session.musyrif_id;
+      break;
+    case 'koordinator':
+      table = 'koordinator';
+      id = session.koordinator_id;
+      break;
+    case 'syaikh':
+      table = 'syaikh';
+      id = session.syaikh_id;
+      break;
+  }
 
   const { data: row } = await supabaseAdmin
     .from(table)

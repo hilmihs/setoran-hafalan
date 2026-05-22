@@ -1,89 +1,113 @@
-// Semua perhitungan pekan pakai timezone Asia/Jakarta untuk konsistensi
-// dengan helper SQL `week_start_of()` di database.
+// Cycle 2-pekan. Anchor: 2026-06-01 (Senin) — selaras dengan SQL fungsi
+// `cycle_start_of()`. Semua perhitungan di timezone Asia/Jakarta.
 
 const TZ = 'Asia/Jakarta';
 
-/**
- * Konversi Date ke ISO date string (YYYY-MM-DD) di timezone Jakarta.
- */
+export const CYCLE_LENGTH_DAYS = 14;
+export const CYCLE_ANCHOR = '2026-06-01'; // Senin
+
 function toJakartaDateString(d: Date): string {
-  // sv-SE locale memberikan format YYYY-MM-DD
   return d.toLocaleDateString('sv-SE', { timeZone: TZ });
 }
 
-/**
- * Hitung Senin dari tanggal apa pun (di timezone Jakarta).
- * Senin = awal pekan (ISO 8601).
- */
-export function weekStartOf(d: Date = new Date()): string {
-  // Ambil komponen tanggal di TZ Jakarta
+function jakartaYMD(d: Date): { y: number; m: number; d: number } {
   const parts = new Intl.DateTimeFormat('en-CA', {
     timeZone: TZ,
     year: 'numeric',
     month: '2-digit',
     day: '2-digit',
-    weekday: 'short',
   }).formatToParts(d);
-
-  const year = parseInt(parts.find((p) => p.type === 'year')!.value);
-  const month = parseInt(parts.find((p) => p.type === 'month')!.value);
-  const day = parseInt(parts.find((p) => p.type === 'day')!.value);
-  const weekday = parts.find((p) => p.type === 'weekday')!.value;
-
-  // Map: Mon=0, Tue=1, ..., Sun=6
-  const dayOffset: Record<string, number> = {
-    Mon: 0, Tue: 1, Wed: 2, Thu: 3, Fri: 4, Sat: 5, Sun: 6,
+  return {
+    y: parseInt(parts.find((p) => p.type === 'year')!.value),
+    m: parseInt(parts.find((p) => p.type === 'month')!.value),
+    d: parseInt(parts.find((p) => p.type === 'day')!.value),
   };
-  const offset = dayOffset[weekday] ?? 0;
-
-  // Bikin UTC date dari komponen Jakarta, lalu kurangi offset hari
-  const dateUTC = new Date(Date.UTC(year, month - 1, day));
-  dateUTC.setUTCDate(dateUTC.getUTCDate() - offset);
-
-  return toJakartaDateString(dateUTC);
 }
 
 /**
- * Pekan berjalan saat ini.
+ * Awal cycle 2-pekan dari tanggal manapun (Senin).
+ * Diturunkan dari anchor 2026-06-01 dengan floor 14 hari.
  */
-export function currentWeekStart(): string {
-  return weekStartOf(new Date());
+export function cycleStartOf(d: Date = new Date()): string {
+  const { y, m, d: day } = jakartaYMD(d);
+  const dateUTC = new Date(Date.UTC(y, m - 1, day));
+  const [ay, am, ad] = CYCLE_ANCHOR.split('-').map(Number);
+  const anchorUTC = new Date(Date.UTC(ay, am - 1, ad));
+  const diffDays = Math.floor((dateUTC.getTime() - anchorUTC.getTime()) / (1000 * 60 * 60 * 24));
+  const cycleOffset = Math.floor(diffDays / CYCLE_LENGTH_DAYS) * CYCLE_LENGTH_DAYS;
+  const result = new Date(anchorUTC);
+  result.setUTCDate(result.getUTCDate() + cycleOffset);
+  return toJakartaDateString(result);
 }
 
 /**
- * Generate label pekan untuk tampilan UI, mis: "5–11 Mei 2026"
+ * Awal cycle 2-pekan yang sedang berjalan.
  */
-export function formatWeekRange(weekStartISO: string): string {
-  const [y, m, d] = weekStartISO.split('-').map(Number);
+export function currentCycleStart(): string {
+  return cycleStartOf(new Date());
+}
+
+/**
+ * Tanggal terakhir cycle (cycle_start + 13 hari). Dipakai untuk menentukan
+ * bulan rekap (cycle masuk ke bulan dimana cycle_end jatuh).
+ */
+export function cycleEndOf(cycleStartISO: string): string {
+  const [y, m, d] = cycleStartISO.split('-').map(Number);
+  const end = new Date(Date.UTC(y, m - 1, d));
+  end.setUTCDate(end.getUTCDate() + (CYCLE_LENGTH_DAYS - 1));
+  return toJakartaDateString(end);
+}
+
+/**
+ * Label cycle untuk UI, mis: "1 – 14 Juni 2026" atau lintas-bulan
+ * "29 Juni – 12 Juli 2026".
+ */
+export function formatCycleRange(cycleStartISO: string): string {
+  const [y, m, d] = cycleStartISO.split('-').map(Number);
   const start = new Date(Date.UTC(y, m - 1, d));
   const end = new Date(start);
-  end.setUTCDate(end.getUTCDate() + 6);
+  end.setUTCDate(end.getUTCDate() + (CYCLE_LENGTH_DAYS - 1));
 
-  const fmt = (dt: Date) =>
+  const sameMonth =
+    start.getUTCMonth() === end.getUTCMonth() &&
+    start.getUTCFullYear() === end.getUTCFullYear();
+
+  const fmtDayMonth = (dt: Date) =>
     dt.toLocaleDateString('id-ID', {
       day: 'numeric',
       month: 'long',
       timeZone: 'UTC',
     });
-  const year = end.toLocaleDateString('id-ID', {
-    year: 'numeric',
-    timeZone: 'UTC',
-  });
+  const fmtDay = (dt: Date) =>
+    dt.toLocaleDateString('id-ID', { day: 'numeric', timeZone: 'UTC' });
+  const year = end.toLocaleDateString('id-ID', { year: 'numeric', timeZone: 'UTC' });
 
-  return `${fmt(start)} – ${fmt(end)} ${year}`;
+  if (sameMonth) {
+    return `${fmtDay(start)} – ${fmtDayMonth(end)} ${year}`;
+  }
+  return `${fmtDayMonth(start)} – ${fmtDayMonth(end)} ${year}`;
 }
 
 /**
- * Pekan-pekan sebelum pekan berjalan (untuk riwayat di dashboard).
+ * Cycle-cycle sebelum cycle berjalan (untuk dropdown riwayat).
  */
-export function previousWeeks(count: number): string[] {
-  const current = currentWeekStart();
+export function previousCycles(count: number): string[] {
+  const current = currentCycleStart();
   const [y, m, d] = current.split('-').map(Number);
   const result: string[] = [];
   for (let i = 1; i <= count; i++) {
     const dt = new Date(Date.UTC(y, m - 1, d));
-    dt.setUTCDate(dt.getUTCDate() - 7 * i);
+    dt.setUTCDate(dt.getUTCDate() - CYCLE_LENGTH_DAYS * i);
     result.push(toJakartaDateString(dt));
   }
   return result;
 }
+
+// ---------- Backward-compat aliases ----------
+// Beberapa modul lama masih mungkin di-import sebelum semua callsite
+// di-refactor; alias ini memetakan API lama → API cycle baru supaya
+// build tidak break secara tiba-tiba.
+export const weekStartOf = cycleStartOf;
+export const currentWeekStart = currentCycleStart;
+export const formatWeekRange = formatCycleRange;
+export const previousWeeks = previousCycles;

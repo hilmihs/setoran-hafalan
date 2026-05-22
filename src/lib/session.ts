@@ -49,3 +49,11 @@ export async function requireKoordinator() {
   }
   return s.session;
 }
+
+export async function requireSyaikh() {
+  const s = await getSession();
+  if (!s.session || s.session.role !== 'syaikh') {
+    throw new Error('UNAUTHORIZED');
+  }
+  return s.session;
+}

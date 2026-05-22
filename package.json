@@ -12,14 +12,17 @@
     "seed-maahir": "tsx --env-file=.env.local scripts/seed-maahir.ts",
     "seed-itsnain": "tsx --env-file=.env.local scripts/seed-itsnain.ts",
     "seed-koordinator": "tsx --env-file=.env.local scripts/seed-koordinator.ts",
+    "seed-syaikh": "tsx --env-file=.env.local scripts/seed-syaikh.ts",
     "seed-peserta-password": "tsx --env-file=.env.local scripts/seed-peserta-password.ts",
     "set-password": "tsx --env-file=.env.local scripts/set-password.ts",
-    "cleanup-audio": "tsx --env-file=.env.local scripts/cleanup-audio.ts"
+    "cleanup-audio": "tsx --env-file=.env.local scripts/cleanup-audio.ts",
+    "reset-setoran": "tsx --env-file=.env.local scripts/reset-setoran.ts"
   },
   "dependencies": {
     "@supabase/ssr": "^0.5.0",
     "@supabase/supabase-js": "^2.45.0",
     "bcryptjs": "^2.4.3",
+    "exceljs": "^4.4.0",
     "iron-session": "^8.0.3",
     "next": "14.2.0",
     "react": "^18.3.1",

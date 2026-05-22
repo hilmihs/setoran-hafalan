@@ -1,7 +1,10 @@
 /**
- * Set koordinator real: Ahmad Abdus Syukur.
+ * Seed dua koordinator (ikhwan + akhwat).
  *
- * Wipes existing koordinator dummy, then inserts the real one.
+ *   - Ahmad Abdus Syukur (ikhwan, 6285822950406)
+ *   - Salma             (akhwat, 6282136573097)
+ *
+ * Wipes existing koordinator dummy, then inserts the real two.
  * Default password: "password123" — ganti via `npm run set-password`.
  */
 import bcrypt from 'bcryptjs';
@@ -10,10 +13,10 @@ import { normalizeWhatsApp } from '../src/lib/whatsapp';
 
 const DEFAULT_PASSWORD = 'password123';
 
-const KOORDINATOR = {
-  name: 'Ahmad Abdus Syukur',
-  wa: '6285822950406',
-};
+const KOORDINATOR = [
+  { name: 'Ahmad Abdus Syukur', gender: 'ikhwan' as const, wa: '6285822950406' },
+  { name: 'Salma', gender: 'akhwat' as const, wa: '6282136573097' },
+];
 
 async function main() {
   console.log('Hashing password default…');
@@ -26,21 +29,23 @@ async function main() {
     .neq('id', '00000000-0000-0000-0000-000000000000');
 
   console.log('Insert koordinator…');
+  const rows = KOORDINATOR.map((k) => ({
+    name: k.name,
+    gender: k.gender,
+    whatsapp_number: normalizeWhatsApp(k.wa),
+    password_hash: hash,
+  }));
   const { data, error } = await supabaseAdmin
     .from('koordinator')
-    .insert({
-      name: KOORDINATOR.name,
-      whatsapp_number: normalizeWhatsApp(KOORDINATOR.wa),
-      password_hash: hash,
-    })
-    .select('id, name, whatsapp_number')
-    .single();
+    .insert(rows)
+    .select('id, name, gender, whatsapp_number');
   if (error) throw error;
 
-  console.log(`\n✓ Selesai.`);
-  console.log(`  Nama: ${data.name}`);
-  console.log(`  WA:   ${data.whatsapp_number}`);
-  console.log(`  Password default: "${DEFAULT_PASSWORD}" — ganti via "npm run set-password"`);
+  console.log(`\n✓ Selesai. ${data!.length} koordinator:`);
+  for (const k of data!) {
+    console.log(`  • ${k.name} — ${k.gender} (${k.whatsapp_number})`);
+  }
+  console.log(`\nDefault password: "${DEFAULT_PASSWORD}" — ganti via "npm run set-password".`);
 }
 
 main().catch((err) => {
