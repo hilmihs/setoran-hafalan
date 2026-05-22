@@ -33,15 +33,36 @@ export default async function KoordinatorAdminPage() {
         </div>
 
         <div className="page">
-          <h1 className="t-h1" style={{ marginBottom: 6 }}>
-            Admin Seed
+          <h1 className="t-h1" style={{ marginBottom: 4 }}>
+            Admin & Seed
           </h1>
-          <p className="t-body" style={{ marginBottom: 18 }}>
-            Jalankan seed/reset langsung dari sini tanpa perlu SSH ke server.
-            Setiap eksekusi minta password koordinator sebagai konfirmasi.
-            Operasi <strong>destruktif</strong> tidak bisa di-undo — pastikan
-            data benar sebelum klik konfirmasi.
+          <p className="t-small" style={{ marginBottom: 16 }}>
+            Jalankan seed/reset langsung tanpa SSH ke server.
           </p>
+
+          <div className="banner banner-error" style={{ marginBottom: 18 }}>
+            <div>
+              <div className="title">Catatan eksekusi</div>
+              <div className="desc">
+                <ul style={{ margin: '6px 0 0', paddingLeft: 18 }}>
+                  <li>Setiap eksekusi minta password koordinator sebagai konfirmasi.</li>
+                  <li>
+                    Operasi <strong>destruktif</strong> tidak bisa di-undo —
+                    pastikan data benar sebelum menjalankan.
+                  </li>
+                  <li>
+                    Seed besar (Itsnain, Maahir) bisa ~30 detik. Kalau timeout,
+                    log tetap dilanjutkan di server — refresh setelah ~1 menit.
+                  </li>
+                </ul>
+              </div>
+            </div>
+          </div>
+
+          <div className="section-row">
+            <div className="t-tiny">Operasi destruktif</div>
+            <div className="t-small">4 operasi</div>
+          </div>
 
           <SeedCard
             seedKey="syaikh"
@@ -71,21 +92,17 @@ export default async function KoordinatorAdminPage() {
             destructive
           />
 
+          <div className="section-row">
+            <div className="t-tiny">Operasi aman</div>
+            <div className="t-small">1 operasi</div>
+          </div>
+
           <SeedCard
             seedKey="peserta-password"
             title="Backfill password peserta"
             description="Set password 'maahir123' ke peserta yang password_hash NULL. Aditif — tidak menimpa password yang sudah ada. Aman dijalankan kapanpun."
             destructive={false}
           />
-
-          <div className="card-flat" style={{ padding: 14, marginTop: 18 }}>
-            <div className="t-tiny" style={{ marginBottom: 6 }}>Tips</div>
-            <ul className="t-small" style={{ margin: 0, paddingLeft: 18 }}>
-              <li>Setelah seed, peserta/musyrif baru bisa login dengan password default — minta mereka ganti via /akun.</li>
-              <li>Eksekusi memakan waktu beberapa detik sampai ~30 detik untuk yang besar (seed-itsnain, seed-maahir).</li>
-              <li>Kalau timeout, log tetap dilanjutkan di server — refresh setelah ~1 menit lalu cek hasilnya di dashboard.</li>
-            </ul>
-          </div>
         </div>
       </div>
     </main>

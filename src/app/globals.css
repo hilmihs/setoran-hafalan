@@ -173,6 +173,9 @@ html, body {
 .btn-soft { background: var(--surface-3); color: var(--ink); }
 .btn-soft:hover:not(:disabled) { background: #e7e3d9; }
 
+.btn-danger { background: var(--merah); color: #fff; }
+.btn-danger:hover:not(:disabled) { background: var(--merah-ink); }
+
 .btn-sm { height: 36px; padding: 0 12px; font-size: 13px; border-radius: 6px; }
 
 .btn-wa { background: oklch(0.58 0.12 155); color: #fff; }
@@ -300,6 +303,9 @@ html, body {
   0%, 100% { opacity: 1; }
   50%      { opacity: 0.35; }
 }
+
+.spin { animation: spin 0.8s linear infinite; transform-origin: center; }
+@keyframes spin { to { transform: rotate(360deg); } }
 
 .wave { color: var(--muted-2); }
 .wave.done { color: var(--accent); }

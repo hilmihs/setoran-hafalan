@@ -54,38 +54,45 @@ export async function runSeed(
   _prev: SeedResult | undefined,
   formData: FormData
 ): Promise<SeedResult> {
-  const s = await getSession();
-  if (!s.session || s.session.role !== 'koordinator') {
-    return { error: 'Akses ditolak.' };
-  }
-  const seedKey = String(formData.get('seed') ?? '') as SeedKey;
-  const password = String(formData.get('password') ?? '');
-  const def = REGISTRY[seedKey];
-  if (!def) return { error: 'Seed tidak dikenal.' };
-  if (!password) return { error: 'Password wajib diisi.' };
-
-  // Verifikasi password koordinator (pola sama dengan changePassword di src/lib/auth.ts).
-  const { data: row } = await supabaseAdmin
-    .from('koordinator')
-    .select('password_hash')
-    .eq('id', s.session.koordinator_id)
-    .maybeSingle();
-  if (!row?.password_hash) return { error: 'Akun koordinator tidak ditemukan.' };
-  const okPass = await bcrypt.compare(password, row.password_hash);
-  if (!okPass) return { error: 'Password salah.' };
-
-  const log: string[] = [];
-  const push = (line: string) => {
-    log.push(line);
-    console.log(`[seed:${seedKey}] ${line}`);
-  };
-  push(`[${new Date().toISOString()}] ${s.session.name} menjalankan: ${def.label}`);
   try {
-    await def.fn(push);
-    push('✓ Selesai.');
-    return { ok: true, log };
+    const s = await getSession();
+    if (!s.session || s.session.role !== 'koordinator') {
+      return { error: 'Akses ditolak.' };
+    }
+    const seedKey = String(formData.get('seed') ?? '') as SeedKey;
+    const password = String(formData.get('password') ?? '');
+    const def = REGISTRY[seedKey];
+    if (!def) return { error: 'Seed tidak dikenal.' };
+    if (!password) return { error: 'Password wajib diisi.' };
+
+    // Verifikasi password koordinator (pola sama dengan changePassword di src/lib/auth.ts).
+    const { data: row } = await supabaseAdmin
+      .from('koordinator')
+      .select('password_hash')
+      .eq('id', s.session.koordinator_id)
+      .maybeSingle();
+    if (!row?.password_hash) return { error: 'Akun koordinator tidak ditemukan.' };
+    const okPass = await bcrypt.compare(password, row.password_hash);
+    if (!okPass) return { error: 'Password salah.' };
+
+    const log: string[] = [];
+    const push = (line: string) => {
+      log.push(line);
+      console.log(`[seed:${seedKey}] ${line}`);
+    };
+    push(`[${new Date().toISOString()}] ${s.session.name} menjalankan: ${def.label}`);
+    try {
+      await def.fn(push);
+      push('✓ Selesai.');
+      return { ok: true, log };
+    } catch (e) {
+      push(`✗ Error: ${e instanceof Error ? e.message : String(e)}`);
+      return { error: 'Eksekusi gagal — cek log.', log };
+    }
   } catch (e) {
-    push(`✗ Error: ${e instanceof Error ? e.message : String(e)}`);
-    return { error: 'Eksekusi gagal — cek log.', log };
+    // Defensive outer catch — jamin useFormState selalu dapat state baru.
+    const msg = e instanceof Error ? e.message : String(e);
+    console.error('[runSeed] unexpected error:', e);
+    return { error: `Error tak terduga: ${msg}` };
   }
 }
