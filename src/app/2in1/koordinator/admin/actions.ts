@@ -9,6 +9,7 @@ import { runSeedSyaikh } from '@/lib/seeds/seed-syaikh';
 import { runSeedPesertaPassword } from '@/lib/seeds/seed-peserta-password';
 import { runResetSetoran } from '@/lib/seeds/reset-setoran';
 import { runSeedHits } from '@/lib/seeds/seed-hits';
+import { runSeedKelasHits } from '@/lib/seeds/seed-kelas-hits';
 
 export type SeedKey =
   | 'itsnain'
@@ -16,7 +17,8 @@ export type SeedKey =
   | 'syaikh'
   | 'peserta-password'
   | 'reset-setoran'
-  | 'hits';
+  | 'hits'
+  | 'kelas-hits';
 
 interface SeedDef {
   label: string;
@@ -47,6 +49,10 @@ const REGISTRY: Record<SeedKey, SeedDef> = {
   hits: {
     label: 'Seed HITS (kelompok + pengajar + kehadiran)',
     fn: runSeedHits,
+  },
+  'kelas-hits': {
+    label: 'Seed Kelas HITS (94 kelas + ketua kelas dari Excel)',
+    fn: runSeedKelasHits,
   },
 };
 

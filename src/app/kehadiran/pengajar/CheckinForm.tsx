@@ -91,7 +91,7 @@ export function CheckinForm({ programs, checkedKeys }: Props) {
 
         <form action={handleAlasan}>
           <input type="hidden" name="tanggal" value={current.tanggal} />
-          <input type="hidden" name="jenis" value="terlambat" />
+          <input type="hidden" name="jenis" value="alpa" />
           {current.type === 'program' && (
             <input type="hidden" name="program_id" value={current.id} />
           )}

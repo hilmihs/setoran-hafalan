@@ -104,6 +104,13 @@ export default async function KoordinatorAdminPage() {
             destructive
           />
 
+          <SeedCard
+            seedKey="kelas-hits"
+            title="Seed Kelas HITS — 94 Kelas + Ketua Kelas"
+            description="Wipe kelas_hits + ketua_kelas, lalu insert 28 kelas ikhwan + 66 kelas akhwat dari data Excel Juni 2025. Pengajar di-match by name, yang belum ada otomatis ditambahkan. Jadwal default: Senin-Jumat 16:00-19:00. Password ketua: hits123. Jalankan SETELAH seed HITS utama."
+            destructive
+          />
+
           <div className="section-row">
             <div className="t-tiny">Operasi aman</div>
             <div className="t-small">1 operasi</div>

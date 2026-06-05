@@ -71,6 +71,28 @@ export default async function KehadiranPengajarPage() {
             {session.name} — {today}
           </p>
 
+          {session.is_ketua && (
+            <a
+              href="/kehadiran/ketua-kelompok"
+              className="card-flat"
+              style={{
+                display: 'block',
+                padding: '12px 16px',
+                marginBottom: 16,
+                textDecoration: 'none',
+                color: 'inherit',
+                borderLeft: '3px solid var(--primary)',
+              }}
+            >
+              <div style={{ fontWeight: 600, marginBottom: 2 }}>
+                Dashboard Ketua Kelompok
+              </div>
+              <div className="t-small" style={{ color: 'var(--muted-2)' }}>
+                Lihat & kelola pengajuan alasan anggota kelompok Anda
+              </div>
+            </a>
+          )}
+
           {allDates.length === 0 ? (
             <div
               className="card-flat"
