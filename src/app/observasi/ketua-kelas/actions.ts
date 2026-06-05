@@ -17,7 +17,6 @@ export async function submitObservasi(
 
   const tanggal = String(formData.get('tanggal') ?? '');
   const kondisi = String(formData.get('kondisi') ?? '') as KondisiKelas;
-  const pengajarOnCam = formData.get('pengajar_on_cam') === 'true';
   const latihanDiberikan = formData.get('latihan_mandiri_diberikan') === 'true';
   const statusLatihan = formData.get('status_latihan_val') as StatusLatihan | null;
   const semuaSiswaSelesai = formData.get('semua_siswa_selesai_latihan') === 'true';
@@ -37,7 +36,7 @@ export async function submitObservasi(
     ketua_kelas_id: session.ketua_kelas_id,
     tanggal,
     kondisi,
-    pengajar_on_cam: kondisi === 'LIBUR' ? null : pengajarOnCam,
+    pengajar_on_cam: null,
     latihan_mandiri_diberikan: kondisi === 'LIBUR' ? null : latihanDiberikan,
     status_latihan_val: kondisi === 'LIBUR' ? null : (latihanDiberikan ? statusLatihan : null),
     semua_siswa_selesai_latihan: kondisi === 'LIBUR' ? null : (latihanDiberikan ? semuaSiswaSelesai : null),

@@ -1,5 +1,7 @@
 import { requireKetuaKelas } from '@/lib/session';
 import { supabaseAdmin } from '@/lib/supabase-admin';
+import { logout } from '@/lib/auth';
+import { Icon } from '@/components/icons';
 import { ObservasiForm } from './ObservasiForm';
 import type { ObservasiKelas } from '@/types/db';
 
@@ -48,9 +50,15 @@ export default async function KetuaKelasObservasiPage() {
             <div className="wordmark">
               <span className="mark">M</span> Observasi Kelas
             </div>
-            <a href="/" className="btn-ghost" style={{ fontSize: 14 }}>
-              Menu
-            </a>
+            <form action={logout}>
+              <button
+                type="submit"
+                className="btn btn-sm btn-ghost"
+                style={{ height: 30, padding: '0 10px' }}
+              >
+                {Icon.logout(12)} Keluar
+              </button>
+            </form>
           </div>
 
           <h1 className="t-h1" style={{ marginBottom: 4 }}>

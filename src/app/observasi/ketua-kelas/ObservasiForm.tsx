@@ -25,7 +25,6 @@ export function ObservasiForm({ kelasName, pengajarName, todayDate, todayUnfille
   const editingRecord = records.find((r) => r.tanggal === editing);
 
   const [kondisi, setKondisi] = useState<KondisiKelas>(editingRecord?.kondisi ?? 'KBBS');
-  const [onCam, setOnCam] = useState(editingRecord?.pengajar_on_cam ?? true);
   const [latihanDiberikan, setLatihanDiberikan] = useState(editingRecord?.latihan_mandiri_diberikan ?? true);
   const [statusLatihan, setStatusLatihan] = useState<StatusLatihan>(editingRecord?.status_latihan_val ?? 'SML');
   const [semuaSelesai, setSemuaSelesai] = useState(editingRecord?.semua_siswa_selesai_latihan ?? true);
@@ -47,7 +46,6 @@ export function ObservasiForm({ kelasName, pengajarName, todayDate, todayUnfille
   function openEdit(tanggal: string) {
     const rec = records.find((r) => r.tanggal === tanggal);
     setKondisi(rec?.kondisi ?? 'KBBS');
-    setOnCam(rec?.pengajar_on_cam ?? true);
     setLatihanDiberikan(rec?.latihan_mandiri_diberikan ?? true);
     setStatusLatihan(rec?.status_latihan_val ?? 'SML');
     setSemuaSelesai(rec?.semua_siswa_selesai_latihan ?? true);
@@ -59,7 +57,6 @@ export function ObservasiForm({ kelasName, pengajarName, todayDate, todayUnfille
 
   function openNew() {
     setKondisi('KBBS');
-    setOnCam(true);
     setLatihanDiberikan(true);
     setStatusLatihan('SML');
     setSemuaSelesai(true);
@@ -86,7 +83,7 @@ export function ObservasiForm({ kelasName, pengajarName, todayDate, todayUnfille
           if (exists) {
             return prev.map((r) =>
               r.tanggal === tanggal
-                ? { ...r, kondisi, pengajar_on_cam: onCam, latihan_mandiri_diberikan: latihanDiberikan, status_latihan_val: latihanDiberikan ? statusLatihan : null, semua_siswa_selesai_latihan: latihanDiberikan ? semuaSelesai : null, catatan: catatan || null }
+                ? { ...r, kondisi, latihan_mandiri_diberikan: latihanDiberikan, status_latihan_val: latihanDiberikan ? statusLatihan : null, semua_siswa_selesai_latihan: latihanDiberikan ? semuaSelesai : null, catatan: catatan || null }
                 : r
             );
           }
@@ -97,7 +94,7 @@ export function ObservasiForm({ kelasName, pengajarName, todayDate, todayUnfille
               ketua_kelas_id: '',
               tanggal,
               kondisi,
-              pengajar_on_cam: onCam,
+              pengajar_on_cam: null,
               latihan_mandiri_diberikan: latihanDiberikan,
               status_latihan_val: latihanDiberikan ? statusLatihan : null,
               semua_siswa_selesai_latihan: latihanDiberikan ? semuaSelesai : null,
@@ -160,30 +157,6 @@ export function ObservasiForm({ kelasName, pengajarName, todayDate, todayUnfille
 
         {kondisi !== 'LIBUR' && (
           <>
-            <div style={{ marginBottom: 14 }}>
-              <label className="field-label">Pengajar on-cam / hadir?</label>
-              <div style={{ display: 'flex', gap: 8 }}>
-                {[true, false].map((v) => (
-                  <label
-                    key={String(v)}
-                    style={{
-                      flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      gap: 8, padding: '10px', borderRadius: 8, cursor: 'pointer',
-                      border: `1px solid ${onCam === v ? 'var(--accent)' : 'var(--line-2)'}`,
-                      background: onCam === v ? 'var(--accent-tint)' : 'transparent',
-                    }}
-                  >
-                    <input
-                      type="radio" name="pengajar_on_cam" value={String(v)}
-                      checked={onCam === v}
-                      onChange={() => setOnCam(v)}
-                    />
-                    <span style={{ fontWeight: 500, fontSize: 13 }}>{v ? 'Ya' : 'Tidak'}</span>
-                  </label>
-                ))}
-              </div>
-            </div>
-
             <div style={{ marginBottom: 14 }}>
               <label className="field-label">Latihan mandiri diberikan?</label>
               <div style={{ display: 'flex', gap: 8 }}>
@@ -369,7 +342,6 @@ export function ObservasiForm({ kelasName, pengajarName, todayDate, todayUnfille
             <tr>
               <th>Tanggal</th>
               <th>Kondisi</th>
-              <th>On-Cam</th>
               <th>Latihan</th>
               <th>Status</th>
               <th>Catatan</th>
@@ -379,7 +351,7 @@ export function ObservasiForm({ kelasName, pengajarName, todayDate, todayUnfille
           <tbody>
             {records.length === 0 ? (
               <tr>
-                <td colSpan={7} style={{ textAlign: 'center', padding: 24, color: 'var(--muted)' }}>
+                <td colSpan={6} style={{ textAlign: 'center', padding: 24, color: 'var(--muted)' }}>
                   Belum ada data observasi.
                 </td>
               </tr>
@@ -399,7 +371,6 @@ export function ObservasiForm({ kelasName, pengajarName, todayDate, todayUnfille
                       {r.kondisi}
                     </span>
                   </td>
-                  <td>{r.kondisi === 'LIBUR' ? '—' : r.pengajar_on_cam ? 'Ya' : 'Tidak'}</td>
                   <td>{r.kondisi === 'LIBUR' ? '—' : r.latihan_mandiri_diberikan ? 'Ya' : 'Tidak'}</td>
                   <td>{r.status_latihan_val ?? '—'}</td>
                   <td className="t-small" style={{ maxWidth: 120, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
