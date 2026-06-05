@@ -5,13 +5,11 @@ import { redirect } from 'next/navigation';
 import { supabaseAdmin } from './supabase-admin';
 import { getSession } from './session';
 import { normalizeWhatsApp } from './whatsapp';
+import type { RoleAccess } from '@/types/db';
+import { ROLE_LANDING } from './roles';
 
 const BCRYPT_COST = 12;
 
-/**
- * Unified login: cari nomor WA berurutan di peserta → musyrif → koordinator → syaikh.
- * Set session sesuai role yang ketemu, lalu redirect ke landing role tsb.
- */
 export async function login(
   _prev: { error?: string } | undefined,
   formData: FormData
@@ -22,104 +20,191 @@ export async function login(
     return { error: 'Nomor WA dan password wajib diisi.' };
   }
 
-  // 1. Peserta
-  const { data: peserta } = await supabaseAdmin
-    .from('peserta')
-    .select('id, name, gender, kelas_id, password_hash, active')
-    .eq('whatsapp_number', wa)
-    .maybeSingle();
-  if (peserta && peserta.active && peserta.password_hash) {
-    const ok = await bcrypt.compare(password, peserta.password_hash);
-    if (ok) {
-      const s = await getSession();
-      s.session = {
-        role: 'peserta',
-        peserta_id: peserta.id,
-        name: peserta.name,
-        gender: peserta.gender,
-        kelas_id: peserta.kelas_id,
-      };
-      await s.save();
-      redirect('/peserta');
-    }
-  }
+  const [
+    { data: peserta },
+    { data: musyrif },
+    { data: koor },
+    { data: syaikh },
+    { data: pengajar },
+    { data: koorHits },
+    { data: ketuaKelas },
+    { data: koorKK },
+  ] = await Promise.all([
+    supabaseAdmin
+      .from('peserta')
+      .select('id, name, gender, kelas_id, password_hash, active')
+      .eq('whatsapp_number', wa)
+      .maybeSingle(),
+    supabaseAdmin
+      .from('musyrif')
+      .select('id, name, gender, password_hash, active')
+      .eq('whatsapp_number', wa)
+      .maybeSingle(),
+    supabaseAdmin
+      .from('koordinator')
+      .select('id, name, gender, password_hash, active')
+      .eq('whatsapp_number', wa)
+      .maybeSingle(),
+    supabaseAdmin
+      .from('syaikh')
+      .select('id, name, gender, password_hash, active')
+      .eq('whatsapp_number', wa)
+      .maybeSingle(),
+    supabaseAdmin
+      .from('pengajar')
+      .select('id, name, gender, password_hash, active, kelompok_id, is_ketua')
+      .eq('whatsapp_number', wa)
+      .maybeSingle(),
+    supabaseAdmin
+      .from('koordinator_hits')
+      .select('id, name, gender, password_hash, active')
+      .eq('whatsapp_number', wa)
+      .maybeSingle(),
+    supabaseAdmin
+      .from('ketua_kelas')
+      .select('id, name, gender, password_hash, active, kelas_hits_id')
+      .eq('whatsapp_number', wa)
+      .maybeSingle(),
+    supabaseAdmin
+      .from('koordinator_ketua_kelas')
+      .select('id, name, gender, password_hash, active')
+      .eq('whatsapp_number', wa)
+      .maybeSingle(),
+  ]);
 
-  // 2. Musyrif
-  const { data: musyrif } = await supabaseAdmin
-    .from('musyrif')
-    .select('id, name, gender, password_hash, active')
-    .eq('whatsapp_number', wa)
-    .maybeSingle();
-  if (musyrif && musyrif.active) {
-    const ok = await bcrypt.compare(password, musyrif.password_hash);
-    if (ok) {
+  const accesses: RoleAccess[] = [];
+
+  async function tryRole(
+    row: { active: boolean; password_hash: string } | null,
+    buildAccess: () => RoleAccess,
+    table?: string,
+    id?: string
+  ): Promise<void> {
+    if (!row || !row.active || !row.password_hash) return;
+    const ok = await bcrypt.compare(password, row.password_hash);
+    if (!ok) return;
+    accesses.push(buildAccess());
+    if (table && id) {
       await supabaseAdmin
-        .from('musyrif')
+        .from(table)
         .update({ last_login_at: new Date().toISOString() })
-        .eq('id', musyrif.id);
-      const s = await getSession();
-      s.session = {
-        role: 'musyrif',
-        musyrif_id: musyrif.id,
-        name: musyrif.name,
-        gender: musyrif.gender,
-      };
-      await s.save();
-      redirect('/musyrif');
+        .eq('id', id);
     }
   }
 
-  // 3. Koordinator
-  const { data: koor } = await supabaseAdmin
-    .from('koordinator')
-    .select('id, name, gender, password_hash, active')
-    .eq('whatsapp_number', wa)
-    .maybeSingle();
-  if (koor && koor.active) {
-    const ok = await bcrypt.compare(password, koor.password_hash);
-    if (ok) {
-      await supabaseAdmin
-        .from('koordinator')
-        .update({ last_login_at: new Date().toISOString() })
-        .eq('id', koor.id);
-      const s = await getSession();
-      s.session = {
-        role: 'koordinator',
-        koordinator_id: koor.id,
-        name: koor.name,
-        gender: koor.gender,
-      };
-      await s.save();
-      redirect('/koordinator');
-    }
+  await Promise.all([
+    tryRole(peserta, () => ({
+      role: 'peserta' as const,
+      peserta_id: peserta!.id,
+      name: peserta!.name,
+      gender: peserta!.gender,
+      kelas_id: peserta!.kelas_id,
+    })),
+    tryRole(
+      musyrif,
+      () => ({
+        role: 'musyrif' as const,
+        musyrif_id: musyrif!.id,
+        name: musyrif!.name,
+        gender: musyrif!.gender,
+      }),
+      'musyrif',
+      musyrif?.id
+    ),
+    tryRole(
+      koor,
+      () => ({
+        role: 'koordinator' as const,
+        koordinator_id: koor!.id,
+        name: koor!.name,
+        gender: koor!.gender,
+      }),
+      'koordinator',
+      koor?.id
+    ),
+    tryRole(
+      syaikh,
+      () => ({
+        role: 'syaikh' as const,
+        syaikh_id: syaikh!.id,
+        name: syaikh!.name,
+        gender: syaikh!.gender,
+      }),
+      'syaikh',
+      syaikh?.id
+    ),
+    tryRole(
+      pengajar,
+      () => ({
+        role: 'pengajar' as const,
+        pengajar_id: pengajar!.id,
+        name: pengajar!.name,
+        gender: pengajar!.gender,
+        kelompok_id: pengajar!.kelompok_id,
+        is_ketua: pengajar!.is_ketua,
+      }),
+      'pengajar',
+      pengajar?.id
+    ),
+    tryRole(
+      koorHits,
+      () => ({
+        role: 'koordinator_hits' as const,
+        koordinator_hits_id: koorHits!.id,
+        name: koorHits!.name,
+        gender: koorHits!.gender,
+      }),
+      'koordinator_hits',
+      koorHits?.id
+    ),
+    tryRole(
+      ketuaKelas,
+      () => ({
+        role: 'ketua_kelas' as const,
+        ketua_kelas_id: ketuaKelas!.id,
+        name: ketuaKelas!.name,
+        gender: ketuaKelas!.gender,
+        kelas_hits_id: ketuaKelas!.kelas_hits_id,
+      }),
+      'ketua_kelas',
+      ketuaKelas?.id
+    ),
+    tryRole(
+      koorKK,
+      () => ({
+        role: 'koordinator_ketua_kelas' as const,
+        koordinator_kk_id: koorKK!.id,
+        name: koorKK!.name,
+        gender: koorKK!.gender,
+      }),
+      'koordinator_ketua_kelas',
+      koorKK?.id
+    ),
+  ]);
+
+  if (accesses.length === 0) {
+    return { error: 'Nomor WA atau password salah.' };
   }
 
-  // 4. Syaikh / Ustadzah
-  const { data: syaikh } = await supabaseAdmin
-    .from('syaikh')
-    .select('id, name, gender, password_hash, active')
-    .eq('whatsapp_number', wa)
-    .maybeSingle();
-  if (syaikh && syaikh.active) {
-    const ok = await bcrypt.compare(password, syaikh.password_hash);
-    if (ok) {
-      await supabaseAdmin
-        .from('syaikh')
-        .update({ last_login_at: new Date().toISOString() })
-        .eq('id', syaikh.id);
-      const s = await getSession();
-      s.session = {
-        role: 'syaikh',
-        syaikh_id: syaikh.id,
-        name: syaikh.name,
-        gender: syaikh.gender,
-      };
-      await s.save();
-      redirect('/syaikh');
-    }
-  }
+  const s = await getSession();
+  s.session = accesses[0];
+  s.accesses = accesses;
+  await s.save();
 
-  return { error: 'Nomor WA atau password salah.' };
+  if (accesses.length === 1) {
+    redirect(ROLE_LANDING[accesses[0].role]);
+  }
+  redirect('/');
+}
+
+export async function switchRole(role: RoleAccess['role']) {
+  const s = await getSession();
+  if (!s.accesses) throw new Error('UNAUTHORIZED');
+  const match = s.accesses.find((a) => a.role === role);
+  if (!match) throw new Error('UNAUTHORIZED');
+  s.session = match;
+  await s.save();
+  redirect(ROLE_LANDING[role]);
 }
 
 export async function logout() {
@@ -128,9 +213,6 @@ export async function logout() {
   redirect('/');
 }
 
-/**
- * Ganti password untuk role yang sedang login.
- */
 export async function changePassword(
   _prev: { error?: string; ok?: boolean } | undefined,
   formData: FormData
@@ -150,31 +232,13 @@ export async function changePassword(
   if (!s.session) return { error: 'Anda belum login.' };
 
   const session = s.session;
-  let table: 'peserta' | 'musyrif' | 'koordinator' | 'syaikh';
-  let id: string;
-  switch (session.role) {
-    case 'peserta':
-      table = 'peserta';
-      id = session.peserta_id;
-      break;
-    case 'musyrif':
-      table = 'musyrif';
-      id = session.musyrif_id;
-      break;
-    case 'koordinator':
-      table = 'koordinator';
-      id = session.koordinator_id;
-      break;
-    case 'syaikh':
-      table = 'syaikh';
-      id = session.syaikh_id;
-      break;
-  }
+  const roleTable = getRoleTable(session);
+  if (!roleTable) return { error: 'Role tidak dikenali.' };
 
   const { data: row } = await supabaseAdmin
-    .from(table)
+    .from(roleTable.table)
     .select('password_hash')
-    .eq('id', id)
+    .eq('id', roleTable.id)
     .maybeSingle();
   if (!row || !row.password_hash) {
     return { error: 'Akun tidak ditemukan.' };
@@ -184,11 +248,55 @@ export async function changePassword(
   if (!ok) return { error: 'Password saat ini salah.' };
 
   const hash = await bcrypt.hash(next, BCRYPT_COST);
-  const { error: upErr } = await supabaseAdmin
-    .from(table)
-    .update({ password_hash: hash })
-    .eq('id', id);
-  if (upErr) return { error: `Gagal simpan: ${upErr.message}` };
+
+  // Update password di semua tabel yang cocok WA-nya
+  const { data: waRow } = await supabaseAdmin
+    .from(roleTable.table)
+    .select('whatsapp_number')
+    .eq('id', roleTable.id)
+    .maybeSingle();
+  if (!waRow) return { error: 'Akun tidak ditemukan.' };
+  const waNum = waRow.whatsapp_number;
+
+  const tables = [
+    'peserta', 'musyrif', 'koordinator', 'syaikh',
+    'pengajar', 'koordinator_hits', 'ketua_kelas', 'koordinator_ketua_kelas',
+  ] as const;
+
+  await Promise.all(
+    tables.map((t) =>
+      supabaseAdmin
+        .from(t)
+        .update({ password_hash: hash })
+        .eq('whatsapp_number', waNum)
+    )
+  );
 
   return { ok: true };
 }
+
+function getRoleTable(
+  session: RoleAccess
+): { table: string; id: string } | null {
+  switch (session.role) {
+    case 'peserta':
+      return { table: 'peserta', id: session.peserta_id };
+    case 'musyrif':
+      return { table: 'musyrif', id: session.musyrif_id };
+    case 'koordinator':
+      return { table: 'koordinator', id: session.koordinator_id };
+    case 'syaikh':
+      return { table: 'syaikh', id: session.syaikh_id };
+    case 'pengajar':
+      return { table: 'pengajar', id: session.pengajar_id };
+    case 'koordinator_hits':
+      return { table: 'koordinator_hits', id: session.koordinator_hits_id };
+    case 'ketua_kelas':
+      return { table: 'ketua_kelas', id: session.ketua_kelas_id };
+    case 'koordinator_ketua_kelas':
+      return { table: 'koordinator_ketua_kelas', id: session.koordinator_kk_id };
+    default:
+      return null;
+  }
+}
+

@@ -14,3 +14,6 @@ tsconfig.tsbuildinfo
 # pakai npm sebagai package manager utama
 pnpm-lock.yaml
 pnpm-workspace.yaml
+
+# data files
+*.xlsx

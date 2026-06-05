@@ -136,7 +136,246 @@ export interface PesertaWithKelas extends Peserta {
   kelas: Kelas;
 }
 
-// Session types
+// ========== HITS Matrix types ==========
+
+export type KondisiKelas = 'KBBS' | 'KMT' | 'JKG' | 'KBLA' | 'LIBUR';
+export type StatusLatihan = 'TAL' | 'PTML' | 'SML';
+export type StatusCheckin = 'hadir' | 'izin' | 'sakit';
+export type JenisAlasan = 'terlambat' | 'alpa';
+export type StatusPengajuan = 'pending' | 'accepted' | 'rejected';
+export type StatusTabayyun = 'pending' | 'awaiting_reason' | 'decided';
+
+export const KONDISI_KELAS_LABEL: Record<KondisiKelas, string> = {
+  KBBS: 'Kelas Berjalan Baik & Sesuai',
+  KMT: 'Kelas Mulai Terlambat (>5 menit)',
+  JKG: 'Jadwal Kelas Ganti',
+  KBLA: 'Kelas Berakhir Lebih Awal',
+  LIBUR: 'Libur / Tidak Ada Kelas',
+};
+
+export const STATUS_LATIHAN_LABEL: Record<StatusLatihan, string> = {
+  TAL: 'Tidak Ada Latihan',
+  PTML: 'Peserta Tidak Mengerjakan Latihan',
+  SML: 'Semua Mengerjakan Latihan',
+};
+
+export const STATUS_CHECKIN_LABEL: Record<StatusCheckin, string> = {
+  hadir: 'Hadir',
+  izin: 'Izin',
+  sakit: 'Sakit',
+};
+
+export interface KelompokPengajar {
+  id: string;
+  name: string;
+  gender: Gender;
+  created_at: string;
+}
+
+export interface Pengajar {
+  id: string;
+  name: string;
+  gender: Gender;
+  whatsapp_number: string;
+  kelompok_id: string;
+  is_ketua: boolean;
+  musyrif_id: string | null;
+  active: boolean;
+  last_login_at: string | null;
+  created_at: string;
+}
+
+export interface KoordinatorHits {
+  id: string;
+  name: string;
+  gender: Gender;
+  whatsapp_number: string;
+  active: boolean;
+  last_login_at: string | null;
+  created_at: string;
+}
+
+export interface KelasHits {
+  id: string;
+  name: string;
+  gender: Gender;
+  pengajar_id: string;
+  jadwal_hari: string | null;
+  jadwal_waktu_mulai: string | null;
+  jadwal_waktu_selesai: string | null;
+  created_at: string;
+}
+
+export interface KetuaKelas {
+  id: string;
+  name: string;
+  gender: Gender;
+  whatsapp_number: string;
+  kelas_hits_id: string;
+  magic_token: string | null;
+  active: boolean;
+  last_login_at: string | null;
+  created_at: string;
+}
+
+export interface KoordinatorKetuaKelas {
+  id: string;
+  name: string;
+  gender: Gender;
+  whatsapp_number: string;
+  active: boolean;
+  last_login_at: string | null;
+  created_at: string;
+}
+
+export interface ProgramKehadiran {
+  id: string;
+  name: string;
+  hari: string[];
+  waktu_mulai: string;
+  waktu_selesai: string;
+  active: boolean;
+  created_at: string;
+}
+
+export interface CheckinPengajar {
+  id: string;
+  pengajar_id: string;
+  program_id: string | null;
+  kelas_hits_id: string | null;
+  tanggal: string;
+  status: StatusCheckin;
+  checked_in_at: string;
+  is_terlambat: boolean;
+  invalidated_by: string | null;
+  invalidated_at: string | null;
+  created_at: string;
+}
+
+export interface PengajuanAlasan {
+  id: string;
+  pengajar_id: string;
+  program_id: string | null;
+  kelas_hits_id: string | null;
+  tanggal: string;
+  jenis: JenisAlasan;
+  alasan: string;
+  status: StatusPengajuan;
+  decided_by: string | null;
+  decided_at: string | null;
+  created_at: string;
+}
+
+export interface LiburProgram {
+  id: string;
+  program_id: string | null;
+  kelas_hits_id: string | null;
+  tanggal: string;
+  gender: Gender | null;
+  keterangan: string | null;
+  created_by_id: string | null;
+  created_at: string;
+}
+
+export interface ObservasiKelas {
+  id: string;
+  kelas_hits_id: string;
+  ketua_kelas_id: string;
+  tanggal: string;
+  kondisi: KondisiKelas;
+  pengajar_on_cam: boolean | null;
+  latihan_mandiri_diberikan: boolean | null;
+  status_latihan_val: StatusLatihan | null;
+  semua_siswa_selesai_latihan: boolean | null;
+  catatan: string | null;
+  created_at: string;
+}
+
+export interface Tabayyun {
+  id: string;
+  observasi_id: string;
+  pengajar_id: string;
+  koordinator_kk_id: string;
+  alasan_pengajar: string | null;
+  alasan_submitted_at: string | null;
+  is_udzur_syari: boolean | null;
+  keputusan_catatan: string | null;
+  decided_at: string | null;
+  status: StatusTabayyun;
+  deadline_at: string;
+  created_at: string;
+}
+
+export interface Teguran {
+  id: string;
+  pengajar_id: string;
+  year_month: string;
+  category: string;
+  nomor_teguran: number;
+  source_ref_type: string | null;
+  source_ref_id: string | null;
+  keterangan: string | null;
+  issued_by_role: string;
+  issued_by_id: string;
+  created_at: string;
+}
+
+export interface MatrixRekap {
+  id: string;
+  pengajar_id: string;
+  year_month: string;
+  skor_bacaan: number | null;
+  skor_hafalan: number | null;
+  skor_tajwid: number | null;
+  skor_kehadiran_maahir: number | null;
+  skor_kehadiran_tibyan: number | null;
+  skor_kehadiran_muallim: number | null;
+  rata_rata_hard_skill: number | null;
+  skor_metode_pengajaran: number | null;
+  skor_kepatuhan_silabus: number | null;
+  skor_manajemen_halaqah: number | null;
+  skor_evaluasi_penguasaan: number | null;
+  rata_rata_pedagogis: number | null;
+  skor_kedisiplinan_waktu: number | null;
+  skor_komitmen_jadwal: number | null;
+  skor_tanggung_jawab: number | null;
+  skor_kepatuhan_sop: number | null;
+  rata_rata_soft_skill: number | null;
+  rata_rata_keseluruhan: number | null;
+  ranking: number | null;
+  total_teguran_bulan: number;
+  total_teguran_kumulatif: number;
+  finalized_at: string | null;
+  updated_at: string;
+  created_at: string;
+}
+
+export interface IndikatorStandar {
+  kode: string;
+  nama: string;
+  kategori: string;
+  standar: number;
+}
+
+export const INDIKATOR_STANDAR: Record<string, number> = {
+  bacaan: 3,
+  hafalan: 1,
+  tajwid: 2,
+  kehadiran_maahir: 4,
+  kehadiran_tibyan: 4,
+  kehadiran_muallim: 4,
+  metode_pengajaran: 4,
+  kepatuhan_silabus: 4,
+  manajemen_halaqah: 4,
+  evaluasi_penguasaan: 4,
+  kedisiplinan_waktu: 4,
+  komitmen_jadwal: 4,
+  tanggung_jawab: 4,
+  kepatuhan_sop: 4,
+};
+
+// ========== Session types ==========
+
 export interface PesertaSession {
   role: 'peserta';
   peserta_id: string;
@@ -166,9 +405,51 @@ export interface SyaikhSession {
   gender: Gender;
 }
 
-export type Session =
+export interface PengajarSession {
+  role: 'pengajar';
+  pengajar_id: string;
+  name: string;
+  gender: Gender;
+  kelompok_id: string;
+  is_ketua: boolean;
+}
+
+export interface KoordinatorHitsSession {
+  role: 'koordinator_hits';
+  koordinator_hits_id: string;
+  name: string;
+  gender: Gender;
+}
+
+export interface KetuaKelasSession {
+  role: 'ketua_kelas';
+  ketua_kelas_id: string;
+  name: string;
+  gender: Gender;
+  kelas_hits_id: string;
+}
+
+export interface KoordinatorKetuaKelasSession {
+  role: 'koordinator_ketua_kelas';
+  koordinator_kk_id: string;
+  name: string;
+  gender: Gender;
+}
+
+export type RoleAccess =
   | PesertaSession
   | MusyrifSession
   | KoordinatorSession
-  | SyaikhSession;
-export type Role = Session['role'];
+  | SyaikhSession
+  | PengajarSession
+  | KoordinatorHitsSession
+  | KetuaKelasSession
+  | KoordinatorKetuaKelasSession;
+
+export type Session = RoleAccess;
+export type Role = RoleAccess['role'];
+
+export interface SessionData {
+  active: RoleAccess;
+  accesses: RoleAccess[];
+}

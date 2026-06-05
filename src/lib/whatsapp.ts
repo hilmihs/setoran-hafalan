@@ -95,12 +95,13 @@ export function tplReminderPesertaBelumSetor(args: {
   pesertaName: string;
   pesertaGender: Gender;
   setorUrl: string;
+  deadlineLabel: string;
 }): string {
   const sapaan = salutation(args.pesertaGender);
   return [
     `Assalamu'alaikum ${sapaan} ${args.pesertaName},`,
     ``,
-    `Pengingat — antum belum menyetorkan hafalan pada cycle ini. Mohon segera setor melalui tautan berikut sebelum batas waktu (Ahad pekan ke-2):`,
+    `Pengingat — antum belum menyetorkan hafalan pada cycle ini. Mohon segera setor melalui tautan berikut sebelum batas waktu (${args.deadlineLabel}):`,
     args.setorUrl,
     ``,
     `Jazakumullahu khairan.`,
@@ -174,12 +175,13 @@ export function tplReminderMusyrifBelumSetor(args: {
   musyrifName: string;
   musyrifGender: Gender;
   setorUrl: string;
+  deadlineLabel: string;
 }): string {
   const sapaan = salutation(args.musyrifGender);
   return [
     `Assalamu'alaikum ${sapaan} ${args.musyrifName},`,
     ``,
-    `Pengingat — antum belum menyetorkan hafalan pada cycle ini. Mohon segera setor melalui tautan berikut:`,
+    `Pengingat — antum belum menyetorkan hafalan pada cycle ini. Mohon segera setor melalui tautan berikut sebelum batas waktu (${args.deadlineLabel}):`,
     args.setorUrl,
     ``,
     `Jazakumullahu khairan.`,
@@ -202,5 +204,244 @@ export function tplReminderSyaikhBelumCek(args: {
     args.cekUrl,
     ``,
     `Jazakumullahu khairan.`,
+  ].join('\n');
+}
+
+// ============================================================
+// Template HITS — Kehadiran & Observasi
+// ============================================================
+
+export function tplReminderPengajarCheckin(args: {
+  pengajarName: string;
+  pengajarGender: Gender;
+  programName: string;
+  checkinUrl: string;
+}): string {
+  const sapaan = salutation(args.pengajarGender);
+  return [
+    `Assalamu'alaikum ${sapaan} ${args.pengajarName},`,
+    ``,
+    `Pengingat — mohon segera check-in kehadiran untuk *${args.programName}* hari ini.`,
+    ``,
+    `Tautan check-in:`,
+    args.checkinUrl,
+    ``,
+    `Jazakumullahu khairan.`,
+  ].join('\n');
+}
+
+export function tplPengajarAlasanToKetuaKelompok(args: {
+  pengajarName: string;
+  pengajarGender: Gender;
+  ketuaGender: Gender;
+  ketuaName: string;
+  programName: string;
+  tanggal: string;
+  jenis: string;
+  alasan: string;
+  reviewUrl: string;
+}): string {
+  const sapaan = salutation(args.ketuaGender);
+  return [
+    `Assalamu'alaikum ${sapaan} ${args.ketuaName},`,
+    ``,
+    `${salutation(args.pengajarGender)} ${args.pengajarName} mengajukan alasan *${args.jenis}* pada *${args.programName}* tanggal ${args.tanggal}:`,
+    ``,
+    `"${args.alasan}"`,
+    ``,
+    `Mohon ditinjau dan diputuskan melalui tautan:`,
+    args.reviewUrl,
+    ``,
+    `Jazakumullahu khairan.`,
+  ].join('\n');
+}
+
+export function tplLiburProgram(args: {
+  pengajarName: string;
+  pengajarGender: Gender;
+  programName: string;
+  tanggal: string;
+  keterangan: string;
+}): string {
+  const sapaan = salutation(args.pengajarGender);
+  return [
+    `Assalamu'alaikum ${sapaan} ${args.pengajarName},`,
+    ``,
+    `Diberitahukan bahwa *${args.programName}* pada tanggal *${args.tanggal}* diliburkan.`,
+    args.keterangan ? `Keterangan: ${args.keterangan}` : '',
+    ``,
+    `Jazakumullahu khairan.`,
+  ].filter(Boolean).join('\n');
+}
+
+export function tplReminderKetuaKelompokTugas(args: {
+  ketuaName: string;
+  ketuaGender: Gender;
+  tugasPending: string[];
+  dashboardUrl: string;
+}): string {
+  const sapaan = salutation(args.ketuaGender);
+  return [
+    `Assalamu'alaikum ${sapaan} ${args.ketuaName},`,
+    ``,
+    `Ada tugas yang perlu ditindaklanjuti:`,
+    ...args.tugasPending.map((t) => `• ${t}`),
+    ``,
+    `Silakan cek dashboard:`,
+    args.dashboardUrl,
+    ``,
+    `Jazakumullahu khairan.`,
+  ].join('\n');
+}
+
+export function tplTabayyunToPengajar(args: {
+  pengajarName: string;
+  pengajarGender: Gender;
+  kondisi: string;
+  tanggal: string;
+  kelasName: string;
+  formUrl: string;
+}): string {
+  const sapaan = salutation(args.pengajarGender);
+  return [
+    `Assalamu'alaikum ${sapaan} ${args.pengajarName},`,
+    ``,
+    `Berdasarkan laporan observasi kelas *${args.kelasName}* tanggal *${args.tanggal}*, tercatat kondisi: *${args.kondisi}*.`,
+    ``,
+    `Mohon sampaikan alasan/klarifikasi melalui tautan berikut:`,
+    args.formUrl,
+    ``,
+    `Jazakumullahu khairan.`,
+  ].join('\n');
+}
+
+export function tplTeguranToPengajar(args: {
+  pengajarName: string;
+  pengajarGender: Gender;
+  nomorTeguran: number;
+  kategori: string;
+  keterangan: string;
+}): string {
+  const sapaan = salutation(args.pengajarGender);
+  return [
+    `Assalamu'alaikum ${sapaan} ${args.pengajarName},`,
+    ``,
+    `Ini adalah *teguran ke-${args.nomorTeguran}* terkait: ${args.kategori}.`,
+    args.keterangan ? `Keterangan: ${args.keterangan}` : '',
+    ``,
+    `Mohon agar tidak mengulangi hal ini di waktu mendatang karena berkaitan dengan amanah kepada umat.`,
+    args.nomorTeguran >= 3 ? `\n⚠️ Peringatan: teguran ke-4 akan mengakibatkan penonaktifan pengajar.` : '',
+    ``,
+    `Jazakumullahu khairan.`,
+  ].filter(Boolean).join('\n');
+}
+
+export function tplSuratNonaktif(args: {
+  pengajarName: string;
+  pengajarGender: Gender;
+}): string {
+  const sapaan = salutation(args.pengajarGender);
+  return [
+    `Assalamu'alaikum ${sapaan} ${args.pengajarName},`,
+    ``,
+    `Dengan berat hati kami sampaikan bahwa berdasarkan akumulasi 4 kali teguran, antum untuk sementara *dinonaktifkan* dari tugas sebagai pengajar HITS.`,
+    ``,
+    `Mohon hubungi koordinator untuk langkah selanjutnya.`,
+    ``,
+    `Semoga Allah memudahkan urusan antum.`,
+  ].join('\n');
+}
+
+export function tplAlasanDiterima(args: {
+  pengajarName: string;
+  pengajarGender: Gender;
+  kondisi: string;
+  tanggal: string;
+}): string {
+  const sapaan = salutation(args.pengajarGender);
+  return [
+    `Assalamu'alaikum ${sapaan} ${args.pengajarName},`,
+    ``,
+    `Alasan antum terkait *${args.kondisi}* pada tanggal *${args.tanggal}* telah diterima sebagai udzur syar'i.`,
+    ``,
+    `Mohon agar ke depan bisa mengkondisikan sebaik mungkin agar kelas berjalan sesuai jadwal.`,
+    ``,
+    `Jazakumullahu khairan.`,
+  ].join('\n');
+}
+
+export function tplJadwalPindahToKoorKK(args: {
+  pengajarName: string;
+  pengajarGender: Gender;
+  kelasName: string;
+  tanggalAsal: string;
+  tanggalPengganti: string;
+  waktuPengganti: string;
+  alasan: string;
+}): string {
+  return [
+    `Assalamu'alaikum,`,
+    ``,
+    `${salutation(args.pengajarGender)} ${args.pengajarName} memindahkan jadwal *${args.kelasName}*:`,
+    `• Jadwal asal: ${args.tanggalAsal}`,
+    `• Jadwal pengganti: ${args.tanggalPengganti}, ${args.waktuPengganti}`,
+    `• Alasan: ${args.alasan}`,
+    ``,
+    `Mohon ditindaklanjuti.`,
+  ].join('\n');
+}
+
+export function tplJadwalPindahToKetuaKelas(args: {
+  ketuaKelasName: string;
+  ketuaKelasGender: Gender;
+  pengajarName: string;
+  kelasName: string;
+  tanggalAsal: string;
+  tanggalPengganti: string;
+  waktuPengganti: string;
+}): string {
+  const sapaan = salutation(args.ketuaKelasGender);
+  return [
+    `Assalamu'alaikum ${sapaan} ${args.ketuaKelasName},`,
+    ``,
+    `Diberitahukan bahwa jadwal *${args.kelasName}* bersama ${args.pengajarName} dipindahkan:`,
+    `• Jadwal asal: ${args.tanggalAsal}`,
+    `• Jadwal baru: ${args.tanggalPengganti}, ${args.waktuPengganti}`,
+    ``,
+    `Jazakumullahu khairan.`,
+  ].join('\n');
+}
+
+export function tplReminderKetuaKelasObservasi(args: {
+  ketuaKelasName: string;
+  ketuaKelasGender: Gender;
+  kelasName: string;
+  observasiUrl: string;
+}): string {
+  const sapaan = salutation(args.ketuaKelasGender);
+  return [
+    `Assalamu'alaikum ${sapaan} ${args.ketuaKelasName},`,
+    ``,
+    `Pengingat — mohon isi laporan observasi kelas *${args.kelasName}* hari ini melalui tautan:`,
+    args.observasiUrl,
+    ``,
+    `Jazakumullahu khairan.`,
+  ].join('\n');
+}
+
+export function tplMagicLinkKetuaKelas(args: {
+  ketuaKelasName: string;
+  ketuaKelasGender: Gender;
+  kelasName: string;
+  magicUrl: string;
+}): string {
+  const sapaan = salutation(args.ketuaKelasGender);
+  return [
+    `Assalamu'alaikum ${sapaan} ${args.ketuaKelasName},`,
+    ``,
+    `Silakan isi observasi kelas *${args.kelasName}* hari ini:`,
+    args.magicUrl,
+    ``,
+    `(Link ini hanya untuk Anda)`,
   ].join('\n');
 }

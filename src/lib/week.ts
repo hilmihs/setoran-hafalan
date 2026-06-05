@@ -89,6 +89,25 @@ export function formatCycleRange(cycleStartISO: string): string {
 }
 
 /**
+ * Label deadline cycle untuk pesan WA, mis: "Ahad, 14 Juni 2026".
+ * Cycle berakhir selalu hari Ahad (start = Senin + 13 hari); prefiks
+ * "Ahad," ditulis literal karena `weekday: 'long'` id-ID memunculkan
+ * "Minggu", bukan diksi pesantren yang dipakai di template lama.
+ */
+export function formatCycleDeadline(cycleStartISO: string): string {
+  const endISO = cycleEndOf(cycleStartISO);
+  const [y, m, d] = endISO.split('-').map(Number);
+  const end = new Date(Date.UTC(y, m - 1, d));
+  const tanggal = end.toLocaleDateString('id-ID', {
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+    timeZone: 'UTC',
+  });
+  return `Ahad, ${tanggal}`;
+}
+
+/**
  * Cycle-cycle sebelum cycle berjalan (untuk dropdown riwayat).
  */
 export function previousCycles(count: number): string[] {

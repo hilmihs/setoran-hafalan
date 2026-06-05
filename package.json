@@ -16,7 +16,8 @@
     "seed-peserta-password": "tsx --env-file=.env.local scripts/seed-peserta-password.ts",
     "set-password": "tsx --env-file=.env.local scripts/set-password.ts",
     "cleanup-audio": "tsx --env-file=.env.local scripts/cleanup-audio.ts",
-    "reset-setoran": "tsx --env-file=.env.local scripts/reset-setoran.ts"
+    "reset-setoran": "tsx --env-file=.env.local scripts/reset-setoran.ts",
+    "seed-hits": "tsx --env-file=.env.local scripts/seed-hits-demo.ts"
   },
   "dependencies": {
     "@supabase/ssr": "^0.5.0",
