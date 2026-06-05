@@ -93,6 +93,18 @@ export default async function KoordinatorAdminPage() {
           />
 
           <div className="section-row">
+            <div className="t-tiny">HITS Matrix</div>
+            <div className="t-small">1 operasi</div>
+          </div>
+
+          <SeedCard
+            seedKey="hits"
+            title="Seed HITS — Kelompok & Pengajar"
+            description="Wipe semua data HITS (pengajar, kelompok, koordinator HITS/KK, checkin, observasi, dll), lalu re-seed 19 kelompok + 162 pengajar + 5 koordinator HITS + 2 koordinator KK + 2 program kehadiran + demo data. Password default: hits123. Akun superadmin (koordinator_hits/KK) yang bukan bawaan akan di-restore otomatis."
+            destructive
+          />
+
+          <div className="section-row">
             <div className="t-tiny">Operasi aman</div>
             <div className="t-small">1 operasi</div>
           </div>
