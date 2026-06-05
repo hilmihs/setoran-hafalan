@@ -2,7 +2,13 @@
 
 import { supabaseAdmin } from '@/lib/supabase-admin';
 import { requireKoordinatorKetuaKelas } from '@/lib/session';
-import { buildWaMeUrl } from '@/lib/whatsapp';
+import {
+  buildWaMeUrl,
+  tplReminderKetuaKelasObservasi,
+  tplReminderPengajarCheckin,
+  tplTabayyunToPengajar,
+} from '@/lib/whatsapp';
+import { absUrl } from '@/lib/url';
 
 export async function decideTabayyun(
   _prev: { error?: string; ok?: boolean } | undefined,
@@ -44,8 +50,12 @@ export async function reminderKetuaKelas(
 
   if (!ketua) return { error: 'Ketua kelas tidak ditemukan.' };
 
-  const sapaan = ketua.gender === 'ikhwan' ? 'Akhi' : 'Ukhti';
-  const msg = `Assalamu'alaikum ${sapaan} ${ketua.name},\n\nMohon segera mengisi observasi kelas *${kelasName}* hari ini.\n\nJazakumullahu khairan.`;
+  const msg = tplReminderKetuaKelasObservasi({
+    ketuaKelasName: ketua.name,
+    ketuaKelasGender: ketua.gender,
+    kelasName,
+    observasiUrl: absUrl('/observasi/ketua-kelas'),
+  });
 
   return { waUrl: buildWaMeUrl(ketua.whatsapp_number, msg) };
 }
@@ -64,8 +74,40 @@ export async function reminderPengajarCheckin(
 
   if (!pengajar) return { error: 'Pengajar tidak ditemukan.' };
 
-  const sapaan = pengajar.gender === 'ikhwan' ? 'Akhi' : 'Ukhti';
-  const msg = `Assalamu'alaikum ${sapaan} ${pengajar.name},\n\nMohon segera melakukan check-in kehadiran untuk kelas *${kelasName}* hari ini.\n\nJazakumullahu khairan.`;
+  const msg = tplReminderPengajarCheckin({
+    pengajarName: pengajar.name,
+    pengajarGender: pengajar.gender,
+    programName: kelasName,
+    checkinUrl: absUrl('/kehadiran/pengajar'),
+  });
+
+  return { waUrl: buildWaMeUrl(pengajar.whatsapp_number, msg) };
+}
+
+export async function reminderTabayyunPengajar(
+  pengajarId: string,
+  kondisi: string,
+  tanggal: string,
+  kelasName: string
+): Promise<{ waUrl?: string; error?: string }> {
+  await requireKoordinatorKetuaKelas();
+
+  const { data: pengajar } = await supabaseAdmin
+    .from('pengajar')
+    .select('name, whatsapp_number, gender')
+    .eq('id', pengajarId)
+    .maybeSingle();
+
+  if (!pengajar) return { error: 'Pengajar tidak ditemukan.' };
+
+  const msg = tplTabayyunToPengajar({
+    pengajarName: pengajar.name,
+    pengajarGender: pengajar.gender,
+    kondisi,
+    tanggal,
+    kelasName,
+    formUrl: absUrl('/kehadiran/pengajar'),
+  });
 
   return { waUrl: buildWaMeUrl(pengajar.whatsapp_number, msg) };
 }

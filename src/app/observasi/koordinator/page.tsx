@@ -85,6 +85,7 @@ export default async function KoordinatorKetuaKelasPage() {
       const pengajar = pengajarMap.get(t.pengajar_id);
       return {
         id: t.id,
+        pengajar_id: t.pengajar_id,
         pengajar_name: pengajar?.name ?? '?',
         kelas_name: kelas?.name ?? '?',
         tanggal: obs.tanggal,

@@ -1,13 +1,14 @@
 'use client';
 
 import { useState, useTransition } from 'react';
-import { decideTabayyun } from './actions';
+import { decideTabayyun, reminderTabayyunPengajar } from './actions';
 import { KONDISI_KELAS_LABEL } from '@/types/db';
 import type { KondisiKelas } from '@/types/db';
 
 interface Props {
   tabayyun: {
     id: string;
+    pengajar_id: string;
     pengajar_name: string;
     kelas_name: string;
     tanggal: string;
@@ -22,6 +23,7 @@ export function TabayyunCard({ tabayyun: t }: Props) {
   const [decided, setDecided] = useState(t.status === 'decided');
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
+  const [reminderPending, startReminderTransition] = useTransition();
 
   if (decided) {
     return (
@@ -48,10 +50,36 @@ export function TabayyunCard({ tabayyun: t }: Props) {
     });
   }
 
+  function handleReminder() {
+    startReminderTransition(async () => {
+      const result = await reminderTabayyunPengajar(
+        t.pengajar_id,
+        t.kondisi,
+        t.tanggal,
+        t.kelas_name
+      );
+      if (result.waUrl) {
+        window.open(result.waUrl, '_blank');
+      }
+    });
+  }
+
   return (
     <div className="card-flat" style={{ padding: '14px 16px', marginBottom: 8 }}>
       <div style={{ marginBottom: 8 }}>
-        <div style={{ fontWeight: 600, marginBottom: 2 }}>{t.pengajar_name}</div>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+          <div style={{ fontWeight: 600, marginBottom: 2 }}>{t.pengajar_name}</div>
+          {t.status === 'pending' && (
+            <button
+              onClick={handleReminder}
+              disabled={reminderPending}
+              className="act-btn wa"
+              style={{ fontSize: 11, flexShrink: 0 }}
+            >
+              {reminderPending ? '...' : 'Reminder Tabayyun'}
+            </button>
+          )}
+        </div>
         <div className="t-small" style={{ color: 'var(--muted-2)' }}>
           {t.kelas_name} &bull; {t.tanggal} &bull;{' '}
           <span style={{ color: 'var(--kuning-ink)', fontWeight: 600 }}>
