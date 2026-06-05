@@ -10,6 +10,7 @@ import { runSeedPesertaPassword } from '@/lib/seeds/seed-peserta-password';
 import { runResetSetoran } from '@/lib/seeds/reset-setoran';
 import { runSeedHits } from '@/lib/seeds/seed-hits';
 import { runSeedKelasHits } from '@/lib/seeds/seed-kelas-hits';
+import { runSeedDemoObservasi } from '@/lib/seeds/seed-demo-observasi';
 
 export type SeedKey =
   | 'itsnain'
@@ -18,7 +19,8 @@ export type SeedKey =
   | 'peserta-password'
   | 'reset-setoran'
   | 'hits'
-  | 'kelas-hits';
+  | 'kelas-hits'
+  | 'demo-observasi';
 
 interface SeedDef {
   label: string;
@@ -53,6 +55,10 @@ const REGISTRY: Record<SeedKey, SeedDef> = {
   'kelas-hits': {
     label: 'Seed Kelas HITS (94 kelas + ketua kelas dari Excel)',
     fn: runSeedKelasHits,
+  },
+  'demo-observasi': {
+    label: 'Demo Observasi + Tabayyun + Checkin',
+    fn: runSeedDemoObservasi,
   },
 };
 

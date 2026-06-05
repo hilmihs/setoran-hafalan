@@ -129,6 +129,9 @@ export default async function KehadiranPengajarPage() {
                 checkedKeys={checkedDates}
                 pengajarId={session.pengajar_id}
                 pengajarGender={session.gender}
+                autoPopup={todayPrograms.some(
+                  (p) => !checkedDates.includes(`${p.type}:${p.id}:${today}`)
+                )}
               />
             </>
           )}

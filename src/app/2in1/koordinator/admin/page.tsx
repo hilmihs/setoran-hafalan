@@ -94,7 +94,7 @@ export default async function KoordinatorAdminPage() {
 
           <div className="section-row">
             <div className="t-tiny">HITS Matrix</div>
-            <div className="t-small">1 operasi</div>
+            <div className="t-small">3 operasi</div>
           </div>
 
           <SeedCard
@@ -108,6 +108,13 @@ export default async function KoordinatorAdminPage() {
             seedKey="kelas-hits"
             title="Seed Kelas HITS — 94 Kelas + Ketua Kelas"
             description="Wipe kelas_hits + ketua_kelas, lalu insert 28 kelas ikhwan + 66 kelas akhwat dari data Excel Juni 2025. Pengajar di-match by name, yang belum ada otomatis ditambahkan. Jadwal default: Senin-Jumat 16:00-19:00. Password ketua: hits123. Jalankan SETELAH seed HITS utama."
+            destructive
+          />
+
+          <SeedCard
+            seedKey="demo-observasi"
+            title="Demo Observasi + Tabayyun + Checkin"
+            description="Wipe observasi_kelas dan tabayyun, lalu generate 5 hari demo data: observasi kondisi kelas, tabayyun untuk non-KBBS, dan checkin pengajar. Jalankan SETELAH seed HITS + Kelas HITS."
             destructive
           />
 

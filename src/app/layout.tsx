@@ -17,8 +17,8 @@ const mono = IBM_Plex_Mono({
 });
 
 export const metadata: Metadata = {
-  title: 'Setoran Hafalan — Maahir',
-  description: 'Setoran pekanan, pemeriksaan, dan monitoring dalam satu alur.',
+  title: 'Muhajir Project Tilawah',
+  description: 'Platform setoran hafalan, kehadiran pengajar, dan monitoring observasi.',
 };
 
 export default function RootLayout({

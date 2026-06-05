@@ -65,7 +65,7 @@ export default async function KoordinatorKehadiranPage() {
         <div className="page" style={{ paddingTop: 20 }}>
           <div className="topbar">
             <div className="wordmark">
-              <span className="mark">M</span> Koordinator HITS
+              <span className="mark">M</span> Koordinator Pengajar
             </div>
             <a href="/" className="btn-ghost" style={{ fontSize: 14 }}>
               Menu

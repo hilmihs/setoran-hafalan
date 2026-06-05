@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useTransition } from 'react';
+import { useState, useTransition, useEffect, useRef } from 'react';
 import { submitCheckin, submitAlasan } from './actions';
 import type { Gender } from '@/types/db';
 import type { ProgramToday } from '@/lib/attendance';
@@ -10,20 +10,42 @@ interface Props {
   checkedKeys: string[];
   pengajarId: string;
   pengajarGender: Gender;
+  autoPopup?: boolean;
 }
 
-export function CheckinForm({ programs, checkedKeys }: Props) {
+export function CheckinForm({ programs, checkedKeys, autoPopup }: Props) {
   const [completed, setCompleted] = useState<string[]>(checkedKeys);
   const [showAlasan, setShowAlasan] = useState(false);
   const [lastWaUrl, setLastWaUrl] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
+  const dialogRef = useRef<HTMLDialogElement>(null);
+  const [modalOpen, setModalOpen] = useState(false);
 
   const remaining = programs.filter(
     (p) => !completed.includes(`${p.type}:${p.id}:${p.tanggal}`)
   );
 
   const current = remaining[0];
+
+  useEffect(() => {
+    if (autoPopup && remaining.length > 0) {
+      setModalOpen(true);
+    }
+  }, []);
+
+  useEffect(() => {
+    const d = dialogRef.current;
+    if (!d) return;
+    if (modalOpen && !d.open) d.showModal();
+    if (!modalOpen && d.open) d.close();
+  }, [modalOpen]);
+
+  useEffect(() => {
+    if (remaining.length === 0 && modalOpen) {
+      setTimeout(() => setModalOpen(false), 1500);
+    }
+  }, [remaining.length, modalOpen]);
 
   function handleCheckin(fd: FormData) {
     setError(null);
@@ -57,41 +79,91 @@ export function CheckinForm({ programs, checkedKeys }: Props) {
     });
   }
 
-  if (remaining.length === 0) {
-    return (
-      <div
-        className="card-flat"
-        style={{ padding: '24px 20px', textAlign: 'center' }}
-      >
-        <p className="t-body" style={{ fontWeight: 600, color: 'var(--success, #4caf50)' }}>
-          Semua kehadiran sudah terisi!
-        </p>
-        {lastWaUrl && (
-          <a
-            href={lastWaUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="btn"
-            style={{ marginTop: 12, display: 'inline-block' }}
-          >
-            Kirim notifikasi ke Ketua Kelompok
-          </a>
-        )}
-      </div>
-    );
-  }
+  const formContent = (() => {
+    if (remaining.length === 0) {
+      return (
+        <div style={{ padding: '24px 20px', textAlign: 'center' }}>
+          <p className="t-body" style={{ fontWeight: 600, color: 'var(--success, #4caf50)' }}>
+            Semua kehadiran sudah terisi!
+          </p>
+          {lastWaUrl && (
+            <a
+              href={lastWaUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="btn"
+              style={{ marginTop: 12, display: 'inline-block' }}
+            >
+              Kirim notifikasi ke Ketua Kelompok
+            </a>
+          )}
+        </div>
+      );
+    }
 
-  if (showAlasan && current) {
-    return (
-      <div className="card-flat" style={{ padding: '16px 20px' }}>
-        <h3 className="t-h2" style={{ marginBottom: 4 }}>Ajukan Alasan</h3>
-        <p className="t-small" style={{ color: 'var(--muted-2)', marginBottom: 12 }}>
-          {current.name} — {current.tanggal}
-        </p>
+    if (showAlasan && current) {
+      return (
+        <div style={{ padding: '16px 20px' }}>
+          <h3 className="t-h2" style={{ marginBottom: 4 }}>Ajukan Alasan</h3>
+          <p className="t-small" style={{ color: 'var(--muted-2)', marginBottom: 12 }}>
+            {current.name} — {current.tanggal}
+          </p>
 
-        <form action={handleAlasan}>
+          <form action={handleAlasan}>
+            <input type="hidden" name="tanggal" value={current.tanggal} />
+            <input type="hidden" name="jenis" value="alpa" />
+            {current.type === 'program' && (
+              <input type="hidden" name="program_id" value={current.id} />
+            )}
+            {current.type === 'kelas_maahir' && (
+              <input type="hidden" name="kelas_hits_id" value={current.id} />
+            )}
+
+            <textarea
+              name="alasan"
+              required
+              placeholder="Tulis alasan Anda..."
+              className="textarea"
+              style={{ marginBottom: 12 }}
+            />
+
+            {error && (
+              <p className="t-small" style={{ color: 'var(--danger)', marginBottom: 8 }}>
+                {error}
+              </p>
+            )}
+
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button type="submit" className="btn" disabled={pending} style={{ flex: 1 }}>
+                {pending ? 'Mengirim...' : 'Kirim Alasan'}
+              </button>
+              <button
+                type="button"
+                className="btn-ghost"
+                onClick={() => setShowAlasan(false)}
+              >
+                Lewati
+              </button>
+            </div>
+          </form>
+        </div>
+      );
+    }
+
+    return (
+      <div style={{ padding: '16px 20px' }}>
+        <div style={{ marginBottom: 12 }}>
+          <p className="t-small" style={{ color: 'var(--muted-2)' }}>
+            {remaining.length > 1 ? `${remaining.length} program tersisa` : 'Program terakhir'}
+          </p>
+          <h3 className="t-h2" style={{ marginBottom: 4 }}>{current.name}</h3>
+          <p className="t-small" style={{ color: 'var(--muted-2)' }}>
+            {current.tanggal} &bull; {current.waktu_mulai} – {current.waktu_selesai}
+          </p>
+        </div>
+
+        <form action={handleCheckin}>
           <input type="hidden" name="tanggal" value={current.tanggal} />
-          <input type="hidden" name="jenis" value="alpa" />
           {current.type === 'program' && (
             <input type="hidden" name="program_id" value={current.id} />
           )}
@@ -99,21 +171,27 @@ export function CheckinForm({ programs, checkedKeys }: Props) {
             <input type="hidden" name="kelas_hits_id" value={current.id} />
           )}
 
-          <textarea
-            name="alasan"
-            required
-            placeholder="Tulis alasan Anda..."
-            style={{
-              width: '100%',
-              minHeight: 80,
-              padding: '10px 12px',
-              borderRadius: 8,
-              border: '1px solid var(--border)',
-              fontSize: 14,
-              marginBottom: 12,
-              resize: 'vertical',
-            }}
-          />
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 16 }}>
+            {(['hadir', 'izin', 'sakit'] as const).map((s) => (
+              <label
+                key={s}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 10,
+                  padding: '12px 16px',
+                  border: '1px solid var(--line-2)',
+                  borderRadius: 8,
+                  cursor: 'pointer',
+                }}
+              >
+                <input type="radio" name="status" value={s} required />
+                <span style={{ fontWeight: 500 }}>
+                  {s === 'hadir' ? 'Hadir' : s === 'izin' ? 'Izin (Tidak Hadir)' : 'Sakit'}
+                </span>
+              </label>
+            ))}
+          </div>
 
           {error && (
             <p className="t-small" style={{ color: 'var(--danger)', marginBottom: 8 }}>
@@ -121,89 +199,62 @@ export function CheckinForm({ programs, checkedKeys }: Props) {
             </p>
           )}
 
-          <div style={{ display: 'flex', gap: 8 }}>
-            <button type="submit" className="btn" disabled={pending} style={{ flex: 1 }}>
-              {pending ? 'Mengirim...' : 'Kirim Alasan'}
-            </button>
-            <button
-              type="button"
-              className="btn-ghost"
-              onClick={() => setShowAlasan(false)}
-            >
-              Lewati
-            </button>
-          </div>
+          <button type="submit" className="btn" disabled={pending} style={{ width: '100%' }}>
+            {pending ? 'Menyimpan...' : 'Simpan'}
+          </button>
         </form>
+
+        {lastWaUrl && (
+          <div style={{ marginTop: 12, textAlign: 'center' }}>
+            <a
+              href={lastWaUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="btn-ghost"
+            >
+              Kirim notifikasi ke Ketua Kelompok
+            </a>
+          </div>
+        )}
       </div>
     );
-  }
+  })();
 
   return (
-    <div className="card-flat" style={{ padding: '16px 20px' }}>
-      <div style={{ marginBottom: 12 }}>
-        <p className="t-small" style={{ color: 'var(--muted-2)' }}>
-          {remaining.length > 1 ? `${remaining.length} program tersisa` : 'Program terakhir'}
-        </p>
-        <h3 className="t-h2" style={{ marginBottom: 4 }}>{current.name}</h3>
-        <p className="t-small" style={{ color: 'var(--muted-2)' }}>
-          {current.tanggal} &bull; {current.waktu_mulai} – {current.waktu_selesai}
-        </p>
-      </div>
+    <>
+      {/* Inline card */}
+      <div className="card-flat">{formContent}</div>
 
-      <form action={handleCheckin}>
-        <input type="hidden" name="tanggal" value={current.tanggal} />
-        {current.type === 'program' && (
-          <input type="hidden" name="program_id" value={current.id} />
-        )}
-        {current.type === 'kelas_maahir' && (
-          <input type="hidden" name="kelas_hits_id" value={current.id} />
-        )}
-
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 16 }}>
-          {(['hadir', 'izin', 'sakit'] as const).map((s) => (
-            <label
-              key={s}
+      {/* Auto-popup modal */}
+      {autoPopup && (
+        <dialog
+          ref={dialogRef}
+          style={{
+            border: 'none',
+            borderRadius: 16,
+            padding: 0,
+            maxWidth: 440,
+            width: '90vw',
+            background: 'var(--surface)',
+            boxShadow: '0 8px 40px rgba(0,0,0,0.18)',
+          }}
+          onClose={() => setModalOpen(false)}
+        >
+          <div style={{ padding: '16px 20px 8px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <h2 className="t-h2">Isi Kehadiran</h2>
+            <button
+              onClick={() => setModalOpen(false)}
               style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 10,
-                padding: '12px 16px',
-                border: '1px solid var(--border)',
-                borderRadius: 8,
-                cursor: 'pointer',
+                background: 'none', border: 'none', cursor: 'pointer',
+                fontSize: 18, color: 'var(--muted)', padding: '4px 8px',
               }}
             >
-              <input type="radio" name="status" value={s} required />
-              <span style={{ fontWeight: 500 }}>
-                {s === 'hadir' ? 'Hadir' : s === 'izin' ? 'Izin (Tidak Hadir)' : 'Sakit'}
-              </span>
-            </label>
-          ))}
-        </div>
-
-        {error && (
-          <p className="t-small" style={{ color: 'var(--danger)', marginBottom: 8 }}>
-            {error}
-          </p>
-        )}
-
-        <button type="submit" className="btn" disabled={pending} style={{ width: '100%' }}>
-          {pending ? 'Menyimpan...' : 'Simpan'}
-        </button>
-      </form>
-
-      {lastWaUrl && (
-        <div style={{ marginTop: 12, textAlign: 'center' }}>
-          <a
-            href={lastWaUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="btn-ghost"
-          >
-            Kirim notifikasi ke Ketua Kelompok
-          </a>
-        </div>
+              &times;
+            </button>
+          </div>
+          {formContent}
+        </dialog>
       )}
-    </div>
+    </>
   );
 }

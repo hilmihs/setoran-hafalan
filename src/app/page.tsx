@@ -27,8 +27,8 @@ const FEATURE_CARDS: {
   },
   {
     roles: ['koordinator_hits'],
-    title: 'Koordinator HITS',
-    description: 'Dashboard kehadiran, penilaian, reminder, dan matrix pengajar',
+    title: 'Koordinator Pengajar HITS',
+    description: 'Check-in kehadiran pengajar, reminder, dan monitoring per kelompok',
     href: '/kehadiran/koordinator',
   },
   {
@@ -40,7 +40,7 @@ const FEATURE_CARDS: {
   {
     roles: ['koordinator_ketua_kelas'],
     title: 'Koordinator Ketua Kelas',
-    description: 'Tabayyun, teguran, dan monitoring observasi halaqah',
+    description: 'Tabayyun, reminder observasi, dan monitoring kondisi halaqah',
     href: '/observasi/koordinator',
   },
 ];
@@ -66,7 +66,7 @@ export default async function HomePage() {
           <div className="page" style={{ paddingTop: 56 }}>
             <div className="wordmark" style={{ marginBottom: 24 }}>
               <span className="mark">M</span>
-              Maahir HITS
+              Muhajir Project Tilawah
             </div>
 
             <h1 className="t-h1" style={{ marginBottom: 6 }}>
@@ -124,7 +124,7 @@ export default async function HomePage() {
         <div className="page" style={{ paddingTop: 56 }}>
           <div className="wordmark" style={{ marginBottom: 24 }}>
             <span className="mark">M</span>
-            Maahir HITS
+            Muhajir Project Tilawah
           </div>
 
           <h1 className="t-h1" style={{ marginBottom: 6 }}>Assalamu&apos;alaikum</h1>
