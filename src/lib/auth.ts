@@ -191,9 +191,6 @@ export async function login(
   s.accesses = accesses;
   await s.save();
 
-  if (accesses.length === 1) {
-    redirect(ROLE_LANDING[accesses[0].role]);
-  }
   redirect('/');
 }
 

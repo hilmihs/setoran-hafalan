@@ -14,7 +14,7 @@ const FEATURE_CARDS: {
   href: string;
 }[] = [
   {
-    roles: ['peserta', 'musyrif', 'koordinator', 'syaikh'],
+    roles: ['peserta', 'musyrif', 'koordinator', 'syaikh', 'pengajar', 'koordinator_hits', 'koordinator_ketua_kelas'],
     title: 'Barnamij 2in1',
     description: 'Setoran Hafalan — Tuhfatul Athfal, Al-Jazariyyah, Syawahid',
     href: '/2in1',
@@ -61,14 +61,14 @@ export default async function HomePage() {
   const s = await getSession();
   const accesses = await getAllAccesses();
 
-  if (accesses.length === 1) {
-    redirect(ROLE_LANDING[accesses[0].role]);
-  }
-
-  if (accesses.length > 1) {
+  if (accesses.length >= 1) {
     const available = FEATURE_CARDS.filter((card) =>
       card.roles.some((r) => accesses.find((a) => a.role === r))
     );
+
+    if (available.length === 1) {
+      redirect(available[0].href);
+    }
 
     const userName = accesses[0]?.name ?? '';
 
