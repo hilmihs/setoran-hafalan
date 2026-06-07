@@ -211,7 +211,9 @@ export interface KetuaKelas {
   name: string;
   gender: Gender;
   whatsapp_number: string;
+  password_hash: string | null;
   kelas_hits_id: string;
+  batch_id: string | null;
   magic_token: string | null;
   active: boolean;
   last_login_at: string | null;
@@ -223,8 +225,16 @@ export interface KoordinatorKetuaKelas {
   name: string;
   gender: Gender;
   whatsapp_number: string;
+  link_grup_wa: string | null;
   active: boolean;
   last_login_at: string | null;
+  created_at: string;
+}
+
+export interface BatchConfig {
+  id: string;
+  name: string;
+  start_date: string;
   created_at: string;
 }
 
@@ -373,6 +383,27 @@ export const INDIKATOR_STANDAR: Record<string, number> = {
   tanggung_jawab: 4,
   kepatuhan_sop: 4,
 };
+
+// ========== SHAKWA ==========
+
+export type PelaporType = 'peserta' | 'pengajar';
+export type StatusShakwa = 'submitted' | 'in_review' | 'resolved' | 'closed';
+
+export interface Shakwa {
+  id: string;
+  pelapor_type: PelaporType;
+  pengajar_id: string | null;
+  nama: string;
+  gender: Gender;
+  kategori: string;
+  halaqoh: string | null;
+  isi: string;
+  saran_kritik: string | null;
+  status: StatusShakwa;
+  catatan_reviewer: string | null;
+  reviewed_at: string | null;
+  created_at: string;
+}
 
 // ========== Session types ==========
 

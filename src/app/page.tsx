@@ -43,6 +43,18 @@ const FEATURE_CARDS: {
     description: 'Tabayyun, reminder observasi, dan monitoring kondisi halaqah',
     href: '/observasi/koordinator',
   },
+  {
+    roles: ['pengajar'],
+    title: 'SHAKWA',
+    description: 'Sampaikan laporan, saran, atau kendala terkait program HITS',
+    href: '/shakwa/pengajar',
+  },
+  {
+    roles: ['koordinator_hits'],
+    title: 'Review SHAKWA',
+    description: 'Tinjau laporan dan aduan dari pengajar & peserta',
+    href: '/shakwa/koordinator',
+  },
 ];
 
 export default async function HomePage() {

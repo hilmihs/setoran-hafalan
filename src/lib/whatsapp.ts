@@ -445,3 +445,31 @@ export function tplMagicLinkKetuaKelas(args: {
     `(Link ini hanya untuk Anda)`,
   ].join('\n');
 }
+
+export function tplKetuaKelasTerpilih(args: {
+  ketuaKelasName: string;
+  ketuaKelasGender: Gender;
+  kelasName: string;
+  magicUrl: string;
+  linkGrupWa: string | null;
+}): string {
+  const sapaan = salutation(args.ketuaKelasGender);
+  const lines = [
+    `Assalamu'alaikum ${sapaan} ${args.ketuaKelasName},`,
+    ``,
+    `Anda telah dipilih sebagai *Ketua Kelas ${args.kelasName}*.`,
+    ``,
+    `Tugas Anda adalah mengisi observasi harian kelas melalui link berikut:`,
+    args.magicUrl,
+    ``,
+    `(Link ini khusus untuk Anda, jangan dibagikan)`,
+  ];
+  if (args.linkGrupWa) {
+    lines.push(``);
+    lines.push(`Silakan bergabung ke grup koordinasi ketua kelas:`);
+    lines.push(args.linkGrupWa);
+  }
+  lines.push(``);
+  lines.push(`Jazakumullahu khairan.`);
+  return lines.join('\n');
+}

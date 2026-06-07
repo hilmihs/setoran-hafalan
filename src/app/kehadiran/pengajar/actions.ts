@@ -6,7 +6,12 @@ import {
   getProgramsForDate,
   deriveIsTerlambat,
 } from '@/lib/attendance';
-import { buildWaMeUrl, tplPengajarAlasanToKetuaKelompok } from '@/lib/whatsapp';
+import {
+  buildWaMeUrl,
+  normalizeWhatsApp,
+  tplPengajarAlasanToKetuaKelompok,
+  tplKetuaKelasTerpilih,
+} from '@/lib/whatsapp';
 import { absUrl } from '@/lib/url';
 import type { StatusCheckin } from '@/types/db';
 
@@ -136,6 +141,86 @@ export async function submitAlasan(
     });
     waUrl = buildWaMeUrl(ketua.whatsapp_number, msg);
   }
+
+  return { ok: true, waUrl };
+}
+
+export async function submitKetuaKelas(
+  _prev: { error?: string; ok?: boolean; waUrl?: string } | undefined,
+  formData: FormData
+): Promise<{ error?: string; ok?: boolean; waUrl?: string }> {
+  const session = await requirePengajar();
+
+  const kelasHitsId = String(formData.get('kelas_hits_id') ?? '');
+  const ketuaName = String(formData.get('ketua_name') ?? '').trim();
+  const ketuaWa = String(formData.get('ketua_wa') ?? '').trim();
+
+  if (!kelasHitsId || !ketuaName || !ketuaWa) {
+    return { error: 'Nama dan nomor WA ketua kelas wajib diisi.' };
+  }
+
+  const { data: kelas } = await supabaseAdmin
+    .from('kelas_hits')
+    .select('id, name, gender, pengajar_id')
+    .eq('id', kelasHitsId)
+    .maybeSingle();
+
+  if (!kelas || kelas.pengajar_id !== session.pengajar_id) {
+    return { error: 'Kelas tidak ditemukan atau bukan kelas Anda.' };
+  }
+
+  const { data: batch } = await supabaseAdmin
+    .from('batch_config')
+    .select('id')
+    .order('start_date', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (!batch) {
+    return { error: 'Konfigurasi batch belum tersedia.' };
+  }
+
+  await supabaseAdmin
+    .from('ketua_kelas')
+    .update({ active: false })
+    .eq('kelas_hits_id', kelasHitsId)
+    .eq('active', true);
+
+  const magicToken = crypto.randomUUID();
+  const normalizedWa = normalizeWhatsApp(ketuaWa);
+
+  const { error: insertErr } = await supabaseAdmin
+    .from('ketua_kelas')
+    .insert({
+      name: ketuaName,
+      gender: kelas.gender,
+      whatsapp_number: normalizedWa,
+      kelas_hits_id: kelasHitsId,
+      batch_id: batch.id,
+      magic_token: magicToken,
+      active: true,
+    });
+
+  if (insertErr) {
+    return { error: `Gagal menyimpan: ${insertErr.message}` };
+  }
+
+  const { data: koorKK } = await supabaseAdmin
+    .from('koordinator_ketua_kelas')
+    .select('link_grup_wa')
+    .eq('gender', kelas.gender)
+    .eq('active', true)
+    .maybeSingle();
+
+  const magicUrl = absUrl(`/api/auth/magic-link?token=${magicToken}`);
+  const msg = tplKetuaKelasTerpilih({
+    ketuaKelasName: ketuaName,
+    ketuaKelasGender: kelas.gender,
+    kelasName: kelas.name,
+    magicUrl,
+    linkGrupWa: koorKK?.link_grup_wa ?? null,
+  });
+  const waUrl = buildWaMeUrl(normalizedWa, msg);
 
   return { ok: true, waUrl };
 }

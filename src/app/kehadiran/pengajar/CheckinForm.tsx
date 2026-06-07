@@ -2,8 +2,16 @@
 
 import { useState, useTransition, useEffect, useRef } from 'react';
 import { submitCheckin, submitAlasan } from './actions';
+import { KetuaKelasStep } from './KetuaKelasStep';
 import type { Gender } from '@/types/db';
 import type { ProgramToday } from '@/lib/attendance';
+
+export interface KetuaKelasInfo {
+  kelasHitsId: string;
+  kelasName: string;
+  hasKetuaThisBatch: boolean;
+  currentKetuaName: string | null;
+}
 
 interface Props {
   programs: ProgramToday[];
@@ -11,9 +19,11 @@ interface Props {
   pengajarId: string;
   pengajarGender: Gender;
   autoPopup?: boolean;
+  kelasList?: KetuaKelasInfo[];
+  pekan?: number | null;
 }
 
-export function CheckinForm({ programs, checkedKeys, autoPopup }: Props) {
+export function CheckinForm({ programs, checkedKeys, autoPopup, kelasList, pekan }: Props) {
   const [completed, setCompleted] = useState<string[]>(checkedKeys);
   const [showAlasan, setShowAlasan] = useState(false);
   const [lastWaUrl, setLastWaUrl] = useState<string | null>(null);
@@ -21,12 +31,24 @@ export function CheckinForm({ programs, checkedKeys, autoPopup }: Props) {
   const [pending, startTransition] = useTransition();
   const dialogRef = useRef<HTMLDialogElement>(null);
   const [modalOpen, setModalOpen] = useState(false);
+  const [ketuaStepDone, setKetuaStepDone] = useState<Set<string>>(new Set());
+  const [ketuaWaUrl, setKetuaWaUrl] = useState<string | null>(null);
 
   const remaining = programs.filter(
     (p) => !completed.includes(`${p.type}:${p.id}:${p.tanggal}`)
   );
 
   const current = remaining[0];
+
+  const needsKetuaStep = (() => {
+    if (!current || !pekan || pekan > 2) return false;
+    if (current.type !== 'kelas_maahir') return false;
+    const info = kelasList?.find((k) => k.kelasHitsId === current.id);
+    if (!info) return false;
+    if (info.hasKetuaThisBatch) return false;
+    if (ketuaStepDone.has(current.id)) return false;
+    return true;
+  })();
 
   useEffect(() => {
     if (autoPopup && remaining.length > 0) {
@@ -79,6 +101,19 @@ export function CheckinForm({ programs, checkedKeys, autoPopup }: Props) {
     });
   }
 
+  function handleKetuaComplete(waUrl?: string) {
+    if (current) {
+      setKetuaStepDone((prev) => new Set(prev).add(current.id));
+    }
+    if (waUrl) setKetuaWaUrl(waUrl);
+  }
+
+  function handleKetuaSkip() {
+    if (current) {
+      setKetuaStepDone((prev) => new Set(prev).add(current.id));
+    }
+  }
+
   const formContent = (() => {
     if (remaining.length === 0) {
       return (
@@ -98,6 +133,34 @@ export function CheckinForm({ programs, checkedKeys, autoPopup }: Props) {
             </a>
           )}
         </div>
+      );
+    }
+
+    if (needsKetuaStep && current) {
+      const info = kelasList?.find((k) => k.kelasHitsId === current.id);
+      return (
+        <>
+          <KetuaKelasStep
+            kelasHitsId={current.id}
+            kelasName={info?.kelasName ?? current.name}
+            pekan={pekan!}
+            currentKetuaName={info?.currentKetuaName ?? null}
+            onComplete={handleKetuaComplete}
+            onSkip={handleKetuaSkip}
+          />
+          {ketuaWaUrl && (
+            <div style={{ padding: '0 20px 16px', textAlign: 'center' }}>
+              <a
+                href={ketuaWaUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="btn-ghost"
+              >
+                Kirim notifikasi ke Ketua Kelas baru
+              </a>
+            </div>
+          )}
+        </>
       );
     }
 
@@ -152,6 +215,33 @@ export function CheckinForm({ programs, checkedKeys, autoPopup }: Props) {
 
     return (
       <div style={{ padding: '16px 20px' }}>
+        {ketuaWaUrl && (
+          <div
+            style={{
+              background: 'var(--hijau-tint)',
+              border: '1px solid var(--hijau-line)',
+              borderRadius: 8,
+              padding: '10px 14px',
+              marginBottom: 12,
+              textAlign: 'center',
+            }}
+          >
+            <p className="t-small" style={{ color: 'var(--hijau-ink)', fontWeight: 600, marginBottom: 4 }}>
+              Ketua kelas berhasil disimpan!
+            </p>
+            <a
+              href={ketuaWaUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="btn-ghost"
+              style={{ fontSize: 13 }}
+              onClick={() => setKetuaWaUrl(null)}
+            >
+              Kirim notifikasi ke Ketua Kelas
+            </a>
+          </div>
+        )}
+
         <div style={{ marginBottom: 12 }}>
           <p className="t-small" style={{ color: 'var(--muted-2)' }}>
             {remaining.length > 1 ? `${remaining.length} program tersisa` : 'Program terakhir'}
@@ -241,7 +331,9 @@ export function CheckinForm({ programs, checkedKeys, autoPopup }: Props) {
           onClose={() => setModalOpen(false)}
         >
           <div style={{ padding: '16px 20px 8px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <h2 className="t-h2">Isi Kehadiran</h2>
+            <h2 className="t-h2">
+              {needsKetuaStep ? 'Ketua Kelas' : 'Isi Kehadiran'}
+            </h2>
             <button
               onClick={() => setModalOpen(false)}
               style={{

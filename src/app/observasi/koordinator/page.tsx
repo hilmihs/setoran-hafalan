@@ -4,6 +4,7 @@ import { logout } from '@/lib/auth';
 import { Icon } from '@/components/icons';
 import { TabayyunCard } from './TabayyunCard';
 import { ReminderButton } from './ReminderButton';
+import { ObservasiFilterBar } from './ObservasiFilterBar';
 import type { KondisiKelas } from '@/types/db';
 
 export const dynamic = 'force-dynamic';
@@ -12,41 +13,66 @@ function jakartaToday(): string {
   return new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Jakarta' });
 }
 
-export default async function KoordinatorKetuaKelasPage() {
+type SP = { q?: string; hari?: string; statusObs?: string; statusTab?: string };
+
+export default async function KoordinatorKetuaKelasPage({
+  searchParams,
+}: {
+  searchParams: SP;
+}) {
   const session = await requireKoordinatorKetuaKelas();
   const today = jakartaToday();
 
+  const q = (searchParams.q ?? '').trim().toLowerCase();
+  const hariFilter = searchParams.hari ?? null;
+  const statusObs = searchParams.statusObs ?? null;
+  const statusTab = searchParams.statusTab ?? null;
+
   const { data: allKelas } = await supabaseAdmin
     .from('kelas_hits')
-    .select('id, name, gender, pengajar_id')
+    .select('id, name, gender, pengajar_id, jadwal_hari')
     .eq('gender', session.gender)
     .order('name');
 
-  const kelasIds = (allKelas ?? []).map((k) => k.id);
-  const pengajarIds = [...new Set((allKelas ?? []).map((k) => k.pengajar_id))];
+  const filteredKelas = (allKelas ?? []).filter((k) => {
+    if (hariFilter && k.jadwal_hari) {
+      const days = (k.jadwal_hari as string).split(',').map((d: string) => d.trim());
+      if (!days.includes(hariFilter)) return false;
+    }
+    return true;
+  });
+
+  const kelasIds = filteredKelas.map((k) => k.id);
+  const pengajarIds = [...new Set(filteredKelas.map((k) => k.pengajar_id))];
+
+  const tabayyunStatuses = statusTab === 'decided'
+    ? ['decided']
+    : statusTab === 'pending'
+      ? ['pending', 'awaiting_reason']
+      : ['pending', 'awaiting_reason', 'decided'];
 
   const [
     { data: allKetuaKelas },
     { data: todayObservasi },
     { data: todayCheckins },
-    { data: pendingTabayyun },
+    { data: rawTabayyun },
     { data: pengajarList },
   ] = await Promise.all([
     supabaseAdmin
       .from('ketua_kelas')
       .select('id, name, kelas_hits_id, whatsapp_number')
-      .in('kelas_hits_id', kelasIds)
+      .in('kelas_hits_id', kelasIds.length > 0 ? kelasIds : ['__none__'])
       .eq('active', true),
     supabaseAdmin
       .from('observasi_kelas')
       .select('id, kelas_hits_id, kondisi, tanggal')
       .eq('tanggal', today)
-      .in('kelas_hits_id', kelasIds),
+      .in('kelas_hits_id', kelasIds.length > 0 ? kelasIds : ['__none__']),
     supabaseAdmin
       .from('checkin_pengajar')
       .select('id, pengajar_id, kelas_hits_id, status')
       .eq('tanggal', today)
-      .in('kelas_hits_id', kelasIds)
+      .in('kelas_hits_id', kelasIds.length > 0 ? kelasIds : ['__none__'])
       .is('invalidated_at', null),
     supabaseAdmin
       .from('tabayyun')
@@ -55,26 +81,48 @@ export default async function KoordinatorKetuaKelasPage() {
         status, deadline_at,
         observasi_kelas!inner(tanggal, kondisi, kelas_hits_id)
       `)
-      .in('status', ['pending', 'awaiting_reason'])
+      .in('status', tabayyunStatuses)
       .order('created_at', { ascending: false }),
     supabaseAdmin
       .from('pengajar')
       .select('id, name, whatsapp_number')
-      .in('id', pengajarIds),
+      .in('id', pengajarIds.length > 0 ? pengajarIds : ['__none__']),
   ]);
 
   const pengajarMap = new Map((pengajarList ?? []).map((p) => [p.id, p]));
-  const kelasMap = new Map((allKelas ?? []).map((k) => [k.id, k]));
+  const kelasMap = new Map(filteredKelas.map((k) => [k.id, k]));
   const ketuaMap = new Map((allKetuaKelas ?? []).map((k) => [k.kelas_hits_id, k]));
   const observasiSet = new Set((todayObservasi ?? []).map((o) => o.kelas_hits_id));
   const checkinSet = new Set((todayCheckins ?? []).map((c) => c.kelas_hits_id));
 
-  const filledCount = observasiSet.size;
-  const totalKelas = allKelas?.length ?? 0;
-  const unfilledKelas = (allKelas ?? []).filter((k) => !observasiSet.has(k.id));
-  const uncheckedKelas = (allKelas ?? []).filter((k) => !checkinSet.has(k.id));
+  function matchesSearch(kelasName: string, pengajarId: string): boolean {
+    if (!q) return true;
+    const pengajar = pengajarMap.get(pengajarId);
+    return (
+      kelasName.toLowerCase().includes(q) ||
+      (pengajar?.name ?? '').toLowerCase().includes(q)
+    );
+  }
 
-  const tabayyunItems = (pendingTabayyun ?? [])
+  const filledCount = (todayObservasi ?? []).filter((o) => kelasIds.includes(o.kelas_hits_id)).length;
+  const totalKelas = filteredKelas.length;
+
+  const unfilledKelas = filteredKelas
+    .filter((k) => !observasiSet.has(k.id))
+    .filter((k) => matchesSearch(k.name, k.pengajar_id));
+
+  const uncheckedKelas = filteredKelas
+    .filter((k) => !checkinSet.has(k.id))
+    .filter((k) => matchesSearch(k.name, k.pengajar_id));
+
+  const filledKelas = (todayObservasi ?? [])
+    .filter((o) => kelasMap.has(o.kelas_hits_id))
+    .filter((o) => {
+      const kelas = kelasMap.get(o.kelas_hits_id);
+      return kelas ? matchesSearch(kelas.name, kelas.pengajar_id) : false;
+    });
+
+  const tabayyunItems = (rawTabayyun ?? [])
     .filter((t) => {
       const obs = t.observasi_kelas as unknown as { kelas_hits_id: string; tanggal: string; kondisi: KondisiKelas };
       return kelasIds.includes(obs.kelas_hits_id);
@@ -94,7 +142,14 @@ export default async function KoordinatorKetuaKelasPage() {
         status: t.status,
         deadline_at: t.deadline_at,
       };
+    })
+    .filter((t) => {
+      if (!q) return true;
+      return t.pengajar_name.toLowerCase().includes(q) || t.kelas_name.toLowerCase().includes(q);
     });
+
+  const showFilled = !statusObs || statusObs === 'sudah';
+  const showUnfilled = !statusObs || statusObs === 'belum';
 
   return (
     <main style={{ minHeight: '100vh' }}>
@@ -122,6 +177,15 @@ export default async function KoordinatorKetuaKelasPage() {
             {session.name} — {session.gender === 'ikhwan' ? 'Ikhwan' : 'Akhwat'} — {today}
           </p>
 
+          <ObservasiFilterBar
+            current={{
+              q: searchParams.q ?? '',
+              hari: hariFilter,
+              statusObs,
+              statusTab,
+            }}
+          />
+
           {/* Stats */}
           <div
             className="card-flat"
@@ -148,11 +212,11 @@ export default async function KoordinatorKetuaKelasPage() {
             </div>
           </div>
 
-          {/* Tabayyun pending */}
+          {/* Tabayyun */}
           {tabayyunItems.length > 0 && (
             <div style={{ marginBottom: 24 }}>
               <h2 className="t-h2" style={{ marginBottom: 12 }}>
-                Tabayyun Menunggu Keputusan
+                {statusTab === 'decided' ? 'Tabayyun Sudah Diputuskan' : 'Tabayyun Menunggu Keputusan'} ({tabayyunItems.length})
               </h2>
               {tabayyunItems.map((t) => (
                 <TabayyunCard key={t.id} tabayyun={t} />
@@ -161,7 +225,7 @@ export default async function KoordinatorKetuaKelasPage() {
           )}
 
           {/* Unfilled observasi today */}
-          {unfilledKelas.length > 0 && (
+          {showUnfilled && unfilledKelas.length > 0 && (
             <div style={{ marginBottom: 24 }}>
               <h2 className="t-h2" style={{ marginBottom: 12 }}>
                 Halaqah Belum Terisi Observasi ({unfilledKelas.length})
@@ -200,7 +264,7 @@ export default async function KoordinatorKetuaKelasPage() {
           )}
 
           {/* Unchecked pengajar (no checkin today) */}
-          {uncheckedKelas.length > 0 && (
+          {showUnfilled && uncheckedKelas.length > 0 && (
             <div style={{ marginBottom: 24 }}>
               <h2 className="t-h2" style={{ marginBottom: 12 }}>
                 Pengajar Belum Check-in ({uncheckedKelas.length})
@@ -237,12 +301,12 @@ export default async function KoordinatorKetuaKelasPage() {
           )}
 
           {/* Today's observasi results */}
-          {(todayObservasi ?? []).length > 0 && (
+          {showFilled && filledKelas.length > 0 && (
             <div style={{ marginBottom: 24 }}>
               <h2 className="t-h2" style={{ marginBottom: 12 }}>
-                Observasi Sudah Terisi Hari Ini ({filledCount})
+                Observasi Sudah Terisi Hari Ini ({filledKelas.length})
               </h2>
-              {(todayObservasi ?? []).map((o) => {
+              {filledKelas.map((o) => {
                 const kelas = kelasMap.get(o.kelas_hits_id);
                 return (
                   <div
@@ -266,6 +330,15 @@ export default async function KoordinatorKetuaKelasPage() {
                   </div>
                 );
               })}
+            </div>
+          )}
+
+          {/* Empty state */}
+          {tabayyunItems.length === 0 && unfilledKelas.length === 0 && uncheckedKelas.length === 0 && filledKelas.length === 0 && (
+            <div className="card-flat" style={{ padding: '24px 20px', textAlign: 'center' }}>
+              <p className="t-body" style={{ color: 'var(--muted-2)' }}>
+                {q || hariFilter ? 'Tidak ada data yang cocok dengan filter.' : 'Tidak ada data hari ini.'}
+              </p>
             </div>
           )}
         </div>

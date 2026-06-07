@@ -1,9 +1,11 @@
-import { redirect } from 'next/navigation';
 import { requirePengajar } from '@/lib/session';
 import { getProgramsForDate, getUnfilledDates } from '@/lib/attendance';
 import { supabaseAdmin } from '@/lib/supabase-admin';
+import { logout } from '@/lib/auth';
+import { Icon } from '@/components/icons';
 import { CheckinForm } from './CheckinForm';
-import type { ProgramToday } from '@/lib/attendance';
+import { getCurrentPekan } from '@/lib/batch';
+import type { KetuaKelasInfo } from './CheckinForm';
 
 export const dynamic = 'force-dynamic';
 
@@ -51,6 +53,46 @@ export default async function KehadiranPengajarPage() {
     .order('tanggal', { ascending: false })
     .limit(5);
 
+  let pekan: number | null = null;
+  let kelasList: KetuaKelasInfo[] = [];
+
+  const { data: batch } = await supabaseAdmin
+    .from('batch_config')
+    .select('id, start_date')
+    .order('start_date', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (batch) {
+    const weekNum = getCurrentPekan(batch.start_date);
+    if (weekNum >= 1 && weekNum <= 2) {
+      pekan = weekNum;
+
+      const { data: pengajarKelas } = await supabaseAdmin
+        .from('kelas_hits')
+        .select('id, name')
+        .eq('pengajar_id', session.pengajar_id);
+
+      if (pengajarKelas) {
+        for (const k of pengajarKelas) {
+          const { data: ketua } = await supabaseAdmin
+            .from('ketua_kelas')
+            .select('name')
+            .eq('kelas_hits_id', k.id)
+            .eq('batch_id', batch.id)
+            .eq('active', true)
+            .maybeSingle();
+          kelasList.push({
+            kelasHitsId: k.id,
+            kelasName: k.name,
+            hasKetuaThisBatch: !!ketua,
+            currentKetuaName: ketua?.name ?? null,
+          });
+        }
+      }
+    }
+  }
+
   return (
     <main style={{ minHeight: '100vh' }}>
       <div style={{ maxWidth: 480, margin: '0 auto' }}>
@@ -59,9 +101,15 @@ export default async function KehadiranPengajarPage() {
             <div className="wordmark">
               <span className="mark">M</span> Kehadiran
             </div>
-            <a href="/" className="btn-ghost" style={{ fontSize: 14 }}>
-              Menu
-            </a>
+            <form action={logout}>
+              <button
+                type="submit"
+                className="btn btn-sm btn-ghost"
+                style={{ height: 30, padding: '0 10px' }}
+              >
+                {Icon.logout(12)} Keluar
+              </button>
+            </form>
           </div>
 
           <h1 className="t-h1" style={{ marginBottom: 4 }}>
@@ -92,6 +140,24 @@ export default async function KehadiranPengajarPage() {
               </div>
             </a>
           )}
+
+          <a
+            href="/shakwa/pengajar"
+            className="card-flat"
+            style={{
+              display: 'block',
+              padding: '12px 16px',
+              marginBottom: 16,
+              textDecoration: 'none',
+              color: 'inherit',
+              borderLeft: '3px solid var(--kuning-ink)',
+            }}
+          >
+            <div style={{ fontWeight: 600, marginBottom: 2 }}>SHAKWA</div>
+            <div className="t-small" style={{ color: 'var(--muted-2)' }}>
+              Sampaikan laporan, saran, atau kendala terkait program HITS
+            </div>
+          </a>
 
           {allDates.length === 0 ? (
             <div
@@ -132,6 +198,8 @@ export default async function KehadiranPengajarPage() {
                 autoPopup={todayPrograms.some(
                   (p) => !checkedDates.includes(`${p.type}:${p.id}:${today}`)
                 )}
+                kelasList={kelasList}
+                pekan={pekan}
               />
             </>
           )}

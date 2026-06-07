@@ -2,6 +2,8 @@ import { requireKoordinatorHits } from '@/lib/session';
 import { supabaseAdmin } from '@/lib/supabase-admin';
 import { buildWaMeUrl, tplReminderKetuaKelompokTugas } from '@/lib/whatsapp';
 import { absUrl } from '@/lib/url';
+import { logout } from '@/lib/auth';
+import { Icon } from '@/components/icons';
 import { LiburForm } from './LiburForm';
 
 export const dynamic = 'force-dynamic';
@@ -67,14 +69,38 @@ export default async function KoordinatorKehadiranPage() {
             <div className="wordmark">
               <span className="mark">M</span> Koordinator Pengajar
             </div>
-            <a href="/" className="btn-ghost" style={{ fontSize: 14 }}>
-              Menu
-            </a>
+            <form action={logout}>
+              <button
+                type="submit"
+                className="btn btn-sm btn-ghost"
+                style={{ height: 30, padding: '0 10px' }}
+              >
+                {Icon.logout(12)} Keluar
+              </button>
+            </form>
           </div>
 
           <h1 className="t-h1" style={{ marginBottom: 16 }}>
             Kehadiran — {session.gender === 'ikhwan' ? 'Ikhwan' : 'Akhwat'}
           </h1>
+
+          <a
+            href="/shakwa/koordinator"
+            className="card-flat"
+            style={{
+              display: 'block',
+              padding: '12px 16px',
+              marginBottom: 16,
+              textDecoration: 'none',
+              color: 'inherit',
+              borderLeft: '3px solid var(--kuning-ink)',
+            }}
+          >
+            <div style={{ fontWeight: 600, marginBottom: 2 }}>Review SHAKWA</div>
+            <div className="t-small" style={{ color: 'var(--muted-2)' }}>
+              Tinjau laporan dan aduan dari pengajar & peserta
+            </div>
+          </a>
 
           {/* Stats */}
           <div

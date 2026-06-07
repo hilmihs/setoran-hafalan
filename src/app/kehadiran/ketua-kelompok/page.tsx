@@ -2,6 +2,8 @@ import { requireKetuaKelompok } from '@/lib/session';
 import { supabaseAdmin } from '@/lib/supabase-admin';
 import { buildWaMeUrl, tplReminderPengajarCheckin } from '@/lib/whatsapp';
 import { absUrl } from '@/lib/url';
+import { logout } from '@/lib/auth';
+import { Icon } from '@/components/icons';
 import { DecisionButtons } from './DecisionButtons';
 
 export const dynamic = 'force-dynamic';
@@ -56,9 +58,15 @@ export default async function KetuaKelompokPage() {
             <div className="wordmark">
               <span className="mark">M</span> Ketua Kelompok
             </div>
-            <a href="/" className="btn-ghost" style={{ fontSize: 14 }}>
-              Menu
-            </a>
+            <form action={logout}>
+              <button
+                type="submit"
+                className="btn btn-sm btn-ghost"
+                style={{ height: 30, padding: '0 10px' }}
+              >
+                {Icon.logout(12)} Keluar
+              </button>
+            </form>
           </div>
 
           <h1 className="t-h1" style={{ marginBottom: 16 }}>
