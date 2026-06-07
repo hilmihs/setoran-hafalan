@@ -141,23 +141,17 @@ export default async function KehadiranPengajarPage() {
             </a>
           )}
 
-          <a
-            href="/shakwa/pengajar"
-            className="card-flat"
-            style={{
-              display: 'block',
-              padding: '12px 16px',
-              marginBottom: 16,
-              textDecoration: 'none',
-              color: 'inherit',
-              borderLeft: '3px solid var(--kuning-ink)',
-            }}
-          >
-            <div style={{ fontWeight: 600, marginBottom: 2 }}>SHAKWA</div>
-            <div className="t-small" style={{ color: 'var(--muted-2)' }}>
-              Sampaikan laporan, saran, atau kendala terkait program HITS
-            </div>
-          </a>
+          <nav style={{ display: 'flex', gap: 6, marginBottom: 16, borderBottom: '1px solid var(--line)', paddingBottom: 10 }}>
+            <a href="/kehadiran/pengajar" className="btn btn-sm" style={{ background: 'var(--primary)', color: '#fff' }}>
+              Kehadiran
+            </a>
+            <a href="/shakwa/pengajar" className="btn btn-sm btn-ghost">
+              SHAKWA
+            </a>
+            <a href="/" className="btn btn-sm btn-ghost">
+              Menu Utama
+            </a>
+          </nav>
 
           {allDates.length === 0 ? (
             <div

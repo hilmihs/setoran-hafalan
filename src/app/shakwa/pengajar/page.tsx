@@ -27,6 +27,18 @@ export default async function ShakwaPengajarPage() {
             </form>
           </div>
 
+          <nav style={{ display: 'flex', gap: 6, marginBottom: 16, borderBottom: '1px solid var(--line)', paddingBottom: 10 }}>
+            <a href="/kehadiran/pengajar" className="btn btn-sm btn-ghost">
+              Kehadiran
+            </a>
+            <a href="/shakwa/pengajar" className="btn btn-sm" style={{ background: 'var(--primary)', color: '#fff' }}>
+              SHAKWA
+            </a>
+            <a href="/" className="btn btn-sm btn-ghost">
+              Menu Utama
+            </a>
+          </nav>
+
           <h1 className="t-h1" style={{ marginBottom: 4 }}>SHAKWA</h1>
           <p className="t-body" style={{ color: 'var(--muted-2)', marginBottom: 20 }}>
             Sampaikan laporan terkait program HITS.

@@ -14,7 +14,7 @@ const FEATURE_CARDS: {
   href: string;
 }[] = [
   {
-    roles: ['peserta', 'musyrif', 'koordinator', 'syaikh', 'pengajar', 'koordinator_hits', 'koordinator_ketua_kelas'],
+    roles: ['peserta', 'musyrif', 'koordinator', 'syaikh'],
     title: 'Barnamij 2in1',
     description: 'Setoran Hafalan — Tuhfatul Athfal, Al-Jazariyyah, Syawahid',
     href: '/2in1',
