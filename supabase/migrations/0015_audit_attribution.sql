@@ -1,7 +1,9 @@
--- 0010: Audit attribution columns
+-- 0015: Audit attribution columns
 -- Tambah field attribution untuk shakwa review, libur announcement, decided alasan.
 -- Tujuan: peer view koordinator bisa terlihat akurat siapa melakukan apa.
 -- Backward-compatible: kolom baru nullable, row lama tidak ter-attribute (OK untuk legacy).
+-- Idempotent: aman di-rerun. (Originally numbered 0010 — renamed ke 0015 untuk
+-- hindari collision dengan 0010_password_reset_requests.sql.)
 
 alter table shakwa add column if not exists reviewed_by_id uuid;
 alter table shakwa add column if not exists reviewed_by_role text;
