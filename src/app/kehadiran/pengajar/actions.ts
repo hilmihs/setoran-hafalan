@@ -13,6 +13,7 @@ import {
   tplKetuaKelasTerpilih,
 } from '@/lib/whatsapp';
 import { absUrl } from '@/lib/url';
+import { logAudit } from '@/lib/audit';
 import type { StatusCheckin } from '@/types/db';
 
 export async function submitCheckin(
@@ -78,6 +79,14 @@ export async function submitCheckin(
     return { error: `Gagal simpan: ${insertErr.message}` };
   }
 
+  await logAudit({
+    actor: session,
+    action: 'checkin.submit',
+    targetTable: 'checkin_pengajar',
+    targetId: null,
+    detail: { tanggal, status, program_id: programId, kelas_hits_id: kelasHitsId, is_terlambat: isTerlambat },
+  });
+
   return { ok: true };
 }
 
@@ -107,13 +116,23 @@ export async function submitAlasan(
   if (programId) insertData.program_id = programId;
   if (kelasHitsId) insertData.kelas_hits_id = kelasHitsId;
 
-  const { error: insertErr } = await supabaseAdmin
+  const { data: insertedAlasan, error: insertErr } = await supabaseAdmin
     .from('pengajuan_alasan')
-    .insert(insertData);
+    .insert(insertData)
+    .select('id')
+    .single();
 
   if (insertErr) {
     return { error: `Gagal simpan: ${insertErr.message}` };
   }
+
+  await logAudit({
+    actor: session,
+    action: 'alasan.submit',
+    targetTable: 'pengajuan_alasan',
+    targetId: insertedAlasan?.id ?? null,
+    detail: { tanggal, jenis, alasan },
+  });
 
   const { data: ketua } = await supabaseAdmin
     .from('pengajar')
@@ -189,7 +208,7 @@ export async function submitKetuaKelas(
   const magicToken = crypto.randomUUID();
   const normalizedWa = normalizeWhatsApp(ketuaWa);
 
-  const { error: insertErr } = await supabaseAdmin
+  const { data: insertedKetua, error: insertErr } = await supabaseAdmin
     .from('ketua_kelas')
     .insert({
       name: ketuaName,
@@ -199,11 +218,21 @@ export async function submitKetuaKelas(
       batch_id: batch.id,
       magic_token: magicToken,
       active: true,
-    });
+    })
+    .select('id')
+    .single();
 
   if (insertErr) {
     return { error: `Gagal menyimpan: ${insertErr.message}` };
   }
+
+  await logAudit({
+    actor: session,
+    action: 'ketua_kelas.elect',
+    targetTable: 'ketua_kelas',
+    targetId: insertedKetua?.id ?? null,
+    detail: { kelas_hits_id: kelasHitsId, ketua_name: ketuaName },
+  });
 
   const { data: koorKK } = await supabaseAdmin
     .from('koordinator_ketua_kelas')

@@ -9,12 +9,13 @@ import {
   tplTabayyunToPengajar,
 } from '@/lib/whatsapp';
 import { absUrl } from '@/lib/url';
+import { logAudit } from '@/lib/audit';
 
 export async function decideTabayyun(
   _prev: { error?: string; ok?: boolean } | undefined,
   formData: FormData
 ): Promise<{ error?: string; ok?: boolean }> {
-  await requireKoordinatorKetuaKelas();
+  const session = await requireKoordinatorKetuaKelas();
 
   const tabayyunId = String(formData.get('tabayyun_id') ?? '');
   const isUdzur = formData.get('is_udzur_syari') === 'true';
@@ -29,10 +30,20 @@ export async function decideTabayyun(
       keputusan_catatan: catatan || null,
       decided_at: new Date().toISOString(),
       status: 'decided',
+      koordinator_kk_id: session.koordinator_kk_id,
     })
     .eq('id', tabayyunId);
 
   if (error) return { error: `Gagal simpan: ${error.message}` };
+
+  await logAudit({
+    actor: session,
+    action: 'tabayyun.decide',
+    targetTable: 'tabayyun',
+    targetId: tabayyunId,
+    detail: { is_udzur_syari: isUdzur, keputusan_catatan: catatan || null },
+  });
+
   return { ok: true };
 }
 

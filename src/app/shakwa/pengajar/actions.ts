@@ -2,6 +2,7 @@
 
 import { supabaseAdmin } from '@/lib/supabase-admin';
 import { requirePengajar } from '@/lib/session';
+import { logAudit } from '@/lib/audit';
 import { KATEGORI_PENGAJAR, HALAQOH_LIST } from '@/lib/shakwa-constants';
 
 const validKategori: string[] = KATEGORI_PENGAJAR.map((k) => k.value);
@@ -27,7 +28,7 @@ export async function submitShakwaPengajar(
     return { error: 'Halaqoh tidak valid.' };
   }
 
-  const { error: insertErr } = await supabaseAdmin.from('shakwa').insert({
+  const { data: inserted, error: insertErr } = await supabaseAdmin.from('shakwa').insert({
     pelapor_type: 'pengajar',
     pengajar_id: session.pengajar_id,
     nama: session.name,
@@ -35,11 +36,19 @@ export async function submitShakwaPengajar(
     kategori,
     halaqoh,
     isi,
-  });
+  }).select('id').single();
 
   if (insertErr) {
     return { error: `Gagal menyimpan: ${insertErr.message}` };
   }
+
+  await logAudit({
+    actor: session,
+    action: 'shakwa.submit_pengajar',
+    targetTable: 'shakwa',
+    targetId: inserted?.id ?? null,
+    detail: { kategori, halaqoh },
+  });
 
   return { ok: true };
 }

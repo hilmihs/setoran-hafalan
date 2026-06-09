@@ -123,7 +123,7 @@ export default async function KoordinatorKehadiranPage() {
             Kehadiran — {session.gender === 'ikhwan' ? 'Ikhwan' : 'Akhwat'}
           </h1>
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 16 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 10, marginBottom: 16 }}>
             <a
               href="/matrix/koordinator"
               className="card-flat"
@@ -154,6 +154,22 @@ export default async function KoordinatorKehadiranPage() {
               <div style={{ fontWeight: 600, marginBottom: 2 }}>Review SHAKWA</div>
               <div className="t-small" style={{ color: 'var(--muted-2)' }}>
                 Aduan pengajar &amp; peserta
+              </div>
+            </a>
+            <a
+              href="/audit/koordinator_hits"
+              className="card-flat"
+              style={{
+                display: 'block',
+                padding: '12px 16px',
+                textDecoration: 'none',
+                color: 'inherit',
+                borderLeft: '3px solid var(--ink-2)',
+              }}
+            >
+              <div style={{ fontWeight: 600, marginBottom: 2 }}>Audit Trail</div>
+              <div className="t-small" style={{ color: 'var(--muted-2)' }}>
+                Aktivitas rekan koordinator
               </div>
             </a>
           </div>

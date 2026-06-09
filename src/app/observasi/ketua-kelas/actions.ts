@@ -2,6 +2,7 @@
 
 import { supabaseAdmin } from '@/lib/supabase-admin';
 import { requireKetuaKelas } from '@/lib/session';
+import { logAudit } from '@/lib/audit';
 import type { KondisiKelas, StatusLatihan } from '@/types/db';
 
 export type ObservasiResult = {
@@ -50,6 +51,14 @@ export async function submitObservasi(
   if (upsertErr) {
     return { error: `Gagal simpan: ${upsertErr.message}` };
   }
+
+  await logAudit({
+    actor: session,
+    action: 'observasi.submit',
+    targetTable: 'observasi_kelas',
+    targetId: null,
+    detail: { kelas_hits_id: session.kelas_hits_id, tanggal, kondisi },
+  });
 
   if (kondisi !== 'KBBS' && kondisi !== 'LIBUR') {
     const { data: obs } = await supabaseAdmin

@@ -2,6 +2,7 @@
 
 import { supabaseAdmin } from '@/lib/supabase-admin';
 import { requireKetuaKelompok } from '@/lib/session';
+import { logAudit } from '@/lib/audit';
 
 export async function decideAlasan(
   _prev: { error?: string; ok?: boolean } | undefined,
@@ -41,6 +42,7 @@ export async function decideAlasan(
     .update({
       status: decision,
       decided_by: session.pengajar_id,
+      decided_by_role: 'pengajar',
       decided_at: new Date().toISOString(),
     })
     .eq('id', pengajuanId);
@@ -48,6 +50,14 @@ export async function decideAlasan(
   if (updateErr) {
     return { error: `Gagal update: ${updateErr.message}` };
   }
+
+  await logAudit({
+    actor: session,
+    action: 'alasan.decide',
+    targetTable: 'pengajuan_alasan',
+    targetId: pengajuanId,
+    detail: { decision, pengajar_id: pengajuan.pengajar_id },
+  });
 
   if (decision === 'accepted') {
     const checkinQuery = supabaseAdmin
@@ -107,6 +117,14 @@ export async function invalidateCheckin(
   if (updateErr) {
     return { error: `Gagal update: ${updateErr.message}` };
   }
+
+  await logAudit({
+    actor: session,
+    action: 'checkin.invalidate',
+    targetTable: 'checkin_pengajar',
+    targetId: checkinId,
+    detail: { pengajar_id: checkin.pengajar_id },
+  });
 
   return { ok: true };
 }

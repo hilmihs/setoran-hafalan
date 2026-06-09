@@ -228,23 +228,40 @@ export default async function KoordinatorKetuaKelasPage({
             {session.name} — {session.gender === 'ikhwan' ? 'Ikhwan' : 'Akhwat'} — {today}
           </p>
 
-          <a
-            href="/matrix/koordinator"
-            className="card-flat"
-            style={{
-              display: 'block',
-              padding: '12px 16px',
-              marginBottom: 16,
-              textDecoration: 'none',
-              color: 'inherit',
-              borderLeft: '3px solid var(--accent)',
-            }}
-          >
-            <div style={{ fontWeight: 600, marginBottom: 2 }}>Matrix HITS Pengajar</div>
-            <div className="t-small" style={{ color: 'var(--muted-2)' }}>
-              14 indikator + teguran + ranking bulanan
-            </div>
-          </a>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 10, marginBottom: 16 }}>
+            <a
+              href="/matrix/koordinator"
+              className="card-flat"
+              style={{
+                display: 'block',
+                padding: '12px 16px',
+                textDecoration: 'none',
+                color: 'inherit',
+                borderLeft: '3px solid var(--accent)',
+              }}
+            >
+              <div style={{ fontWeight: 600, marginBottom: 2 }}>Matrix HITS</div>
+              <div className="t-small" style={{ color: 'var(--muted-2)' }}>
+                14 indikator + ranking
+              </div>
+            </a>
+            <a
+              href="/audit/koordinator_ketua_kelas"
+              className="card-flat"
+              style={{
+                display: 'block',
+                padding: '12px 16px',
+                textDecoration: 'none',
+                color: 'inherit',
+                borderLeft: '3px solid var(--ink-2)',
+              }}
+            >
+              <div style={{ fontWeight: 600, marginBottom: 2 }}>Audit Trail</div>
+              <div className="t-small" style={{ color: 'var(--muted-2)' }}>
+                Aktivitas rekan koordinator KK
+              </div>
+            </a>
+          </div>
 
           <ObservasiFilterBar
             current={{

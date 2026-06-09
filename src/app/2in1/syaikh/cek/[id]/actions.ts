@@ -8,6 +8,7 @@ import {
   type NilaiRekaman,
 } from '@/types/db';
 import { buildWaMeUrl, tplSyaikhFeedbackToMusyrif } from '@/lib/whatsapp';
+import { logAudit } from '@/lib/audit';
 
 const VALID_NILAI: NilaiRekaman[] = ['hijau', 'kuning', 'merah'];
 
@@ -90,6 +91,14 @@ export async function submitCekSyaikh(
       : '(tidak ada catatan tambahan)',
   });
   const waUrl = buildWaMeUrl(musyrif.whatsapp_number, waText);
+
+  await logAudit({
+    actor: s.session,
+    action: 'cek.submit_syaikh',
+    targetTable: 'setoran_musyrif',
+    targetId: setoranId,
+    detail: { musyrif_id: musyrif.id, nilai_summary: nilaiSummaryParts.join(' | ') },
+  });
 
   return { ok: true, waUrl };
 }

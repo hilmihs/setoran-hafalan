@@ -461,7 +461,13 @@ export default async function KoordinatorDashboard({
                             <Initials name={peserta.name} />
                           </div>
                           <div>
-                            <div className="nm">{peserta.name}</div>
+                            <Link
+                              href={`/peserta/${peserta.id}`}
+                              className="nm"
+                              style={{ color: 'inherit', textDecoration: 'none', borderBottom: '1px dashed var(--line-2)' }}
+                            >
+                              {peserta.name}
+                            </Link>
                             <div className="sub">{peserta.gender}</div>
                           </div>
                         </div>

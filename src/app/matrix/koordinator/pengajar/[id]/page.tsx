@@ -4,6 +4,7 @@ import { logout } from '@/lib/auth';
 import { Icon } from '@/components/icons';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
+import { MatrixTrendChart } from '@/components/charts/MatrixTrendChart';
 
 export const dynamic = 'force-dynamic';
 
@@ -162,6 +163,22 @@ export default async function PengajarDetailPage({ params }: { params: { id: str
               </div>
             </div>
           </div>
+
+          {/* Trend chart */}
+          {matrixHistory && matrixHistory.length > 1 && (
+            <>
+              <h2 className="t-h2" style={{ marginBottom: 10 }}>Trend 6 Bulan</h2>
+              <div className="card-flat" style={{ padding: 16, marginBottom: 24 }}>
+                <MatrixTrendChart data={matrixHistory.map((m) => ({
+                  year_month: m.year_month,
+                  rata_rata_hard_skill: m.rata_rata_hard_skill != null ? Number(m.rata_rata_hard_skill) : null,
+                  rata_rata_pedagogis: m.rata_rata_pedagogis != null ? Number(m.rata_rata_pedagogis) : null,
+                  rata_rata_soft_skill: m.rata_rata_soft_skill != null ? Number(m.rata_rata_soft_skill) : null,
+                  rata_rata_keseluruhan: m.rata_rata_keseluruhan != null ? Number(m.rata_rata_keseluruhan) : null,
+                }))} />
+              </div>
+            </>
+          )}
 
           {/* Matrix history */}
           <h2 className="t-h2" style={{ marginBottom: 10 }}>Riwayat Matrix Bulanan</h2>
