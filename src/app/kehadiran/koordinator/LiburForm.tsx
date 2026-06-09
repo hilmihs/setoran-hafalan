@@ -14,10 +14,11 @@ export function LiburForm({ programs }: Props) {
     <form action={action} className="card-flat" style={{ padding: '16px 20px' }}>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
         <div>
-          <label className="t-small" style={{ fontWeight: 600, display: 'block', marginBottom: 4 }}>
+          <label className="t-small" htmlFor="libur_program_id" style={{ fontWeight: 600, display: 'block', marginBottom: 4 }}>
             Program
           </label>
           <select
+            id="libur_program_id"
             name="program_id"
             required
             style={{
@@ -38,10 +39,11 @@ export function LiburForm({ programs }: Props) {
         </div>
 
         <div>
-          <label className="t-small" style={{ fontWeight: 600, display: 'block', marginBottom: 4 }}>
+          <label className="t-small" htmlFor="libur_tanggal" style={{ fontWeight: 600, display: 'block', marginBottom: 4 }}>
             Tanggal
           </label>
           <input
+            id="libur_tanggal"
             type="date"
             name="tanggal"
             required
@@ -56,10 +58,11 @@ export function LiburForm({ programs }: Props) {
         </div>
 
         <div>
-          <label className="t-small" style={{ fontWeight: 600, display: 'block', marginBottom: 4 }}>
+          <label className="t-small" htmlFor="libur_keterangan" style={{ fontWeight: 600, display: 'block', marginBottom: 4 }}>
             Keterangan
           </label>
           <input
+            id="libur_keterangan"
             type="text"
             name="keterangan"
             placeholder="Opsional — misal: Libur Hari Raya"

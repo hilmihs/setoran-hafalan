@@ -8,8 +8,9 @@ export function LoginForm() {
   return (
     <form action={formAction} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
       <div>
-        <label className="field-label">Nomor WhatsApp</label>
+        <label className="field-label" htmlFor="login_whatsapp_number">Nomor WhatsApp</label>
         <input
+          id="login_whatsapp_number"
           className="input"
           name="whatsapp_number"
           type="tel"
@@ -19,8 +20,9 @@ export function LoginForm() {
         />
       </div>
       <div>
-        <label className="field-label">Password</label>
+        <label className="field-label" htmlFor="login_password">Password</label>
         <input
+          id="login_password"
           className="input"
           name="password"
           type="password"

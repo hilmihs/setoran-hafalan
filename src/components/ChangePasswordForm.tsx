@@ -12,8 +12,9 @@ export function ChangePasswordForm() {
       style={{ display: 'flex', flexDirection: 'column', gap: 14 }}
     >
       <div>
-        <label className="field-label">Password saat ini</label>
+        <label className="field-label" htmlFor="current_password">Password saat ini</label>
         <input
+          id="current_password"
           className="input"
           name="current_password"
           type="password"
@@ -22,8 +23,9 @@ export function ChangePasswordForm() {
         />
       </div>
       <div>
-        <label className="field-label">Password baru</label>
+        <label className="field-label" htmlFor="new_password">Password baru</label>
         <input
+          id="new_password"
           className="input"
           name="new_password"
           type="password"
@@ -33,8 +35,9 @@ export function ChangePasswordForm() {
         />
       </div>
       <div>
-        <label className="field-label">Konfirmasi password baru</label>
+        <label className="field-label" htmlFor="confirm_password">Konfirmasi password baru</label>
         <input
+          id="confirm_password"
           className="input"
           name="confirm_password"
           type="password"
