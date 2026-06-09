@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useFormState, useFormStatus } from 'react-dom';
 import { acceptResetRequest, declineResetRequest } from './actions';
 
@@ -15,6 +15,12 @@ export function ProcessClient({ request }: { request: RequestSummary }) {
   const [acceptState, acceptAction] = useFormState(acceptResetRequest, undefined);
   const [declineState, declineAction] = useFormState(declineResetRequest, undefined);
   const [copied, setCopied] = useState(false);
+
+  useEffect(() => {
+    if (acceptState?.waMeUrl) {
+      window.open(acceptState.waMeUrl, '_blank', 'noopener,noreferrer');
+    }
+  }, [acceptState?.waMeUrl]);
 
   // Setelah accept sukses: tampilkan password + tombol kirim WA.
   if (acceptState?.password && acceptState?.waMeUrl) {
