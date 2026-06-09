@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { ADMIN_WA } from '@/lib/constants';
 
 interface UserInfo {
   name: string;
@@ -31,8 +32,6 @@ const ROLE_LANDING: Record<string, string> = {
   ketua_kelas: '/observasi/ketua-kelas',
   koordinator_ketua_kelas: '/observasi/koordinator',
 };
-
-const ADMIN_WA = '6281399741809';
 
 export function ReportErrorButton({ user }: { user?: UserInfo | null }) {
   const [open, setOpen] = useState(false);

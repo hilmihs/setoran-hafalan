@@ -405,6 +405,20 @@ export interface Shakwa {
   created_at: string;
 }
 
+// ========== Password reset request ==========
+
+export type StatusResetRequest = 'pending' | 'accepted' | 'declined';
+
+export interface PasswordResetRequest {
+  id: string;
+  whatsapp_number: string;
+  requester_name: string | null;
+  status: StatusResetRequest;
+  decided_by_wa: string | null;
+  decided_at: string | null;
+  created_at: string;
+}
+
 // ========== Session types ==========
 
 export interface PesertaSession {

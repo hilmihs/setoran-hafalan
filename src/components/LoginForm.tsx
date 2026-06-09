@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useFormState, useFormStatus } from 'react-dom';
 import { login } from '@/lib/auth';
 
@@ -40,6 +41,11 @@ export function LoginForm() {
         </div>
       )}
       <SubmitBtn />
+      <div style={{ textAlign: 'center', marginTop: 4 }}>
+        <Link href="/lupa-password" className="t-small" style={{ color: 'var(--muted)' }}>
+          Lupa password?
+        </Link>
+      </div>
     </form>
   );
 }
