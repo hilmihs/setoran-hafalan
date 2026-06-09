@@ -72,70 +72,62 @@ export async function login(
       .maybeSingle(),
   ]);
 
-  const accesses: RoleAccess[] = [];
+  type Candidate = {
+    row: { active: boolean; password_hash: string; id: string } | null;
+    build: () => RoleAccess;
+    table: 'peserta' | 'musyrif' | 'koordinator' | 'syaikh' | 'pengajar' | 'koordinator_hits' | 'ketua_kelas' | 'koordinator_ketua_kelas';
+    trackLastLogin: boolean;
+  };
 
-  async function tryRole(
-    row: { active: boolean; password_hash: string } | null,
-    buildAccess: () => RoleAccess,
-    table?: string,
-    id?: string
-  ): Promise<void> {
-    if (!row || !row.active || !row.password_hash) return;
-    const ok = await bcrypt.compare(password, row.password_hash);
-    if (!ok) return;
-    accesses.push(buildAccess());
-    if (table && id) {
-      await supabaseAdmin
-        .from(table)
-        .update({ last_login_at: new Date().toISOString() })
-        .eq('id', id);
-    }
-  }
-
-  await Promise.all([
-    tryRole(peserta, () => ({
-      role: 'peserta' as const,
-      peserta_id: peserta!.id,
-      name: peserta!.name,
-      gender: peserta!.gender,
-      kelas_id: peserta!.kelas_id,
-    })),
-    tryRole(
-      musyrif,
-      () => ({
+  const candidates: Candidate[] = [
+    {
+      row: peserta,
+      build: () => ({
+        role: 'peserta' as const,
+        peserta_id: peserta!.id,
+        name: peserta!.name,
+        gender: peserta!.gender,
+        kelas_id: peserta!.kelas_id,
+      }),
+      table: 'peserta',
+      trackLastLogin: false,
+    },
+    {
+      row: musyrif,
+      build: () => ({
         role: 'musyrif' as const,
         musyrif_id: musyrif!.id,
         name: musyrif!.name,
         gender: musyrif!.gender,
       }),
-      'musyrif',
-      musyrif?.id
-    ),
-    tryRole(
-      koor,
-      () => ({
+      table: 'musyrif',
+      trackLastLogin: true,
+    },
+    {
+      row: koor,
+      build: () => ({
         role: 'koordinator' as const,
         koordinator_id: koor!.id,
         name: koor!.name,
         gender: koor!.gender,
       }),
-      'koordinator',
-      koor?.id
-    ),
-    tryRole(
-      syaikh,
-      () => ({
+      table: 'koordinator',
+      trackLastLogin: true,
+    },
+    {
+      row: syaikh,
+      build: () => ({
         role: 'syaikh' as const,
         syaikh_id: syaikh!.id,
         name: syaikh!.name,
         gender: syaikh!.gender,
       }),
-      'syaikh',
-      syaikh?.id
-    ),
-    tryRole(
-      pengajar,
-      () => ({
+      table: 'syaikh',
+      trackLastLogin: true,
+    },
+    {
+      row: pengajar,
+      build: () => ({
         role: 'pengajar' as const,
         pengajar_id: pengajar!.id,
         name: pengajar!.name,
@@ -143,48 +135,87 @@ export async function login(
         kelompok_id: pengajar!.kelompok_id,
         is_ketua: pengajar!.is_ketua,
       }),
-      'pengajar',
-      pengajar?.id
-    ),
-    tryRole(
-      koorHits,
-      () => ({
+      table: 'pengajar',
+      trackLastLogin: true,
+    },
+    {
+      row: koorHits,
+      build: () => ({
         role: 'koordinator_hits' as const,
         koordinator_hits_id: koorHits!.id,
         name: koorHits!.name,
         gender: koorHits!.gender,
       }),
-      'koordinator_hits',
-      koorHits?.id
-    ),
-    tryRole(
-      ketuaKelas,
-      () => ({
+      table: 'koordinator_hits',
+      trackLastLogin: true,
+    },
+    {
+      row: ketuaKelas,
+      build: () => ({
         role: 'ketua_kelas' as const,
         ketua_kelas_id: ketuaKelas!.id,
         name: ketuaKelas!.name,
         gender: ketuaKelas!.gender,
         kelas_hits_id: ketuaKelas!.kelas_hits_id,
       }),
-      'ketua_kelas',
-      ketuaKelas?.id
-    ),
-    tryRole(
-      koorKK,
-      () => ({
+      table: 'ketua_kelas',
+      trackLastLogin: true,
+    },
+    {
+      row: koorKK,
+      build: () => ({
         role: 'koordinator_ketua_kelas' as const,
         koordinator_kk_id: koorKK!.id,
         name: koorKK!.name,
         gender: koorKK!.gender,
       }),
-      'koordinator_ketua_kelas',
-      koorKK?.id
-    ),
-  ]);
+      table: 'koordinator_ketua_kelas',
+      trackLastLogin: true,
+    },
+  ];
 
-  if (accesses.length === 0) {
+  // Step 1: gate. Minimal satu row aktif yang hash-nya match password.
+  const matchFlags = await Promise.all(
+    candidates.map(async (c) => {
+      if (!c.row || !c.row.active || !c.row.password_hash) return false;
+      return bcrypt.compare(password, c.row.password_hash);
+    })
+  );
+
+  if (!matchFlags.some(Boolean)) {
     return { error: 'Nomor WA atau password salah.' };
   }
+
+  // Step 2: unlock semua row aktif untuk WA ini. Hash bakal disinkron di Step 3 jadi
+  // semantically valid password untuk WA = akses ke semua role.
+  const accesses: RoleAccess[] = candidates
+    .filter((c) => c.row && c.row.active && c.row.password_hash)
+    .map((c) => c.build());
+
+  // Step 3: sync hash + stamp last_login_at untuk role yang match.
+  const correctHash = await bcrypt.hash(password, BCRYPT_COST);
+  const tables = [
+    'peserta', 'musyrif', 'koordinator', 'syaikh',
+    'pengajar', 'koordinator_hits', 'ketua_kelas', 'koordinator_ketua_kelas',
+  ] as const;
+  const nowIso = new Date().toISOString();
+  await Promise.all([
+    ...tables.map((t) =>
+      supabaseAdmin
+        .from(t)
+        .update({ password_hash: correctHash })
+        .eq('whatsapp_number', wa)
+    ),
+    ...candidates
+      .map((c, i) => ({ c, matched: matchFlags[i] }))
+      .filter(({ c, matched }) => matched && c.trackLastLogin && c.row)
+      .map(({ c }) =>
+        supabaseAdmin
+          .from(c.table)
+          .update({ last_login_at: nowIso })
+          .eq('id', c.row!.id)
+      ),
+  ]);
 
   const s = await getSession();
   s.session = accesses[0];
@@ -234,7 +265,7 @@ export async function changePassword(
 
   const { data: row } = await supabaseAdmin
     .from(roleTable.table)
-    .select('password_hash')
+    .select('password_hash, whatsapp_number')
     .eq('id', roleTable.id)
     .maybeSingle();
   if (!row || !row.password_hash) {
@@ -245,15 +276,7 @@ export async function changePassword(
   if (!ok) return { error: 'Password saat ini salah.' };
 
   const hash = await bcrypt.hash(next, BCRYPT_COST);
-
-  // Update password di semua tabel yang cocok WA-nya
-  const { data: waRow } = await supabaseAdmin
-    .from(roleTable.table)
-    .select('whatsapp_number')
-    .eq('id', roleTable.id)
-    .maybeSingle();
-  if (!waRow) return { error: 'Akun tidak ditemukan.' };
-  const waNum = waRow.whatsapp_number;
+  const waNum = row.whatsapp_number;
 
   const tables = [
     'peserta', 'musyrif', 'koordinator', 'syaikh',
