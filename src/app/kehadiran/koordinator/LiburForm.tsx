@@ -1,6 +1,6 @@
 'use client';
 
-import { useActionState } from 'react';
+import { useFormState, useFormStatus } from 'react-dom';
 import { createLibur } from './actions';
 
 interface Props {
@@ -8,7 +8,7 @@ interface Props {
 }
 
 export function LiburForm({ programs }: Props) {
-  const [state, action, pending] = useActionState(createLibur, undefined);
+  const [state, action] = useFormState(createLibur, undefined);
 
   return (
     <form action={action} className="card-flat" style={{ padding: '16px 20px' }}>
@@ -82,10 +82,17 @@ export function LiburForm({ programs }: Props) {
           </p>
         )}
 
-        <button type="submit" className="btn" disabled={pending} style={{ marginTop: 4 }}>
-          {pending ? 'Menyimpan...' : 'Simpan Libur'}
-        </button>
+        <SubmitBtn />
       </div>
     </form>
+  );
+}
+
+function SubmitBtn() {
+  const { pending } = useFormStatus();
+  return (
+    <button type="submit" className="btn" disabled={pending} style={{ marginTop: 4 }}>
+      {pending ? 'Menyimpan...' : 'Simpan Libur'}
+    </button>
   );
 }
