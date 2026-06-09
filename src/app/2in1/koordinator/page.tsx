@@ -153,6 +153,35 @@ export default async function KoordinatorDashboard({
 
   const weekOptions = [currentCycleStart(), ...previousCycles(8)];
 
+  // Risky peserta: ≥2 dari 3 cycle terakhir tidak submit/draft.
+  const riskCycles = [week, ...previousCycles(2)];
+  const { data: riskSetoranList } = await supabaseAdmin
+    .from('setoran')
+    .select('peserta_id, week_start, status')
+    .in('peserta_id', pesertaIds.length ? pesertaIds : ['00000000-0000-0000-0000-000000000000'])
+    .in('week_start', riskCycles);
+
+  const setoranByPesertaCycle = new Map<string, Map<string, string>>();
+  for (const s of riskSetoranList ?? []) {
+    const inner = setoranByPesertaCycle.get(s.peserta_id) ?? new Map<string, string>();
+    inner.set(s.week_start, s.status);
+    setoranByPesertaCycle.set(s.peserta_id, inner);
+  }
+
+  const riskyPeserta = pesertaList
+    .map((p) => {
+      const cycles = setoranByPesertaCycle.get(p.id) ?? new Map<string, string>();
+      let missing = 0;
+      for (const c of riskCycles) {
+        const st = cycles.get(c);
+        if (!st || st === 'draft') missing++;
+      }
+      return { peserta: p, missing };
+    })
+    .filter((r) => r.missing >= 2)
+    .sort((a, b) => b.missing - a.missing)
+    .slice(0, 8);
+
   // Status setoran musyrif → syaikh untuk cycle yang dipilih (read-only,
   // koordinator tidak meminder; itu tugas syaikh).
   const allMusyrifIds = Array.from(
@@ -173,6 +202,18 @@ export default async function KoordinatorDashboard({
   const musyrifSetoranByMusyrif = new Map(
     (musyrifSetoranList ?? []).map((m) => [m.musyrif_id, m])
   );
+
+  // Inactive musyrif: last_login_at > 14 hari atau null.
+  const fourteenDaysAgo = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString();
+  const { data: inactiveMusyrif } = allMusyrifIds.length
+    ? await supabaseAdmin
+        .from('musyrif')
+        .select('id, name, gender, whatsapp_number, last_login_at')
+        .in('id', allMusyrifIds)
+        .eq('active', true)
+        .or(`last_login_at.is.null,last_login_at.lt.${fourteenDaysAgo}`)
+        .order('last_login_at', { ascending: true, nullsFirst: true })
+    : { data: [] as Array<{ id: string; name: string; gender: Gender; whatsapp_number: string; last_login_at: string | null }> };
   // Daftar musyrif unik dari kelasList (deduped by id)
   const musyrifMap = new Map<
     string,
@@ -316,6 +357,57 @@ export default async function KoordinatorDashboard({
             </div>
           </div>
         </div>
+
+        {/* Alerts: risky peserta + inactive musyrif */}
+        {(riskyPeserta.length > 0 || (inactiveMusyrif ?? []).length > 0) && (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 12, marginTop: 12 }}>
+            {riskyPeserta.length > 0 && (
+              <div className="card-flat" style={{ padding: '14px 18px', borderLeft: '3px solid var(--merah)' }}>
+                <div className="t-tiny" style={{ color: 'var(--merah-ink)', marginBottom: 6 }}>
+                  PESERTA BERISIKO (≥2 cycle tidak setor dari 3 cycle terakhir)
+                </div>
+                {riskyPeserta.map((r) => {
+                  const kelas = kelasById.get(r.peserta.kelas_id);
+                  return (
+                    <div key={r.peserta.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0' }}>
+                      <div style={{ fontSize: 13 }}>
+                        <span style={{ fontWeight: 600 }}>{r.peserta.name}</span>
+                        <span className="t-small" style={{ color: 'var(--muted-2)', marginLeft: 6 }}>
+                          {kelas?.name ?? ''}
+                        </span>
+                      </div>
+                      <span className="badge badge-merah" style={{ fontSize: 10 }}>
+                        {r.missing}/3 cycle
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+            {(inactiveMusyrif ?? []).length > 0 && (
+              <div className="card-flat" style={{ padding: '14px 18px', borderLeft: '3px solid var(--kuning-ink)' }}>
+                <div className="t-tiny" style={{ color: 'var(--kuning-ink)', marginBottom: 6 }}>
+                  MUSYRIF/MUSYRIFAH TIDAK AKTIF ({'>'}14 hari tidak login)
+                </div>
+                {(inactiveMusyrif ?? []).slice(0, 8).map((m) => (
+                  <div key={m.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0' }}>
+                    <div style={{ fontSize: 13 }}>
+                      <span style={{ fontWeight: 600 }}>{m.name}</span>
+                      <span className="t-small" style={{ color: 'var(--muted-2)', marginLeft: 6 }}>
+                        {m.gender === 'ikhwan' ? 'Ikhwan' : 'Akhwat'}
+                      </span>
+                    </div>
+                    <span className="t-small" style={{ color: 'var(--muted)' }}>
+                      {m.last_login_at
+                        ? new Date(m.last_login_at).toLocaleDateString('id-ID', { day: 'numeric', month: 'short' })
+                        : 'belum pernah'}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Filter bar (auto-apply on change) */}
         <KoordinatorFilterBar

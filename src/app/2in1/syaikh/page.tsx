@@ -104,6 +104,28 @@ export default async function SyaikhDashboard() {
     selesai: rows.filter((r) => r.statusKey === 'selesai').length,
   };
 
+  // Peer view: aktivitas rekan syaikh bulan ini
+  const ym = new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Jakarta' }).slice(0, 7);
+  const { data: rekanSyaikh } = await supabaseAdmin
+    .from('syaikh')
+    .select('id, name, gender, last_login_at')
+    .eq('active', true)
+    .order('name');
+  const rekanSyaikhIds = (rekanSyaikh ?? []).map((r) => r.id);
+  const checkedByRekan = new Map<string, number>();
+  if (rekanSyaikhIds.length) {
+    const { data: checkedSetorans } = await supabaseAdmin
+      .from('setoran_musyrif')
+      .select('checked_by_syaikh_id, checked_at')
+      .in('checked_by_syaikh_id', rekanSyaikhIds)
+      .gte('checked_at', `${ym}-01`);
+    for (const t of checkedSetorans ?? []) {
+      if (t.checked_by_syaikh_id) {
+        checkedByRekan.set(t.checked_by_syaikh_id, (checkedByRekan.get(t.checked_by_syaikh_id) ?? 0) + 1);
+      }
+    }
+  }
+
   return (
     <main style={{ minHeight: '100vh' }}>
       <div style={{ maxWidth: 720, margin: '0 auto' }}>
@@ -179,6 +201,43 @@ export default async function SyaikhDashboard() {
               </div>
             </div>
           </div>
+
+          {(rekanSyaikh ?? []).length > 1 && (
+            <div className="card-flat" style={{ padding: 0, overflow: 'hidden', marginTop: 14, marginBottom: 14 }}>
+              <div style={{ padding: '10px 16px', background: 'var(--surface-2)', borderBottom: '1px solid var(--line)' }}>
+                <div className="t-tiny">Aktivitas Rekan Masyaikh — {ym}</div>
+              </div>
+              <table className="t-mono" style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+                <thead>
+                  <tr style={{ textAlign: 'left' }}>
+                    <th style={{ padding: '8px 16px', fontWeight: 600 }}>Nama</th>
+                    <th style={{ padding: '8px 8px', fontWeight: 600 }}>Gender</th>
+                    <th style={{ padding: '8px 8px', fontWeight: 600, textAlign: 'right' }}>Setoran dicek</th>
+                    <th style={{ padding: '8px 16px', fontWeight: 600, textAlign: 'right' }}>Login</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(rekanSyaikh ?? []).map((r) => {
+                    const isMe = r.id === syaikhId;
+                    return (
+                      <tr key={r.id} style={{ borderTop: '1px solid var(--line)', background: isMe ? 'var(--accent-tint)' : 'transparent' }}>
+                        <td style={{ padding: '8px 16px', fontWeight: isMe ? 700 : 500 }}>
+                          {r.name} {isMe && <span className="t-tiny" style={{ color: 'var(--accent-2)' }}>(saya)</span>}
+                        </td>
+                        <td style={{ padding: '8px 8px', color: 'var(--muted)' }}>{r.gender === 'ikhwan' ? 'Ikhwan' : 'Akhwat'}</td>
+                        <td style={{ padding: '8px 8px', textAlign: 'right' }}>{checkedByRekan.get(r.id) ?? 0}</td>
+                        <td style={{ padding: '8px 16px', textAlign: 'right', color: 'var(--muted)' }}>
+                          {r.last_login_at
+                            ? new Date(r.last_login_at).toLocaleDateString('id-ID', { day: 'numeric', month: 'short' })
+                            : '—'}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
 
           <div className="section-row">
             <div className="t-tiny">Musyrif &amp; Musyrifah</div>

@@ -1,0 +1,325 @@
+import { requireOneOfRoles } from '@/lib/session';
+import { supabaseAdmin } from '@/lib/supabase-admin';
+import { logout } from '@/lib/auth';
+import { Icon } from '@/components/icons';
+import Link from 'next/link';
+import { notFound } from 'next/navigation';
+
+export const dynamic = 'force-dynamic';
+
+function fmtNum(n: number | null | undefined): string {
+  if (n === null || n === undefined) return '—';
+  return Number(n).toFixed(2);
+}
+
+function fmtDate(s: string | null | undefined): string {
+  if (!s) return '—';
+  return s.slice(0, 10);
+}
+
+function scoreColor(value: number | null | undefined, standar: number): string {
+  if (value === null || value === undefined) return 'var(--muted-2)';
+  if (value >= standar) return 'var(--hijau-ink)';
+  if (value >= standar - 1) return 'var(--kuning-ink)';
+  return 'var(--merah-ink)';
+}
+
+const KATEGORI_LABEL: Record<string, { label: string; color: string }> = {
+  kedisiplinan_waktu: { label: 'Disiplin Waktu', color: 'var(--merah-ink)' },
+  komitmen_jadwal: { label: 'Komitmen Jadwal', color: 'var(--merah-ink)' },
+  tanggung_jawab: { label: 'Tanggung Jawab', color: 'var(--merah-ink)' },
+  kepatuhan_sop: { label: 'Kepatuhan SOP', color: 'var(--merah-ink)' },
+};
+
+const KONDISI_LABEL: Record<string, { label: string; badge: string }> = {
+  KBBS: { label: 'KBBS — Kelas Berlangsung Baik', badge: 'badge-hijau' },
+  KMT: { label: 'KMT — Kelas Mulai Terlambat', badge: 'badge-kuning' },
+  JKG: { label: 'JKG — Jadwal Kelas Ganti', badge: 'badge-kuning' },
+  KBLA: { label: 'KBLA — Kelas Bermasalah/Libur Adhoc', badge: 'badge-kuning' },
+  LIBUR: { label: 'LIBUR', badge: 'badge-neutral' },
+};
+
+export default async function PengajarDetailPage({ params }: { params: { id: string } }) {
+  const session = await requireOneOfRoles(['koordinator_hits', 'koordinator_ketua_kelas']);
+
+  const { data: pengajar } = await supabaseAdmin
+    .from('pengajar')
+    .select('id, name, gender, whatsapp_number, kelompok_id, is_ketua, active, last_login_at')
+    .eq('id', params.id)
+    .eq('gender', session.gender)
+    .maybeSingle();
+
+  if (!pengajar) notFound();
+
+  const { data: kelompok } = pengajar.kelompok_id
+    ? await supabaseAdmin
+        .from('kelompok_pengajar')
+        .select('name')
+        .eq('id', pengajar.kelompok_id)
+        .maybeSingle()
+    : { data: null };
+
+  const { data: kelasList } = await supabaseAdmin
+    .from('kelas_hits')
+    .select('id')
+    .eq('pengajar_id', params.id);
+  const kelasIds = (kelasList ?? []).map((k) => k.id);
+
+  const [
+    { data: matrixHistory },
+    { data: teguranList },
+    { data: penilaianMasyaikh },
+    { data: penilaianPedagogis },
+    { data: observasiList },
+  ] = await Promise.all([
+    supabaseAdmin
+      .from('matrix_rekap')
+      .select(
+        'year_month, rata_rata_hard_skill, rata_rata_pedagogis, rata_rata_soft_skill, rata_rata_keseluruhan, ranking, total_teguran_bulan, total_teguran_kumulatif, finalized_at'
+      )
+      .eq('pengajar_id', params.id)
+      .order('year_month', { ascending: false })
+      .limit(6),
+    supabaseAdmin
+      .from('teguran')
+      .select('id, year_month, category, nomor_teguran, keterangan, issued_by_role, created_at')
+      .eq('pengajar_id', params.id)
+      .order('created_at', { ascending: false })
+      .limit(20),
+    supabaseAdmin
+      .from('penilaian_masyaikh')
+      .select(
+        'year_month, skor_bacaan, keterangan_bacaan, skor_hafalan, keterangan_hafalan, assessor_role, updated_at'
+      )
+      .eq('pengajar_id', params.id)
+      .order('year_month', { ascending: false })
+      .limit(6),
+    supabaseAdmin
+      .from('penilaian_pedagogis')
+      .select(
+        'year_month, skor_metode_pengajaran, skor_kepatuhan_silabus, skor_manajemen_halaqah, skor_evaluasi_penguasaan, updated_at'
+      )
+      .eq('pengajar_id', params.id)
+      .order('year_month', { ascending: false })
+      .limit(6),
+    kelasIds.length
+      ? supabaseAdmin
+          .from('observasi_kelas')
+          .select('id, kelas_hits_id, tanggal, kondisi, catatan')
+          .in('kelas_hits_id', kelasIds)
+          .order('tanggal', { ascending: false })
+          .limit(20)
+      : Promise.resolve({ data: [] as Array<{ id: string; kelas_hits_id: string; tanggal: string; kondisi: string; catatan: string | null }> }),
+  ]);
+
+  const totalTeguranKum = matrixHistory?.[0]?.total_teguran_kumulatif ?? teguranList?.length ?? 0;
+  const stepsUntilNonaktif = Math.max(0, 4 - totalTeguranKum);
+
+  return (
+    <main style={{ minHeight: '100vh' }}>
+      <div style={{ maxWidth: 960, margin: '0 auto' }}>
+        <div className="page" style={{ paddingTop: 20 }}>
+          <div className="topbar">
+            <div className="wordmark">
+              <span className="mark">M</span> Pengajar
+            </div>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <Link href="/matrix/koordinator" className="btn btn-sm btn-ghost" style={{ height: 30, padding: '0 10px' }}>
+                {Icon.back(12)} Matrix
+              </Link>
+              <form action={logout}>
+                <button type="submit" className="btn btn-sm btn-ghost" style={{ height: 30, padding: '0 10px' }}>
+                  {Icon.logout(12)} Keluar
+                </button>
+              </form>
+            </div>
+          </div>
+
+          {/* Header */}
+          <div className="card-flat" style={{ padding: 20, marginBottom: 16 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12, flexWrap: 'wrap' }}>
+              <div>
+                <h1 className="t-h1" style={{ marginBottom: 4 }}>{pengajar.name}</h1>
+                <p className="t-small" style={{ color: 'var(--muted-2)' }}>
+                  {kelompok?.name ?? '—'} · {pengajar.gender === 'ikhwan' ? 'Ikhwan' : 'Akhwat'}
+                  {pengajar.is_ketua && ' · Ketua Kelompok'}
+                </p>
+                <p className="t-small" style={{ color: 'var(--muted-2)', marginTop: 4 }}>
+                  Login terakhir: {pengajar.last_login_at ? new Date(pengajar.last_login_at).toLocaleDateString('id-ID') : '—'}
+                </p>
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6, alignItems: 'flex-end' }}>
+                {!pengajar.active && <span className="badge badge-merah"><span className="dot" /> Nonaktif</span>}
+                {pengajar.active && totalTeguranKum >= 3 && (
+                  <span className="badge badge-merah"><span className="dot" /> {stepsUntilNonaktif} teguran lagi → nonaktif</span>
+                )}
+                {pengajar.active && totalTeguranKum > 0 && totalTeguranKum < 3 && (
+                  <span className="badge badge-kuning"><span className="dot" /> {totalTeguranKum} teguran kumulatif</span>
+                )}
+                {pengajar.active && totalTeguranKum === 0 && (
+                  <span className="badge badge-hijau"><span className="dot" /> Tanpa teguran</span>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* Matrix history */}
+          <h2 className="t-h2" style={{ marginBottom: 10 }}>Riwayat Matrix Bulanan</h2>
+          {matrixHistory && matrixHistory.length > 0 ? (
+            <div className="card-flat" style={{ padding: 0, overflowX: 'auto', marginBottom: 24 }}>
+              <table className="t-mono" style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13, minWidth: 640 }}>
+                <thead>
+                  <tr style={{ background: 'var(--surface-2)', textAlign: 'left' }}>
+                    <th style={{ padding: '10px 12px', fontWeight: 600 }}>Bulan</th>
+                    <th style={{ padding: '10px 8px', fontWeight: 600, textAlign: 'right' }}>Hard</th>
+                    <th style={{ padding: '10px 8px', fontWeight: 600, textAlign: 'right' }}>Ped.</th>
+                    <th style={{ padding: '10px 8px', fontWeight: 600, textAlign: 'right' }}>Soft</th>
+                    <th style={{ padding: '10px 8px', fontWeight: 700, textAlign: 'right' }}>Rata²</th>
+                    <th style={{ padding: '10px 8px', fontWeight: 600, textAlign: 'right' }}>Ranking</th>
+                    <th style={{ padding: '10px 8px', fontWeight: 600, textAlign: 'right' }}>Teguran</th>
+                    <th style={{ padding: '10px 8px', fontWeight: 600, textAlign: 'center' }}>Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {matrixHistory.map((m, i) => (
+                    <tr key={m.year_month} style={{ borderTop: '1px solid var(--line)', background: i % 2 ? 'var(--surface)' : 'transparent' }}>
+                      <td style={{ padding: '10px 12px', fontWeight: 600 }}>{m.year_month}</td>
+                      <td style={{ padding: '10px 8px', textAlign: 'right', color: scoreColor(Number(m.rata_rata_hard_skill), 3) }}>{fmtNum(m.rata_rata_hard_skill)}</td>
+                      <td style={{ padding: '10px 8px', textAlign: 'right', color: scoreColor(Number(m.rata_rata_pedagogis), 4) }}>{fmtNum(m.rata_rata_pedagogis)}</td>
+                      <td style={{ padding: '10px 8px', textAlign: 'right', color: scoreColor(Number(m.rata_rata_soft_skill), 4) }}>{fmtNum(m.rata_rata_soft_skill)}</td>
+                      <td style={{ padding: '10px 8px', textAlign: 'right', fontWeight: 700, color: scoreColor(Number(m.rata_rata_keseluruhan), 3.5) }}>{fmtNum(m.rata_rata_keseluruhan)}</td>
+                      <td style={{ padding: '10px 8px', textAlign: 'right', color: 'var(--muted)' }}>{m.ranking ?? '—'}</td>
+                      <td style={{ padding: '10px 8px', textAlign: 'right' }}>{m.total_teguran_bulan} / {m.total_teguran_kumulatif}</td>
+                      <td style={{ padding: '10px 8px', textAlign: 'center' }}>
+                        {m.finalized_at ? <span className="badge badge-hijau"><span className="dot" />Final</span> : <span className="badge badge-kuning"><span className="dot" />Draft</span>}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <div className="card-flat" style={{ padding: 24, textAlign: 'center', marginBottom: 24 }}>
+              <p className="t-small" style={{ color: 'var(--muted)' }}>Belum ada rekap matrix.</p>
+            </div>
+          )}
+
+          {/* Penilaian Masyaikh (bacaan/hafalan) */}
+          <h2 className="t-h2" style={{ marginBottom: 10 }}>Penilaian Masyaikh — Bacaan &amp; Hafalan</h2>
+          {penilaianMasyaikh && penilaianMasyaikh.length > 0 ? (
+            <div className="card-flat" style={{ padding: 0, overflowX: 'auto', marginBottom: 24 }}>
+              <table className="t-mono" style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13, minWidth: 560 }}>
+                <thead>
+                  <tr style={{ background: 'var(--surface-2)', textAlign: 'left' }}>
+                    <th style={{ padding: '10px 12px', fontWeight: 600 }}>Bulan</th>
+                    <th style={{ padding: '10px 8px', fontWeight: 600, textAlign: 'right' }}>Bacaan (≥3)</th>
+                    <th style={{ padding: '10px 8px', fontWeight: 600, textAlign: 'right' }}>Hafalan (≥1)</th>
+                    <th style={{ padding: '10px 12px', fontWeight: 600 }}>Assessor</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {penilaianMasyaikh.map((p, i) => (
+                    <tr key={p.year_month} style={{ borderTop: '1px solid var(--line)', background: i % 2 ? 'var(--surface)' : 'transparent' }}>
+                      <td style={{ padding: '10px 12px', fontWeight: 600 }}>{p.year_month}</td>
+                      <td style={{ padding: '10px 8px', textAlign: 'right', color: scoreColor(p.skor_bacaan, 3) }}>{p.skor_bacaan ?? '—'}</td>
+                      <td style={{ padding: '10px 8px', textAlign: 'right', color: scoreColor(p.skor_hafalan, 1) }}>{p.skor_hafalan ?? '—'}</td>
+                      <td style={{ padding: '10px 12px', color: 'var(--muted)' }}>{p.assessor_role}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <div className="card-flat" style={{ padding: 24, textAlign: 'center', marginBottom: 24 }}>
+              <p className="t-small" style={{ color: 'var(--muted)' }}>Belum ada penilaian masyaikh.</p>
+            </div>
+          )}
+
+          {/* Penilaian Pedagogis */}
+          <h2 className="t-h2" style={{ marginBottom: 10 }}>Penilaian Pedagogis (≥4)</h2>
+          {penilaianPedagogis && penilaianPedagogis.length > 0 ? (
+            <div className="card-flat" style={{ padding: 0, overflowX: 'auto', marginBottom: 24 }}>
+              <table className="t-mono" style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13, minWidth: 640 }}>
+                <thead>
+                  <tr style={{ background: 'var(--surface-2)', textAlign: 'left' }}>
+                    <th style={{ padding: '10px 12px', fontWeight: 600 }}>Bulan</th>
+                    <th style={{ padding: '10px 8px', fontWeight: 600, textAlign: 'right' }}>Metode</th>
+                    <th style={{ padding: '10px 8px', fontWeight: 600, textAlign: 'right' }}>Silabus</th>
+                    <th style={{ padding: '10px 8px', fontWeight: 600, textAlign: 'right' }}>Manajemen</th>
+                    <th style={{ padding: '10px 8px', fontWeight: 600, textAlign: 'right' }}>Evaluasi</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {penilaianPedagogis.map((p, i) => (
+                    <tr key={p.year_month} style={{ borderTop: '1px solid var(--line)', background: i % 2 ? 'var(--surface)' : 'transparent' }}>
+                      <td style={{ padding: '10px 12px', fontWeight: 600 }}>{p.year_month}</td>
+                      <td style={{ padding: '10px 8px', textAlign: 'right', color: scoreColor(p.skor_metode_pengajaran, 4) }}>{p.skor_metode_pengajaran ?? '—'}</td>
+                      <td style={{ padding: '10px 8px', textAlign: 'right', color: scoreColor(p.skor_kepatuhan_silabus, 4) }}>{p.skor_kepatuhan_silabus ?? '—'}</td>
+                      <td style={{ padding: '10px 8px', textAlign: 'right', color: scoreColor(p.skor_manajemen_halaqah, 4) }}>{p.skor_manajemen_halaqah ?? '—'}</td>
+                      <td style={{ padding: '10px 8px', textAlign: 'right', color: scoreColor(p.skor_evaluasi_penguasaan, 4) }}>{p.skor_evaluasi_penguasaan ?? '—'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <div className="card-flat" style={{ padding: 24, textAlign: 'center', marginBottom: 24 }}>
+              <p className="t-small" style={{ color: 'var(--muted)' }}>Belum ada penilaian pedagogis.</p>
+            </div>
+          )}
+
+          {/* Teguran timeline */}
+          <h2 className="t-h2" style={{ marginBottom: 10 }}>Riwayat Teguran (20 terakhir)</h2>
+          {teguranList && teguranList.length > 0 ? (
+            <div style={{ marginBottom: 24 }}>
+              {teguranList.map((t) => {
+                const cat = KATEGORI_LABEL[t.category] ?? { label: t.category, color: 'var(--ink-2)' };
+                return (
+                  <div key={t.id} className="card-flat" style={{ padding: '12px 16px', marginBottom: 8, borderLeft: '3px solid var(--merah)' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, marginBottom: 4 }}>
+                      <div style={{ fontWeight: 600, color: cat.color }}>
+                        #{t.nomor_teguran} — {cat.label}
+                      </div>
+                      <div className="t-small" style={{ color: 'var(--muted-2)' }}>{fmtDate(t.created_at)} · {t.year_month}</div>
+                    </div>
+                    {t.keterangan && <p className="t-small" style={{ color: 'var(--ink-2)' }}>{t.keterangan}</p>}
+                    <p className="t-tiny" style={{ color: 'var(--muted-2)', marginTop: 4 }}>Oleh: {t.issued_by_role}</p>
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <div className="card-flat" style={{ padding: 24, textAlign: 'center', marginBottom: 24 }}>
+              <p className="t-small" style={{ color: 'var(--muted)' }}>Tidak ada teguran tercatat. ✓</p>
+            </div>
+          )}
+
+          {/* Observasi recent (filter by pengajar via kelas_hits) */}
+          <h2 className="t-h2" style={{ marginBottom: 10 }}>Observasi Kelas (20 terakhir)</h2>
+          {observasiList && observasiList.length > 0 ? (
+            <div style={{ marginBottom: 24 }}>
+              {observasiList.slice(0, 20).map((o) => {
+                const kondisi = KONDISI_LABEL[o.kondisi as string] ?? { label: o.kondisi as string, badge: 'badge-neutral' };
+                return (
+                  <div key={o.id} className="card-flat" style={{ padding: '10px 14px', marginBottom: 6 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                      <div>
+                        <div style={{ fontWeight: 600 }}>{o.tanggal}</div>
+                        {o.catatan && <p className="t-small" style={{ color: 'var(--muted)', marginTop: 4 }}>{o.catatan}</p>}
+                      </div>
+                      <span className={`badge ${kondisi.badge}`}><span className="dot" />{kondisi.label}</span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <div className="card-flat" style={{ padding: 24, textAlign: 'center', marginBottom: 24 }}>
+              <p className="t-small" style={{ color: 'var(--muted)' }}>Belum ada observasi tercatat.</p>
+            </div>
+          )}
+        </div>
+      </div>
+    </main>
+  );
+}

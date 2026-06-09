@@ -204,6 +204,13 @@ export default async function MatrixKoordinatorPage({
                 Reset
               </Link>
             )}
+            <a
+              href={`/api/matrix/download?bulan=${selectedMonth}${selectedKelompok ? `&kelompok=${selectedKelompok}` : ''}`}
+              className="btn btn-accent btn-sm"
+              style={{ height: 38, marginLeft: 'auto' }}
+            >
+              Export Excel
+            </a>
           </form>
 
           {/* Stats */}
@@ -328,7 +335,12 @@ export default async function MatrixKoordinatorPage({
                           {m?.ranking ?? '—'}
                         </td>
                         <td style={{ padding: '10px 12px', fontWeight: 600 }}>
-                          {row.pengajar.name}
+                          <Link
+                            href={`/matrix/koordinator/pengajar/${row.pengajar.id}`}
+                            style={{ color: 'inherit', textDecoration: 'none', borderBottom: '1px dashed var(--line-2)' }}
+                          >
+                            {row.pengajar.name}
+                          </Link>
                           {isInactive && (
                             <span
                               className="badge badge-merah"

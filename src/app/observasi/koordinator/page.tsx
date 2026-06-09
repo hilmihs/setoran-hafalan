@@ -89,6 +89,57 @@ export default async function KoordinatorKetuaKelasPage({
       .in('id', pengajarIds.length > 0 ? pengajarIds : ['__none__']),
   ]);
 
+  // Tabayyun analytics: monthly aggregate (semua tabayyun yg observasi-nya di kelas gender koordinator bulan ini)
+  const ymStart = today.slice(0, 7) + '-01';
+  const { data: monthlyTab } = kelasIds.length
+    ? await supabaseAdmin
+        .from('tabayyun')
+        .select(`id, status, is_udzur_syari, decided_at, created_at, observasi_kelas!inner(kelas_hits_id, tanggal)`)
+        .gte('created_at', ymStart)
+    : { data: [] as Array<{ id: string; status: string; is_udzur_syari: boolean | null; decided_at: string | null; created_at: string; observasi_kelas: { kelas_hits_id: string; tanggal: string } | { kelas_hits_id: string; tanggal: string }[] }> };
+
+  const tabAnalytics = (monthlyTab ?? []).filter((t) => {
+    const obs = Array.isArray(t.observasi_kelas) ? t.observasi_kelas[0] : t.observasi_kelas;
+    return obs && kelasIds.includes(obs.kelas_hits_id);
+  });
+  const tabTotalBulan = tabAnalytics.length;
+  const tabDecidedBulan = tabAnalytics.filter((t) => t.status === 'decided');
+  const tabUdzurDiterima = tabDecidedBulan.filter((t) => t.is_udzur_syari === true).length;
+  const tabUdzurRate = tabDecidedBulan.length > 0
+    ? Math.round((tabUdzurDiterima / tabDecidedBulan.length) * 100)
+    : 0;
+  const tabAvgHours = tabDecidedBulan.length > 0
+    ? Math.round(
+        tabDecidedBulan.reduce((sum, t) => {
+          if (!t.decided_at) return sum;
+          return sum + (new Date(t.decided_at).getTime() - new Date(t.created_at).getTime()) / 3600_000;
+        }, 0) / tabDecidedBulan.length
+      )
+    : 0;
+
+  // Peer view: aktivitas rekan koordinator_ketua_kelas bulan ini
+  const { data: rekanKK } = await supabaseAdmin
+    .from('koordinator_ketua_kelas')
+    .select('id, name, last_login_at')
+    .eq('gender', session.gender)
+    .eq('active', true)
+    .order('name');
+  const rekanKkIds = (rekanKK ?? []).map((r) => r.id);
+  const tabDecisionsByRekan = new Map<string, number>();
+  if (rekanKkIds.length) {
+    const { data: tabDecisions } = await supabaseAdmin
+      .from('tabayyun')
+      .select('koordinator_kk_id, decided_at')
+      .eq('status', 'decided')
+      .in('koordinator_kk_id', rekanKkIds)
+      .gte('decided_at', ymStart);
+    for (const t of tabDecisions ?? []) {
+      if (t.koordinator_kk_id) {
+        tabDecisionsByRekan.set(t.koordinator_kk_id, (tabDecisionsByRekan.get(t.koordinator_kk_id) ?? 0) + 1);
+      }
+    }
+  }
+
   const pengajarMap = new Map((pengajarList ?? []).map((p) => [p.id, p]));
   const kelasMap = new Map(filteredKelas.map((k) => [k.id, k]));
   const ketuaMap = new Map((allKetuaKelas ?? []).map((k) => [k.kelas_hits_id, k]));
@@ -204,12 +255,12 @@ export default async function KoordinatorKetuaKelasPage({
             }}
           />
 
-          {/* Stats */}
+          {/* Stats hari ini */}
           <div
             className="card-flat"
             style={{
-              padding: '16px 20px', marginBottom: 20,
-              display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12, textAlign: 'center',
+              padding: '16px 20px', marginBottom: 12,
+              display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 12, textAlign: 'center',
             }}
           >
             <div>
@@ -229,6 +280,73 @@ export default async function KoordinatorKetuaKelasPage({
               </div>
             </div>
           </div>
+
+          {/* Tabayyun analytics bulan ini */}
+          <div
+            className="card-flat"
+            style={{
+              padding: '14px 18px', marginBottom: 20,
+              borderLeft: '3px solid var(--accent)',
+            }}
+          >
+            <div className="t-tiny" style={{ marginBottom: 8 }}>ANALITIK TABAYYUN BULAN INI</div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: 10, textAlign: 'center' }}>
+              <div>
+                <div className="t-small" style={{ color: 'var(--muted-2)' }}>Total</div>
+                <div style={{ fontSize: 18, fontWeight: 700 }}>{tabTotalBulan}</div>
+              </div>
+              <div>
+                <div className="t-small" style={{ color: 'var(--muted-2)' }}>Diputuskan</div>
+                <div style={{ fontSize: 18, fontWeight: 700 }}>{tabDecidedBulan.length}</div>
+              </div>
+              <div>
+                <div className="t-small" style={{ color: 'var(--muted-2)' }}>Udzur diterima</div>
+                <div style={{ fontSize: 18, fontWeight: 700, color: 'var(--hijau-ink)' }}>{tabUdzurRate}%</div>
+              </div>
+              <div>
+                <div className="t-small" style={{ color: 'var(--muted-2)' }}>Avg waktu putusan</div>
+                <div style={{ fontSize: 18, fontWeight: 700 }}>{tabAvgHours}j</div>
+              </div>
+            </div>
+          </div>
+
+          {/* Peer view: rekan koordinator KK */}
+          {(rekanKK ?? []).length > 1 && (
+            <div style={{ marginBottom: 24 }}>
+              <h2 className="t-h2" style={{ marginBottom: 12 }}>
+                Aktivitas Rekan Koordinator KK — {today.slice(0, 7)}
+              </h2>
+              <div className="card-flat" style={{ padding: 0, overflow: 'hidden' }}>
+                <table className="t-mono" style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+                  <thead>
+                    <tr style={{ background: 'var(--surface-2)', textAlign: 'left' }}>
+                      <th style={{ padding: '8px 12px', fontWeight: 600 }}>Nama</th>
+                      <th style={{ padding: '8px 8px', fontWeight: 600, textAlign: 'right' }}>Tabayyun Diputuskan</th>
+                      <th style={{ padding: '8px 8px', fontWeight: 600, textAlign: 'right' }}>Login Terakhir</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(rekanKK ?? []).map((r) => {
+                      const isMe = r.id === session.koordinator_kk_id;
+                      return (
+                        <tr key={r.id} style={{ borderTop: '1px solid var(--line)', background: isMe ? 'var(--accent-tint)' : 'transparent' }}>
+                          <td style={{ padding: '8px 12px', fontWeight: isMe ? 700 : 500 }}>
+                            {r.name} {isMe && <span className="t-tiny" style={{ color: 'var(--accent-2)' }}>(saya)</span>}
+                          </td>
+                          <td style={{ padding: '8px 8px', textAlign: 'right' }}>{tabDecisionsByRekan.get(r.id) ?? 0}</td>
+                          <td style={{ padding: '8px 8px', textAlign: 'right', color: 'var(--muted)' }}>
+                            {r.last_login_at
+                              ? new Date(r.last_login_at).toLocaleDateString('id-ID', { day: 'numeric', month: 'short' })
+                              : '—'}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
 
           {/* Tabayyun */}
           {tabayyunItems.length > 0 && (

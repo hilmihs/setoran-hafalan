@@ -56,6 +56,45 @@ export default async function KoordinatorKehadiranPage() {
 
   const pengajarMap = new Map((allPengajar ?? []).map((p) => [p.id, p]));
 
+  // Peer view: aktivitas rekan koordinator_hits bulan ini
+  const { data: rekanList } = await supabaseAdmin
+    .from('koordinator_hits')
+    .select('id, name, last_login_at')
+    .eq('gender', session.gender)
+    .eq('active', true)
+    .order('name');
+
+  const rekanIds = (rekanList ?? []).map((r) => r.id);
+
+  const [{ data: teguranMonth }, { data: liburMonth }] = await Promise.all([
+    rekanIds.length
+      ? supabaseAdmin
+          .from('teguran')
+          .select('issued_by_id')
+          .eq('issued_by_role', 'koordinator_hits')
+          .gte('created_at', `${ym}-01`)
+          .in('issued_by_id', rekanIds)
+      : Promise.resolve({ data: [] as Array<{ issued_by_id: string }> }),
+    rekanIds.length
+      ? supabaseAdmin
+          .from('libur_program')
+          .select('created_by_id')
+          .gte('created_at', `${ym}-01`)
+          .in('created_by_id', rekanIds)
+      : Promise.resolve({ data: [] as Array<{ created_by_id: string }> }),
+  ]);
+
+  const teguranByRekan = new Map<string, number>();
+  for (const t of teguranMonth ?? []) {
+    teguranByRekan.set(t.issued_by_id, (teguranByRekan.get(t.issued_by_id) ?? 0) + 1);
+  }
+  const liburByRekan = new Map<string, number>();
+  for (const l of liburMonth ?? []) {
+    if (l.created_by_id) {
+      liburByRekan.set(l.created_by_id, (liburByRekan.get(l.created_by_id) ?? 0) + 1);
+    }
+  }
+
   const totalPengajar = allPengajar?.length ?? 0;
   const totalCheckins = checkins?.length ?? 0;
   const hadirCount = (checkins ?? []).filter((c) => c.status === 'hadir').length;
@@ -172,6 +211,46 @@ export default async function KoordinatorKehadiranPage() {
                   </div>
                 );
               })}
+            </div>
+          )}
+
+          {/* Peer view: aktivitas rekan koordinator */}
+          {(rekanList ?? []).length > 1 && (
+            <div style={{ marginBottom: 24 }}>
+              <h2 className="t-h2" style={{ marginBottom: 12 }}>
+                Aktivitas Rekan Koordinator — {ym}
+              </h2>
+              <div className="card-flat" style={{ padding: 0, overflow: 'hidden' }}>
+                <table className="t-mono" style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+                  <thead>
+                    <tr style={{ background: 'var(--surface-2)', textAlign: 'left' }}>
+                      <th style={{ padding: '8px 12px', fontWeight: 600 }}>Nama</th>
+                      <th style={{ padding: '8px 8px', fontWeight: 600, textAlign: 'right' }}>Teguran</th>
+                      <th style={{ padding: '8px 8px', fontWeight: 600, textAlign: 'right' }}>Libur</th>
+                      <th style={{ padding: '8px 8px', fontWeight: 600, textAlign: 'right' }}>Login</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(rekanList ?? []).map((r) => {
+                      const isMe = r.id === session.koordinator_hits_id;
+                      return (
+                        <tr key={r.id} style={{ borderTop: '1px solid var(--line)', background: isMe ? 'var(--accent-tint)' : 'transparent' }}>
+                          <td style={{ padding: '8px 12px', fontWeight: isMe ? 700 : 500 }}>
+                            {r.name} {isMe && <span className="t-tiny" style={{ color: 'var(--accent-2)' }}>(saya)</span>}
+                          </td>
+                          <td style={{ padding: '8px 8px', textAlign: 'right' }}>{teguranByRekan.get(r.id) ?? 0}</td>
+                          <td style={{ padding: '8px 8px', textAlign: 'right' }}>{liburByRekan.get(r.id) ?? 0}</td>
+                          <td style={{ padding: '8px 8px', textAlign: 'right', color: 'var(--muted)' }}>
+                            {r.last_login_at
+                              ? new Date(r.last_login_at).toLocaleDateString('id-ID', { day: 'numeric', month: 'short' })
+                              : '—'}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
             </div>
           )}
 
