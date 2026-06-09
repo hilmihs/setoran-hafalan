@@ -173,9 +173,27 @@ export default async function KoordinatorKetuaKelasPage({
           <h1 className="t-h1" style={{ marginBottom: 4 }}>
             Monitoring Observasi
           </h1>
-          <p className="t-small" style={{ color: 'var(--muted-2)', marginBottom: 20 }}>
+          <p className="t-small" style={{ color: 'var(--muted-2)', marginBottom: 12 }}>
             {session.name} — {session.gender === 'ikhwan' ? 'Ikhwan' : 'Akhwat'} — {today}
           </p>
+
+          <a
+            href="/matrix/koordinator"
+            className="card-flat"
+            style={{
+              display: 'block',
+              padding: '12px 16px',
+              marginBottom: 16,
+              textDecoration: 'none',
+              color: 'inherit',
+              borderLeft: '3px solid var(--accent)',
+            }}
+          >
+            <div style={{ fontWeight: 600, marginBottom: 2 }}>Matrix HITS Pengajar</div>
+            <div className="t-small" style={{ color: 'var(--muted-2)' }}>
+              14 indikator + teguran + ranking bulanan
+            </div>
+          </a>
 
           <ObservasiFilterBar
             current={{

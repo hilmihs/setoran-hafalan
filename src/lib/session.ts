@@ -72,6 +72,20 @@ export async function requireKetuaKelompok(): Promise<PengajarSession> {
   throw new Error('UNAUTHORIZED');
 }
 
+export async function requireOneOfRoles<R extends RoleAccess['role']>(
+  roles: R[]
+): Promise<Extract<RoleAccess, { role: R }>> {
+  const s = await getSession();
+  if (s.accesses) {
+    const match = s.accesses.find((a) => roles.includes(a.role as R));
+    if (match) return match as Extract<RoleAccess, { role: R }>;
+  }
+  if (s.session && roles.includes(s.session.role as R)) {
+    return s.session as Extract<RoleAccess, { role: R }>;
+  }
+  throw new Error('UNAUTHORIZED');
+}
+
 export async function getActiveSession(): Promise<RoleAccess | null> {
   const s = await getSession();
   return s.session ?? null;

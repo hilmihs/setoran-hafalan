@@ -84,23 +84,40 @@ export default async function KoordinatorKehadiranPage() {
             Kehadiran — {session.gender === 'ikhwan' ? 'Ikhwan' : 'Akhwat'}
           </h1>
 
-          <a
-            href="/shakwa/koordinator"
-            className="card-flat"
-            style={{
-              display: 'block',
-              padding: '12px 16px',
-              marginBottom: 16,
-              textDecoration: 'none',
-              color: 'inherit',
-              borderLeft: '3px solid var(--kuning-ink)',
-            }}
-          >
-            <div style={{ fontWeight: 600, marginBottom: 2 }}>Review SHAKWA</div>
-            <div className="t-small" style={{ color: 'var(--muted-2)' }}>
-              Tinjau laporan dan aduan dari pengajar & peserta
-            </div>
-          </a>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 16 }}>
+            <a
+              href="/matrix/koordinator"
+              className="card-flat"
+              style={{
+                display: 'block',
+                padding: '12px 16px',
+                textDecoration: 'none',
+                color: 'inherit',
+                borderLeft: '3px solid var(--accent)',
+              }}
+            >
+              <div style={{ fontWeight: 600, marginBottom: 2 }}>Matrix HITS</div>
+              <div className="t-small" style={{ color: 'var(--muted-2)' }}>
+                14 indikator + ranking pengajar
+              </div>
+            </a>
+            <a
+              href="/shakwa/koordinator"
+              className="card-flat"
+              style={{
+                display: 'block',
+                padding: '12px 16px',
+                textDecoration: 'none',
+                color: 'inherit',
+                borderLeft: '3px solid var(--kuning-ink)',
+              }}
+            >
+              <div style={{ fontWeight: 600, marginBottom: 2 }}>Review SHAKWA</div>
+              <div className="t-small" style={{ color: 'var(--muted-2)' }}>
+                Aduan pengajar &amp; peserta
+              </div>
+            </a>
+          </div>
 
           {/* Stats */}
           <div
