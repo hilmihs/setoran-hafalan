@@ -24,7 +24,6 @@ const KELAS: KelasEntry[] = [
     name: 'Alif',
     musyrif: { name: 'Faizil El Islami', wa: '81298205428' },
     peserta: [
-      { name: 'Izha Richardinata', wa: '85934517467' },
       { name: 'Lalu Fauzul Azhim', wa: '85947384638' },
       { name: 'Pandite Agung Nasrianyar', wa: '87878874267' },
       { name: 'Saiful Idris', wa: '62895383372726' },

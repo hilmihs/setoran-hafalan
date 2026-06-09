@@ -4,29 +4,27 @@ import { getSession } from '@/lib/session';
 import { ChangePasswordForm } from '@/components/ChangePasswordForm';
 import { Icon } from '@/components/icons';
 import { musyrifTitle, syaikhTitle } from '@/lib/whatsapp';
+import { ROLE_LANDING } from '@/lib/roles';
 import type { Gender } from '@/types/db';
 
 export const dynamic = 'force-dynamic';
-
-const ROLE_HOME: Record<string, string> = {
-  peserta: '/peserta',
-  musyrif: '/musyrif',
-  koordinator: '/koordinator',
-  syaikh: '/syaikh',
-};
 
 function roleLabel(role: string, gender: Gender): string {
   if (role === 'musyrif') return musyrifTitle(gender);
   if (role === 'syaikh') return syaikhTitle(gender);
   if (role === 'peserta') return 'Peserta';
   if (role === 'koordinator') return 'Koordinator';
+  if (role === 'pengajar') return 'Pengajar';
+  if (role === 'koordinator_hits') return 'Koordinator HITS';
+  if (role === 'ketua_kelas') return 'Ketua Kelas';
+  if (role === 'koordinator_ketua_kelas') return 'Koordinator Ketua Kelas';
   return role;
 }
 
 export default async function AkunPage() {
   const s = await getSession();
   if (!s.session) redirect('/');
-  const back = ROLE_HOME[s.session.role] ?? '/';
+  const back = ROLE_LANDING[s.session.role] ?? '/';
 
   return (
     <main style={{ minHeight: '100vh' }}>
