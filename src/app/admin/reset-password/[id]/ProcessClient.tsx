@@ -15,10 +15,14 @@ export function ProcessClient({ request }: { request: RequestSummary }) {
   const [acceptState, acceptAction] = useFormState(acceptResetRequest, undefined);
   const [declineState, declineAction] = useFormState(declineResetRequest, undefined);
   const [copied, setCopied] = useState(false);
+  const [popupBlocked, setPopupBlocked] = useState(false);
 
   useEffect(() => {
     if (acceptState?.waMeUrl) {
-      window.open(acceptState.waMeUrl, '_blank', 'noopener,noreferrer');
+      const w = window.open(acceptState.waMeUrl, '_blank', 'noopener,noreferrer');
+      if (!w || w.closed || typeof w.closed === 'undefined') {
+        setPopupBlocked(true);
+      }
     }
   }, [acceptState?.waMeUrl]);
 
@@ -59,17 +63,31 @@ export function ProcessClient({ request }: { request: RequestSummary }) {
             </button>
           </div>
           <p className="t-small" style={{ color: 'var(--muted)', marginTop: 6 }}>
-            Password ini hanya muncul sekali. Pastikan tersalin atau langsung dikirim sebelum tutup halaman.
+            Plaintext password disimpan 24 jam — Anda bisa kembali ke halaman ini kalau lupa kirim.
           </p>
         </div>
+
+        {popupBlocked ? (
+          <div className="banner banner-error">
+            <div>
+              <div className="title">Tab WhatsApp diblokir browser</div>
+              <div className="desc">Klik tombol di bawah untuk buka WhatsApp manual.</div>
+            </div>
+          </div>
+        ) : (
+          <p className="t-small" style={{ color: 'var(--muted)', textAlign: 'center', margin: 0 }}>
+            Tab WhatsApp dibuka otomatis. Kalau tidak terbuka, klik tombol di bawah.
+          </p>
+        )}
 
         <a
           href={acceptState.waMeUrl}
           target="_blank"
           rel="noreferrer"
           className="btn btn-block btn-primary"
+          style={{ fontSize: 16 }}
         >
-          Kirim ke {request.requester_name ?? 'pemohon'} via WhatsApp
+          📱 Buka WhatsApp — {request.requester_name ?? 'pemohon'}
         </a>
       </div>
     );

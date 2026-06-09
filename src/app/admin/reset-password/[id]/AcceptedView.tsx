@@ -117,8 +117,18 @@ function PlaintextRecovery({
         </div>
       </div>
 
-      <a href={waMeUrl} target="_blank" rel="noreferrer" className="btn btn-block btn-primary">
-        Kirim ke {requesterName ?? 'pemohon'} via WhatsApp
+      <p className="t-small" style={{ color: 'var(--muted)', textAlign: 'center', margin: 0 }}>
+        Klik tombol di bawah untuk buka tab WhatsApp dengan pesan siap kirim.
+      </p>
+
+      <a
+        href={waMeUrl}
+        target="_blank"
+        rel="noreferrer"
+        className="btn btn-block btn-primary"
+        style={{ fontSize: 16 }}
+      >
+        📱 Buka WhatsApp — {requesterName ?? 'pemohon'}
       </a>
 
       <form action={clearAction}>
@@ -147,10 +157,14 @@ function ExpiredView({
 }) {
   const [regenState, regenAction] = useFormState(regeneratePassword, undefined);
   const [copied, setCopied] = useState(false);
+  const [popupBlocked, setPopupBlocked] = useState(false);
 
   useEffect(() => {
     if (regenState?.waMeUrl) {
-      window.open(regenState.waMeUrl, '_blank', 'noopener,noreferrer');
+      const w = window.open(regenState.waMeUrl, '_blank', 'noopener,noreferrer');
+      if (!w || w.closed || typeof w.closed === 'undefined') {
+        setPopupBlocked(true);
+      }
     }
   }, [regenState?.waMeUrl]);
 
@@ -189,8 +203,26 @@ function ExpiredView({
             </button>
           </div>
         </div>
-        <a href={regenState.waMeUrl} target="_blank" rel="noreferrer" className="btn btn-block btn-primary">
-          Kirim ke {requesterName ?? 'pemohon'} via WhatsApp
+        {popupBlocked ? (
+          <div className="banner banner-error">
+            <div>
+              <div className="title">Tab WhatsApp diblokir browser</div>
+              <div className="desc">Klik tombol di bawah untuk buka WhatsApp manual.</div>
+            </div>
+          </div>
+        ) : (
+          <p className="t-small" style={{ color: 'var(--muted)', textAlign: 'center', margin: 0 }}>
+            Tab WhatsApp dibuka otomatis. Kalau tidak terbuka, klik tombol di bawah.
+          </p>
+        )}
+        <a
+          href={regenState.waMeUrl}
+          target="_blank"
+          rel="noreferrer"
+          className="btn btn-block btn-primary"
+          style={{ fontSize: 16 }}
+        >
+          📱 Buka WhatsApp — {requesterName ?? 'pemohon'}
         </a>
       </div>
     );
