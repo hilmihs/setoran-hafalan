@@ -10,6 +10,7 @@ import {
 } from '@/lib/whatsapp';
 import { absUrl } from '@/lib/url';
 import { logAudit } from '@/lib/audit';
+import { logWaReminder } from '@/lib/wa-log';
 
 export async function decideTabayyun(
   _prev: { error?: string; ok?: boolean } | undefined,
@@ -51,7 +52,7 @@ export async function reminderKetuaKelas(
   ketuaKelasId: string,
   kelasName: string
 ): Promise<{ waUrl?: string; error?: string }> {
-  await requireKoordinatorKetuaKelas();
+  const session = await requireKoordinatorKetuaKelas();
 
   const { data: ketua } = await supabaseAdmin
     .from('ketua_kelas')
@@ -68,14 +69,24 @@ export async function reminderKetuaKelas(
     observasiUrl: absUrl('/observasi/ketua-kelas'),
   });
 
-  return { waUrl: buildWaMeUrl(ketua.whatsapp_number, msg) };
+  const waUrl = buildWaMeUrl(ketua.whatsapp_number, msg);
+
+  await logWaReminder({
+    sender: session,
+    recipientTable: 'ketua_kelas',
+    recipientId: ketuaKelasId,
+    recipientWa: ketua.whatsapp_number,
+    templateKind: 'observasi_reminder',
+  });
+
+  return { waUrl };
 }
 
 export async function reminderPengajarCheckin(
   pengajarId: string,
   kelasName: string
 ): Promise<{ waUrl?: string; error?: string }> {
-  await requireKoordinatorKetuaKelas();
+  const session = await requireKoordinatorKetuaKelas();
 
   const { data: pengajar } = await supabaseAdmin
     .from('pengajar')
@@ -92,7 +103,17 @@ export async function reminderPengajarCheckin(
     checkinUrl: absUrl('/kehadiran/pengajar'),
   });
 
-  return { waUrl: buildWaMeUrl(pengajar.whatsapp_number, msg) };
+  const waUrl = buildWaMeUrl(pengajar.whatsapp_number, msg);
+
+  await logWaReminder({
+    sender: session,
+    recipientTable: 'pengajar',
+    recipientId: pengajarId,
+    recipientWa: pengajar.whatsapp_number,
+    templateKind: 'checkin_reminder',
+  });
+
+  return { waUrl };
 }
 
 export async function reminderTabayyunPengajar(
@@ -101,7 +122,7 @@ export async function reminderTabayyunPengajar(
   tanggal: string,
   kelasName: string
 ): Promise<{ waUrl?: string; error?: string }> {
-  await requireKoordinatorKetuaKelas();
+  const session = await requireKoordinatorKetuaKelas();
 
   const { data: pengajar } = await supabaseAdmin
     .from('pengajar')
@@ -120,5 +141,16 @@ export async function reminderTabayyunPengajar(
     formUrl: absUrl('/kehadiran/pengajar'),
   });
 
-  return { waUrl: buildWaMeUrl(pengajar.whatsapp_number, msg) };
+  const waUrl = buildWaMeUrl(pengajar.whatsapp_number, msg);
+
+  await logWaReminder({
+    sender: session,
+    recipientTable: 'pengajar',
+    recipientId: pengajarId,
+    recipientWa: pengajar.whatsapp_number,
+    templateKind: 'tabayyun_notify',
+    targetTable: 'observasi_kelas',
+  });
+
+  return { waUrl };
 }

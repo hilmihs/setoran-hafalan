@@ -8,7 +8,17 @@ import { currentCycleStart, previousCycles, formatCycleRange, formatCycleDeadlin
 import { buildWaMeUrl, tplReminderPesertaBelumSetor } from '@/lib/whatsapp';
 import { absUrl } from '@/lib/url';
 import { SetoranDistributionChart } from '@/components/charts/SetoranDistributionChart';
+import { NotesPanel } from '@/components/NotesPanel';
 import type { NilaiRekaman } from '@/types/db';
+
+interface NoteRow {
+  id: string;
+  author_role: string;
+  author_id: string;
+  body: string;
+  visibility: string;
+  created_at: string;
+}
 
 export const dynamic = 'force-dynamic';
 
@@ -40,7 +50,7 @@ export default async function PesertaDossierPage({ params }: { params: { id: str
   if (!peserta) notFound();
 
   // Syaikh + koordinator boleh akses cross-gender (sudah pattern existing di /2in1)
-  void session;
+  const sessionAuthorId = session.role === 'koordinator' ? session.koordinator_id : session.syaikh_id;
 
   const { data: kelas } = await supabaseAdmin
     .from('kelas')
@@ -103,6 +113,36 @@ export default async function PesertaDossierPage({ params }: { params: { id: str
 
   const cycleDeadline = formatCycleDeadline(cycleNow);
   const cycleRange = formatCycleRange(cycleNow);
+
+  // Notes
+  const { data: notesRaw } = await supabaseAdmin
+    .from('koordinator_notes')
+    .select('id, author_role, author_id, body, visibility, created_at')
+    .eq('target_type', 'peserta')
+    .eq('target_id', peserta.id)
+    .or(`visibility.eq.peer,and(visibility.eq.private,author_id.eq.${sessionAuthorId})`)
+    .order('created_at', { ascending: false })
+    .limit(20);
+
+  const authorIds = Array.from(new Set((notesRaw ?? []).map((n) => n.author_id)));
+  const authorMap = new Map<string, string>();
+  if (authorIds.length) {
+    const tables = ['koordinator', 'syaikh', 'koordinator_hits', 'koordinator_ketua_kelas'];
+    for (const t of tables) {
+      const { data } = await supabaseAdmin.from(t).select('id, name').in('id', authorIds);
+      for (const r of data ?? []) authorMap.set(r.id, r.name);
+    }
+  }
+
+  const notes = ((notesRaw ?? []) as NoteRow[]).map((n) => ({
+    id: n.id,
+    author_role: n.author_role,
+    author_name: authorMap.get(n.author_id),
+    body: n.body,
+    visibility: n.visibility,
+    created_at: n.created_at,
+    isMine: n.author_id === sessionAuthorId,
+  }));
 
   // Reminder URL untuk koordinator (kalau peserta belum setor cycle ini)
   const setoranNow = setoranByCycle.get(cycleNow);
@@ -245,6 +285,9 @@ export default async function PesertaDossierPage({ params }: { params: { id: str
               </>
             ) : null;
           })()}
+
+          {/* Notes panel */}
+          <NotesPanel targetType="peserta" targetId={peserta.id} notes={notes} />
 
           {/* Catatan musyrif */}
           <h2 className="t-h2" style={{ marginBottom: 10 }}>Catatan Musyrif Terakhir</h2>

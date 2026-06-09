@@ -90,6 +90,47 @@ export async function submitCheckin(
   return { ok: true };
 }
 
+export async function submitCheckout(
+  _prev: { error?: string; ok?: boolean } | undefined,
+  formData: FormData
+): Promise<{ error?: string; ok?: boolean }> {
+  const session = await requirePengajar();
+
+  const checkinId = String(formData.get('checkin_id') ?? '');
+  if (!checkinId) return { error: 'ID checkin tidak ditemukan.' };
+
+  const { data: checkin } = await supabaseAdmin
+    .from('checkin_pengajar')
+    .select('id, pengajar_id, checkout_at')
+    .eq('id', checkinId)
+    .maybeSingle();
+
+  if (!checkin || checkin.pengajar_id !== session.pengajar_id) {
+    return { error: 'Checkin tidak ditemukan atau bukan milik Anda.' };
+  }
+  if (checkin.checkout_at) {
+    return { error: 'Sudah checkout sebelumnya.' };
+  }
+
+  const nowIso = new Date().toISOString();
+  const { error: updateErr } = await supabaseAdmin
+    .from('checkin_pengajar')
+    .update({ checkout_at: nowIso })
+    .eq('id', checkinId);
+
+  if (updateErr) return { error: `Gagal simpan: ${updateErr.message}` };
+
+  await logAudit({
+    actor: session,
+    action: 'checkin.checkout',
+    targetTable: 'checkin_pengajar',
+    targetId: checkinId,
+    detail: { checkout_at: nowIso },
+  });
+
+  return { ok: true };
+}
+
 export async function submitAlasan(
   _prev: { error?: string; ok?: boolean; waUrl?: string } | undefined,
   formData: FormData

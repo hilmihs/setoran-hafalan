@@ -5,6 +5,17 @@ import { Icon } from '@/components/icons';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { MatrixTrendChart } from '@/components/charts/MatrixTrendChart';
+import { computeRiskPengajar, levelColor, levelLabel } from '@/lib/risk';
+import { NotesPanel } from '@/components/NotesPanel';
+
+interface NoteRow {
+  id: string;
+  author_role: string;
+  author_id: string;
+  body: string;
+  visibility: string;
+  created_at: string;
+}
 
 export const dynamic = 'force-dynamic';
 
@@ -116,6 +127,39 @@ export default async function PengajarDetailPage({ params }: { params: { id: str
   const totalTeguranKum = matrixHistory?.[0]?.total_teguran_kumulatif ?? teguranList?.length ?? 0;
   const stepsUntilNonaktif = Math.max(0, 4 - totalTeguranKum);
 
+  const risk = await computeRiskPengajar(params.id);
+
+  // Notes: tampilkan peer notes + own private notes
+  const sessionAuthorId = session.role === 'koordinator_hits' ? session.koordinator_hits_id : session.koordinator_kk_id;
+  const { data: notesRaw } = await supabaseAdmin
+    .from('koordinator_notes')
+    .select('id, author_role, author_id, body, visibility, created_at')
+    .eq('target_type', 'pengajar')
+    .eq('target_id', params.id)
+    .or(`visibility.eq.peer,and(visibility.eq.private,author_id.eq.${sessionAuthorId})`)
+    .order('created_at', { ascending: false })
+    .limit(20);
+
+  const authorIds = Array.from(new Set((notesRaw ?? []).map((n) => n.author_id)));
+  const authorMap = new Map<string, string>();
+  if (authorIds.length) {
+    const tables = ['koordinator_hits', 'koordinator_ketua_kelas', 'koordinator', 'syaikh'];
+    for (const t of tables) {
+      const { data } = await supabaseAdmin.from(t).select('id, name').in('id', authorIds);
+      for (const r of data ?? []) authorMap.set(r.id, r.name);
+    }
+  }
+
+  const notes = ((notesRaw ?? []) as NoteRow[]).map((n) => ({
+    id: n.id,
+    author_role: n.author_role,
+    author_name: authorMap.get(n.author_id),
+    body: n.body,
+    visibility: n.visibility,
+    created_at: n.created_at,
+    isMine: n.author_id === sessionAuthorId,
+  }));
+
   return (
     <main style={{ minHeight: '100vh' }}>
       <div style={{ maxWidth: 960, margin: '0 auto' }}>
@@ -161,6 +205,48 @@ export default async function PengajarDetailPage({ params }: { params: { id: str
                   <span className="badge badge-hijau"><span className="dot" /> Tanpa teguran</span>
                 )}
               </div>
+            </div>
+          </div>
+
+          {/* Notes panel */}
+          <NotesPanel targetType="pengajar" targetId={params.id} notes={notes} />
+
+          {/* Risk breakdown */}
+          <h2 className="t-h2" style={{ marginBottom: 10 }}>Risk Profile</h2>
+          <div className="card-flat" style={{ padding: 16, marginBottom: 24 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, gap: 12 }}>
+              <div>
+                <div className="t-tiny" style={{ color: 'var(--muted-2)' }}>Risk score</div>
+                <div style={{ fontSize: 28, fontWeight: 700, color: levelColor(risk.level) }}>
+                  {risk.score} <span style={{ fontSize: 14, fontWeight: 500, color: 'var(--muted)' }}>/ 100 — {levelLabel(risk.level)}</span>
+                </div>
+              </div>
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 10 }}>
+              {risk.factors.map((f) => (
+                <div key={f.name} style={{ padding: 10, borderRadius: 8, background: 'var(--surface-2)' }}>
+                  <div className="t-small" style={{ fontWeight: 600 }}>{f.name}</div>
+                  <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 4 }}>{f.detail}</div>
+                  <div style={{ height: 6, background: 'var(--line)', borderRadius: 3, overflow: 'hidden' }}>
+                    <div
+                      style={{
+                        width: `${(f.points / f.weight) * 100}%`,
+                        height: '100%',
+                        background: f.points >= f.weight * 0.75
+                          ? 'var(--merah)'
+                          : f.points >= f.weight * 0.5
+                          ? 'var(--kuning)'
+                          : f.points > 0
+                          ? 'var(--accent)'
+                          : 'var(--hijau)',
+                      }}
+                    />
+                  </div>
+                  <div className="t-tiny" style={{ marginTop: 4, color: 'var(--muted-2)' }}>
+                    {f.points} / {f.weight} pts
+                  </div>
+                </div>
+              ))}
             </div>
           </div>
 

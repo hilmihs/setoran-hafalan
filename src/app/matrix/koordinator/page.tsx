@@ -3,6 +3,7 @@ import { supabaseAdmin } from '@/lib/supabase-admin';
 import { logout } from '@/lib/auth';
 import { Icon } from '@/components/icons';
 import Link from 'next/link';
+import { computeRiskPengajar, levelColor, levelLabel, type RiskResult } from '@/lib/risk';
 
 export const dynamic = 'force-dynamic';
 
@@ -79,12 +80,21 @@ export default async function MatrixKoordinatorPage({
   ).sort()
     .reverse();
 
+  const riskByPengajar = new Map<string, RiskResult>();
+  if (pengajarIds.length) {
+    const results = await Promise.all(
+      pengajarIds.map(async (id) => [id, await computeRiskPengajar(id)] as const)
+    );
+    for (const [id, r] of results) riskByPengajar.set(id, r);
+  }
+
   const rows = (pengajarList ?? []).map((p) => {
     const m = (matrixData ?? []).find((mm) => mm.pengajar_id === p.id);
     return {
       pengajar: p,
       kelompokName: kelompokMap.get(p.kelompok_id ?? '') ?? '—',
       matrix: m,
+      risk: riskByPengajar.get(p.id),
     };
   });
 
@@ -309,6 +319,9 @@ export default async function MatrixKoordinatorPage({
                       Teguran (bln/kum)
                     </th>
                     <th style={{ padding: '10px 8px', fontWeight: 600, textAlign: 'center' }}>
+                      Risk
+                    </th>
+                    <th style={{ padding: '10px 8px', fontWeight: 600, textAlign: 'center' }}>
                       Status
                     </th>
                   </tr>
@@ -399,6 +412,24 @@ export default async function MatrixKoordinatorPage({
                           }}
                         >
                           {m?.total_teguran_bulan ?? 0} / {teguranKum}
+                        </td>
+                        <td style={{ padding: '10px 8px', textAlign: 'center' }}>
+                          {row.risk ? (
+                            <span
+                              className="badge"
+                              style={{
+                                background: 'transparent',
+                                borderColor: levelColor(row.risk.level),
+                                color: levelColor(row.risk.level),
+                                fontSize: 11,
+                              }}
+                              title={`Score ${row.risk.score}/100`}
+                            >
+                              {levelLabel(row.risk.level)} {row.risk.score}
+                            </span>
+                          ) : (
+                            <span className="t-tiny" style={{ color: 'var(--muted-2)' }}>—</span>
+                          )}
                         </td>
                         <td style={{ padding: '10px 8px', textAlign: 'center' }}>
                           {m?.finalized_at ? (

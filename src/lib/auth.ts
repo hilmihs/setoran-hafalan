@@ -7,6 +7,7 @@ import { getSession } from './session';
 import { normalizeWhatsApp } from './whatsapp';
 import type { RoleAccess } from '@/types/db';
 import { ROLE_LANDING } from './roles';
+import { logLogins, logLogout } from './session-log';
 
 const BCRYPT_COST = 12;
 
@@ -222,6 +223,8 @@ export async function login(
   s.accesses = accesses;
   await s.save();
 
+  void logLogins({ accesses });
+
   redirect('/');
 }
 
@@ -237,6 +240,8 @@ export async function switchRole(role: RoleAccess['role']) {
 
 export async function logout() {
   const s = await getSession();
+  const accesses = s.accesses ?? (s.session ? [s.session] : []);
+  if (accesses.length) await logLogout(accesses);
   s.destroy();
   redirect('/');
 }
