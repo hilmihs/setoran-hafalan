@@ -60,6 +60,9 @@ steps:
         echo "📦 Install dependency Web Maahir"
         nvm exec 24.15.0 npm install
 
+        echo "🧹 Clean .next lama (file cache runtime standalone bisa owned by root)"
+        sudo rm -rf .next
+
         echo "⚙️ Build Web Maahir"
         nvm exec 24.15.0 npm run build
 
