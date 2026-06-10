@@ -5,6 +5,7 @@ import { supabaseAdmin } from '@/lib/supabase-admin';
 import { currentCycleStart, formatCycleDeadline, formatCycleRange } from '@/lib/week';
 import { logout } from '@/lib/auth';
 import { Icon, Initials } from '@/components/icons';
+import { FeatureNav } from '@/components/FeatureNav';
 import {
   buildWaMeUrl,
   salutation,
@@ -150,6 +151,7 @@ export default async function MusyrifDashboard() {
         </div>
 
         <div className="page">
+          <FeatureNav current="/2in1" />
           <div className="row" style={{ padding: '4px 0 16px' }}>
             <div
               className="avatar"

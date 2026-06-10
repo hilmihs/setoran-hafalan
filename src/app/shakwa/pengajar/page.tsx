@@ -1,6 +1,7 @@
 import { requirePengajar } from '@/lib/session';
 import { logout } from '@/lib/auth';
 import { Icon } from '@/components/icons';
+import { FeatureNav } from '@/components/FeatureNav';
 import { ShakwaForm } from './ShakwaForm';
 
 export const dynamic = 'force-dynamic';
@@ -27,17 +28,7 @@ export default async function ShakwaPengajarPage() {
             </form>
           </div>
 
-          <nav style={{ display: 'flex', gap: 6, marginBottom: 16, borderBottom: '1px solid var(--line)', paddingBottom: 10 }}>
-            <a href="/kehadiran/pengajar" className="btn btn-sm btn-ghost">
-              Kehadiran
-            </a>
-            <a href="/shakwa/pengajar" className="btn btn-sm" style={{ background: 'var(--primary)', color: '#fff' }}>
-              SHAKWA
-            </a>
-            <a href="/" className="btn btn-sm btn-ghost">
-              Menu Utama
-            </a>
-          </nav>
+          <FeatureNav current="/shakwa/pengajar" />
 
           <h1 className="t-h1" style={{ marginBottom: 4 }}>SHAKWA</h1>
           <p className="t-body" style={{ color: 'var(--muted-2)', marginBottom: 20 }}>

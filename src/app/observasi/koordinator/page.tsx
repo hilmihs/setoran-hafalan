@@ -2,6 +2,7 @@ import { requireKoordinatorKetuaKelas } from '@/lib/session';
 import { supabaseAdmin } from '@/lib/supabase-admin';
 import { logout } from '@/lib/auth';
 import { Icon } from '@/components/icons';
+import { FeatureNav } from '@/components/FeatureNav';
 import { TabayyunCard } from './TabayyunCard';
 import { ReminderButton } from './ReminderButton';
 import { ObservasiFilterBar } from './ObservasiFilterBar';
@@ -220,6 +221,8 @@ export default async function KoordinatorKetuaKelasPage({
               </button>
             </form>
           </div>
+
+          <FeatureNav current="/observasi/koordinator" />
 
           <h1 className="t-h1" style={{ marginBottom: 4 }}>
             Monitoring Observasi

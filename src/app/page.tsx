@@ -3,68 +3,16 @@ import { LoginForm } from '@/components/LoginForm';
 import { getSession, getAllAccesses } from '@/lib/session';
 import { currentCycleStart, formatCycleRange } from '@/lib/week';
 import { ROLE_LANDING } from '@/lib/roles';
-import type { RoleAccess } from '@/types/db';
+import { featureLinksFor } from '@/lib/feature-links';
 
 export const dynamic = 'force-dynamic';
-
-const FEATURE_CARDS: {
-  roles: RoleAccess['role'][];
-  title: string;
-  description: string;
-  href: string;
-}[] = [
-  {
-    roles: ['peserta', 'musyrif', 'koordinator', 'syaikh'],
-    title: 'Barnamij 2in1',
-    description: 'Setoran Hafalan — Tuhfatul Athfal, Al-Jazariyyah, Syawahid',
-    href: '/2in1',
-  },
-  {
-    roles: ['pengajar'],
-    title: 'Kehadiran Program',
-    description: 'Check-in kehadiran Kelas Maahir, Kajian At-Tibyan, Muallim Najih',
-    href: '/kehadiran/pengajar',
-  },
-  {
-    roles: ['koordinator_hits'],
-    title: 'Koordinator Pengajar HITS',
-    description: 'Check-in kehadiran pengajar, reminder, dan monitoring per kelompok',
-    href: '/kehadiran/koordinator',
-  },
-  {
-    roles: ['ketua_kelas'],
-    title: 'Observasi Kelas',
-    description: 'Laporan kondisi kelas dan performa pengajar',
-    href: '/observasi/ketua-kelas',
-  },
-  {
-    roles: ['koordinator_ketua_kelas'],
-    title: 'Koordinator Ketua Kelas',
-    description: 'Tabayyun, reminder observasi, dan monitoring kondisi halaqah',
-    href: '/observasi/koordinator',
-  },
-  {
-    roles: ['pengajar'],
-    title: 'SHAKWA',
-    description: 'Sampaikan laporan, saran, atau kendala terkait program HITS',
-    href: '/shakwa/pengajar',
-  },
-  {
-    roles: ['koordinator_hits'],
-    title: 'Review SHAKWA',
-    description: 'Tinjau laporan dan aduan dari pengajar & peserta',
-    href: '/shakwa/koordinator',
-  },
-];
 
 export default async function HomePage() {
   const s = await getSession();
   const accesses = await getAllAccesses();
 
   if (accesses.length >= 1) {
-    const available = FEATURE_CARDS.filter((card) =>
-      card.roles.some((r) => accesses.find((a) => a.role === r))
-    );
+    const available = featureLinksFor(accesses);
 
     if (available.length === 1) {
       redirect(available[0].href);

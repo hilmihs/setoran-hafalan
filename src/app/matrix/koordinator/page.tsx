@@ -2,6 +2,7 @@ import { requireOneOfRoles } from '@/lib/session';
 import { supabaseAdmin } from '@/lib/supabase-admin';
 import { logout } from '@/lib/auth';
 import { Icon } from '@/components/icons';
+import { FeatureNav } from '@/components/FeatureNav';
 import Link from 'next/link';
 import { computeRiskPengajar, levelColor, levelLabel, type RiskResult } from '@/lib/risk';
 
@@ -140,6 +141,8 @@ export default async function MatrixKoordinatorPage({
               </form>
             </div>
           </div>
+
+          <FeatureNav current="/matrix/koordinator" />
 
           <h1 className="t-h1" style={{ marginBottom: 4 }}>
             Matrix Skill Pengajar — {session.gender === 'ikhwan' ? 'Ikhwan' : 'Akhwat'}

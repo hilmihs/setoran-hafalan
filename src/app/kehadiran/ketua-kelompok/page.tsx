@@ -4,6 +4,7 @@ import { buildWaMeUrl, tplReminderPengajarCheckin } from '@/lib/whatsapp';
 import { absUrl } from '@/lib/url';
 import { logout } from '@/lib/auth';
 import { Icon } from '@/components/icons';
+import { FeatureNav } from '@/components/FeatureNav';
 import { DecisionButtons } from './DecisionButtons';
 
 export const dynamic = 'force-dynamic';
@@ -68,6 +69,8 @@ export default async function KetuaKelompokPage() {
               </button>
             </form>
           </div>
+
+          <FeatureNav current="/kehadiran/ketua-kelompok" />
 
           <h1 className="t-h1" style={{ marginBottom: 16 }}>
             Dashboard Kelompok

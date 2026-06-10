@@ -3,6 +3,7 @@ import { getProgramsForDate, getUnfilledDates } from '@/lib/attendance';
 import { supabaseAdmin } from '@/lib/supabase-admin';
 import { logout } from '@/lib/auth';
 import { Icon } from '@/components/icons';
+import { FeatureNav } from '@/components/FeatureNav';
 import { CheckinForm } from './CheckinForm';
 import { getCurrentPekan } from '@/lib/batch';
 import type { KetuaKelasInfo } from './CheckinForm';
@@ -112,6 +113,8 @@ export default async function KehadiranPengajarPage() {
             </form>
           </div>
 
+          <FeatureNav current="/kehadiran/pengajar" />
+
           <h1 className="t-h1" style={{ marginBottom: 4 }}>
             Check-in Kehadiran
           </h1>
@@ -140,18 +143,6 @@ export default async function KehadiranPengajarPage() {
               </div>
             </a>
           )}
-
-          <nav style={{ display: 'flex', gap: 6, marginBottom: 16, borderBottom: '1px solid var(--line)', paddingBottom: 10 }}>
-            <a href="/kehadiran/pengajar" className="btn btn-sm" style={{ background: 'var(--primary)', color: '#fff' }}>
-              Kehadiran
-            </a>
-            <a href="/shakwa/pengajar" className="btn btn-sm btn-ghost">
-              SHAKWA
-            </a>
-            <a href="/" className="btn btn-sm btn-ghost">
-              Menu Utama
-            </a>
-          </nav>
 
           {allDates.length === 0 ? (
             <div

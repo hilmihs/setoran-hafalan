@@ -2,6 +2,7 @@ import { requireKetuaKelas } from '@/lib/session';
 import { supabaseAdmin } from '@/lib/supabase-admin';
 import { logout } from '@/lib/auth';
 import { Icon } from '@/components/icons';
+import { FeatureNav } from '@/components/FeatureNav';
 import { ObservasiForm } from './ObservasiForm';
 import type { ObservasiKelas } from '@/types/db';
 
@@ -60,6 +61,8 @@ export default async function KetuaKelasObservasiPage() {
               </button>
             </form>
           </div>
+
+          <FeatureNav current="/observasi/ketua-kelas" />
 
           <h1 className="t-h1" style={{ marginBottom: 4 }}>
             {kelas?.name ?? 'Halaqah'}

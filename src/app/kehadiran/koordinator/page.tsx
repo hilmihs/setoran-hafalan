@@ -4,6 +4,7 @@ import { buildWaMeUrl, tplReminderKetuaKelompokTugas } from '@/lib/whatsapp';
 import { absUrl } from '@/lib/url';
 import { logout } from '@/lib/auth';
 import { Icon } from '@/components/icons';
+import { FeatureNav } from '@/components/FeatureNav';
 import { LiburForm } from './LiburForm';
 
 export const dynamic = 'force-dynamic';
@@ -118,6 +119,8 @@ export default async function KoordinatorKehadiranPage() {
               </button>
             </form>
           </div>
+
+          <FeatureNav current="/kehadiran/koordinator" />
 
           <h1 className="t-h1" style={{ marginBottom: 16 }}>
             Kehadiran — {session.gender === 'ikhwan' ? 'Ikhwan' : 'Akhwat'}

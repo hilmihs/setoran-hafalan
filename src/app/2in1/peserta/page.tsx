@@ -7,6 +7,7 @@ import {
   type ExistingSetoran,
 } from '@/components/PesertaSetoranForm';
 import { Icon } from '@/components/icons';
+import { FeatureNav } from '@/components/FeatureNav';
 import { logout } from '@/lib/auth';
 import { currentCycleStart, formatCycleRange } from '@/lib/week';
 import { buildWaMeUrl, musyrifTitle, tplPesertaSubmitToMusyrif } from '@/lib/whatsapp';
@@ -99,6 +100,7 @@ export default async function PesertaPage() {
         </div>
 
         <div className="page">
+          <FeatureNav current="/2in1" />
           <div className="row" style={{ padding: '4px 0 14px' }}>
             <div
               className="avatar"
