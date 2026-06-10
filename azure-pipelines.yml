@@ -62,6 +62,9 @@ steps:
         echo "📦 Install dependency Web Maahir"
         nvm exec 24.15.0 npm install
 
+        echo "📦 stop service"
+        sudo systemctl stop next-maahir
+        
         echo "🧹 Clean .next lama (file cache runtime standalone bisa owned by root)"
         sudo rm -rf .next
 
@@ -71,8 +74,8 @@ steps:
         echo "📁 Copy static files to standalone folder"
         cp -r .next/static .next/standalone/.next/
 
-        echo "🔄 Restart systemd service"
-        sudo systemctl restart next-maahir
+        echo "🔄 start systemd service"
+        sudo systemctl start next-maahir
         sudo systemctl status next-maahir --no-pager
 
         echo "✅ Next.js frontend deployment selesai"
