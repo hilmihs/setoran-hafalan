@@ -5,11 +5,12 @@ import { revalidatePath } from 'next/cache';
 import { supabaseAdmin } from '@/lib/supabase-admin';
 import { buildWaMeUrl } from '@/lib/whatsapp';
 import { absUrl } from '@/lib/url';
-import { generateReadablePassword } from '@/lib/random-password';
 import { requireAdmin } from '@/lib/admin-guard';
 
 const BCRYPT_COST = 12;
 const PLAINTEXT_TTL_HOURS = 24;
+// Password seragam untuk semua reset — pemohon wajib ganti sendiri setelah login.
+const DEFAULT_RESET_PASSWORD = 'hits123';
 
 const ROLE_TABLES = [
   'peserta',
@@ -56,7 +57,7 @@ async function applyAccept(
   requesterName: string | null,
   adminWa: string
 ): Promise<AcceptState> {
-  const newPassword = generateReadablePassword(10);
+  const newPassword = DEFAULT_RESET_PASSWORD;
   const hash = await bcrypt.hash(newPassword, BCRYPT_COST);
 
   await Promise.all(
