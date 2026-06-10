@@ -54,8 +54,10 @@ steps:
         cd /var/www/html/maahir
         echo "📂 Current folder: $(pwd)"
 
-        echo "⬇️ Git pull Web Maaher"
-        git pull origin main || true
+        echo "⬇️ Git sync Web Maahir (strict)"
+        git fetch origin main
+        git reset --hard origin/main
+        echo "📌 Deployed commit: $(git log -1 --oneline)"
 
         echo "📦 Install dependency Web Maahir"
         nvm exec 24.15.0 npm install
