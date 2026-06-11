@@ -132,6 +132,8 @@ export default async function PesertaPage() {
               musyrifInitials={initialsOf(musyrif.name)}
               existing={existing}
               targetRoleLabel={`${musyrifTitle(musyrif.gender)} kelas Anda`}
+              endpoint="/api/2in1/setoran/submit"
+              cacheKey={week}
             />
           ) : (
             <p className="t-body">

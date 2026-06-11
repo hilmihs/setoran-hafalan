@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { AudioRecorder } from './AudioRecorder';
 import { Icon, Initials } from './icons';
 import {
@@ -9,6 +9,12 @@ import {
   type JenisRekaman,
   type NilaiRekaman,
 } from '@/types/db';
+import {
+  saveRecording,
+  deleteRecording,
+  loadRecordings,
+  clearRecordings,
+} from '@/lib/recording-cache';
 
 type Recordings = Record<JenisRekaman, { blob: Blob; durationSec: number } | null>;
 
@@ -37,23 +43,42 @@ export function PesertaSetoranForm({
   existing,
   endpoint = '/api/setoran/submit',
   targetRoleLabel = 'Musyrif kelas Anda',
+  cacheKey,
 }: {
   musyrifName: string;
   musyrifInitials: string;
   existing: ExistingSetoran | null;
   endpoint?: string;
   targetRoleLabel?: string;
+  cacheKey?: string;
 }) {
   const [recordings, setRecordings] = useState<Recordings>(EMPTY);
+  const [initialRecordings, setInitialRecordings] = useState<Partial<Recordings>>({});
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [resultWaUrl, setResultWaUrl] = useState<string | null>(
     existing?.status === 'submitted' ? existing.musyrifWaUrl : null
   );
 
+  useEffect(() => {
+    if (!cacheKey) return;
+    loadRecordings(cacheKey).then(setInitialRecordings);
+  }, [cacheKey]);
+
   const doneCount = Object.values(recordings).filter(Boolean).length;
   const allRecorded = doneCount === 3;
   const checked = existing?.status === 'checked';
+
+  function handleRecordingChange(jenis: JenisRekaman, blob: Blob | null, durationSec: number | null) {
+    setRecordings((prev) => ({
+      ...prev,
+      [jenis]: blob && durationSec ? { blob, durationSec } : null,
+    }));
+    if (cacheKey) {
+      if (blob && durationSec) saveRecording(cacheKey, jenis, blob, durationSec);
+      else deleteRecording(cacheKey, jenis);
+    }
+  }
 
   async function onSubmit() {
     if (!allRecorded || submitting) return;
@@ -69,9 +94,15 @@ export function PesertaSetoranForm({
       const res = await fetch(endpoint, { method: 'POST', body: fd });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error ?? 'Gagal submit');
+      if (cacheKey) clearRecordings(cacheKey);
       setResultWaUrl(json.wa_url);
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : 'Gagal submit');
+      const msg = e instanceof Error ? e.message : 'Gagal submit';
+      setError(
+        msg === 'Failed to fetch'
+          ? 'Koneksi gagal. Rekaman masih tersimpan, coba kirim lagi.'
+          : msg
+      );
     } finally {
       setSubmitting(false);
     }
@@ -156,7 +187,9 @@ export function PesertaSetoranForm({
         <button
           type="button"
           onClick={() => {
+            if (cacheKey) clearRecordings(cacheKey);
             setRecordings(EMPTY);
+            setInitialRecordings({});
             setResultWaUrl(null);
           }}
           className="btn btn-ghost btn-block"
@@ -197,12 +230,8 @@ export function PesertaSetoranForm({
             key={j}
             label={JENIS_LABEL_FORM[j] ?? JENIS_REKAMAN_LABEL[j]}
             disabled={submitting}
-            onChange={(blob, durationSec) => {
-              setRecordings((prev) => ({
-                ...prev,
-                [j]: blob && durationSec ? { blob, durationSec } : null,
-              }));
-            }}
+            initialRecording={initialRecordings[j] ?? undefined}
+            onChange={(blob, durationSec) => handleRecordingChange(j, blob, durationSec)}
           />
         ))}
       </div>

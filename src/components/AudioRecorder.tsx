@@ -14,10 +14,12 @@ export function AudioRecorder({
   label,
   onChange,
   disabled,
+  initialRecording,
 }: {
   label: string;
   onChange: (blob: Blob | null, durationSec: number | null) => void;
   disabled?: boolean;
+  initialRecording?: { blob: Blob; durationSec: number };
 }) {
   const [state, setState] = useState<State>({ kind: 'idle' });
   const [elapsed, setElapsed] = useState(0);
@@ -31,6 +33,11 @@ export function AudioRecorder({
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
   useEffect(() => {
+    if (initialRecording) {
+      const url = URL.createObjectURL(initialRecording.blob);
+      setState({ kind: 'recorded', blob: initialRecording.blob, url, durationSec: initialRecording.durationSec });
+      onChange(initialRecording.blob, initialRecording.durationSec);
+    }
     return () => {
       stopStream();
       if (tickRef.current) window.clearInterval(tickRef.current);

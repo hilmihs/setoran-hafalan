@@ -39,6 +39,21 @@ steps:
       cleanTargetFolder: false
       overwrite: true
   - task: Ssh@0
+    displayName: "🔧 Ensure nginx upload limit (audio rekaman ~14MB)"
+    inputs:
+      sshEndpoint: "server-staging@103.181.142.223"
+      runOptions: "inline"
+      failOnStdErr: false
+      inline: |
+        NGINX_SNIPPET="/etc/nginx/conf.d/maahir-upload-limit.conf"
+        if [ ! -f "$NGINX_SNIPPET" ]; then
+          echo "client_max_body_size 64m;" | sudo tee "$NGINX_SNIPPET"
+          sudo nginx -t && sudo systemctl reload nginx
+          echo "✅ nginx client_max_body_size 64m set"
+        else
+          echo "✅ nginx upload limit sudah ada, skip"
+        fi
+  - task: Ssh@0
     displayName: "🚀 Deploy Next.js Frontend"
     inputs:
       sshEndpoint: "server-staging@103.181.142.223"
