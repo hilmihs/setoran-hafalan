@@ -37,11 +37,14 @@ export interface ExistingSetoran {
   rekaman: Array<{ jenis: JenisRekaman; nilai: NilaiRekaman | null; masukan: string | null }>;
 }
 
+type SubmitState = 'idle' | 'submitting' | 'done';
+
 export function PesertaSetoranForm({
   musyrifName,
   musyrifInitials,
   existing,
   endpoint = '/api/setoran/submit',
+  singleSubmitEndpoint,
   targetRoleLabel = 'Musyrif kelas Anda',
   cacheKey,
 }: {
@@ -49,6 +52,7 @@ export function PesertaSetoranForm({
   musyrifInitials: string;
   existing: ExistingSetoran | null;
   endpoint?: string;
+  singleSubmitEndpoint?: string;
   targetRoleLabel?: string;
   cacheKey?: string;
 }) {
@@ -59,6 +63,15 @@ export function PesertaSetoranForm({
   const [resultWaUrl, setResultWaUrl] = useState<string | null>(
     existing?.status === 'submitted' ? existing.musyrifWaUrl : null
   );
+
+  // Per-rekaman submit (2in1 mode)
+  const [perJenisState, setPerJenisState] = useState<Record<JenisRekaman, SubmitState>>({
+    tuhfatul_athfal: 'idle',
+    jazariyyah: 'idle',
+    syawahid: 'idle',
+  });
+  const [perJenisError, setPerJenisError] = useState<Partial<Record<JenisRekaman, string>>>({});
+  const [singleWaUrl, setSingleWaUrl] = useState<string | null>(null);
 
   useEffect(() => {
     if (!cacheKey) return;
@@ -77,6 +90,30 @@ export function PesertaSetoranForm({
     if (cacheKey) {
       if (blob && durationSec) saveRecording(cacheKey, jenis, blob, durationSec);
       else deleteRecording(cacheKey, jenis);
+    }
+  }
+
+  async function submitSingle(jenis: JenisRekaman) {
+    if (!singleSubmitEndpoint) return;
+    const rec = recordings[jenis];
+    if (!rec) return;
+    setPerJenisState((p) => ({ ...p, [jenis]: 'submitting' }));
+    setPerJenisError((p) => ({ ...p, [jenis]: undefined }));
+    try {
+      const fd = new FormData();
+      fd.append('jenis', jenis);
+      fd.append('audio_file', rec.blob, `${jenis}.webm`);
+      fd.append('duration_sec', String(rec.durationSec));
+      const res = await fetch(singleSubmitEndpoint, { method: 'POST', body: fd });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error ?? 'Gagal submit');
+      if (cacheKey) deleteRecording(cacheKey, jenis);
+      setPerJenisState((p) => ({ ...p, [jenis]: 'done' }));
+      if (json.wa_url && !singleWaUrl) setSingleWaUrl(json.wa_url);
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : 'Gagal submit';
+      setPerJenisError((p) => ({ ...p, [jenis]: msg }));
+      setPerJenisState((p) => ({ ...p, [jenis]: 'idle' }));
     }
   }
 
@@ -147,8 +184,8 @@ export function PesertaSetoranForm({
     );
   }
 
-  // --- success after submit ---
-  if (resultWaUrl) {
+  // --- success after bulk submit ---
+  if (resultWaUrl && !singleSubmitEndpoint) {
     return (
       <div>
         <div className="banner banner-success" style={{ marginBottom: 16 }}>
@@ -207,11 +244,15 @@ export function PesertaSetoranForm({
     );
   }
 
+  const hasSingleMode = !!singleSubmitEndpoint;
+  const anySubmitted = hasSingleMode && Object.values(perJenisState).some((s) => s === 'done');
+  const allSingleSubmitted = hasSingleMode && JENIS_REKAMAN.every((j) => perJenisState[j] === 'done');
+
   // --- main: form ---
   return (
     <div>
       <p className="t-small" style={{ marginBottom: 14 }}>
-        3 rekaman · maks 15 menit per rekaman
+        {hasSingleMode ? 'Rekam dan kirim satu per satu, atau langsung 3 sekaligus.' : '3 rekaman · maks 15 menit per rekaman'}
       </p>
 
       <div className="section-row">
@@ -224,16 +265,63 @@ export function PesertaSetoranForm({
         </div>
       </div>
 
+      {/* WA banner after first single submit */}
+      {singleWaUrl && (
+        <div className="banner banner-success" style={{ marginBottom: 12 }}>
+          <div className="ic" aria-hidden>
+            <svg width="14" height="14" viewBox="0 0 12 12" fill="none">
+              <path d="M2.5 6.3l2.4 2.4L9.5 3.7" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          </div>
+          <div style={{ flex: 1 }}>
+            <div className="title">Rekaman terkirim ke {musyrifName}</div>
+            <div className="desc">Rekaman lain bisa dikirim sendiri-sendiri.</div>
+          </div>
+          <a href={singleWaUrl} target="_blank" rel="noopener" className="btn btn-wa btn-xs" style={{ whiteSpace: 'nowrap' }}>
+            {Icon.wa(12)} WA
+          </a>
+        </div>
+      )}
+
       <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-        {JENIS_REKAMAN.map((j) => (
-          <AudioRecorder
-            key={j}
-            label={JENIS_LABEL_FORM[j] ?? JENIS_REKAMAN_LABEL[j]}
-            disabled={submitting}
-            initialRecording={initialRecordings[j] ?? undefined}
-            onChange={(blob, durationSec) => handleRecordingChange(j, blob, durationSec)}
-          />
-        ))}
+        {JENIS_REKAMAN.map((j) => {
+          const isSubmitted = perJenisState[j] === 'done';
+          const isSubmitting = perJenisState[j] === 'submitting';
+          const rec = recordings[j];
+          const perErr = perJenisError[j];
+          return (
+            <div key={j}>
+              <AudioRecorder
+                label={JENIS_LABEL_FORM[j] ?? JENIS_REKAMAN_LABEL[j]}
+                disabled={submitting || isSubmitting || isSubmitted}
+                submitted={isSubmitted}
+                initialRecording={initialRecordings[j] ?? undefined}
+                onChange={(blob, durationSec) => handleRecordingChange(j, blob, durationSec)}
+              />
+              {hasSingleMode && rec && !isSubmitted && (
+                <div style={{ marginTop: 6 }}>
+                  {perErr && (
+                    <p style={{ color: 'var(--merah-ink)', fontSize: 11, marginBottom: 4 }}>{perErr}</p>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => submitSingle(j)}
+                    disabled={isSubmitting || submitting}
+                    className={`btn btn-xs ${isSubmitting ? 'btn-soft' : 'btn-primary'}`}
+                    style={{ width: '100%' }}
+                  >
+                    {isSubmitting ? 'Mengirim…' : `Kirim rekaman ${JENIS_LABEL_FORM[j]}`}
+                  </button>
+                </div>
+              )}
+              {hasSingleMode && isSubmitted && (
+                <p style={{ fontSize: 11, color: 'var(--hijau-ink)', marginTop: 4 }}>
+                  ✓ Rekaman {JENIS_LABEL_FORM[j]} terkirim
+                </p>
+              )}
+            </div>
+          );
+        })}
       </div>
 
       {error && (
@@ -245,16 +333,27 @@ export function PesertaSetoranForm({
         </div>
       )}
 
-      <button
-        type="button"
-        onClick={onSubmit}
-        disabled={!allRecorded || submitting}
-        className={`btn btn-block ${allRecorded && !submitting ? 'btn-primary' : 'btn-soft'}`}
-        style={{ marginTop: 20 }}
-      >
-        {submitting ? 'Mengirim…' : 'Kirim setoran'}
-        {allRecorded && !submitting && Icon.arrow(14)}
-      </button>
+      {!allSingleSubmitted && (
+        <button
+          type="button"
+          onClick={onSubmit}
+          disabled={!allRecorded || submitting}
+          className={`btn btn-block ${allRecorded && !submitting ? 'btn-primary' : 'btn-soft'}`}
+          style={{ marginTop: 20 }}
+        >
+          {submitting ? 'Mengirim…' : anySubmitted ? 'Kirim sisa rekaman' : 'Kirim setoran'}
+          {allRecorded && !submitting && Icon.arrow(14)}
+        </button>
+      )}
+
+      {allSingleSubmitted && (
+        <div className="banner banner-success" style={{ marginTop: 16 }}>
+          <div>
+            <div className="title">Semua rekaman terkirim</div>
+            <div className="desc">Musyrif akan segera memeriksa. Selama belum diperiksa, kamu masih bisa rekam ulang.</div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

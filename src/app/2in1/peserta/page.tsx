@@ -133,6 +133,7 @@ export default async function PesertaPage() {
               existing={existing}
               targetRoleLabel={`${musyrifTitle(musyrif.gender)} kelas Anda`}
               endpoint="/api/2in1/setoran/submit"
+              singleSubmitEndpoint="/api/2in1/rekaman/submit-single"
               cacheKey={week}
             />
           ) : (

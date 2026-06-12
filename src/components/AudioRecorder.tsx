@@ -4,24 +4,29 @@ import { useEffect, useRef, useState } from 'react';
 import { Icon, Waveform } from './icons';
 
 const MAX_DURATION_SEC = 15 * 60;
+const MAX_UPLOAD_BYTES = 25 * 1024 * 1024;
 
 type State =
   | { kind: 'idle' }
-  | { kind: 'recording'; startedAt: number }
+  | { kind: 'recording'; startedAt: number; base: number }
+  | { kind: 'paused' }
   | { kind: 'recorded'; blob: Blob; url: string; durationSec: number };
 
 export function AudioRecorder({
   label,
   onChange,
   disabled,
+  submitted,
   initialRecording,
 }: {
   label: string;
   onChange: (blob: Blob | null, durationSec: number | null) => void;
   disabled?: boolean;
+  submitted?: boolean;
   initialRecording?: { blob: Blob; durationSec: number };
 }) {
   const [state, setState] = useState<State>({ kind: 'idle' });
+  const [mode, setMode] = useState<'rec' | 'upload'>('rec');
   const [elapsed, setElapsed] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [playing, setPlaying] = useState(false);
@@ -31,6 +36,8 @@ export function AudioRecorder({
   const streamRef = useRef<MediaStream | null>(null);
   const tickRef = useRef<number | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const elapsedRef = useRef(0);
+  const uploadRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
     if (initialRecording) {
@@ -51,6 +58,16 @@ export function AudioRecorder({
     streamRef.current = null;
   }
 
+  function startTick(startedAt: number, base: number) {
+    if (tickRef.current) window.clearInterval(tickRef.current);
+    tickRef.current = window.setInterval(() => {
+      const total = base + Math.floor((Date.now() - startedAt) / 1000);
+      setElapsed(total);
+      elapsedRef.current = total;
+      if (total >= MAX_DURATION_SEC) stop();
+    }, 250);
+  }
+
   async function start() {
     setError(null);
     try {
@@ -62,26 +79,23 @@ export function AudioRecorder({
       rec.ondataavailable = (e) => {
         if (e.data.size > 0) chunksRef.current.push(e.data);
       };
-      const startedAt = Date.now();
       rec.onstop = () => {
         const blob = new Blob(chunksRef.current, {
           type: rec.mimeType || 'audio/webm',
         });
         const url = URL.createObjectURL(blob);
-        const durationSec = Math.max(1, Math.round((Date.now() - startedAt) / 1000));
+        const durationSec = Math.max(1, elapsedRef.current);
         setState({ kind: 'recorded', blob, url, durationSec });
         onChange(blob, durationSec);
         stopStream();
       };
       recorderRef.current = rec;
       rec.start();
-      setState({ kind: 'recording', startedAt });
+      const startedAt = Date.now();
+      elapsedRef.current = 0;
       setElapsed(0);
-      tickRef.current = window.setInterval(() => {
-        const e = Math.floor((Date.now() - startedAt) / 1000);
-        setElapsed(e);
-        if (e >= MAX_DURATION_SEC) stop();
-      }, 250);
+      setState({ kind: 'recording', startedAt, base: 0 });
+      startTick(startedAt, 0);
     } catch (e: unknown) {
       const name = (e as { name?: string } | null)?.name;
       setError(
@@ -92,8 +106,30 @@ export function AudioRecorder({
     }
   }
 
+  function pause() {
+    const rec = recorderRef.current;
+    if (!rec || rec.state !== 'recording') return;
+    rec.pause();
+    if (tickRef.current) {
+      window.clearInterval(tickRef.current);
+      tickRef.current = null;
+    }
+    setState({ kind: 'paused' });
+  }
+
+  function resume() {
+    const rec = recorderRef.current;
+    if (!rec || rec.state !== 'paused') return;
+    rec.resume();
+    const startedAt = Date.now();
+    const base = elapsedRef.current;
+    setState({ kind: 'recording', startedAt, base });
+    startTick(startedAt, base);
+  }
+
   function stop() {
     if (recorderRef.current && recorderRef.current.state !== 'inactive') {
+      if (recorderRef.current.state === 'paused') recorderRef.current.resume();
       recorderRef.current.stop();
     }
     if (tickRef.current) {
@@ -109,24 +145,47 @@ export function AudioRecorder({
     if (state.kind === 'recorded') URL.revokeObjectURL(state.url);
     setState({ kind: 'idle' });
     setElapsed(0);
+    elapsedRef.current = 0;
     onChange(null, null);
+    if (uploadRef.current) uploadRef.current.value = '';
   }
 
   function togglePlay() {
     const a = audioRef.current;
     if (!a) return;
-    if (a.paused) {
-      a.play();
-    } else {
-      a.pause();
+    if (a.paused) a.play();
+    else a.pause();
+  }
+
+  async function handleFileUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!file.type.startsWith('audio/')) {
+      setError('Hanya file audio yang didukung (mp3, m4a, ogg, webm).');
+      return;
     }
+    if (file.size > MAX_UPLOAD_BYTES) {
+      setError('Ukuran file maks 25 MB.');
+      return;
+    }
+    setError(null);
+    const url = URL.createObjectURL(file);
+    const audio = new Audio(url);
+    const duration = await new Promise<number>((resolve) => {
+      audio.onloadedmetadata = () => resolve(audio.duration || 0);
+      audio.onerror = () => resolve(0);
+    });
+    const durationSec = Math.max(1, Math.round(duration));
+    const blob = new Blob([await file.arrayBuffer()], { type: file.type });
+    setState({ kind: 'recorded', blob, url, durationSec });
+    onChange(blob, durationSec);
   }
 
   return (
     <div className="rec">
       <div className="rec-head">
         <div className="title">{label}</div>
-        <Status state={state.kind} elapsed={elapsed} durationSec={state.kind === 'recorded' ? state.durationSec : 0} />
+        <Status state={state.kind} elapsed={elapsed} durationSec={state.kind === 'recorded' ? state.durationSec : 0} submitted={submitted} />
       </div>
 
       {error && (
@@ -134,19 +193,62 @@ export function AudioRecorder({
       )}
 
       {state.kind === 'idle' && (
-        <button
-          type="button"
-          onClick={start}
-          disabled={disabled}
-          className="rec-start"
-        >
-          <span className="ic">{Icon.mic(16)}</span>
-          <span className="txt">Mulai rekam</span>
-          <span className="hint">maks 15 min</span>
-        </button>
+        <div>
+          <div style={{ display: 'flex', gap: 6, marginBottom: 8 }}>
+            <button
+              type="button"
+              onClick={() => setMode('rec')}
+              className={mode === 'rec' ? 'btn btn-soft btn-xs active' : 'btn btn-ghost btn-xs'}
+              style={{ fontSize: 11, padding: '3px 10px' }}
+            >
+              {Icon.mic(12)} Rekam
+            </button>
+            <button
+              type="button"
+              onClick={() => setMode('upload')}
+              className={mode === 'upload' ? 'btn btn-soft btn-xs active' : 'btn btn-ghost btn-xs'}
+              style={{ fontSize: 11, padding: '3px 10px' }}
+            >
+              ↑ Upload
+            </button>
+          </div>
+          {mode === 'rec' ? (
+            <button
+              type="button"
+              onClick={start}
+              disabled={disabled}
+              className="rec-start"
+            >
+              <span className="ic">{Icon.mic(16)}</span>
+              <span className="txt">Mulai rekam</span>
+              <span className="hint">maks 15 min</span>
+            </button>
+          ) : (
+            <div>
+              <input
+                ref={uploadRef}
+                type="file"
+                accept="audio/*"
+                disabled={disabled}
+                onChange={handleFileUpload}
+                style={{ display: 'none' }}
+                id={`upload-${label.replace(/\s+/g, '-')}`}
+              />
+              <label
+                htmlFor={`upload-${label.replace(/\s+/g, '-')}`}
+                className="rec-start"
+                style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8 }}
+              >
+                <span className="ic">↑</span>
+                <span className="txt">Pilih file audio</span>
+                <span className="hint">maks 25 MB · mp3, m4a, ogg</span>
+              </label>
+            </div>
+          )}
+        </div>
       )}
 
-      {state.kind === 'recording' && (
+      {(state.kind === 'recording' || state.kind === 'paused') && (
         <div>
           <div className="wave rec">
             <Waveform full progress={1} height={36} />
@@ -157,21 +259,22 @@ export function AudioRecorder({
               className="play"
               onClick={stop}
               style={{ background: 'var(--merah)' }}
-              aria-label="Berhenti merekam"
+              aria-label="Selesai merekam"
             >
-              <span
-                style={{
-                  width: 10,
-                  height: 10,
-                  background: '#fff',
-                  borderRadius: 2,
-                  display: 'inline-block',
-                }}
-              />
+              <span style={{ width: 10, height: 10, background: '#fff', borderRadius: 2, display: 'inline-block' }} />
             </button>
             <span className="time">{formatTime(elapsed)}</span>
-            <button type="button" className="stop" onClick={stop}>
-              ● berhenti
+            {state.kind === 'recording' ? (
+              <button type="button" className="stop" onClick={pause} aria-label="Jeda">
+                ⏸ jeda
+              </button>
+            ) : (
+              <button type="button" className="stop" onClick={resume} aria-label="Lanjut rekam">
+                ▶ lanjut
+              </button>
+            )}
+            <button type="button" className="stop" onClick={stop} style={{ marginLeft: 4 }}>
+              ■ selesai
             </button>
           </div>
         </div>
@@ -184,17 +287,14 @@ export function AudioRecorder({
             src={state.url}
             onPlay={() => setPlaying(true)}
             onPause={() => setPlaying(false)}
-            onEnded={() => {
-              setPlaying(false);
-              setPlayPos(0);
-            }}
+            onEnded={() => { setPlaying(false); setPlayPos(0); }}
             onTimeUpdate={(e) => {
               const el = e.currentTarget;
               if (el.duration > 0) setPlayPos(el.currentTime / el.duration);
             }}
             style={{ display: 'none' }}
           />
-          <div className={`wave ${playing ? 'done' : 'done'}`}>
+          <div className="wave done">
             <Waveform progress={playPos || 1} height={36} />
           </div>
           <div className="rec-action">
@@ -216,9 +316,11 @@ export function AudioRecorder({
             <span className="time">
               {formatTime(Math.round(playPos * state.durationSec))} / {formatTime(state.durationSec)}
             </span>
-            <button type="button" className="redo" onClick={reset} disabled={disabled}>
-              {Icon.redo()} rekam ulang
-            </button>
+            {!submitted && (
+              <button type="button" className="redo" onClick={reset} disabled={disabled}>
+                {Icon.redo()} rekam ulang
+              </button>
+            )}
           </div>
         </div>
       )}
@@ -230,10 +332,12 @@ function Status({
   state,
   elapsed,
   durationSec,
+  submitted,
 }: {
-  state: 'idle' | 'recording' | 'recorded';
+  state: 'idle' | 'recording' | 'paused' | 'recorded';
   elapsed: number;
   durationSec: number;
+  submitted?: boolean;
 }) {
   if (state === 'recording') {
     return (
@@ -243,7 +347,22 @@ function Status({
       </span>
     );
   }
+  if (state === 'paused') {
+    return (
+      <span className="status" style={{ color: 'var(--kuning-ink)' }}>
+        <span className="dot" style={{ background: 'var(--kuning)' }} />
+        <span className="t-mono">{formatTime(elapsed)} (jeda)</span>
+      </span>
+    );
+  }
   if (state === 'recorded') {
+    if (submitted) {
+      return (
+        <span className="status done">
+          <span style={{ fontSize: 11 }}>✓ terkirim</span>
+        </span>
+      );
+    }
     return (
       <span className="status done">
         <span className="dot" />
