@@ -122,6 +122,41 @@ export function previousCycles(count: number): string[] {
   return result;
 }
 
+/**
+ * Dua cycle dalam bulan kalender tertentu.
+ * H1 = cycle yang mengandung hari ke-1 bulan,
+ * H2 = cycle berikutnya (+14 hari).
+ */
+export function cyclesOfMonth(year: number, month: number): [string, string] {
+  const firstDay = new Date(Date.UTC(year, month - 1, 1));
+  const h1 = cycleStartOf(firstDay);
+  const [hy, hm, hd] = h1.split('-').map(Number);
+  const h2 = new Date(Date.UTC(hy, hm - 1, hd + CYCLE_LENGTH_DAYS));
+  return [h1, toJakartaDateString(h2)];
+}
+
+/**
+ * Tahun dan bulan berjalan di timezone Jakarta.
+ */
+export function currentYearMonth(): { year: number; month: number; label: string } {
+  const now = new Date();
+  const str = now.toLocaleDateString('id-ID', {
+    timeZone: TZ,
+    year: 'numeric',
+    month: 'long',
+  });
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: TZ,
+    year: 'numeric',
+    month: '2-digit',
+  }).formatToParts(now);
+  return {
+    year: parseInt(parts.find((p) => p.type === 'year')!.value),
+    month: parseInt(parts.find((p) => p.type === 'month')!.value),
+    label: str,
+  };
+}
+
 // ---------- Backward-compat aliases ----------
 // Beberapa modul lama masih mungkin di-import sebelum semua callsite
 // di-refactor; alias ini memetakan API lama → API cycle baru supaya

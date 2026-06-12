@@ -2,7 +2,7 @@ import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { getSession } from '@/lib/session';
 import { supabaseAdmin } from '@/lib/supabase-admin';
-import { currentCycleStart, formatCycleDeadline, formatCycleRange } from '@/lib/week';
+import { currentCycleStart, formatCycleDeadline, formatCycleRange, cyclesOfMonth, currentYearMonth } from '@/lib/week';
 import { logout } from '@/lib/auth';
 import { Icon, Initials } from '@/components/icons';
 import { FeatureNav } from '@/components/FeatureNav';
@@ -40,6 +40,8 @@ export default async function SyaikhDashboard() {
 
   const cycle = currentCycleStart();
   const deadlineLabel = formatCycleDeadline(cycle);
+  const { year: curYear, month: curMonth, label: monthLabel } = currentYearMonth();
+  const [h1Week, h2Week] = cyclesOfMonth(curYear, curMonth);
 
   // View cross-gender: tarik semua musyrif aktif. Aksi (cek/ingatkan)
   // tetap di-gating same-gender di UI di bawah.
@@ -126,6 +128,77 @@ export default async function SyaikhDashboard() {
       }
     }
   }
+
+  // Monthly peserta progress (all peserta, for ranking view)
+  const { data: allKelas } = await supabaseAdmin.from('kelas').select('id, name');
+  const allKelasIds = (allKelas ?? []).map((k) => k.id);
+  const { data: allPesertaRaw } = allKelasIds.length
+    ? await supabaseAdmin
+        .from('peserta')
+        .select('id, name, gender, kelas_id')
+        .eq('active', true)
+        .in('kelas_id', allKelasIds)
+        .order('name')
+    : { data: [] as Array<{ id: string; name: string; gender: string; kelas_id: string }> };
+
+  const allPesertaIds = (allPesertaRaw ?? []).map((p) => p.id);
+  const { data: pesertaMonthlySetoranRaw } = allPesertaIds.length
+    ? await supabaseAdmin
+        .from('setoran')
+        .select('id, peserta_id, week_start, status')
+        .in('peserta_id', allPesertaIds)
+        .in('week_start', [h1Week, h2Week])
+    : { data: [] as Array<{ id: string; peserta_id: string; week_start: string; status: string }> };
+
+  const pesertaMonthlyMap = new Map<string, { h1?: { id: string; status: string }; h2?: { id: string; status: string } }>();
+  for (const st of pesertaMonthlySetoranRaw ?? []) {
+    const entry = pesertaMonthlyMap.get(st.peserta_id) ?? {};
+    if (st.week_start === h1Week) entry.h1 = { id: st.id, status: st.status };
+    else if (st.week_start === h2Week) entry.h2 = { id: st.id, status: st.status };
+    pesertaMonthlyMap.set(st.peserta_id, entry);
+  }
+
+  const checkedPesertaMonthlyIds = (pesertaMonthlySetoranRaw ?? [])
+    .filter((st) => st.status === 'checked')
+    .map((st) => st.id);
+  const { data: pesertaMonthlyRekamanRaw } = checkedPesertaMonthlyIds.length
+    ? await supabaseAdmin
+        .from('rekaman')
+        .select('setoran_id, nilai')
+        .in('setoran_id', checkedPesertaMonthlyIds)
+    : { data: [] as Array<{ setoran_id: string; nilai: string | null }> };
+
+  const pesertaRekamanMap = new Map<string, NilaiRekaman[]>();
+  for (const r of pesertaMonthlyRekamanRaw ?? []) {
+    const arr = pesertaRekamanMap.get(r.setoran_id) ?? [];
+    if (r.nilai) arr.push(r.nilai as NilaiRekaman);
+    pesertaRekamanMap.set(r.setoran_id, arr);
+  }
+
+  function nilaiToSkor(n: NilaiRekaman): number {
+    if (n === 'hijau') return 4;
+    if (n === 'kuning') return 2;
+    return 0;
+  }
+
+  const pesertaMonthlyRows = (allPesertaRaw ?? [])
+    .map((p) => {
+      const entry = pesertaMonthlyMap.get(p.id) ?? {};
+      const h1Rek = entry.h1 ? pesertaRekamanMap.get(entry.h1.id) ?? [] : [];
+      const h2Rek = entry.h2 ? pesertaRekamanMap.get(entry.h2.id) ?? [] : [];
+      const allNilai = [...h1Rek, ...h2Rek];
+      const rataRata =
+        allNilai.length > 0
+          ? allNilai.reduce((acc, n) => acc + nilaiToSkor(n), 0) / allNilai.length
+          : null;
+      return { peserta: p, entry, h1Rek, h2Rek, rataRata };
+    })
+    .sort((a, b) => {
+      if (a.rataRata === null && b.rataRata === null) return 0;
+      if (a.rataRata === null) return 1;
+      if (b.rataRata === null) return -1;
+      return b.rataRata - a.rataRata;
+    });
 
   return (
     <main style={{ minHeight: '100vh' }}>
@@ -322,10 +395,101 @@ export default async function SyaikhDashboard() {
               })}
             </div>
           )}
+
+          {/* Progress ranking peserta bulan ini */}
+          <div className="section-row" style={{ marginTop: 24 }}>
+            <div className="t-tiny">Ranking peserta — {monthLabel}</div>
+            <div className="t-small">{pesertaMonthlyRows.length} peserta</div>
+          </div>
+          <div className="card-flat" style={{ padding: 0, overflow: 'hidden', marginBottom: 16 }}>
+            {/* Header */}
+            <div
+              style={{
+                display: 'grid',
+                gridTemplateColumns: '30px 1fr 70px 70px 56px',
+                gap: 6,
+                padding: '8px 12px',
+                background: 'var(--surface-2)',
+                borderBottom: '1px solid var(--line)',
+                fontSize: 10,
+                fontWeight: 600,
+                color: 'var(--muted)',
+                textTransform: 'uppercase',
+                letterSpacing: '0.04em',
+              }}
+            >
+              <div>#</div>
+              <div>Peserta</div>
+              <div style={{ textAlign: 'center' }}>H1</div>
+              <div style={{ textAlign: 'center' }}>H2</div>
+              <div style={{ textAlign: 'center' }}>Rata²</div>
+            </div>
+            {pesertaMonthlyRows.length === 0 ? (
+              <div style={{ padding: 18 }}>
+                <p className="t-small">Belum ada data bulan ini.</p>
+              </div>
+            ) : (
+              pesertaMonthlyRows.map(({ peserta, entry, h1Rek, h2Rek, rataRata }, idx) => {
+                const h1Status = !entry.h1 ? 'belum' : entry.h1.status === 'checked' ? 'selesai' : entry.h1.status === 'submitted' ? 'menunggu' : 'belum';
+                const h2Status = !entry.h2 ? 'belum' : entry.h2.status === 'checked' ? 'selesai' : entry.h2.status === 'submitted' ? 'menunggu' : 'belum';
+                return (
+                  <div
+                    key={peserta.id}
+                    style={{
+                      display: 'grid',
+                      gridTemplateColumns: '30px 1fr 70px 70px 56px',
+                      gap: 6,
+                      padding: '9px 12px',
+                      borderTop: idx === 0 ? 'none' : '1px solid var(--line)',
+                      alignItems: 'center',
+                    }}
+                  >
+                    <div style={{ fontSize: 12, color: idx < 3 ? 'var(--accent-2)' : 'var(--muted)', fontWeight: idx < 3 ? 700 : 400 }}>
+                      {idx + 1}
+                    </div>
+                    <div style={{ minWidth: 0 }}>
+                      <div style={{ fontSize: 12, fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                        {peserta.name}
+                      </div>
+                    </div>
+                    <div style={{ textAlign: 'center' }}>
+                      <SyaikhMonthCell status={h1Status} rekaman={h1Rek} />
+                    </div>
+                    <div style={{ textAlign: 'center' }}>
+                      <SyaikhMonthCell status={h2Status} rekaman={h2Rek} />
+                    </div>
+                    <div style={{ textAlign: 'center', fontSize: 12, fontWeight: 700 }}>
+                      {rataRata !== null ? (
+                        <span style={{ color: rataRata >= 3 ? 'var(--hijau-ink)' : rataRata >= 2 ? 'var(--kuning-ink)' : 'var(--merah-ink)' }}>
+                          {rataRata.toFixed(1)}
+                        </span>
+                      ) : (
+                        <span style={{ color: 'var(--muted-2)' }}>—</span>
+                      )}
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </div>
         </div>
       </div>
     </main>
   );
+}
+
+function SyaikhMonthCell({ status, rekaman }: { status: 'belum' | 'menunggu' | 'selesai'; rekaman: NilaiRekaman[] }) {
+  if (status === 'belum') return <span className="badge badge-merah" style={{ fontSize: 9 }}><span className="dot" />–</span>;
+  if (status === 'menunggu') return <span className="badge badge-kuning" style={{ fontSize: 9 }}><span className="dot" />cek</span>;
+  if (rekaman.length > 0) {
+    return (
+      <span className="nilai-trio" style={{ justifyContent: 'center' }}>
+        {rekaman.slice(0, 3).map((n, i) => <span key={i} className={`d ${n}`} style={{ width: 7, height: 7 }} />)}
+        {Array.from({ length: Math.max(0, 3 - rekaman.length) }).map((_, i) => <span key={`e${i}`} className="d" style={{ width: 7, height: 7 }} />)}
+      </span>
+    );
+  }
+  return <span className="badge badge-hijau" style={{ fontSize: 9 }}><span className="dot" />✓</span>;
 }
 
 function StatusLabel({ statusKey }: { statusKey: 'belum' | 'menunggu' | 'selesai' }) {

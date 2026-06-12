@@ -2,7 +2,13 @@ import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { getSession } from '@/lib/session';
 import { supabaseAdmin } from '@/lib/supabase-admin';
-import { currentCycleStart, formatCycleDeadline, formatCycleRange } from '@/lib/week';
+import {
+  currentCycleStart,
+  formatCycleDeadline,
+  formatCycleRange,
+  cyclesOfMonth,
+  currentYearMonth,
+} from '@/lib/week';
 import { logout } from '@/lib/auth';
 import { Icon, Initials } from '@/components/icons';
 import { FeatureNav } from '@/components/FeatureNav';
@@ -28,10 +34,17 @@ type PesertaRow = {
 type SetoranRow = {
   id: string;
   peserta_id: string;
+  week_start: string;
   status: StatusSetoran;
   submitted_at: string | null;
   checked_at: string | null;
 };
+
+function nilaiToSkor(n: NilaiRekaman): number {
+  if (n === 'hijau') return 4;
+  if (n === 'kuning') return 2;
+  return 0;
+}
 
 export default async function MusyrifDashboard() {
   const s = await getSession();
@@ -42,6 +55,8 @@ export default async function MusyrifDashboard() {
 
   const cycle = currentCycleStart();
   const deadlineLabel = formatCycleDeadline(cycle);
+  const { year, month, label: monthLabel } = currentYearMonth();
+  const [h1Week, h2Week] = cyclesOfMonth(year, month);
 
   const { data: kelasList } = await supabaseAdmin
     .from('kelas')
@@ -60,11 +75,12 @@ export default async function MusyrifDashboard() {
     )
     .order('name');
   const pesertaList = (pesertaListRaw ?? []) as PesertaRow[];
-
   const pesertaIds = pesertaList.map((p) => p.id);
+
+  // Current cycle data
   const { data: setoranListRaw } = await supabaseAdmin
     .from('setoran')
-    .select('id, peserta_id, status, submitted_at, checked_at')
+    .select('id, peserta_id, week_start, status, submitted_at, checked_at')
     .in(
       'peserta_id',
       pesertaIds.length ? pesertaIds : ['00000000-0000-0000-0000-000000000000']
@@ -73,9 +89,7 @@ export default async function MusyrifDashboard() {
   const setoranList = (setoranListRaw ?? []) as SetoranRow[];
   const setoranByPeserta = new Map(setoranList.map((st) => [st.peserta_id, st]));
 
-  const checkedIds = setoranList
-    .filter((st) => st.status === 'checked')
-    .map((st) => st.id);
+  const checkedIds = setoranList.filter((st) => st.status === 'checked').map((st) => st.id);
   const { data: rekamanList } = await supabaseAdmin
     .from('rekaman')
     .select('setoran_id, jenis, nilai')
@@ -116,16 +130,82 @@ export default async function MusyrifDashboard() {
     selesai: rows.filter((r) => r.statusKey === 'selesai').length,
   };
 
-  // Setoran musyrif → syaikh untuk cycle ini
+  // Setoran musyrif → syaikh
   const { data: selfSetoranRaw } = await supabaseAdmin
     .from('setoran_musyrif')
     .select('id, status')
     .eq('musyrif_id', musyrifId)
     .eq('week_start', cycle)
     .maybeSingle();
-  const selfSetoran = selfSetoranRaw as
-    | { id: string; status: StatusSetoran }
-    | null;
+  const selfSetoran = selfSetoranRaw as { id: string; status: StatusSetoran } | null;
+
+  // Monthly H1/H2 data
+  const { data: monthlySetoranRaw } = await supabaseAdmin
+    .from('setoran')
+    .select('id, peserta_id, week_start, status, submitted_at, checked_at')
+    .in(
+      'peserta_id',
+      pesertaIds.length ? pesertaIds : ['00000000-0000-0000-0000-000000000000']
+    )
+    .in('week_start', [h1Week, h2Week]);
+  const monthlySetoran = (monthlySetoranRaw ?? []) as SetoranRow[];
+
+  // Map: peserta_id → { h1: SetoranRow, h2: SetoranRow }
+  const monthlyByPeserta = new Map<string, { h1?: SetoranRow; h2?: SetoranRow }>();
+  for (const st of monthlySetoran) {
+    const entry = monthlyByPeserta.get(st.peserta_id) ?? {};
+    if (st.week_start === h1Week) entry.h1 = st;
+    else if (st.week_start === h2Week) entry.h2 = st;
+    monthlyByPeserta.set(st.peserta_id, entry);
+  }
+
+  const checkedMonthlyIds = monthlySetoran
+    .filter((st) => st.status === 'checked')
+    .map((st) => st.id);
+  const { data: monthlyRekamanRaw } = checkedMonthlyIds.length
+    ? await supabaseAdmin
+        .from('rekaman')
+        .select('setoran_id, nilai')
+        .in('setoran_id', checkedMonthlyIds)
+    : { data: [] as Array<{ setoran_id: string; nilai: string | null }> };
+
+  const monthlyRekamanBySetoran = new Map<string, NilaiRekaman[]>();
+  for (const r of monthlyRekamanRaw ?? []) {
+    const arr = monthlyRekamanBySetoran.get(r.setoran_id) ?? [];
+    if (r.nilai) arr.push(r.nilai as NilaiRekaman);
+    monthlyRekamanBySetoran.set(r.setoran_id, arr);
+  }
+
+  type MonthlyRow = {
+    peserta: PesertaRow;
+    h1: { setoran?: SetoranRow; rekaman: NilaiRekaman[] };
+    h2: { setoran?: SetoranRow; rekaman: NilaiRekaman[] };
+    rataRata: number | null;
+  };
+
+  const monthlyRows: MonthlyRow[] = pesertaList.map((p) => {
+    const entry = monthlyByPeserta.get(p.id) ?? {};
+    const h1Rek = entry.h1 ? monthlyRekamanBySetoran.get(entry.h1.id) ?? [] : [];
+    const h2Rek = entry.h2 ? monthlyRekamanBySetoran.get(entry.h2.id) ?? [] : [];
+    const allNilai = [...h1Rek, ...h2Rek];
+    const rataRata =
+      allNilai.length > 0
+        ? allNilai.reduce((acc, n) => acc + nilaiToSkor(n), 0) / allNilai.length
+        : null;
+    return {
+      peserta: p,
+      h1: { setoran: entry.h1, rekaman: h1Rek },
+      h2: { setoran: entry.h2, rekaman: h2Rek },
+      rataRata,
+    };
+  });
+
+  const monthlyRowsSorted = [...monthlyRows].sort((a, b) => {
+    if (a.rataRata === null && b.rataRata === null) return 0;
+    if (a.rataRata === null) return 1;
+    if (b.rataRata === null) return -1;
+    return b.rataRata - a.rataRata;
+  });
 
   return (
     <main style={{ minHeight: '100vh' }}>
@@ -182,7 +262,7 @@ export default async function MusyrifDashboard() {
             />
           </div>
 
-          {/* Stats peserta */}
+          {/* Stats peserta cycle berjalan */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10, marginBottom: 14 }}>
             <div className="stat">
               <div className="v" style={{ color: 'var(--merah-ink)' }}>{counters.belum}</div>
@@ -207,8 +287,9 @@ export default async function MusyrifDashboard() {
             </div>
           </div>
 
+          {/* Cycle berjalan: list peserta */}
           <div className="section-row">
-            <div className="t-tiny">Peserta saya</div>
+            <div className="t-tiny">Cycle berjalan — peserta saya</div>
             <div className="t-small">{counters.total} orang</div>
           </div>
 
@@ -231,11 +312,7 @@ export default async function MusyrifDashboard() {
                   })
                 );
                 return (
-                  <div
-                    key={peserta.id}
-                    className="row"
-                    style={{ color: 'var(--ink)' }}
-                  >
+                  <div key={peserta.id} className="row" style={{ color: 'var(--ink)' }}>
                     <div className="avatar">
                       <Initials name={peserta.name} />
                     </div>
@@ -284,10 +361,151 @@ export default async function MusyrifDashboard() {
               })}
             </div>
           )}
+
+          {/* Progress bulanan H1/H2 */}
+          <div className="section-row" style={{ marginTop: 24 }}>
+            <div className="t-tiny">Progress bulan ini — {monthLabel}</div>
+            <div className="t-small">{counters.total} peserta</div>
+          </div>
+          <div
+            className="card-flat"
+            style={{ padding: 0, overflow: 'hidden', marginBottom: 24 }}
+          >
+            {/* Header */}
+            <div
+              style={{
+                display: 'grid',
+                gridTemplateColumns: '1fr 80px 80px 60px',
+                gap: 8,
+                padding: '8px 14px',
+                background: 'var(--surface-2)',
+                borderBottom: '1px solid var(--line)',
+                fontSize: 11,
+                fontWeight: 600,
+                color: 'var(--muted)',
+                textTransform: 'uppercase',
+                letterSpacing: '0.04em',
+              }}
+            >
+              <div>Peserta</div>
+              <div style={{ textAlign: 'center' }}>H1</div>
+              <div style={{ textAlign: 'center' }}>H2</div>
+              <div style={{ textAlign: 'center' }}>Rata²</div>
+            </div>
+            {monthlyRowsSorted.length === 0 ? (
+              <div style={{ padding: 18 }}>
+                <p className="t-small">Belum ada data bulan ini.</p>
+              </div>
+            ) : (
+              monthlyRowsSorted.map(({ peserta, h1, h2, rataRata }, idx) => {
+                const setorUrl = absUrl('/2in1/peserta');
+                const reminderWa = buildWaMeUrl(
+                  peserta.whatsapp_number,
+                  tplReminderPesertaBelumSetor({
+                    pesertaName: peserta.name,
+                    pesertaGender: peserta.gender,
+                    setorUrl,
+                    deadlineLabel,
+                  })
+                );
+                return (
+                  <div
+                    key={peserta.id}
+                    style={{
+                      display: 'grid',
+                      gridTemplateColumns: '1fr 80px 80px 60px',
+                      gap: 8,
+                      padding: '10px 14px',
+                      borderTop: idx === 0 ? 'none' : '1px solid var(--line)',
+                      alignItems: 'center',
+                    }}
+                  >
+                    <div style={{ minWidth: 0 }}>
+                      <div style={{ fontSize: 13, fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                        {peserta.name}
+                      </div>
+                    </div>
+                    <div style={{ textAlign: 'center' }}>
+                      <MonthlyCell
+                        setoran={h1.setoran}
+                        rekaman={h1.rekaman}
+                        reminderWa={reminderWa}
+                      />
+                    </div>
+                    <div style={{ textAlign: 'center' }}>
+                      <MonthlyCell
+                        setoran={h2.setoran}
+                        rekaman={h2.rekaman}
+                        reminderWa={reminderWa}
+                      />
+                    </div>
+                    <div style={{ textAlign: 'center', fontSize: 13 }}>
+                      {rataRata !== null ? (
+                        <span style={{ fontWeight: 600, color: rataRata >= 3 ? 'var(--hijau-ink)' : rataRata >= 2 ? 'var(--kuning-ink)' : 'var(--merah-ink)' }}>
+                          {rataRata.toFixed(1)}
+                        </span>
+                      ) : (
+                        <span style={{ color: 'var(--muted-2)' }}>—</span>
+                      )}
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </div>
         </div>
       </div>
     </main>
   );
+}
+
+function MonthlyCell({
+  setoran,
+  rekaman,
+  reminderWa,
+}: {
+  setoran: SetoranRow | undefined;
+  rekaman: NilaiRekaman[];
+  reminderWa: string;
+}) {
+  if (!setoran) {
+    return (
+      <a
+        href={reminderWa}
+        target="_blank"
+        rel="noopener"
+        className="act-btn wa"
+        style={{ textDecoration: 'none', fontSize: 10, padding: '3px 6px' }}
+      >
+        {Icon.wa(10)}
+      </a>
+    );
+  }
+  if (setoran.status === 'submitted') {
+    return (
+      <Link
+        href={`/2in1/musyrif/cek/${setoran.id}`}
+        className="badge badge-kuning"
+        style={{ textDecoration: 'none', fontSize: 10 }}
+      >
+        <span className="dot" />
+        Cek
+      </Link>
+    );
+  }
+  if (setoran.status === 'checked' && rekaman.length > 0) {
+    return (
+      <span className="nilai-trio" style={{ justifyContent: 'center' }}>
+        {rekaman.slice(0, 3).map((n, i) => (
+          <span key={i} className={`d ${n}`} />
+        ))}
+        {Array.from({ length: Math.max(0, 3 - rekaman.length) }).map((_, i) => (
+          <span key={`e${i}`} className="d" />
+        ))}
+      </span>
+    );
+  }
+  return <span style={{ color: 'var(--muted-2)', fontSize: 11 }}>—</span>;
 }
 
 function SelfSetoranBadge({ status }: { status: StatusSetoran | undefined }) {
@@ -325,29 +543,17 @@ function SelfSetoranAction({
   musyrifGender: Gender;
 }) {
   if (status === 'checked') {
-    return (
-      <div className="t-small">
-        Antum sudah dinilai cycle ini. Barakallahu fiik.
-      </div>
-    );
+    return <div className="t-small">Antum sudah dinilai cycle ini. Barakallahu fiik.</div>;
   }
   if (status === 'submitted') {
     return (
-      <Link
-        href="/2in1/musyrif/setor"
-        className="btn btn-block btn-ghost"
-        style={{ textDecoration: 'none' }}
-      >
+      <Link href="/2in1/musyrif/setor" className="btn btn-block btn-ghost" style={{ textDecoration: 'none' }}>
         Lihat / rekam ulang setoran saya
       </Link>
     );
   }
   return (
-    <Link
-      href="/2in1/musyrif/setor"
-      className="btn btn-block btn-primary"
-      style={{ textDecoration: 'none' }}
-    >
+    <Link href="/2in1/musyrif/setor" className="btn btn-block btn-primary" style={{ textDecoration: 'none' }}>
       {Icon.mic(14)} Setor ke {syaikhTitle(musyrifGender)} sekarang
     </Link>
   );

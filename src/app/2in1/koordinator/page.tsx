@@ -9,6 +9,8 @@ import {
   formatCycleDeadline,
   formatCycleRange,
   previousCycles,
+  cyclesOfMonth,
+  currentYearMonth,
 } from '@/lib/week';
 import {
   buildWaMeUrl,
@@ -37,6 +39,8 @@ export default async function KoordinatorDashboard({
   const koordinatorGender = s.session.gender;
 
   const week = searchParams.week ?? currentCycleStart();
+  const { year: curYear, month: curMonth, label: monthLabel } = currentYearMonth();
+  const [h1Week, h2Week] = cyclesOfMonth(curYear, curMonth);
   const deadlineLabel = formatCycleDeadline(week);
   // View cross-gender penuh: koordinator (ikhwan & akhwat) lihat semua data.
   // Aksi (kirim reminder) tetap di-gating same-gender di UI bawah.
@@ -181,6 +185,95 @@ export default async function KoordinatorDashboard({
     .filter((r) => r.missing >= 2)
     .sort((a, b) => b.missing - a.missing)
     .slice(0, 8);
+
+  // Monthly H1/H2 progress (semua peserta dari filter kelas/gender aktif, lepas status/q)
+  const allPesertaIds = (allPesertaUnfiltered ?? []).map((p) => p.id);
+  const { data: monthlySetoranRaw } = await supabaseAdmin
+    .from('setoran')
+    .select('id, peserta_id, week_start, status, submitted_at, checked_at')
+    .in('peserta_id', allPesertaIds.length ? allPesertaIds : ['00000000-0000-0000-0000-000000000000'])
+    .in('week_start', [h1Week, h2Week]);
+
+  type MonthlySt = { id: string; peserta_id: string; week_start: string; status: string; submitted_at: string | null; checked_at: string | null };
+  const monthlyByPeserta = new Map<string, { h1?: MonthlySt; h2?: MonthlySt }>();
+  for (const st of (monthlySetoranRaw ?? []) as MonthlySt[]) {
+    const entry = monthlyByPeserta.get(st.peserta_id) ?? {};
+    if (st.week_start === h1Week) entry.h1 = st;
+    else if (st.week_start === h2Week) entry.h2 = st;
+    monthlyByPeserta.set(st.peserta_id, entry);
+  }
+
+  const checkedMonthlyIds = (monthlySetoranRaw ?? [])
+    .filter((st) => st.status === 'checked')
+    .map((st) => st.id);
+  const { data: monthlyRekamanRaw } = checkedMonthlyIds.length
+    ? await supabaseAdmin
+        .from('rekaman')
+        .select('setoran_id, nilai')
+        .in('setoran_id', checkedMonthlyIds)
+    : { data: [] as Array<{ setoran_id: string; nilai: string | null }> };
+
+  const monthlyRekamanBySetoran = new Map<string, NilaiRekaman[]>();
+  for (const r of monthlyRekamanRaw ?? []) {
+    const arr = monthlyRekamanBySetoran.get(r.setoran_id) ?? [];
+    if (r.nilai) arr.push(r.nilai as NilaiRekaman);
+    monthlyRekamanBySetoran.set(r.setoran_id, arr);
+  }
+
+  function nilaiToSkor(n: NilaiRekaman): number {
+    if (n === 'hijau') return 4;
+    if (n === 'kuning') return 2;
+    return 0;
+  }
+
+  type MonthlyRow = {
+    peserta: { id: string; name: string; gender: Gender; kelas_id: string };
+    rank: number;
+    h1Status: 'belum' | 'menunggu' | 'selesai';
+    h2Status: 'belum' | 'menunggu' | 'selesai';
+    h1SetoranId?: string;
+    h2SetoranId?: string;
+    h1Rekaman: NilaiRekaman[];
+    h2Rekaman: NilaiRekaman[];
+    rataRata: number | null;
+  };
+
+  const monthlyRowsUnsorted = (allPesertaUnfiltered ?? []).map((p) => {
+    const entry = monthlyByPeserta.get(p.id) ?? {};
+    const h1Rek = entry.h1 ? monthlyRekamanBySetoran.get(entry.h1.id) ?? [] : [];
+    const h2Rek = entry.h2 ? monthlyRekamanBySetoran.get(entry.h2.id) ?? [] : [];
+    const allNilai = [...h1Rek, ...h2Rek];
+    const rataRata =
+      allNilai.length > 0
+        ? allNilai.reduce((acc, n) => acc + nilaiToSkor(n), 0) / allNilai.length
+        : null;
+    const statusOf = (st: MonthlySt | undefined): 'belum' | 'menunggu' | 'selesai' => {
+      if (!st) return 'belum';
+      if (st.status === 'checked') return 'selesai';
+      if (st.status === 'submitted') return 'menunggu';
+      return 'belum';
+    };
+    return {
+      peserta: p,
+      rank: 0,
+      h1Status: statusOf(entry.h1),
+      h2Status: statusOf(entry.h2),
+      h1SetoranId: entry.h1?.id,
+      h2SetoranId: entry.h2?.id,
+      h1Rekaman: h1Rek,
+      h2Rekaman: h2Rek,
+      rataRata,
+    };
+  });
+
+  const monthlyRows: MonthlyRow[] = monthlyRowsUnsorted
+    .sort((a, b) => {
+      if (a.rataRata === null && b.rataRata === null) return 0;
+      if (a.rataRata === null) return 1;
+      if (b.rataRata === null) return -1;
+      return b.rataRata - a.rataRata;
+    })
+    .map((r, i) => ({ ...r, rank: i + 1 }));
 
   // Status setoran musyrif → syaikh untuk cycle yang dipilih (read-only,
   // koordinator tidak meminder; itu tugas syaikh).
@@ -515,6 +608,88 @@ export default async function KoordinatorDashboard({
           Menampilkan {rows.length} dari {counters.total} peserta
         </div>
 
+        {/* Progress Ranking Bulanan */}
+        <div style={{ marginTop: 24 }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+            <div>
+              <div className="t-tiny">RANKING PROGRESS BULAN INI — {monthLabel.toUpperCase()}</div>
+              <div className="t-small" style={{ marginTop: 2 }}>{monthlyRows.length} peserta · sorted by rata-rata nilai</div>
+            </div>
+            <Link
+              href="/2in1/koordinator/penilaian"
+              className="btn btn-sm btn-ghost"
+              style={{ height: 28, padding: '0 10px', textDecoration: 'none', fontSize: 12 }}
+            >
+              Input Nilai
+            </Link>
+          </div>
+          <div className="card-flat" style={{ padding: 0, overflow: 'hidden' }}>
+            <div style={{ overflowX: 'auto' }}>
+              <table className="k-table">
+                <thead>
+                  <tr>
+                    <th style={{ width: 40 }}>#</th>
+                    <th style={{ width: '28%' }}>Peserta</th>
+                    <th style={{ width: '12%' }}>Kelas</th>
+                    <th style={{ width: '18%', textAlign: 'center' }}>H1 ({h1Week.slice(5)})</th>
+                    <th style={{ width: '18%', textAlign: 'center' }}>H2 ({h2Week.slice(5)})</th>
+                    <th style={{ width: '12%', textAlign: 'center' }}>Rata²</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {monthlyRows.length === 0 && (
+                    <tr>
+                      <td colSpan={6} style={{ textAlign: 'center', padding: 32, color: 'var(--muted)' }}>
+                        Belum ada data bulan ini.
+                      </td>
+                    </tr>
+                  )}
+                  {monthlyRows.map(({ peserta, rank, h1Status, h2Status, h1SetoranId, h2SetoranId, h1Rekaman, h2Rekaman, rataRata }) => {
+                    const kelas = kelasById.get(peserta.kelas_id);
+                    return (
+                      <tr key={peserta.id}>
+                        <td style={{ color: rank <= 3 ? 'var(--accent-2)' : 'var(--muted)', fontWeight: rank <= 3 ? 700 : 400 }}>
+                          {rank}
+                        </td>
+                        <td>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                            <div className="avatar" style={{ width: 26, height: 26, fontSize: 10 }}>
+                              <Initials name={peserta.name} />
+                            </div>
+                            <span style={{ fontSize: 13, fontWeight: 600 }}>{peserta.name}</span>
+                          </div>
+                        </td>
+                        <td style={{ color: 'var(--ink-2)', fontSize: 12 }}>
+                          {kelas?.name ?? '—'}
+                        </td>
+                        <td style={{ textAlign: 'center' }}>
+                          <MonthlyStatusCell status={h1Status} setoranId={h1SetoranId} rekaman={h1Rekaman} />
+                        </td>
+                        <td style={{ textAlign: 'center' }}>
+                          <MonthlyStatusCell status={h2Status} setoranId={h2SetoranId} rekaman={h2Rekaman} />
+                        </td>
+                        <td style={{ textAlign: 'center' }}>
+                          {rataRata !== null ? (
+                            <span style={{
+                              fontWeight: 700,
+                              fontSize: 14,
+                              color: rataRata >= 3 ? 'var(--hijau-ink)' : rataRata >= 2 ? 'var(--kuning-ink)' : 'var(--merah-ink)',
+                            }}>
+                              {rataRata.toFixed(1)}
+                            </span>
+                          ) : (
+                            <span style={{ color: 'var(--muted-2)' }}>—</span>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
         {/* Status setoran musyrif → syaikh */}
         <div style={{ marginTop: 12 }}>
           <div className="section-row">
@@ -658,6 +833,36 @@ function ActionCell({
     );
   }
   return <span style={{ color: 'var(--muted-2)', fontSize: 12 }}>—</span>;
+}
+
+function MonthlyStatusCell({
+  status,
+  setoranId,
+  rekaman,
+}: {
+  status: 'belum' | 'menunggu' | 'selesai';
+  setoranId?: string;
+  rekaman: NilaiRekaman[];
+}) {
+  if (status === 'belum') {
+    return <span className="badge badge-merah" style={{ fontSize: 10 }}><span className="dot" />belum</span>;
+  }
+  if (status === 'menunggu' && setoranId) {
+    return (
+      <Link href={`/2in1/musyrif/cek/${setoranId}`} className="badge badge-kuning" style={{ textDecoration: 'none', fontSize: 10 }}>
+        <span className="dot" />Cek
+      </Link>
+    );
+  }
+  if (status === 'selesai' && rekaman.length > 0) {
+    return (
+      <span className="nilai-trio" style={{ justifyContent: 'center' }}>
+        {rekaman.slice(0, 3).map((n, i) => <span key={i} className={`d ${n}`} />)}
+        {Array.from({ length: Math.max(0, 3 - rekaman.length) }).map((_, i) => <span key={`e${i}`} className="d" />)}
+      </span>
+    );
+  }
+  return <span className="badge badge-hijau" style={{ fontSize: 10 }}><span className="dot" />selesai</span>;
 }
 
 function formatTime(iso: string): string {
