@@ -23,9 +23,24 @@ export default async function PesertaPage() {
 
   const { data: kelas } = await supabaseAdmin
     .from('kelas')
-    .select('id, name, musyrif:musyrif_id(id, name, gender, whatsapp_number)')
+    .select('id, name, ketua_peserta_id, musyrif:musyrif_id(id, name, gender, whatsapp_number)')
     .eq('id', session.kelas_id)
     .maybeSingle();
+
+  // Ketua banner: check if today has a scheduled pertemuan for this kelas
+  const isKetua = kelas?.ketua_peserta_id === session.peserta_id;
+  let pertemuanHariIni: { id: string; program: string; nama_kegiatan: string } | null = null;
+  if (isKetua) {
+    const todayStr = new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Jakarta' });
+    const { data: todayPertemuan } = await supabaseAdmin
+      .from('pertemuan_program')
+      .select('id, program, nama_kegiatan')
+      .eq('kelas_id', session.kelas_id)
+      .eq('tanggal', todayStr)
+      .limit(1)
+      .maybeSingle();
+    pertemuanHariIni = todayPertemuan ?? null;
+  }
 
   const musyrif = kelas?.musyrif as
     | { id: string; name: string; gender: 'ikhwan' | 'akhwat'; whatsapp_number: string }
@@ -117,6 +132,33 @@ export default async function PesertaPage() {
               Pekan {formatCycleRange(week)}
             </span>
           </div>
+
+          {isKetua && (
+            <Link
+              href={pertemuanHariIni ? `/2in1/ketua-kelas/pertemuan/${pertemuanHariIni.id}` : '/2in1/ketua-kelas'}
+              style={{ textDecoration: 'none', display: 'block', marginBottom: 16 }}
+            >
+              <div style={{
+                background: pertemuanHariIni ? 'var(--primary-tint, #e8f0fe)' : 'var(--bg-card)',
+                border: `1.5px solid ${pertemuanHariIni ? 'var(--primary, #1a73e8)' : 'var(--border)'}`,
+                borderRadius: 10,
+                padding: '10px 14px',
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+              }}>
+                <div>
+                  <div style={{ fontSize: 12, fontWeight: 600, color: pertemuanHariIni ? 'var(--primary, #1a73e8)' : 'var(--muted-2)' }}>
+                    {pertemuanHariIni ? `Ada pertemuan hari ini: ${pertemuanHariIni.nama_kegiatan}` : 'Ketua Kelas 2in1'}
+                  </div>
+                  <div className="t-tiny">
+                    {pertemuanHariIni ? 'Isi kehadiran →' : 'Catat pertemuan & kehadiran'}
+                  </div>
+                </div>
+                <span style={{ fontSize: 18 }}>→</span>
+              </div>
+            </Link>
+          )}
 
           <h1 className="t-h1" style={{ marginBottom: 2 }}>
             Setoran cycle ini
