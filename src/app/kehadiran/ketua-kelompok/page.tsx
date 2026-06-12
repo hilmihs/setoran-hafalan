@@ -72,9 +72,18 @@ export default async function KetuaKelompokPage() {
 
           <FeatureNav current="/kehadiran/ketua-kelompok" />
 
-          <h1 className="t-h1" style={{ marginBottom: 16 }}>
-            Dashboard Kelompok
-          </h1>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+            <h1 className="t-h1" style={{ margin: 0 }}>
+              Dashboard Kelompok
+            </h1>
+            <a
+              href="/kehadiran/ketua-kelompok/penilaian"
+              className="btn btn-sm btn-primary"
+              style={{ textDecoration: 'none', fontSize: 12, padding: '5px 12px' }}
+            >
+              Penilaian Bulan Ini
+            </a>
+          </div>
 
           {/* Summary card */}
           <div
