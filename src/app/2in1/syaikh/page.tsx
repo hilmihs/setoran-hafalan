@@ -216,6 +216,13 @@ export default async function SyaikhDashboard() {
               Penilaian
             </Link>
             <Link
+              href="/2in1/koordinator/matrix"
+              className="btn btn-sm btn-ghost"
+              style={{ height: 30, padding: '0 10px', textDecoration: 'none' }}
+            >
+              Matrix
+            </Link>
+            <Link
               href="/2in1/laporan"
               className="btn btn-sm btn-ghost"
               style={{ height: 30, padding: '0 10px', textDecoration: 'none' }}

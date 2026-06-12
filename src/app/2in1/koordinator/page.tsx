@@ -615,13 +615,22 @@ export default async function KoordinatorDashboard({
               <div className="t-tiny">RANKING PROGRESS BULAN INI — {monthLabel.toUpperCase()}</div>
               <div className="t-small" style={{ marginTop: 2 }}>{monthlyRows.length} peserta · sorted by rata-rata nilai</div>
             </div>
-            <Link
-              href="/2in1/koordinator/penilaian"
-              className="btn btn-sm btn-ghost"
-              style={{ height: 28, padding: '0 10px', textDecoration: 'none', fontSize: 12 }}
-            >
-              Input Nilai
-            </Link>
+            <div style={{ display: 'flex', gap: 6 }}>
+              <Link
+                href="/2in1/koordinator/penilaian"
+                className="btn btn-sm btn-ghost"
+                style={{ height: 28, padding: '0 10px', textDecoration: 'none', fontSize: 12 }}
+              >
+                Input Nilai
+              </Link>
+              <Link
+                href="/2in1/koordinator/matrix"
+                className="btn btn-sm btn-primary"
+                style={{ height: 28, padding: '0 10px', textDecoration: 'none', fontSize: 12 }}
+              >
+                Matrix Guru
+              </Link>
+            </div>
           </div>
           <div className="card-flat" style={{ padding: 0, overflow: 'hidden' }}>
             <div style={{ overflowX: 'auto' }}>
