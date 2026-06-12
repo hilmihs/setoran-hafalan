@@ -209,6 +209,13 @@ export default async function SyaikhDashboard() {
           </div>
           <div style={{ display: 'flex', gap: 8 }}>
             <Link
+              href="/2in1/syaikh/penilaian"
+              className="btn btn-sm btn-ghost"
+              style={{ height: 30, padding: '0 10px', textDecoration: 'none' }}
+            >
+              Penilaian
+            </Link>
+            <Link
               href="/2in1/laporan"
               className="btn btn-sm btn-ghost"
               style={{ height: 30, padding: '0 10px', textDecoration: 'none' }}
