@@ -543,3 +543,89 @@ dialog[open] {
 
 /* Util */
 .grow { flex: 1; }
+
+/* =========================================================
+   Matrix Dashboard — utilities
+   ========================================================= */
+
+/* Hero stat grid: 2-col mobile, 4-col desktop */
+.matrix-stat-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+/* Podium top-3 */
+.podium {
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 8px;
+  padding: 12px 0 0;
+}
+.podium-card {
+  flex: 1;
+  max-width: 160px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  padding: 14px 10px 12px;
+  text-align: center;
+  box-shadow: var(--shadow-card);
+}
+.podium-card.first {
+  box-shadow: var(--shadow-raised);
+  border-color: var(--kuning-line);
+  background: var(--kuning-tint);
+  transform: translateY(-8px);
+}
+
+/* TriSkillBar — 3 tracks 6px, pure CSS */
+.tri-bar {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.tri-bar .seg {
+  height: 6px;
+  border-radius: 3px;
+  background: var(--line);
+  overflow: hidden;
+  position: relative;
+}
+.tri-bar .seg .fill {
+  position: absolute;
+  inset: 0;
+  height: 100%;
+  border-radius: 3px;
+  transition: width 0.25s ease;
+}
+
+/* Delta badges */
+.delta-up   { color: var(--hijau-ink); font-size: 11px; font-weight: 600; }
+.delta-down { color: var(--merah-ink); font-size: 11px; font-weight: 600; }
+
+/* Standar tick on progress bar */
+.std-tick {
+  position: absolute;
+  top: -2px;
+  bottom: -2px;
+  width: 2px;
+  background: var(--ink-2);
+  border-radius: 1px;
+}
+
+/* Btn-xs (smaller than btn-sm) */
+.btn-xs { height: 28px; padding: 0 8px; font-size: 11px; border-radius: 6px; }
+
+@media (min-width: 720px) {
+  .matrix-stat-grid {
+    grid-template-columns: repeat(4, 1fr);
+  }
+  .podium {
+    gap: 12px;
+  }
+  .podium-card {
+    max-width: 200px;
+  }
+}
