@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
-import { getSession } from '@/lib/session';
 import { supabaseAdmin } from '@/lib/supabase-admin';
+import { getSessionWa, findKetuaProgramKelas } from '@/lib/program-kelas';
 
 export const dynamic = 'force-dynamic';
 
@@ -12,32 +12,26 @@ const PROGRAM_LABEL: Record<string, string> = {
 };
 
 export default async function KetuaKelasPage() {
-  const s = await getSession();
-  const session = s.accesses?.find((a) => a.role === 'peserta') ?? (s.session?.role === 'peserta' ? s.session : null);
-  if (!session) redirect('/');
-  const pesertaId = (session as { peserta_id: string }).peserta_id;
-  const kelasId = (session as { kelas_id: string }).kelas_id;
+  const wa = await getSessionWa();
+  if (!wa) redirect('/');
 
-  const { data: kelas } = await supabaseAdmin
-    .from('kelas')
-    .select('id, name, gender, ketua_peserta_id, jadwal_hari, jadwal_waktu_mulai, jadwal_waktu_selesai')
-    .eq('id', kelasId)
-    .single();
-
-  if (!kelas || kelas.ketua_peserta_id !== pesertaId) {
+  const myKelas = await findKetuaProgramKelas(wa);
+  if (myKelas.length === 0) {
     return (
       <main style={{ padding: 24 }}>
         <p className="t-body" style={{ color: 'var(--muted-2)' }}>
-          Halaman ini hanya untuk Ketua Kelas 2in1.
+          Halaman ini hanya untuk Ketua / Wakil Ketua Kelas program Maahir.
         </p>
-        <Link href="/2in1/peserta" className="btn btn-ghost" style={{ marginTop: 16 }}>
+        <Link href="/" className="btn btn-ghost" style={{ marginTop: 16 }}>
           ← Kembali
         </Link>
       </main>
     );
   }
 
-  // Fetch pertemuan bulan ini
+  const kelasIds = myKelas.map((k) => k.id);
+
+  // Pertemuan bulan ini untuk semua kelas yang dipimpin
   const now = new Date();
   const year = now.getFullYear();
   const month = String(now.getMonth() + 1).padStart(2, '0');
@@ -48,13 +42,12 @@ export default async function KetuaKelasPage() {
 
   const { data: pertemuanList } = await supabaseAdmin
     .from('pertemuan_program')
-    .select('id, program, tanggal, nama_kegiatan, waktu_mulai, waktu_selesai, keterangan')
-    .eq('kelas_id', kelasId)
+    .select('id, program_kelas_id, program, tanggal, nama_kegiatan, waktu_mulai, waktu_selesai')
+    .in('program_kelas_id', kelasIds)
     .gte('tanggal', monthStart)
     .lt('tanggal', nextMonth)
     .order('tanggal', { ascending: false });
 
-  // Count kehadiran per pertemuan
   const pertemuanIds = (pertemuanList ?? []).map((p) => p.id);
   const { data: kehadiranCounts } = await supabaseAdmin
     .from('kehadiran_peserta')
@@ -69,31 +62,44 @@ export default async function KetuaKelasPage() {
     countByPertemuan.set(k.pertemuan_id, prev);
   }
 
-  const pertemuanWithCount = (pertemuanList ?? []).map((p) => ({
+  const kelasById = new Map(myKelas.map((k) => [k.id, k]));
+  const pertemuanWithMeta = (pertemuanList ?? []).map((p) => ({
     ...p,
     counts: countByPertemuan.get(p.id) ?? null,
     programLabel: PROGRAM_LABEL[p.program] ?? p.program,
+    kelasName: kelasById.get(p.program_kelas_id)?.name ?? '',
   }));
 
   const todayStr = new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Jakarta' });
-  const pertemuanToday = pertemuanWithCount.filter((p) => p.tanggal === todayStr);
-  const pertemuanOther = pertemuanWithCount.filter((p) => p.tanggal !== todayStr);
+  const pertemuanToday = pertemuanWithMeta.filter((p) => p.tanggal === todayStr);
+  const pertemuanOther = pertemuanWithMeta.filter((p) => p.tanggal !== todayStr);
 
   const monthLabel = now.toLocaleDateString('id-ID', { year: 'numeric', month: 'long' });
 
   return (
     <main style={{ padding: '0 0 80px' }}>
       <div className="page-header">
-        <Link href="/2in1/peserta" className="back-btn" aria-label="Kembali">←</Link>
+        <Link href="/" className="back-btn" aria-label="Kembali">←</Link>
         <div>
           <div className="title">Ketua Kelas</div>
-          <div className="sub">{kelas.name}</div>
+          <div className="sub">{myKelas.map((k) => k.name).join(' · ')}</div>
         </div>
       </div>
 
       <div style={{ padding: '0 16px' }}>
+        {/* Jadwal info */}
+        {myKelas.map((k) => (
+          <div key={k.id} className="card" style={{ padding: '8px 12px', marginBottom: 8, background: 'var(--bg-soft, #fafafa)' }}>
+            <div style={{ fontSize: 12, fontWeight: 600 }}>{k.name}</div>
+            <div className="t-tiny" style={{ color: 'var(--muted-2)' }}>
+              {(k.jadwal_hari ?? []).join(', ')}
+              {k.waktu_mulai ? ` · ${k.waktu_mulai.slice(0, 5)}${k.waktu_selesai ? ' – ' + k.waktu_selesai.slice(0, 5) : ''}` : ''}
+            </div>
+          </div>
+        ))}
+
         {pertemuanToday.length > 0 && (
-          <div style={{ marginBottom: 20 }}>
+          <div style={{ margin: '20px 0' }}>
             <div className="section-row" style={{ marginBottom: 8 }}>
               <div className="t-tiny">Hari ini</div>
             </div>
@@ -103,7 +109,7 @@ export default async function KetuaKelasPage() {
           </div>
         )}
 
-        <div style={{ marginBottom: 16 }}>
+        <div style={{ margin: '16px 0' }}>
           <div className="section-row">
             <div className="t-tiny">{monthLabel}</div>
             <Link
@@ -134,6 +140,7 @@ function PertemuanCard({ p, highlight }: {
   p: {
     id: string;
     programLabel: string;
+    kelasName: string;
     tanggal: string;
     nama_kegiatan: string;
     waktu_mulai: string | null;
@@ -159,18 +166,14 @@ function PertemuanCard({ p, highlight }: {
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
           <div>
             <div style={{ fontSize: 13, fontWeight: 600 }}>{p.programLabel}</div>
-            <div className="t-small">{p.nama_kegiatan}</div>
+            <div className="t-small">{p.nama_kegiatan} · {p.kelasName}</div>
             <div className="t-tiny" style={{ marginTop: 2 }}>
               {tanggalLabel}{timeRange ? ` · ${timeRange}` : ''}
             </div>
           </div>
           <div style={{ textAlign: 'right' }}>
             {p.counts ? (
-              <span style={{
-                fontSize: 12,
-                fontWeight: 600,
-                color: 'var(--hijau-ink)',
-              }}>
+              <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--hijau-ink)' }}>
                 {p.counts.hadir}/{p.counts.total}
               </span>
             ) : (

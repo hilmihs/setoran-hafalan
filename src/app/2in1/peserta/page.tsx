@@ -23,23 +23,35 @@ export default async function PesertaPage() {
 
   const { data: kelas } = await supabaseAdmin
     .from('kelas')
-    .select('id, name, ketua_peserta_id, musyrif:musyrif_id(id, name, gender, whatsapp_number)')
+    .select('id, name, musyrif:musyrif_id(id, name, gender, whatsapp_number)')
     .eq('id', session.kelas_id)
     .maybeSingle();
 
-  // Ketua banner: check if today has a scheduled pertemuan for this kelas
-  const isKetua = kelas?.ketua_peserta_id === session.peserta_id;
-  let pertemuanHariIni: { id: string; program: string; nama_kegiatan: string } | null = null;
-  if (isKetua) {
-    const todayStr = new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Jakarta' });
-    const { data: todayPertemuan } = await supabaseAdmin
-      .from('pertemuan_program')
-      .select('id, program, nama_kegiatan')
-      .eq('kelas_id', session.kelas_id)
-      .eq('tanggal', todayStr)
-      .limit(1)
-      .maybeSingle();
-    pertemuanHariIni = todayPertemuan ?? null;
+  // Ketua banner: cek apakah peserta ini ketua/wakil kelas program Maahir
+  const { data: me } = await supabaseAdmin
+    .from('peserta')
+    .select('whatsapp_number')
+    .eq('id', session.peserta_id)
+    .maybeSingle();
+  let isKetua = false;
+  let pertemuanHariIni: { id: string; nama_kegiatan: string } | null = null;
+  if (me?.whatsapp_number) {
+    const { data: myProgramKelas } = await supabaseAdmin
+      .from('program_kelas')
+      .select('id')
+      .or(`ketua_wa.eq.${me.whatsapp_number},wakil_wa.eq.${me.whatsapp_number}`);
+    isKetua = (myProgramKelas ?? []).length > 0;
+    if (isKetua) {
+      const todayStr = new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Jakarta' });
+      const { data: todayPertemuan } = await supabaseAdmin
+        .from('pertemuan_program')
+        .select('id, nama_kegiatan')
+        .in('program_kelas_id', (myProgramKelas ?? []).map((k) => k.id))
+        .eq('tanggal', todayStr)
+        .limit(1)
+        .maybeSingle();
+      pertemuanHariIni = todayPertemuan ?? null;
+    }
   }
 
   const musyrif = kelas?.musyrif as

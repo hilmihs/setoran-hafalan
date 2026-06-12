@@ -62,7 +62,7 @@ export function KehadiranForm({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           rows: current.map((r) => ({
-            peserta_id: r.id,
+            anggota_id: r.id,
             status: r.status,
             catatan: r.catatan || undefined,
           })),

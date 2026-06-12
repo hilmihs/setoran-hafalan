@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
-import { getSession } from '@/lib/session';
 import { supabaseAdmin } from '@/lib/supabase-admin';
+import { getSessionWa } from '@/lib/program-kelas';
 import { KehadiranForm } from './KehadiranForm';
 
 export const dynamic = 'force-dynamic';
@@ -13,47 +13,46 @@ const PROGRAM_LABEL: Record<string, string> = {
 };
 
 export default async function PertemuanDetailPage({ params }: { params: { id: string } }) {
-  const s = await getSession();
-  const session = s.accesses?.find((a) => a.role === 'peserta') ?? (s.session?.role === 'peserta' ? s.session : null);
-  if (!session) redirect('/');
-  const pesertaId = (session as { peserta_id: string }).peserta_id;
+  const wa = await getSessionWa();
+  if (!wa) redirect('/');
 
   const { data: pertemuan } = await supabaseAdmin
     .from('pertemuan_program')
-    .select('id, kelas_id, program, tanggal, nama_kegiatan, waktu_mulai, waktu_selesai, kelas:kelas_id(id, name, ketua_peserta_id)')
+    .select('id, program_kelas_id, program, tanggal, nama_kegiatan, waktu_mulai, waktu_selesai, program_kelas:program_kelas_id(id, name, ketua_wa, wakil_wa)')
     .eq('id', params.id)
     .single();
 
-  if (!pertemuan) redirect('/2in1/ketua-kelas');
-  const kelas = pertemuan.kelas as unknown as { id: string; name: string; ketua_peserta_id: string | null };
-  if (kelas.ketua_peserta_id !== pesertaId) redirect('/2in1/ketua-kelas');
+  if (!pertemuan || !pertemuan.program_kelas_id) redirect('/2in1/ketua-kelas');
+  const kelas = pertemuan.program_kelas as unknown as {
+    id: string; name: string; ketua_wa: string | null; wakil_wa: string | null;
+  };
+  if (kelas.ketua_wa !== wa && kelas.wakil_wa !== wa) redirect('/2in1/ketua-kelas');
 
-  // Fetch all peserta in this kelas
-  const { data: pesertaList } = await supabaseAdmin
-    .from('peserta')
-    .select('id, name')
-    .eq('kelas_id', pertemuan.kelas_id)
-    .eq('active', true)
+  // Semua anggota kelas program ini
+  const { data: anggotaList } = await supabaseAdmin
+    .from('program_kelas_anggota')
+    .select('id, name, is_ketua, is_wakil')
+    .eq('program_kelas_id', kelas.id)
     .order('name');
 
-  // Existing kehadiran
-  const pesertaIds = (pesertaList ?? []).map((p) => p.id);
+  // Kehadiran existing
   const { data: existingKehadiran } = await supabaseAdmin
     .from('kehadiran_peserta')
-    .select('peserta_id, status, catatan')
-    .eq('pertemuan_id', params.id)
-    .in('peserta_id', pesertaIds.length ? pesertaIds : ['00000000-0000-0000-0000-000000000000']);
+    .select('anggota_id, status, catatan')
+    .eq('pertemuan_id', params.id);
 
   const kehadiranMap = new Map<string, { status: string; catatan: string | null }>(
-    (existingKehadiran ?? []).map((k) => [k.peserta_id, { status: k.status, catatan: k.catatan }])
+    (existingKehadiran ?? [])
+      .filter((k) => k.anggota_id)
+      .map((k) => [k.anggota_id as string, { status: k.status, catatan: k.catatan }])
   );
 
   type StatusType = 'hadir' | 'izin' | 'terlambat' | 'sakit' | 'tidak_ada_keterangan';
-  const pesertaWithStatus = (pesertaList ?? []).map((p) => ({
-    id: p.id,
-    name: p.name,
-    status: (kehadiranMap.get(p.id)?.status ?? 'tidak_ada_keterangan') as StatusType,
-    catatan: kehadiranMap.get(p.id)?.catatan ?? '',
+  const anggotaWithStatus = (anggotaList ?? []).map((a) => ({
+    id: a.id,
+    name: a.name + (a.is_ketua ? ' (Ketua)' : a.is_wakil ? ' (Wakil)' : ''),
+    status: (kehadiranMap.get(a.id)?.status ?? 'tidak_ada_keterangan') as StatusType,
+    catatan: kehadiranMap.get(a.id)?.catatan ?? '',
   }));
 
   const tanggalLabel = new Date(pertemuan.tanggal + 'T00:00:00').toLocaleDateString('id-ID', {
@@ -72,7 +71,7 @@ export default async function PertemuanDetailPage({ params }: { params: { id: st
       <div style={{ padding: '0 16px' }}>
         <KehadiranForm
           pertemuanId={params.id}
-          pesertaList={pesertaWithStatus}
+          pesertaList={anggotaWithStatus}
         />
       </div>
     </main>

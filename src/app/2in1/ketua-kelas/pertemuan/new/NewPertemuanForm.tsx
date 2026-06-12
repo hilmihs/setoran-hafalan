@@ -4,23 +4,48 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 
 const PROGRAMS = [
-  { value: 'kelas_maahir', label: 'Kelas Maahir' },
-  { value: 'muallim_najih', label: 'Muallim Najih' },
-  { value: 'at_tibyan', label: 'At-Tibyan' },
+  { value: 'kelas_maahir', label: 'Kelas Maahir', mulai: '', selesai: '' },
+  { value: 'muallim_najih', label: 'Muallim Najih', mulai: '19:30', selesai: '21:00' },
+  { value: 'at_tibyan', label: 'At-Tibyan', mulai: '08:30', selesai: '10:00' },
 ];
 
-export function NewPertemuanForm({ kelasName }: { kelasName: string }) {
+type KelasOption = {
+  id: string;
+  name: string;
+  waktu_mulai: string | null;
+  waktu_selesai: string | null;
+};
+
+export function NewPertemuanForm({ kelasList }: { kelasList: KelasOption[] }) {
   const router = useRouter();
   const today = new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Jakarta' });
 
+  const [kelasId, setKelasId] = useState(kelasList[0]?.id ?? '');
   const [program, setProgram] = useState('kelas_maahir');
   const [tanggal, setTanggal] = useState(today);
-  const [namaKegiatan, setNamaKegiatan] = useState('Pertemuan Rutin');
-  const [waktuMulai, setWaktuMulai] = useState('');
-  const [waktuSelesai, setWaktuSelesai] = useState('');
+  const [namaKegiatan, setNamaKegiatan] = useState('Kelas Maahir');
+  const [waktuMulai, setWaktuMulai] = useState(
+    kelasList[0]?.waktu_mulai?.slice(0, 5) ?? ''
+  );
+  const [waktuSelesai, setWaktuSelesai] = useState(
+    kelasList[0]?.waktu_selesai?.slice(0, 5) ?? ''
+  );
   const [keterangan, setKeterangan] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  function pickProgram(p: typeof PROGRAMS[number]) {
+    setProgram(p.value);
+    setNamaKegiatan(p.label);
+    if (p.value === 'kelas_maahir') {
+      const k = kelasList.find((x) => x.id === kelasId);
+      setWaktuMulai(k?.waktu_mulai?.slice(0, 5) ?? '');
+      setWaktuSelesai(k?.waktu_selesai?.slice(0, 5) ?? '');
+    } else {
+      setWaktuMulai(p.mulai);
+      setWaktuSelesai(p.selesai);
+    }
+  }
 
   async function submit() {
     setSubmitting(true);
@@ -30,6 +55,7 @@ export function NewPertemuanForm({ kelasName }: { kelasName: string }) {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          program_kelas_id: kelasId,
           program,
           tanggal,
           nama_kegiatan: namaKegiatan,
@@ -49,6 +75,21 @@ export function NewPertemuanForm({ kelasName }: { kelasName: string }) {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+      {kelasList.length > 1 && (
+        <div>
+          <div className="t-tiny" style={{ marginBottom: 4 }}>Kelas</div>
+          <select
+            value={kelasId}
+            onChange={(e) => setKelasId(e.target.value)}
+            style={{ width: '100%', padding: '8px 12px', borderRadius: 8, border: '1.5px solid var(--border)', fontSize: 14 }}
+          >
+            {kelasList.map((k) => (
+              <option key={k.id} value={k.id}>{k.name}</option>
+            ))}
+          </select>
+        </div>
+      )}
+
       <div>
         <div className="t-tiny" style={{ marginBottom: 4 }}>Program</div>
         <div style={{ display: 'flex', gap: 6 }}>
@@ -56,10 +97,7 @@ export function NewPertemuanForm({ kelasName }: { kelasName: string }) {
             <button
               key={p.value}
               type="button"
-              onClick={() => {
-                setProgram(p.value);
-                setNamaKegiatan(p.label);
-              }}
+              onClick={() => pickProgram(p)}
               className={program === p.value ? 'btn btn-sm btn-primary' : 'btn btn-sm btn-ghost'}
               style={{ flex: 1, fontSize: 12 }}
             >
@@ -131,7 +169,7 @@ export function NewPertemuanForm({ kelasName }: { kelasName: string }) {
       <button
         type="button"
         onClick={submit}
-        disabled={submitting || !tanggal || !namaKegiatan}
+        disabled={submitting || !tanggal || !namaKegiatan || !kelasId}
         className={`btn btn-block ${!submitting && tanggal && namaKegiatan ? 'btn-primary' : 'btn-soft'}`}
       >
         {submitting ? 'Menyimpan…' : 'Simpan & Isi Kehadiran →'}
