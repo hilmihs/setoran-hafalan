@@ -77,20 +77,21 @@ steps:
         echo "📦 Install dependency Web Maahir"
         nvm exec 24.15.0 npm install
 
-        echo "📦 stop service"
-        sudo systemctl stop next-maahir
-        
+        # Build duluan selagi service lama masih serve traffic — hindari 502
+        # berkepanjangan. rm .next aman walau service jalan: proses standalone
+        # pegang inode file yang sudah terbuka. Kalau build gagal, script exit
+        # sebelum restart sehingga versi lama tetap hidup.
         echo "🧹 Clean .next lama (file cache runtime standalone bisa owned by root)"
         sudo rm -rf .next
 
-        echo "⚙️ Build Web Maahir"
+        echo "⚙️ Build Web Maahir (service lama tetap jalan)"
         nvm exec 24.15.0 npm run build
 
         echo "📁 Copy static files to standalone folder"
         cp -r .next/static .next/standalone/.next/
 
-        echo "🔄 start systemd service"
-        sudo systemctl start next-maahir
+        echo "🔄 restart systemd service (downtime ~2 detik)"
+        sudo systemctl restart next-maahir
         sudo systemctl status next-maahir --no-pager
 
         echo "✅ Next.js frontend deployment selesai"
