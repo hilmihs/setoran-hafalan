@@ -4,6 +4,7 @@ import { supabaseAdmin } from '@/lib/supabase-admin';
 import { logout } from '@/lib/auth';
 import { Icon } from '@/components/icons';
 import { FeatureNav } from '@/components/FeatureNav';
+import { StatCard } from '@/components/ui/StatCard';
 import { CheckinForm } from './CheckinForm';
 import { getCurrentPekan } from '@/lib/batch';
 import type { KetuaKelasInfo } from './CheckinForm';
@@ -122,6 +123,21 @@ export default async function KehadiranPengajarPage() {
             {session.name} — {today}
           </p>
 
+          {todayPrograms.length > 0 && (
+            <div className="matrix-stat-grid" style={{ gridTemplateColumns: '1fr 1fr', marginBottom: 16 }}>
+              <StatCard
+                value={`${checkedDates.length}/${todayPrograms.length}`}
+                label="Sesi terisi hari ini"
+                valueColor={checkedDates.length >= todayPrograms.length ? 'var(--hijau-ink)' : 'var(--kuning-ink)'}
+              />
+              <StatCard
+                value={unfilled.length}
+                label="Sesi lampau belum diisi"
+                valueColor={unfilled.length > 0 ? 'var(--merah-ink)' : undefined}
+              />
+            </div>
+          )}
+
           {session.is_ketua && (
             <a
               href="/kehadiran/ketua-kelompok"
@@ -132,7 +148,7 @@ export default async function KehadiranPengajarPage() {
                 marginBottom: 16,
                 textDecoration: 'none',
                 color: 'inherit',
-                borderLeft: '3px solid var(--primary)',
+                borderLeft: '3px solid var(--accent)',
               }}
             >
               <div style={{ fontWeight: 600, marginBottom: 2 }}>
@@ -158,20 +174,18 @@ export default async function KehadiranPengajarPage() {
             <>
               {unfilled.length > 0 && (
                 <div
+                  className="banner"
                   style={{
-                    background: 'var(--warning-bg, #fff8e1)',
-                    border: '1px solid var(--warning-border, #ffe082)',
-                    borderRadius: 8,
-                    padding: '12px 16px',
+                    background: 'var(--kuning-tint)',
+                    borderColor: 'var(--kuning-line)',
                     marginBottom: 16,
                   }}
                 >
-                  <p className="t-small" style={{ fontWeight: 600 }}>
-                    Ada {unfilled.length} sesi yang belum diisi
-                  </p>
-                  <p className="t-small" style={{ color: 'var(--muted-2)' }}>
-                    Isi kehadiran di bawah mulai dari yang paling lama.
-                  </p>
+                  <span className="ic" style={{ background: 'var(--kuning)', color: '#fff' }}>!</span>
+                  <div>
+                    <div className="title">Ada {unfilled.length} sesi yang belum diisi</div>
+                    <div className="desc">Isi kehadiran di bawah mulai dari yang paling lama.</div>
+                  </div>
                 </div>
               )}
 

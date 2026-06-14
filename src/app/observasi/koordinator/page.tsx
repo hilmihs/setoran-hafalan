@@ -3,6 +3,9 @@ import { supabaseAdmin } from '@/lib/supabase-admin';
 import { logout } from '@/lib/auth';
 import { Icon } from '@/components/icons';
 import { FeatureNav } from '@/components/FeatureNav';
+import { StatCard } from '@/components/ui/StatCard';
+import { SectionHeader } from '@/components/ui/SectionHeader';
+import { MiniDistribution } from '@/components/ui/MiniDistribution';
 import { TabayyunCard } from './TabayyunCard';
 import { ReminderButton } from './ReminderButton';
 import { ObservasiFilterBar } from './ObservasiFilterBar';
@@ -159,6 +162,12 @@ export default async function KoordinatorKetuaKelasPage({
   const filledCount = (todayObservasi ?? []).filter((o) => kelasIds.includes(o.kelas_hits_id)).length;
   const totalKelas = filteredKelas.length;
 
+  // Distribusi kondisi observasi hari ini (untuk MiniDistribution)
+  const obsInScope = (todayObservasi ?? []).filter((o) => kelasIds.includes(o.kelas_hits_id));
+  const kondisiKbbs = obsInScope.filter((o) => o.kondisi === 'KBBS').length;
+  const kondisiLibur = obsInScope.filter((o) => o.kondisi === 'LIBUR').length;
+  const kondisiCatatan = obsInScope.length - kondisiKbbs - kondisiLibur;
+
   const unfilledKelas = filteredKelas
     .filter((k) => !observasiSet.has(k.id))
     .filter((k) => matchesSearch(k.name, k.pengajar_id));
@@ -276,58 +285,40 @@ export default async function KoordinatorKetuaKelasPage({
           />
 
           {/* Stats hari ini */}
-          <div
-            className="card-flat"
-            style={{
-              padding: '16px 20px', marginBottom: 12,
-              display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 12, textAlign: 'center',
-            }}
-          >
-            <div>
-              <div className="t-small" style={{ color: 'var(--muted-2)' }}>Total Halaqah</div>
-              <div style={{ fontSize: 20, fontWeight: 700 }}>{totalKelas}</div>
-            </div>
-            <div>
-              <div className="t-small" style={{ color: 'var(--muted-2)' }}>Observasi Hari Ini</div>
-              <div style={{ fontSize: 20, fontWeight: 700, color: filledCount === totalKelas ? 'var(--hijau-ink)' : 'var(--kuning-ink)' }}>
-                {filledCount}/{totalKelas}
-              </div>
-            </div>
-            <div>
-              <div className="t-small" style={{ color: 'var(--muted-2)' }}>Tabayyun Pending</div>
-              <div style={{ fontSize: 20, fontWeight: 700, color: tabayyunItems.length > 0 ? 'var(--merah-ink)' : 'inherit' }}>
-                {tabayyunItems.length}
-              </div>
-            </div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 10, marginBottom: 12 }}>
+            <StatCard value={totalKelas} label="Total Halaqah" />
+            <StatCard
+              value={`${filledCount}/${totalKelas}`}
+              label="Observasi Hari Ini"
+              valueColor={filledCount === totalKelas ? 'var(--hijau-ink)' : 'var(--kuning-ink)'}
+            />
+            <StatCard
+              value={tabayyunItems.length}
+              label="Tabayyun Pending"
+              valueColor={tabayyunItems.length > 0 ? 'var(--merah-ink)' : undefined}
+            />
           </div>
 
-          {/* Tabayyun analytics bulan ini */}
-          <div
-            className="card-flat"
-            style={{
-              padding: '14px 18px', marginBottom: 20,
-              borderLeft: '3px solid var(--accent)',
-            }}
-          >
-            <div className="t-tiny" style={{ marginBottom: 8 }}>ANALITIK TABAYYUN BULAN INI</div>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: 10, textAlign: 'center' }}>
-              <div>
-                <div className="t-small" style={{ color: 'var(--muted-2)' }}>Total</div>
-                <div style={{ fontSize: 18, fontWeight: 700 }}>{tabTotalBulan}</div>
-              </div>
-              <div>
-                <div className="t-small" style={{ color: 'var(--muted-2)' }}>Diputuskan</div>
-                <div style={{ fontSize: 18, fontWeight: 700 }}>{tabDecidedBulan.length}</div>
-              </div>
-              <div>
-                <div className="t-small" style={{ color: 'var(--muted-2)' }}>Udzur diterima</div>
-                <div style={{ fontSize: 18, fontWeight: 700, color: 'var(--hijau-ink)' }}>{tabUdzurRate}%</div>
-              </div>
-              <div>
-                <div className="t-small" style={{ color: 'var(--muted-2)' }}>Avg waktu putusan</div>
-                <div style={{ fontSize: 18, fontWeight: 700 }}>{tabAvgHours}j</div>
-              </div>
+          {obsInScope.length > 0 && (
+            <div className="card-flat" style={{ padding: 14, marginBottom: 12 }}>
+              <div className="t-tiny" style={{ marginBottom: 8 }}>Kondisi observasi hari ini</div>
+              <MiniDistribution
+                segments={[
+                  { value: kondisiKbbs, color: 'var(--hijau)', label: 'KBBS' },
+                  { value: kondisiCatatan, color: 'var(--kuning)', label: 'Catatan' },
+                  { value: kondisiLibur, color: 'var(--muted-2)', label: 'Libur' },
+                ]}
+              />
             </div>
+          )}
+
+          {/* Tabayyun analytics bulan ini */}
+          <SectionHeader title="Analitik Tabayyun bulan ini" />
+          <div className="matrix-stat-grid" style={{ marginBottom: 20 }}>
+            <StatCard value={tabTotalBulan} label="Total" />
+            <StatCard value={tabDecidedBulan.length} label="Diputuskan" />
+            <StatCard value={`${tabUdzurRate}%`} label="Udzur diterima" valueColor="var(--hijau-ink)" />
+            <StatCard value={`${tabAvgHours}j`} label="Avg waktu putusan" />
           </div>
 
           {/* Peer view: rekan koordinator KK */}
@@ -337,24 +328,25 @@ export default async function KoordinatorKetuaKelasPage({
                 Aktivitas Rekan Koordinator KK — {today.slice(0, 7)}
               </h2>
               <div className="card-flat" style={{ padding: 0, overflow: 'hidden' }}>
-                <table className="t-mono" style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+                <div style={{ overflowX: 'auto' }}>
+                <table className="k-table">
                   <thead>
-                    <tr style={{ background: 'var(--surface-2)', textAlign: 'left' }}>
-                      <th style={{ padding: '8px 12px', fontWeight: 600 }}>Nama</th>
-                      <th style={{ padding: '8px 8px', fontWeight: 600, textAlign: 'right' }}>Tabayyun Diputuskan</th>
-                      <th style={{ padding: '8px 8px', fontWeight: 600, textAlign: 'right' }}>Login Terakhir</th>
+                    <tr>
+                      <th>Nama</th>
+                      <th style={{ textAlign: 'right' }}>Tabayyun Diputuskan</th>
+                      <th style={{ textAlign: 'right' }}>Login Terakhir</th>
                     </tr>
                   </thead>
                   <tbody>
                     {(rekanKK ?? []).map((r) => {
                       const isMe = r.id === session.koordinator_kk_id;
                       return (
-                        <tr key={r.id} style={{ borderTop: '1px solid var(--line)', background: isMe ? 'var(--accent-tint)' : 'transparent' }}>
-                          <td style={{ padding: '8px 12px', fontWeight: isMe ? 700 : 500 }}>
+                        <tr key={r.id} style={{ background: isMe ? 'var(--accent-tint)' : 'transparent' }}>
+                          <td className="nm" style={{ fontWeight: isMe ? 700 : 500 }}>
                             {r.name} {isMe && <span className="t-tiny" style={{ color: 'var(--accent-2)' }}>(saya)</span>}
                           </td>
-                          <td style={{ padding: '8px 8px', textAlign: 'right' }}>{tabDecisionsByRekan.get(r.id) ?? 0}</td>
-                          <td style={{ padding: '8px 8px', textAlign: 'right', color: 'var(--muted)' }}>
+                          <td className="t-mono" style={{ textAlign: 'right' }}>{tabDecisionsByRekan.get(r.id) ?? 0}</td>
+                          <td className="t-mono" style={{ textAlign: 'right', color: 'var(--muted)' }}>
                             {r.last_login_at
                               ? new Date(r.last_login_at).toLocaleDateString('id-ID', { day: 'numeric', month: 'short' })
                               : '—'}
@@ -364,6 +356,7 @@ export default async function KoordinatorKetuaKelasPage({
                     })}
                   </tbody>
                 </table>
+                </div>
               </div>
             </div>
           )}

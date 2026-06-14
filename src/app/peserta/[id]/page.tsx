@@ -209,31 +209,31 @@ export default async function PesertaDossierPage({ params }: { params: { id: str
           {/* Cycle history table */}
           <h2 className="t-h2" style={{ marginBottom: 10 }}>Riwayat Setoran (6 cycle)</h2>
           <div className="card-flat" style={{ padding: 0, overflowX: 'auto', marginBottom: 24 }}>
-            <table className="t-mono" style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13, minWidth: 640 }}>
+            <table className="k-table" style={{ minWidth: 640 }}>
               <thead>
-                <tr style={{ background: 'var(--surface-2)', textAlign: 'left' }}>
-                  <th style={{ padding: '10px 12px', fontWeight: 600 }}>Cycle</th>
-                  <th style={{ padding: '10px 12px', fontWeight: 600 }}>Status</th>
-                  <th style={{ padding: '10px 12px', fontWeight: 600 }}>Dikirim</th>
-                  <th style={{ padding: '10px 12px', fontWeight: 600 }}>Dicek</th>
-                  <th style={{ padding: '10px 12px', fontWeight: 600 }}>Nilai</th>
+                <tr>
+                  <th>Cycle</th>
+                  <th>Status</th>
+                  <th>Dikirim</th>
+                  <th>Dicek</th>
+                  <th>Nilai</th>
                 </tr>
               </thead>
               <tbody>
-                {cycleListAsc.map((cy, i) => {
+                {cycleListAsc.map((cy) => {
                   const s = setoranByCycle.get(cy);
                   const status = s?.status ?? 'draft';
                   const badge = STATUS_BADGE[status];
                   const rec = s ? rekamanBySetoran.get(s.id) ?? [] : [];
                   return (
-                    <tr key={cy} style={{ borderTop: '1px solid var(--line)', background: i % 2 ? 'var(--surface)' : 'transparent' }}>
-                      <td style={{ padding: '10px 12px', fontWeight: 600 }}>{formatCycleRange(cy)}</td>
-                      <td style={{ padding: '10px 12px' }}>
+                    <tr key={cy}>
+                      <td className="nm">{formatCycleRange(cy)}</td>
+                      <td>
                         <span className={`badge ${badge.cls}`}><span className="dot" />{badge.label}</span>
                       </td>
-                      <td style={{ padding: '10px 12px', color: 'var(--muted)' }}>{fmtDate(s?.submitted_at)}</td>
-                      <td style={{ padding: '10px 12px', color: 'var(--muted)' }}>{fmtDate(s?.checked_at)}</td>
-                      <td style={{ padding: '10px 12px' }}>
+                      <td className="t-mono" style={{ color: 'var(--muted)' }}>{fmtDate(s?.submitted_at)}</td>
+                      <td className="t-mono" style={{ color: 'var(--muted)' }}>{fmtDate(s?.checked_at)}</td>
+                      <td>
                         <div style={{ display: 'flex', gap: 4 }}>
                           {[0, 1, 2].map((idx) => {
                             const r = rec[idx];

@@ -6,6 +6,9 @@ import { currentCycleStart, formatCycleDeadline, formatCycleRange, cyclesOfMonth
 import { logout } from '@/lib/auth';
 import { Icon, Initials } from '@/components/icons';
 import { FeatureNav } from '@/components/FeatureNav';
+import { StatCard } from '@/components/ui/StatCard';
+import { SectionHeader } from '@/components/ui/SectionHeader';
+import { Podium } from '@/components/ui/Podium';
 import {
   buildWaMeUrl,
   syaikhTitle,
@@ -132,6 +135,7 @@ export default async function SyaikhDashboard() {
   // Monthly peserta progress (all peserta, for ranking view)
   const { data: allKelas } = await supabaseAdmin.from('kelas').select('id, name');
   const allKelasIds = (allKelas ?? []).map((k) => k.id);
+  const kelasNameById = new Map((allKelas ?? []).map((k) => [k.id, k.name]));
   const { data: allPesertaRaw } = allKelasIds.length
     ? await supabaseAdmin
         .from('peserta')
@@ -268,27 +272,9 @@ export default async function SyaikhDashboard() {
           </div>
 
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10, marginBottom: 14 }}>
-            <div className="stat">
-              <div className="v" style={{ color: 'var(--merah-ink)' }}>{counters.belum}</div>
-              <div className="l">
-                <span className="accent-dot" style={{ background: 'var(--merah)' }} />
-                Belum
-              </div>
-            </div>
-            <div className="stat">
-              <div className="v" style={{ color: 'var(--kuning-ink)' }}>{counters.menunggu}</div>
-              <div className="l">
-                <span className="accent-dot" style={{ background: 'var(--kuning)' }} />
-                Menunggu
-              </div>
-            </div>
-            <div className="stat">
-              <div className="v" style={{ color: 'var(--hijau-ink)' }}>{counters.selesai}</div>
-              <div className="l">
-                <span className="accent-dot" style={{ background: 'var(--hijau)' }} />
-                Selesai
-              </div>
-            </div>
+            <StatCard value={counters.belum} label="Belum" valueColor="var(--merah-ink)" dotColor="var(--merah)" />
+            <StatCard value={counters.menunggu} label="Menunggu" valueColor="var(--kuning-ink)" dotColor="var(--kuning)" />
+            <StatCard value={counters.selesai} label="Selesai" valueColor="var(--hijau-ink)" dotColor="var(--hijau)" />
           </div>
 
           {(rekanSyaikh ?? []).length > 1 && (
@@ -296,6 +282,7 @@ export default async function SyaikhDashboard() {
               <div style={{ padding: '10px 16px', background: 'var(--surface-2)', borderBottom: '1px solid var(--line)' }}>
                 <div className="t-tiny">Aktivitas Rekan Masyaikh — {ym}</div>
               </div>
+              <div style={{ overflowX: 'auto' }}>
               <table className="t-mono" style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
                 <thead>
                   <tr style={{ textAlign: 'left' }}>
@@ -325,13 +312,11 @@ export default async function SyaikhDashboard() {
                   })}
                 </tbody>
               </table>
+              </div>
             </div>
           )}
 
-          <div className="section-row">
-            <div className="t-tiny">Musyrif &amp; Musyrifah</div>
-            <div className="t-small">{counters.total} orang</div>
-          </div>
+          <SectionHeader title="Musyrif & Musyrifah" right={`${counters.total} orang`} />
 
           {rows.length === 0 ? (
             <div className="card-flat" style={{ padding: 18 }}>
@@ -411,10 +396,28 @@ export default async function SyaikhDashboard() {
           )}
 
           {/* Progress ranking peserta bulan ini */}
-          <div className="section-row" style={{ marginTop: 24 }}>
-            <div className="t-tiny">Ranking peserta — {monthLabel}</div>
-            <div className="t-small">{pesertaMonthlyRows.length} peserta</div>
-          </div>
+          <SectionHeader title={`Ranking peserta — ${monthLabel}`} right={`${pesertaMonthlyRows.length} peserta`} style={{ marginTop: 24 }} />
+          <Podium
+            items={pesertaMonthlyRows
+              .filter((r) => r.rataRata !== null)
+              .slice(0, 3)
+              .map((r) => ({
+                id: r.peserta.id,
+                name: r.peserta.name,
+                sub: kelasNameById.get(r.peserta.kelas_id) ?? undefined,
+                score: r.rataRata,
+              }))}
+            href={(id) => `/peserta/${id}`}
+            colorFor={(score) =>
+              score === null
+                ? 'var(--muted-2)'
+                : score >= 3
+                  ? 'var(--hijau-ink)'
+                  : score >= 2
+                    ? 'var(--kuning-ink)'
+                    : 'var(--merah-ink)'
+            }
+          />
           <div className="card-flat" style={{ padding: 0, overflow: 'hidden', marginBottom: 16 }}>
             {/* Header */}
             <div

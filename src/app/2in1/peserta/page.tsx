@@ -151,8 +151,8 @@ export default async function PesertaPage() {
               style={{ textDecoration: 'none', display: 'block', marginBottom: 16 }}
             >
               <div style={{
-                background: pertemuanHariIni ? 'var(--primary-tint, #e8f0fe)' : 'var(--bg-card)',
-                border: `1.5px solid ${pertemuanHariIni ? 'var(--primary, #1a73e8)' : 'var(--border)'}`,
+                background: pertemuanHariIni ? 'var(--accent-tint)' : 'var(--surface)',
+                border: `1.5px solid ${pertemuanHariIni ? 'var(--accent)' : 'var(--line)'}`,
                 borderRadius: 10,
                 padding: '10px 14px',
                 display: 'flex',
@@ -160,7 +160,7 @@ export default async function PesertaPage() {
                 alignItems: 'center',
               }}>
                 <div>
-                  <div style={{ fontSize: 12, fontWeight: 600, color: pertemuanHariIni ? 'var(--primary, #1a73e8)' : 'var(--muted-2)' }}>
+                  <div style={{ fontSize: 12, fontWeight: 600, color: pertemuanHariIni ? 'var(--accent-2)' : 'var(--muted-2)' }}>
                     {pertemuanHariIni ? `Ada pertemuan hari ini: ${pertemuanHariIni.nama_kegiatan}` : 'Ketua Kelas 2in1'}
                   </div>
                   <div className="t-tiny">

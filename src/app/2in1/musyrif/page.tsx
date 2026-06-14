@@ -12,6 +12,9 @@ import {
 import { logout } from '@/lib/auth';
 import { Icon, Initials } from '@/components/icons';
 import { FeatureNav } from '@/components/FeatureNav';
+import { StatCard } from '@/components/ui/StatCard';
+import { SectionHeader } from '@/components/ui/SectionHeader';
+import { Podium } from '@/components/ui/Podium';
 import {
   buildWaMeUrl,
   salutation,
@@ -264,34 +267,13 @@ export default async function MusyrifDashboard() {
 
           {/* Stats peserta cycle berjalan */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10, marginBottom: 14 }}>
-            <div className="stat">
-              <div className="v" style={{ color: 'var(--merah-ink)' }}>{counters.belum}</div>
-              <div className="l">
-                <span className="accent-dot" style={{ background: 'var(--merah)' }} />
-                Belum
-              </div>
-            </div>
-            <div className="stat">
-              <div className="v" style={{ color: 'var(--kuning-ink)' }}>{counters.menunggu}</div>
-              <div className="l">
-                <span className="accent-dot" style={{ background: 'var(--kuning)' }} />
-                Menunggu
-              </div>
-            </div>
-            <div className="stat">
-              <div className="v" style={{ color: 'var(--hijau-ink)' }}>{counters.selesai}</div>
-              <div className="l">
-                <span className="accent-dot" style={{ background: 'var(--hijau)' }} />
-                Selesai
-              </div>
-            </div>
+            <StatCard value={counters.belum} label="Belum" valueColor="var(--merah-ink)" dotColor="var(--merah)" />
+            <StatCard value={counters.menunggu} label="Menunggu" valueColor="var(--kuning-ink)" dotColor="var(--kuning)" />
+            <StatCard value={counters.selesai} label="Selesai" valueColor="var(--hijau-ink)" dotColor="var(--hijau)" />
           </div>
 
           {/* Cycle berjalan: list peserta */}
-          <div className="section-row">
-            <div className="t-tiny">Cycle berjalan — peserta saya</div>
-            <div className="t-small">{counters.total} orang</div>
-          </div>
+          <SectionHeader title="Cycle berjalan — peserta saya" right={`${counters.total} orang`} />
 
           {rows.length === 0 ? (
             <div className="card-flat" style={{ padding: 18 }}>
@@ -363,10 +345,28 @@ export default async function MusyrifDashboard() {
           )}
 
           {/* Progress bulanan H1/H2 */}
-          <div className="section-row" style={{ marginTop: 24 }}>
-            <div className="t-tiny">Progress bulan ini — {monthLabel}</div>
-            <div className="t-small">{counters.total} peserta</div>
-          </div>
+          <SectionHeader title={`Progress bulan ini — ${monthLabel}`} right={`${counters.total} peserta`} style={{ marginTop: 24 }} />
+          <Podium
+            items={monthlyRowsSorted
+              .filter((r) => r.rataRata !== null)
+              .slice(0, 3)
+              .map((r) => ({
+                id: r.peserta.id,
+                name: r.peserta.name,
+                sub: kelasById.get(r.peserta.kelas_id)?.name ?? undefined,
+                score: r.rataRata,
+              }))}
+            href={(id) => `/peserta/${id}`}
+            colorFor={(score) =>
+              score === null
+                ? 'var(--muted-2)'
+                : score >= 3
+                  ? 'var(--hijau-ink)'
+                  : score >= 2
+                    ? 'var(--kuning-ink)'
+                    : 'var(--merah-ink)'
+            }
+          />
           <div
             className="card-flat"
             style={{ padding: 0, overflow: 'hidden', marginBottom: 24 }}

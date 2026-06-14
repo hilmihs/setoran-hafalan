@@ -5,6 +5,7 @@ import { absUrl } from '@/lib/url';
 import { logout } from '@/lib/auth';
 import { Icon } from '@/components/icons';
 import { FeatureNav } from '@/components/FeatureNav';
+import { StatCard } from '@/components/ui/StatCard';
 import { DecisionButtons } from './DecisionButtons';
 
 export const dynamic = 'force-dynamic';
@@ -86,31 +87,18 @@ export default async function KetuaKelompokPage() {
           </div>
 
           {/* Summary card */}
-          <div
-            className="card-flat"
-            style={{
-              padding: '16px 20px',
-              marginBottom: 20,
-              display: 'grid',
-              gridTemplateColumns: '1fr 1fr 1fr',
-              gap: 12,
-              textAlign: 'center',
-            }}
-          >
-            <div>
-              <div className="t-small" style={{ color: 'var(--muted-2)' }}>Anggota</div>
-              <div style={{ fontSize: 24, fontWeight: 700 }}>{members?.length ?? 0}</div>
-            </div>
-            <div>
-              <div className="t-small" style={{ color: 'var(--muted-2)' }}>Kehadiran</div>
-              <div style={{ fontSize: 24, fontWeight: 700 }}>{attendancePercent}%</div>
-            </div>
-            <div>
-              <div className="t-small" style={{ color: 'var(--muted-2)' }}>Pending</div>
-              <div style={{ fontSize: 24, fontWeight: 700, color: (pendingAlasan?.length ?? 0) > 0 ? 'var(--danger)' : 'inherit' }}>
-                {pendingAlasan?.length ?? 0}
-              </div>
-            </div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10, marginBottom: 20 }}>
+            <StatCard value={members?.length ?? 0} label="Anggota" />
+            <StatCard
+              value={`${attendancePercent}%`}
+              label="Kehadiran"
+              valueColor={attendancePercent >= 70 ? 'var(--hijau-ink)' : attendancePercent >= 50 ? 'var(--kuning-ink)' : 'var(--merah-ink)'}
+            />
+            <StatCard
+              value={pendingAlasan?.length ?? 0}
+              label="Pending"
+              valueColor={(pendingAlasan?.length ?? 0) > 0 ? 'var(--merah-ink)' : undefined}
+            />
           </div>
 
           {/* Pending excuses */}
@@ -172,12 +160,19 @@ export default async function KetuaKelompokPage() {
                   alignItems: 'center',
                 }}
               >
-                <div>
+                <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ fontWeight: m.is_ketua ? 700 : 500 }}>
                     {m.is_ketua ? '⭐ ' : ''}{m.name}
                   </div>
-                  <div className="t-small" style={{ color: 'var(--muted-2)' }}>
+                  <div className="t-small" style={{ color: 'var(--muted-2)', marginBottom: 6 }}>
                     {hadirN}/{totalN} hadir ({pct}%)
+                  </div>
+                  <div style={{ height: 4, maxWidth: 220, background: 'var(--line)', borderRadius: 2, overflow: 'hidden' }}>
+                    <div style={{
+                      height: '100%',
+                      width: `${pct}%`,
+                      background: pct >= 70 ? 'var(--hijau)' : pct >= 50 ? 'var(--kuning)' : 'var(--merah)',
+                    }} />
                   </div>
                 </div>
                 <a
@@ -185,7 +180,7 @@ export default async function KetuaKelompokPage() {
                   target="_blank"
                   rel="noopener noreferrer"
                   className="btn-ghost"
-                  style={{ fontSize: 12, padding: '6px 10px' }}
+                  style={{ fontSize: 12, padding: '6px 10px', flexShrink: 0, marginLeft: 10 }}
                 >
                   Reminder
                 </a>

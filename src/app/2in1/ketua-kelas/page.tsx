@@ -2,6 +2,8 @@ import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { supabaseAdmin } from '@/lib/supabase-admin';
 import { getSessionWa, findKetuaProgramKelas } from '@/lib/program-kelas';
+import { Icon } from '@/components/icons';
+import { SectionHeader } from '@/components/ui/SectionHeader';
 
 export const dynamic = 'force-dynamic';
 
@@ -77,60 +79,66 @@ export default async function KetuaKelasPage() {
   const monthLabel = now.toLocaleDateString('id-ID', { year: 'numeric', month: 'long' });
 
   return (
-    <main style={{ padding: '0 0 80px' }}>
-      <div className="page-header">
-        <Link href="/" className="back-btn" aria-label="Kembali">←</Link>
-        <div>
-          <div className="title">Ketua Kelas</div>
-          <div className="sub">{myKelas.map((k) => k.name).join(' · ')}</div>
-        </div>
-      </div>
-
-      <div style={{ padding: '0 16px' }}>
-        {/* Jadwal info */}
-        {myKelas.map((k) => (
-          <div key={k.id} className="card" style={{ padding: '8px 12px', marginBottom: 8, background: 'var(--bg-soft, #fafafa)' }}>
-            <div style={{ fontSize: 12, fontWeight: 600 }}>{k.name}</div>
-            <div className="t-tiny" style={{ color: 'var(--muted-2)' }}>
-              {(k.jadwal_hari ?? []).join(', ')}
-              {k.waktu_mulai ? ` · ${k.waktu_mulai.slice(0, 5)}${k.waktu_selesai ? ' – ' + k.waktu_selesai.slice(0, 5) : ''}` : ''}
-            </div>
+    <main style={{ minHeight: '100vh' }}>
+      <div style={{ maxWidth: 480, margin: '0 auto' }}>
+        <div className="topbar">
+          <div className="wordmark">
+            <span className="mark">M</span> Ketua Kelas
           </div>
-        ))}
-
-        {pertemuanToday.length > 0 && (
-          <div style={{ margin: '20px 0' }}>
-            <div className="section-row" style={{ marginBottom: 8 }}>
-              <div className="t-tiny">Hari ini</div>
-            </div>
-            {pertemuanToday.map((p) => (
-              <PertemuanCard key={p.id} p={p} highlight />
-            ))}
-          </div>
-        )}
-
-        <div style={{ margin: '16px 0' }}>
-          <div className="section-row">
-            <div className="t-tiny">{monthLabel}</div>
-            <Link
-              href="/2in1/ketua-kelas/pertemuan/new"
-              className="btn btn-sm btn-primary"
-              style={{ padding: '3px 10px', fontSize: 12, textDecoration: 'none' }}
-            >
-              + Catat Pertemuan
-            </Link>
-          </div>
+          <Link href="/" className="back">
+            {Icon.back(12)} Beranda
+          </Link>
         </div>
 
-        {pertemuanOther.length === 0 && pertemuanToday.length === 0 && (
-          <p className="t-small" style={{ color: 'var(--muted-2)', marginTop: 8 }}>
-            Belum ada pertemuan bulan ini. Tap &quot;+ Catat Pertemuan&quot; untuk mulai.
+        <div className="page">
+          <p className="t-small" style={{ color: 'var(--muted-2)', marginBottom: 16 }}>
+            {myKelas.map((k) => k.name).join(' · ')}
           </p>
-        )}
 
-        {pertemuanOther.map((p) => (
-          <PertemuanCard key={p.id} p={p} />
-        ))}
+          {/* Jadwal info */}
+          {myKelas.map((k) => (
+            <div key={k.id} className="card" style={{ padding: '8px 12px', marginBottom: 8, background: 'var(--surface-2)' }}>
+              <div style={{ fontSize: 12, fontWeight: 600 }}>{k.name}</div>
+              <div className="t-tiny" style={{ color: 'var(--muted-2)' }}>
+                {(k.jadwal_hari ?? []).join(', ')}
+                {k.waktu_mulai ? ` · ${k.waktu_mulai.slice(0, 5)}${k.waktu_selesai ? ' – ' + k.waktu_selesai.slice(0, 5) : ''}` : ''}
+              </div>
+            </div>
+          ))}
+
+          {pertemuanToday.length > 0 && (
+            <div style={{ margin: '20px 0' }}>
+              <SectionHeader title="Hari ini" style={{ marginBottom: 8 }} />
+              {pertemuanToday.map((p) => (
+                <PertemuanCard key={p.id} p={p} highlight />
+              ))}
+            </div>
+          )}
+
+          <SectionHeader
+            title={monthLabel}
+            style={{ margin: '16px 2px 10px' }}
+            right={
+              <Link
+                href="/2in1/ketua-kelas/pertemuan/new"
+                className="btn btn-sm btn-primary"
+                style={{ padding: '3px 10px', fontSize: 12, textDecoration: 'none' }}
+              >
+                + Catat Pertemuan
+              </Link>
+            }
+          />
+
+          {pertemuanOther.length === 0 && pertemuanToday.length === 0 && (
+            <p className="t-small" style={{ color: 'var(--muted-2)', marginTop: 8 }}>
+              Belum ada pertemuan bulan ini. Tap &quot;+ Catat Pertemuan&quot; untuk mulai.
+            </p>
+          )}
+
+          {pertemuanOther.map((p) => (
+            <PertemuanCard key={p.id} p={p} />
+          ))}
+        </div>
       </div>
     </main>
   );
@@ -161,9 +169,9 @@ function PertemuanCard({ p, highlight }: {
       <div className="card" style={{
         padding: '10px 14px',
         marginBottom: 8,
-        border: highlight ? '1.5px solid var(--primary, #1a73e8)' : undefined,
+        borderLeft: highlight ? '3px solid var(--accent)' : undefined,
       }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 10 }}>
           <div>
             <div style={{ fontSize: 13, fontWeight: 600 }}>{p.programLabel}</div>
             <div className="t-small">{p.nama_kegiatan} · {p.kelasName}</div>
@@ -171,13 +179,17 @@ function PertemuanCard({ p, highlight }: {
               {tanggalLabel}{timeRange ? ` · ${timeRange}` : ''}
             </div>
           </div>
-          <div style={{ textAlign: 'right' }}>
+          <div style={{ textAlign: 'right', flexShrink: 0 }}>
             {p.counts ? (
-              <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--hijau-ink)' }}>
+              <span className="badge badge-hijau">
+                <span className="dot" />
                 {p.counts.hadir}/{p.counts.total}
               </span>
             ) : (
-              <span className="t-tiny" style={{ color: 'var(--muted-2)' }}>Isi →</span>
+              <span className="badge badge-kuning">
+                <span className="dot" />
+                Isi →
+              </span>
             )}
           </div>
         </div>

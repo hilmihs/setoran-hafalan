@@ -19,11 +19,11 @@ interface ShakwaItem {
   created_at: string;
 }
 
-const STATUS_COLORS: Record<string, { bg: string; border: string; color: string }> = {
-  submitted: { bg: 'var(--kuning-tint)', border: 'var(--kuning-line)', color: 'var(--kuning-ink)' },
-  in_review: { bg: 'var(--surface-3)', border: 'var(--line)', color: 'var(--muted)' },
-  resolved: { bg: 'var(--hijau-tint)', border: 'var(--hijau-line)', color: 'var(--hijau-ink)' },
-  closed: { bg: 'var(--surface-3)', border: 'var(--line)', color: 'var(--muted-2)' },
+const STATUS_COLORS: Record<string, { bg: string; border: string; color: string; accent: string }> = {
+  submitted: { bg: 'var(--kuning-tint)', border: 'var(--kuning-line)', color: 'var(--kuning-ink)', accent: 'var(--kuning)' },
+  in_review: { bg: 'var(--surface-3)', border: 'var(--line)', color: 'var(--muted)', accent: 'var(--accent)' },
+  resolved: { bg: 'var(--hijau-tint)', border: 'var(--hijau-line)', color: 'var(--hijau-ink)', accent: 'var(--hijau)' },
+  closed: { bg: 'var(--surface-3)', border: 'var(--line)', color: 'var(--muted-2)', accent: 'var(--muted-2)' },
 };
 
 const STATUS_LABELS: Record<string, string> = {
@@ -54,7 +54,7 @@ export function ShakwaReviewCard({ shakwa }: { shakwa: ShakwaItem }) {
   }
 
   return (
-    <div className="card-flat" style={{ marginBottom: 8 }}>
+    <div className="card-flat" style={{ marginBottom: 8, borderLeft: `3px solid ${sc.accent}` }}>
       <div
         style={{
           padding: '10px 14px',

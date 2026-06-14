@@ -34,7 +34,7 @@ export default function ShakwaLandingPage() {
                 padding: '16px 20px',
                 textDecoration: 'none',
                 color: 'inherit',
-                borderLeft: '3px solid var(--primary)',
+                borderLeft: '3px solid var(--accent)',
               }}
             >
               <div style={{ fontWeight: 600, marginBottom: 2 }}>Peserta</div>
@@ -51,7 +51,7 @@ export default function ShakwaLandingPage() {
                 padding: '16px 20px',
                 textDecoration: 'none',
                 color: 'inherit',
-                borderLeft: '3px solid var(--primary)',
+                borderLeft: '3px solid var(--accent)',
               }}
             >
               <div style={{ fontWeight: 600, marginBottom: 2 }}>Pengajar</div>

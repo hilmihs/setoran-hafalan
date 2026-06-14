@@ -18,13 +18,13 @@ export default function ShakwaPesertaPage() {
             </div>
 
             <div className="card-flat" style={{ padding: '24px 20px', textAlign: 'center' }}>
-              <p className="t-body" style={{ fontWeight: 600, color: 'var(--success, #4caf50)', marginBottom: 8 }}>
+              <p className="t-body" style={{ fontWeight: 600, color: 'var(--hijau-ink)', marginBottom: 8 }}>
                 Terima kasih, SHAKWA Anda telah diterima.
               </p>
               <p className="t-small" style={{ color: 'var(--muted-2)', marginBottom: 16 }}>
                 Laporan Anda akan ditinjau oleh koordinator.
               </p>
-              <a href="/shakwa" className="btn" style={{ display: 'inline-block' }}>
+              <a href="/shakwa" className="btn btn-ghost" style={{ display: 'inline-flex' }}>
                 Kembali
               </a>
             </div>
@@ -49,7 +49,7 @@ export default function ShakwaPesertaPage() {
 
           <div
             style={{
-              background: 'var(--primary)',
+              background: 'var(--accent)',
               color: 'white',
               padding: '12px 16px',
               borderRadius: 8,
@@ -136,7 +136,7 @@ export default function ShakwaPesertaPage() {
               </p>
             )}
 
-            <button type="submit" className="btn" style={{ width: '100%' }}>
+            <button type="submit" className="btn btn-primary btn-block">
               Kirim
             </button>
           </form>

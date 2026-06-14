@@ -3,6 +3,7 @@ import { supabaseAdmin } from '@/lib/supabase-admin';
 import { logout } from '@/lib/auth';
 import { Icon } from '@/components/icons';
 import { FeatureNav } from '@/components/FeatureNav';
+import { StatCard } from '@/components/ui/StatCard';
 import { ObservasiForm } from './ObservasiForm';
 import type { ObservasiKelas } from '@/types/db';
 
@@ -70,9 +71,19 @@ export default async function KetuaKelasObservasiPage() {
           <p className="t-body" style={{ marginBottom: 4 }}>
             Pengajar: {pengajarName}
           </p>
-          <p className="t-small" style={{ color: 'var(--muted-2)', marginBottom: 20 }}>
+          <p className="t-small" style={{ color: 'var(--muted-2)', marginBottom: 16 }}>
             {session.name} (Ketua Kelas) — {today}
           </p>
+
+          <div className="matrix-stat-grid" style={{ gridTemplateColumns: '1fr 1fr', marginBottom: 20 }}>
+            <StatCard value={history.length} label="Observasi tercatat" />
+            <StatCard
+              value={todayExists ? 'Terisi' : 'Belum'}
+              label="Observasi hari ini"
+              valueColor={todayExists ? 'var(--hijau-ink)' : 'var(--kuning-ink)'}
+              dotColor={todayExists ? 'var(--hijau)' : 'var(--kuning)'}
+            />
+          </div>
 
           <ObservasiForm
             kelasName={kelas?.name ?? 'Halaqah'}

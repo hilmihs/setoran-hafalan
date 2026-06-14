@@ -3,6 +3,8 @@ import { supabaseAdmin } from '@/lib/supabase-admin';
 import { logout } from '@/lib/auth';
 import { Icon } from '@/components/icons';
 import { FeatureNav } from '@/components/FeatureNav';
+import { StatCard } from '@/components/ui/StatCard';
+import { MiniDistribution } from '@/components/ui/MiniDistribution';
 import { ShakwaReviewCard } from './ShakwaReviewCard';
 import { ShakwaFilterBar } from './ShakwaFilterBar';
 
@@ -76,32 +78,30 @@ export default async function ShakwaKoordinatorPage({
           </p>
 
           {/* Stats */}
-          <div
-            className="card-flat"
-            style={{
-              padding: '16px 20px', marginBottom: 20,
-              display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 8, textAlign: 'center',
-            }}
-          >
-            <div>
-              <div className="t-small" style={{ color: 'var(--muted-2)' }}>Total</div>
-              <div style={{ fontSize: 18, fontWeight: 700 }}>{totalCount ?? 0}</div>
-            </div>
-            <div>
-              <div className="t-small" style={{ color: 'var(--muted-2)' }}>Baru</div>
-              <div style={{ fontSize: 18, fontWeight: 700, color: (submittedCount ?? 0) > 0 ? 'var(--kuning-ink)' : 'inherit' }}>
-                {submittedCount ?? 0}
-              </div>
-            </div>
-            <div>
-              <div className="t-small" style={{ color: 'var(--muted-2)' }}>Ditinjau</div>
-              <div style={{ fontSize: 18, fontWeight: 700 }}>{reviewCount ?? 0}</div>
-            </div>
-            <div>
-              <div className="t-small" style={{ color: 'var(--muted-2)' }}>Selesai</div>
-              <div style={{ fontSize: 18, fontWeight: 700, color: 'var(--hijau-ink)' }}>{resolvedCount ?? 0}</div>
-            </div>
+          <div className="matrix-stat-grid" style={{ marginBottom: 12 }}>
+            <StatCard value={totalCount ?? 0} label="Total" />
+            <StatCard
+              value={submittedCount ?? 0}
+              label="Baru"
+              dotColor="var(--kuning)"
+              valueColor={(submittedCount ?? 0) > 0 ? 'var(--kuning-ink)' : undefined}
+            />
+            <StatCard value={reviewCount ?? 0} label="Ditinjau" dotColor="var(--accent)" />
+            <StatCard value={resolvedCount ?? 0} label="Selesai" dotColor="var(--hijau)" valueColor="var(--hijau-ink)" />
           </div>
+
+          {(totalCount ?? 0) > 0 && (
+            <div className="card-flat" style={{ padding: 14, marginBottom: 20 }}>
+              <div className="t-tiny" style={{ marginBottom: 8 }}>Distribusi status</div>
+              <MiniDistribution
+                segments={[
+                  { value: submittedCount ?? 0, color: 'var(--kuning)', label: 'Baru' },
+                  { value: reviewCount ?? 0, color: 'var(--accent)', label: 'Ditinjau' },
+                  { value: resolvedCount ?? 0, color: 'var(--hijau)', label: 'Selesai' },
+                ]}
+              />
+            </div>
+          )}
 
           <ShakwaFilterBar
             current={{ status: statusFilter, pelapor: pelaporFilter }}

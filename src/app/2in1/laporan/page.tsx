@@ -74,6 +74,17 @@ export default async function LaporanPage({
             berisi 2 sheet: <em>Rekap</em> dan <em>Matrix Skill Tajwid</em>.
           </p>
 
+          <div className="matrix-stat-grid" style={{ gridTemplateColumns: '1fr 1fr', marginBottom: 18 }}>
+            <div className="card-flat" style={{ padding: 14 }}>
+              <div className="t-tiny" style={{ marginBottom: 4 }}>Sheet 1 — Rekap</div>
+              <div className="t-small" style={{ color: 'var(--muted-2)' }}>Setoran & kehadiran</div>
+            </div>
+            <div className="card-flat" style={{ padding: 14 }}>
+              <div className="t-tiny" style={{ marginBottom: 4 }}>Sheet 2 — Matrix Skill Tajwid</div>
+              <div className="t-small" style={{ color: 'var(--muted-2)' }}>Skor per indikator</div>
+            </div>
+          </div>
+
           <LaporanFilterBar
             monthOptions={monthOptions}
             current={{ bulan: defaultMonth, gender }}

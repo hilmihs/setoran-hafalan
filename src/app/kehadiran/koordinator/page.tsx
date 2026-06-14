@@ -5,6 +5,8 @@ import { absUrl } from '@/lib/url';
 import { logout } from '@/lib/auth';
 import { Icon } from '@/components/icons';
 import { FeatureNav } from '@/components/FeatureNav';
+import { StatCard } from '@/components/ui/StatCard';
+import { MiniDistribution } from '@/components/ui/MiniDistribution';
 import { LiburForm } from './LiburForm';
 
 export const dynamic = 'force-dynamic';
@@ -178,36 +180,32 @@ export default async function KoordinatorKehadiranPage() {
           </div>
 
           {/* Stats */}
-          <div
-            className="card-flat"
-            style={{
-              padding: '16px 20px',
-              marginBottom: 20,
-              display: 'grid',
-              gridTemplateColumns: '1fr 1fr 1fr 1fr',
-              gap: 12,
-              textAlign: 'center',
-            }}
-          >
-            <div>
-              <div className="t-small" style={{ color: 'var(--muted-2)' }}>Pengajar</div>
-              <div style={{ fontSize: 20, fontWeight: 700 }}>{totalPengajar}</div>
-            </div>
-            <div>
-              <div className="t-small" style={{ color: 'var(--muted-2)' }}>Kehadiran</div>
-              <div style={{ fontSize: 20, fontWeight: 700 }}>{overallPercent}%</div>
-            </div>
-            <div>
-              <div className="t-small" style={{ color: 'var(--muted-2)' }}>Alasan Pending</div>
-              <div style={{ fontSize: 20, fontWeight: 700, color: (pendingAlasan?.length ?? 0) > 0 ? 'var(--danger)' : 'inherit' }}>
-                {pendingAlasan?.length ?? 0}
-              </div>
-            </div>
-            <div>
-              <div className="t-small" style={{ color: 'var(--muted-2)' }}>Kelompok</div>
-              <div style={{ fontSize: 20, fontWeight: 700 }}>{kelompokList?.length ?? 0}</div>
-            </div>
+          <div className="matrix-stat-grid" style={{ marginBottom: 12 }}>
+            <StatCard value={totalPengajar} label="Pengajar" />
+            <StatCard
+              value={`${overallPercent}%`}
+              label="Kehadiran"
+              valueColor={overallPercent >= 70 ? 'var(--hijau-ink)' : overallPercent >= 50 ? 'var(--kuning-ink)' : 'var(--merah-ink)'}
+            />
+            <StatCard
+              value={pendingAlasan?.length ?? 0}
+              label="Alasan Pending"
+              valueColor={(pendingAlasan?.length ?? 0) > 0 ? 'var(--merah-ink)' : undefined}
+            />
+            <StatCard value={kelompokList?.length ?? 0} label="Kelompok" />
           </div>
+
+          {totalCheckins > 0 && (
+            <div className="card-flat" style={{ padding: 14, marginBottom: 20 }}>
+              <div className="t-tiny" style={{ marginBottom: 8 }}>Distribusi check-in bulan ini</div>
+              <MiniDistribution
+                segments={[
+                  { value: hadirCount, color: 'var(--hijau)', label: 'Hadir' },
+                  { value: totalCheckins - hadirCount, color: 'var(--kuning)', label: 'Izin/Sakit' },
+                ]}
+              />
+            </div>
+          )}
 
           {/* Pending alasan overview */}
           {pendingAlasan && pendingAlasan.length > 0 && (
@@ -240,6 +238,7 @@ export default async function KoordinatorKehadiranPage() {
                 Aktivitas Rekan Koordinator — {ym}
               </h2>
               <div className="card-flat" style={{ padding: 0, overflow: 'hidden' }}>
+                <div style={{ overflowX: 'auto' }}>
                 <table className="t-mono" style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
                   <thead>
                     <tr style={{ background: 'var(--surface-2)', textAlign: 'left' }}>
@@ -269,6 +268,7 @@ export default async function KoordinatorKehadiranPage() {
                     })}
                   </tbody>
                 </table>
+                </div>
               </div>
             </div>
           )}
@@ -321,7 +321,7 @@ export default async function KoordinatorKehadiranPage() {
                   <div className="t-small" style={{ color: 'var(--muted-2)' }}>
                     {ketua ? `Ketua: ${ketua.name}` : 'Tanpa ketua'} &bull; {kelMembers.length} anggota &bull; {kelPct}% hadir
                     {kelPending > 0 && (
-                      <span style={{ color: 'var(--danger)', fontWeight: 600 }}>
+                      <span style={{ color: 'var(--merah-ink)', fontWeight: 600 }}>
                         {' '}&bull; {kelPending} pending
                       </span>
                     )}
