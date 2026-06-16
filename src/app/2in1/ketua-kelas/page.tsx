@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { supabaseAdmin } from '@/lib/supabase-admin';
 import { getSessionWa, findKetuaProgramKelas } from '@/lib/program-kelas';
+import { getUnfilledMaahirDays } from '@/lib/maahir-presensi';
 import { Icon } from '@/components/icons';
 import { SectionHeader } from '@/components/ui/SectionHeader';
 
@@ -32,6 +33,8 @@ export default async function KetuaKelasPage() {
   }
 
   const kelasIds = myKelas.map((k) => k.id);
+
+  const unfilledCount = (await getUnfilledMaahirDays(wa)).length;
 
   // Pertemuan bulan ini untuk semua kelas yang dipimpin
   const now = new Date();
@@ -94,6 +97,18 @@ export default async function KetuaKelasPage() {
           <p className="t-small" style={{ color: 'var(--muted-2)', marginBottom: 16 }}>
             {myKelas.map((k) => k.name).join(' · ')}
           </p>
+
+          {unfilledCount > 0 && (
+            <Link
+              href="/2in1/ketua-kelas/presensi"
+              className="banner banner-error"
+              style={{ display: 'block', textDecoration: 'none', marginBottom: 16 }}
+            >
+              <div className="desc">
+                <strong>{unfilledCount} presensi belum diisi.</strong> Tap untuk isi sekarang →
+              </div>
+            </Link>
+          )}
 
           {/* Jadwal info */}
           {myKelas.map((k) => (
