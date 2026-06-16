@@ -3,6 +3,7 @@ import { supabaseAdmin } from '@/lib/supabase-admin';
 import { getSessionWa } from '@/lib/program-kelas';
 import { getUnfilledMaahirDays, PROGRAM_LABEL } from '@/lib/maahir-presensi';
 import { PresensiWizardForm } from './PresensiWizardForm';
+import { LogoutButton } from '@/components/LogoutButton';
 
 export const dynamic = 'force-dynamic';
 
@@ -86,6 +87,7 @@ export default async function PresensiWizardPage() {
           <div className="wordmark">
             <span className="mark">M</span> Presensi Wajib
           </div>
+          <LogoutButton />
         </div>
 
         <div className="page">
