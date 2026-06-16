@@ -2,9 +2,10 @@ import { redirect } from 'next/navigation';
 import Link from 'next/link';
 import { getSession } from '@/lib/session';
 import { supabaseAdmin } from '@/lib/supabase-admin';
-import { logout } from '@/lib/auth';
+import { LogoutButton } from '@/components/LogoutButton';
 import { Icon, Initials } from '@/components/icons';
 import {
+  CYCLE_ANCHOR,
   currentCycleStart,
   formatCycleDeadline,
   formatCycleRange,
@@ -12,6 +13,7 @@ import {
   cyclesOfMonth,
   currentYearMonth,
 } from '@/lib/week';
+import { formatCycleRangeShort } from '@/lib/week';
 import {
   buildWaMeUrl,
   salutation,
@@ -21,11 +23,13 @@ import {
 } from '@/lib/whatsapp';
 import { absUrl, appOrigin } from '@/lib/url';
 import { KoordinatorFilterBar } from '@/components/KoordinatorFilterBar';
+import { MonitoringTable, type MonitoringRow } from '@/components/MonitoringTable';
+import { RankingTable, type RankingRow } from '@/components/RankingTable';
 import type { Gender, NilaiRekaman, StatusSetoran } from '@/types/db';
 
 export const dynamic = 'force-dynamic';
 
-type SP = { week?: string; gender?: string; kelas?: string; status?: string; q?: string };
+type SP = { week?: string; gender?: string; kelas?: string; status?: string; q?: string; month?: string };
 
 export default async function KoordinatorDashboard({
   searchParams,
@@ -39,8 +43,39 @@ export default async function KoordinatorDashboard({
   const koordinatorGender = s.session.gender;
 
   const week = searchParams.week ?? currentCycleStart();
-  const { year: curYear, month: curMonth, label: monthLabel } = currentYearMonth();
-  const [h1Week, h2Week] = cyclesOfMonth(curYear, curMonth);
+  const { year: curYear, month: curMonth } = currentYearMonth();
+  // Periode ranking = bulan terpilih (default bulan berjalan).
+  let rankYear = curYear;
+  let rankMonth = curMonth;
+  if (searchParams.month && /^\d{4}-\d{2}$/.test(searchParams.month)) {
+    const [my, mm] = searchParams.month.split('-').map(Number);
+    rankYear = my;
+    rankMonth = mm;
+  }
+  const rankYearMonth = `${rankYear}-${String(rankMonth).padStart(2, '0')}`;
+  const monthLabel = new Date(Date.UTC(rankYear, rankMonth - 1, 1)).toLocaleDateString('id-ID', {
+    month: 'long',
+    year: 'numeric',
+    timeZone: 'UTC',
+  });
+  const [h1Week, h2Week] = cyclesOfMonth(rankYear, rankMonth);
+  // Opsi bulan: dari bulan anchor (2026-06) s/d bulan berjalan.
+  const monthOptions: Array<{ value: string; label: string }> = [];
+  {
+    const [ay, am] = CYCLE_ANCHOR.split('-').map(Number);
+    let y = ay;
+    let m = am;
+    while (y < curYear || (y === curYear && m <= curMonth)) {
+      const val = `${y}-${String(m).padStart(2, '0')}`;
+      monthOptions.push({
+        value: val,
+        label: new Date(Date.UTC(y, m - 1, 1)).toLocaleDateString('id-ID', { month: 'long', year: 'numeric', timeZone: 'UTC' }),
+      });
+      m++;
+      if (m > 12) { m = 1; y++; }
+    }
+    monthOptions.reverse();
+  }
   const deadlineLabel = formatCycleDeadline(week);
   // View cross-gender penuh: koordinator (ikhwan & akhwat) lihat semua data.
   // Aksi (kirim reminder) tetap di-gating same-gender di UI bawah.
@@ -157,13 +192,18 @@ export default async function KoordinatorDashboard({
 
   const weekOptions = [currentCycleStart(), ...previousCycles(8)];
 
-  // Risky peserta: ≥2 dari 3 cycle terakhir tidak submit/draft.
-  const riskCycles = [week, ...previousCycles(2)];
-  const { data: riskSetoranList } = await supabaseAdmin
-    .from('setoran')
-    .select('peserta_id, week_start, status')
-    .in('peserta_id', pesertaIds.length ? pesertaIds : ['00000000-0000-0000-0000-000000000000'])
-    .in('week_start', riskCycles);
+  // Risky peserta: ≥2 cycle tidak setor — HANYA hitung cycle yang sudah ada
+  // (sejak anchor 2026-06-01). Saat <2 cycle berjalan, konsep "berisiko" belum
+  // berlaku → section disembunyikan.
+  const riskCycles = [week, ...previousCycles(2)].filter((c) => c >= CYCLE_ANCHOR);
+  const riskN = riskCycles.length;
+  const { data: riskSetoranList } = riskN >= 2
+    ? await supabaseAdmin
+        .from('setoran')
+        .select('peserta_id, week_start, status')
+        .in('peserta_id', pesertaIds.length ? pesertaIds : ['00000000-0000-0000-0000-000000000000'])
+        .in('week_start', riskCycles)
+    : { data: [] as Array<{ peserta_id: string; week_start: string; status: string }> };
 
   const setoranByPesertaCycle = new Map<string, Map<string, string>>();
   for (const s of riskSetoranList ?? []) {
@@ -172,26 +212,36 @@ export default async function KoordinatorDashboard({
     setoranByPesertaCycle.set(s.peserta_id, inner);
   }
 
-  const riskyPeserta = pesertaList
-    .map((p) => {
-      const cycles = setoranByPesertaCycle.get(p.id) ?? new Map<string, string>();
-      let missing = 0;
-      for (const c of riskCycles) {
-        const st = cycles.get(c);
-        if (!st || st === 'draft') missing++;
-      }
-      return { peserta: p, missing };
-    })
-    .filter((r) => r.missing >= 2)
-    .sort((a, b) => b.missing - a.missing)
-    .slice(0, 8);
+  const riskyPeserta = riskN >= 2
+    ? pesertaList
+        .map((p) => {
+          const cycles = setoranByPesertaCycle.get(p.id) ?? new Map<string, string>();
+          let missing = 0;
+          for (const c of riskCycles) {
+            const st = cycles.get(c);
+            if (!st || st === 'draft') missing++;
+          }
+          return { peserta: p, missing };
+        })
+        .filter((r) => r.missing >= 2)
+        .sort((a, b) => b.missing - a.missing)
+        .slice(0, 8)
+    : [];
 
-  // Monthly H1/H2 progress (semua peserta dari filter kelas/gender aktif, lepas status/q)
-  const allPesertaIds = (allPesertaUnfiltered ?? []).map((p) => p.id);
+  // Ranking: SEMUA peserta aktif (independen dari filter bar atas; ranking punya
+  // filter sendiri di client).
+  const { data: rankPesertaAll } = await supabaseAdmin
+    .from('peserta')
+    .select('id, name, gender, kelas_id')
+    .eq('active', true)
+    .order('name');
+  const rankIds = (rankPesertaAll ?? []).map((p) => p.id);
+
+  // Monthly H1/H2 progress untuk semua peserta aktif.
   const { data: monthlySetoranRaw } = await supabaseAdmin
     .from('setoran')
     .select('id, peserta_id, week_start, status, submitted_at, checked_at')
-    .in('peserta_id', allPesertaIds.length ? allPesertaIds : ['00000000-0000-0000-0000-000000000000'])
+    .in('peserta_id', rankIds.length ? rankIds : ['00000000-0000-0000-0000-000000000000'])
     .in('week_start', [h1Week, h2Week]);
 
   type MonthlySt = { id: string; peserta_id: string; week_start: string; status: string; submitted_at: string | null; checked_at: string | null };
@@ -226,54 +276,35 @@ export default async function KoordinatorDashboard({
     return 0;
   }
 
-  type MonthlyRow = {
-    peserta: { id: string; name: string; gender: Gender; kelas_id: string };
-    rank: number;
-    h1Status: 'belum' | 'menunggu' | 'selesai';
-    h2Status: 'belum' | 'menunggu' | 'selesai';
-    h1SetoranId?: string;
-    h2SetoranId?: string;
-    h1Rekaman: NilaiRekaman[];
-    h2Rekaman: NilaiRekaman[];
-    rataRata: number | null;
+  const statusOfSt = (st: MonthlySt | undefined): 'belum' | 'menunggu' | 'selesai' => {
+    if (!st) return 'belum';
+    if (st.status === 'checked') return 'selesai';
+    if (st.status === 'submitted') return 'menunggu';
+    return 'belum';
   };
-
-  const monthlyRowsUnsorted = (allPesertaUnfiltered ?? []).map((p) => {
+  const rankingRows: RankingRow[] = (rankPesertaAll ?? []).map((p) => {
     const entry = monthlyByPeserta.get(p.id) ?? {};
     const h1Rek = entry.h1 ? monthlyRekamanBySetoran.get(entry.h1.id) ?? [] : [];
     const h2Rek = entry.h2 ? monthlyRekamanBySetoran.get(entry.h2.id) ?? [] : [];
     const allNilai = [...h1Rek, ...h2Rek];
-    const rataRata =
-      allNilai.length > 0
-        ? allNilai.reduce((acc, n) => acc + nilaiToSkor(n), 0) / allNilai.length
-        : null;
-    const statusOf = (st: MonthlySt | undefined): 'belum' | 'menunggu' | 'selesai' => {
-      if (!st) return 'belum';
-      if (st.status === 'checked') return 'selesai';
-      if (st.status === 'submitted') return 'menunggu';
-      return 'belum';
-    };
+    const rataRata = allNilai.length > 0
+      ? Math.round((allNilai.reduce((acc, n) => acc + nilaiToSkor(n), 0) / allNilai.length) * 10) / 10
+      : null;
     return {
-      peserta: p,
-      rank: 0,
-      h1Status: statusOf(entry.h1),
-      h2Status: statusOf(entry.h2),
-      h1SetoranId: entry.h1?.id,
-      h2SetoranId: entry.h2?.id,
+      id: p.id,
+      name: p.name,
+      gender: p.gender as Gender,
+      kelasId: p.kelas_id,
+      kelasName: kelasById.get(p.kelas_id)?.name ?? '',
+      h1Status: statusOfSt(entry.h1),
+      h2Status: statusOfSt(entry.h2),
+      h1SetoranId: entry.h1?.id ?? null,
+      h2SetoranId: entry.h2?.id ?? null,
       h1Rekaman: h1Rek,
       h2Rekaman: h2Rek,
       rataRata,
     };
   });
-
-  const monthlyRows: MonthlyRow[] = monthlyRowsUnsorted
-    .sort((a, b) => {
-      if (a.rataRata === null && b.rataRata === null) return 0;
-      if (a.rataRata === null) return 1;
-      if (b.rataRata === null) return -1;
-      return b.rataRata - a.rataRata;
-    })
-    .map((r, i) => ({ ...r, rank: i + 1 }));
 
   // Status setoran musyrif → syaikh untuk cycle yang dipilih (read-only,
   // koordinator tidak meminder; itu tugas syaikh).
@@ -284,17 +315,45 @@ export default async function KoordinatorDashboard({
         .filter((id): id is string => typeof id === 'string')
     )
   );
+  // 2 periode per bulan (h1 & h2 dari bulan ranking terpilih).
   const { data: musyrifSetoranList } = await supabaseAdmin
     .from('setoran_musyrif')
-    .select('musyrif_id, status, submitted_at, checked_at')
+    .select('id, musyrif_id, week_start, status')
     .in(
       'musyrif_id',
       allMusyrifIds.length ? allMusyrifIds : ['00000000-0000-0000-0000-000000000000']
     )
-    .eq('week_start', week);
-  const musyrifSetoranByMusyrif = new Map(
-    (musyrifSetoranList ?? []).map((m) => [m.musyrif_id, m])
-  );
+    .in('week_start', [h1Week, h2Week]);
+  const musyrifSetoranByMusyrif = new Map<string, { p1?: string; p2?: string }>();
+  const musyrifSetoranIdToMusyrif = new Map<string, string>();
+  const checkedMusyrifSetoranIds: string[] = [];
+  for (const m of musyrifSetoranList ?? []) {
+    const e = musyrifSetoranByMusyrif.get(m.musyrif_id) ?? {};
+    if (m.week_start === h1Week) e.p1 = m.status;
+    else if (m.week_start === h2Week) e.p2 = m.status;
+    musyrifSetoranByMusyrif.set(m.musyrif_id, e);
+    musyrifSetoranIdToMusyrif.set(m.id, m.musyrif_id);
+    if (m.status === 'checked') checkedMusyrifSetoranIds.push(m.id);
+  }
+  // Rata-rata nilai rekaman musyrif (kontribusi tajwid musyrif ke matrix guru).
+  const { data: musyrifRekamanRaw } = checkedMusyrifSetoranIds.length
+    ? await supabaseAdmin
+        .from('rekaman_musyrif')
+        .select('setoran_musyrif_id, nilai')
+        .in('setoran_musyrif_id', checkedMusyrifSetoranIds)
+        .not('nilai', 'is', null)
+    : { data: [] as Array<{ setoran_musyrif_id: string; nilai: string | null }> };
+  const musyrifNilaiAcc = new Map<string, number[]>();
+  for (const r of musyrifRekamanRaw ?? []) {
+    const mid = musyrifSetoranIdToMusyrif.get(r.setoran_musyrif_id);
+    if (!mid || !r.nilai) continue;
+    const arr = musyrifNilaiAcc.get(mid) ?? [];
+    arr.push(nilaiToSkor(r.nilai as NilaiRekaman));
+    musyrifNilaiAcc.set(mid, arr);
+  }
+  const currentCycle = currentCycleStart();
+  const statusKeyOf = (st?: string): 'belum' | 'menunggu' | 'selesai' =>
+    st === 'checked' ? 'selesai' : st === 'submitted' ? 'menunggu' : 'belum';
 
   // Inactive musyrif: last_login_at > 14 hari atau null.
   const fourteenDaysAgo = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString();
@@ -321,27 +380,71 @@ export default async function KoordinatorDashboard({
     }
   }
   const musyrifSummaryRows = Array.from(musyrifMap.values()).map((m) => {
-    const st = musyrifSetoranByMusyrif.get(m.id);
-    let statusKey: 'belum' | 'menunggu' | 'selesai' = 'belum';
-    if (st?.status === 'checked') statusKey = 'selesai';
-    else if (st?.status === 'submitted') statusKey = 'menunggu';
-    return { musyrif: m, statusKey };
+    const e = musyrifSetoranByMusyrif.get(m.id) ?? {};
+    const skor = musyrifNilaiAcc.get(m.id) ?? [];
+    const rataRata = skor.length
+      ? Math.round((skor.reduce((a, b) => a + b, 0) / skor.length) * 10) / 10
+      : null;
+    return {
+      musyrif: m,
+      p1Status: statusKeyOf(e.p1),
+      p2Status: statusKeyOf(e.p2),
+      rataRata,
+    };
+  });
+
+  // Serialize baris monitoring + bangun URL aksi WA server-side.
+  const monitoringRows: MonitoringRow[] = rows.map(({ peserta, setoran, rekaman, statusKey }) => {
+    const kelas = kelasById.get(peserta.kelas_id);
+    let actionUrl: string | null = null;
+    let actionLabel: string | null = null;
+    let actionWarn = false;
+    if (statusKey === 'belum') {
+      actionUrl = buildWaMeUrl(
+        peserta.whatsapp_number,
+        tplReminderPesertaBelumSetor({
+          pesertaName: peserta.name,
+          pesertaGender: peserta.gender,
+          setorUrl: `${origin}/2in1/peserta`,
+          deadlineLabel,
+        })
+      );
+      actionLabel = 'Ingatkan peserta';
+    } else if (statusKey === 'menunggu' && setoran?.id && kelas) {
+      actionUrl = buildWaMeUrl(
+        kelas.musyrif.whatsapp_number,
+        tplReminderMusyrifBelumCek({
+          musyrifName: kelas.musyrif.name,
+          musyrifGender: kelas.musyrif.gender,
+          pesertaName: peserta.name,
+          kelasName: kelas.name,
+          cekUrl: absUrl(`/2in1/musyrif/cek/${setoran.id}`),
+        })
+      );
+      actionLabel = 'Ingatkan musyrif';
+      actionWarn = true;
+    }
+    return {
+      id: peserta.id,
+      name: peserta.name,
+      gender: peserta.gender,
+      kelasName: kelas?.name ?? '',
+      musyrifName: kelas?.musyrif.name ?? '',
+      statusKey,
+      nilai: rekaman,
+      submittedAt: setoran?.submitted_at && statusKey !== 'belum' ? formatTime(setoran.submitted_at) : null,
+      pesertaHref: `/peserta/${peserta.id}`,
+      actionUrl,
+      actionLabel,
+      actionWarn,
+    };
   });
 
   return (
     <main style={{ minHeight: '100vh' }}>
       {/* Header */}
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          padding: '18px 28px',
-          borderBottom: '1px solid var(--line)',
-          background: 'var(--surface)',
-        }}
-      >
-        <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+      <div className="dash-header">
+        <div className="grp">
           <Link href="/" className="wordmark">
             <span className="mark">M</span>Maahir
           </Link>
@@ -350,10 +453,10 @@ export default async function KoordinatorDashboard({
             Koordinator {koordinatorGender === 'ikhwan' ? 'Ikhwan' : 'Akhwat'}
           </span>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+        <div className="grp">
           <span className="pekan-tag">
             <span className="dot" />
-            Pekan {formatCycleRange(week)}
+            Periode {formatCycleRangeShort(week)}
           </span>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <div
@@ -370,6 +473,13 @@ export default async function KoordinatorDashboard({
             </div>
             <span style={{ fontSize: 13, fontWeight: 600 }}>{s.session.name}</span>
           </div>
+          <Link
+            href="/2in1/koordinator/pedagogis"
+            className="btn btn-sm btn-ghost"
+            style={{ height: 30, padding: '0 12px', textDecoration: 'none' }}
+          >
+            Pedagogis
+          </Link>
           <Link
             href="/2in1/laporan"
             className="btn btn-sm btn-ghost"
@@ -391,25 +501,12 @@ export default async function KoordinatorDashboard({
           >
             Akun
           </Link>
-          <form action={logout}>
-            <button type="submit" className="btn btn-sm btn-ghost" style={{ height: 30 }}>
-              {Icon.logout(12)} Keluar
-            </button>
-          </form>
+          <LogoutButton />
         </div>
       </div>
 
       {/* Body */}
-      <div
-        style={{
-          padding: '24px 28px',
-          display: 'flex',
-          flexDirection: 'column',
-          gap: 18,
-          maxWidth: 1200,
-          margin: '0 auto',
-        }}
-      >
+      <div className="dash-body">
         {/* Title */}
         <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
           <div>
@@ -423,7 +520,7 @@ export default async function KoordinatorDashboard({
         </div>
 
         {/* Stats */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12 }}>
+        <div className="stat-grid">
           <div className="stat">
             <div className="v">{counters.total}</div>
             <div className="l">Total peserta</div>
@@ -457,7 +554,7 @@ export default async function KoordinatorDashboard({
             {riskyPeserta.length > 0 && (
               <div className="card-flat" style={{ padding: '14px 18px', borderLeft: '3px solid var(--merah)' }}>
                 <div className="t-tiny" style={{ color: 'var(--merah-ink)', marginBottom: 6 }}>
-                  PESERTA BERISIKO (≥2 cycle tidak setor dari 3 cycle terakhir)
+                  PESERTA BERISIKO (≥2 dari {riskN} cycle terakhir tidak setor)
                 </div>
                 {riskyPeserta.map((r) => {
                   const kelas = kelasById.get(r.peserta.kelas_id);
@@ -470,7 +567,7 @@ export default async function KoordinatorDashboard({
                         </span>
                       </div>
                       <span className="badge badge-merah" style={{ fontSize: 10 }}>
-                        {r.missing}/3 cycle
+                        {r.missing}/{riskN} cycle
                       </span>
                     </div>
                   );
@@ -522,188 +619,26 @@ export default async function KoordinatorDashboard({
           }}
         />
 
-        {/* Table */}
-        <div className="card-flat" style={{ padding: 0, overflow: 'hidden' }}>
-          <div style={{ overflowX: 'auto' }}>
-            <table className="k-table">
-              <thead>
-                <tr>
-                  <th style={{ width: '26%' }}>Peserta</th>
-                  <th style={{ width: '12%' }}>Kelas</th>
-                  <th style={{ width: '18%' }}>Musyrif/Musyrifah</th>
-                  <th style={{ width: '14%' }}>Status</th>
-                  <th style={{ width: '12%' }}>Nilai</th>
-                  <th style={{ width: '18%' }}>Aksi</th>
-                </tr>
-              </thead>
-              <tbody>
-                {rows.length === 0 && (
-                  <tr>
-                    <td colSpan={6} style={{ textAlign: 'center', padding: 32, color: 'var(--muted)' }}>
-                      Tidak ada peserta sesuai filter.
-                    </td>
-                  </tr>
-                )}
-                {rows.map(({ peserta, setoran, rekaman, statusKey }) => {
-                  const kelas = kelasById.get(peserta.kelas_id);
-                  return (
-                    <tr key={peserta.id}>
-                      <td>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                          <div className="avatar" style={{ width: 30, height: 30, fontSize: 11 }}>
-                            <Initials name={peserta.name} />
-                          </div>
-                          <div>
-                            <Link
-                              href={`/peserta/${peserta.id}`}
-                              className="nm"
-                              style={{ color: 'inherit', textDecoration: 'none', borderBottom: '1px dashed var(--line-2)' }}
-                            >
-                              {peserta.name}
-                            </Link>
-                            <div className="sub">{peserta.gender}</div>
-                          </div>
-                        </div>
-                      </td>
-                      <td>Kelas {kelas?.name ?? '-'}</td>
-                      <td style={{ color: 'var(--ink-2)' }}>
-                        {kelas?.musyrif.name ?? '—'}
-                      </td>
-                      <td>
-                        <StatusBadge status={statusKey} />
-                        {setoran?.submitted_at && statusKey !== 'belum' && (
-                          <div className="sub">{formatTime(setoran.submitted_at)}</div>
-                        )}
-                      </td>
-                      <td>
-                        {statusKey === 'selesai' && rekaman.length > 0 ? (
-                          <span className="nilai-trio">
-                            {rekaman.slice(0, 3).map((n, i) => (
-                              <span key={i} className={`d ${n}`} />
-                            ))}
-                          </span>
-                        ) : (
-                          <span style={{ color: 'var(--muted-2)' }}>—</span>
-                        )}
-                      </td>
-                      <td>
-                        <ActionCell
-                          statusKey={statusKey}
-                          peserta={peserta}
-                          setoranId={setoran?.id ?? null}
-                          kelas={kelas}
-                          origin={origin}
-                          deadlineLabel={deadlineLabel}
-                        />
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        </div>
+        {/* Table monitoring (sortable) */}
+        <MonitoringTable rows={monitoringRows} total={counters.total} />
 
-        <div className="t-small">
-          Menampilkan {rows.length} dari {counters.total} peserta
-        </div>
+        {/* Ranking progress (filter + sort sendiri) */}
+        <RankingTable
+          rows={rankingRows}
+          kelasOptions={(allKelas ?? []).map((k) => ({ id: k.id, name: k.name, gender: k.gender as Gender }))}
+          monthOptions={monthOptions}
+          currentMonth={rankYearMonth}
+          h1Label={h1Week.slice(5)}
+          h2Label={h2Week.slice(5)}
+        />
 
-        {/* Progress Ranking Bulanan */}
-        <div style={{ marginTop: 24 }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
-            <div>
-              <div className="t-tiny">RANKING PROGRESS BULAN INI — {monthLabel.toUpperCase()}</div>
-              <div className="t-small" style={{ marginTop: 2 }}>{monthlyRows.length} peserta · sorted by rata-rata nilai</div>
-            </div>
-            <div style={{ display: 'flex', gap: 6 }}>
-              <Link
-                href="/2in1/koordinator/penilaian"
-                className="btn btn-sm btn-ghost"
-                style={{ height: 28, padding: '0 10px', textDecoration: 'none', fontSize: 12 }}
-              >
-                Input Nilai
-              </Link>
-              <Link
-                href="/2in1/koordinator/matrix"
-                className="btn btn-sm btn-primary"
-                style={{ height: 28, padding: '0 10px', textDecoration: 'none', fontSize: 12 }}
-              >
-                Matrix Guru
-              </Link>
-            </div>
-          </div>
-          <div className="card-flat" style={{ padding: 0, overflow: 'hidden' }}>
-            <div style={{ overflowX: 'auto' }}>
-              <table className="k-table">
-                <thead>
-                  <tr>
-                    <th style={{ width: 40 }}>#</th>
-                    <th style={{ width: '28%' }}>Peserta</th>
-                    <th style={{ width: '12%' }}>Kelas</th>
-                    <th style={{ width: '18%', textAlign: 'center' }}>H1 ({h1Week.slice(5)})</th>
-                    <th style={{ width: '18%', textAlign: 'center' }}>H2 ({h2Week.slice(5)})</th>
-                    <th style={{ width: '12%', textAlign: 'center' }}>Rata²</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {monthlyRows.length === 0 && (
-                    <tr>
-                      <td colSpan={6} style={{ textAlign: 'center', padding: 32, color: 'var(--muted)' }}>
-                        Belum ada data bulan ini.
-                      </td>
-                    </tr>
-                  )}
-                  {monthlyRows.map(({ peserta, rank, h1Status, h2Status, h1SetoranId, h2SetoranId, h1Rekaman, h2Rekaman, rataRata }) => {
-                    const kelas = kelasById.get(peserta.kelas_id);
-                    return (
-                      <tr key={peserta.id}>
-                        <td style={{ color: rank <= 3 ? 'var(--accent-2)' : 'var(--muted)', fontWeight: rank <= 3 ? 700 : 400 }}>
-                          {rank}
-                        </td>
-                        <td>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                            <div className="avatar" style={{ width: 26, height: 26, fontSize: 10 }}>
-                              <Initials name={peserta.name} />
-                            </div>
-                            <span style={{ fontSize: 13, fontWeight: 600 }}>{peserta.name}</span>
-                          </div>
-                        </td>
-                        <td style={{ color: 'var(--ink-2)', fontSize: 12 }}>
-                          {kelas?.name ?? '—'}
-                        </td>
-                        <td style={{ textAlign: 'center' }}>
-                          <MonthlyStatusCell status={h1Status} setoranId={h1SetoranId} rekaman={h1Rekaman} />
-                        </td>
-                        <td style={{ textAlign: 'center' }}>
-                          <MonthlyStatusCell status={h2Status} setoranId={h2SetoranId} rekaman={h2Rekaman} />
-                        </td>
-                        <td style={{ textAlign: 'center' }}>
-                          {rataRata !== null ? (
-                            <span style={{
-                              fontWeight: 700,
-                              fontSize: 14,
-                              color: rataRata >= 3 ? 'var(--hijau-ink)' : rataRata >= 2 ? 'var(--kuning-ink)' : 'var(--merah-ink)',
-                            }}>
-                              {rataRata.toFixed(1)}
-                            </span>
-                          ) : (
-                            <span style={{ color: 'var(--muted-2)' }}>—</span>
-                          )}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </div>
-
-        {/* Status setoran musyrif → syaikh */}
+        {/* Status setoran musyrif → syaikh (2 periode/bulan) */}
         <div style={{ marginTop: 12 }}>
           <div className="section-row">
-            <div className="t-tiny">Setoran musyrif → Syaikh/Ustadzah</div>
-            <div className="t-small">{musyrifSummaryRows.length} musyrif</div>
+            <div className="t-tiny">
+              Setoran musyrif → Syaikh (ikhwan) / Ustadzah (akhwat) · 2 periode/bulan
+            </div>
+            <div className="t-small">{monthLabel} · {musyrifSummaryRows.length} musyrif</div>
           </div>
           <div className="card-flat" style={{ overflow: 'hidden' }}>
             {musyrifSummaryRows.length === 0 ? (
@@ -711,11 +646,15 @@ export default async function KoordinatorDashboard({
                 <p className="t-small">Belum ada musyrif terdaftar.</p>
               </div>
             ) : (
-              musyrifSummaryRows.map(({ musyrif, statusKey }) => {
+              musyrifSummaryRows.map(({ musyrif, p1Status, p2Status, rataRata }) => {
                 const sameGender = musyrif.gender === koordinatorGender;
+                // Reminder utk periode berjalan yg belum setor.
+                const curIsP1 = currentCycle === h1Week;
+                const curIsP2 = currentCycle === h2Week;
+                const curStatus = curIsP1 ? p1Status : curIsP2 ? p2Status : null;
                 const setorUrl = absUrl('/2in1/musyrif/setor');
                 const reminderWa =
-                  sameGender && statusKey === 'belum'
+                  sameGender && curStatus === 'belum'
                     ? buildWaMeUrl(
                         musyrif.whatsapp_number,
                         tplReminderMusyrifBelumSetor({
@@ -734,7 +673,7 @@ export default async function KoordinatorDashboard({
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ fontSize: 14, fontWeight: 600 }}>{musyrif.name}</div>
                       <div style={{ fontSize: 12, color: 'var(--muted)' }}>
-                        {salutation(musyrif.gender)}
+                        {salutation(musyrif.gender)} → {musyrif.gender === 'ikhwan' ? 'Syaikh' : 'Ustadzah'}
                       </div>
                     </div>
                     {reminderWa && (
@@ -748,7 +687,20 @@ export default async function KoordinatorDashboard({
                         {Icon.wa(11)} Ingatkan
                       </a>
                     )}
-                    <StatusBadge status={statusKey} />
+                    <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexShrink: 0 }}>
+                      <div style={{ textAlign: 'center', minWidth: 40 }}>
+                        <div style={{
+                          fontWeight: 700,
+                          fontSize: 14,
+                          color: rataRata === null ? 'var(--muted-2)' : rataRata >= 3 ? 'var(--hijau-ink)' : rataRata >= 2 ? 'var(--kuning-ink)' : 'var(--merah-ink)',
+                        }}>
+                          {rataRata !== null ? rataRata.toFixed(1) : '—'}
+                        </div>
+                        <div className="t-tiny" style={{ color: 'var(--muted-2)' }}>rata²</div>
+                      </div>
+                      <PeriodBadge label="P1" status={p1Status} />
+                      <PeriodBadge label="P2" status={p2Status} />
+                    </div>
                   </div>
                 );
               })
@@ -760,118 +712,14 @@ export default async function KoordinatorDashboard({
   );
 }
 
-function StatusBadge({ status }: { status: 'belum' | 'menunggu' | 'selesai' }) {
-  if (status === 'selesai') {
-    return (
-      <span className="badge badge-hijau">
-        <span className="dot" />
-        selesai
-      </span>
-    );
-  }
-  if (status === 'menunggu') {
-    return (
-      <span className="badge badge-kuning">
-        <span className="dot" />
-        menunggu cek
-      </span>
-    );
-  }
+function PeriodBadge({ label, status }: { label: string; status: 'belum' | 'menunggu' | 'selesai' }) {
+  const cls = status === 'selesai' ? 'badge-hijau' : status === 'menunggu' ? 'badge-kuning' : 'badge-merah';
   return (
-    <span className="badge badge-merah">
+    <span className={`badge ${cls}`} style={{ fontSize: 10 }} title={`Periode ${label}: ${status}`}>
       <span className="dot" />
-      belum setor
+      {label}
     </span>
   );
-}
-
-function ActionCell({
-  statusKey,
-  peserta,
-  setoranId,
-  kelas,
-  origin,
-  deadlineLabel,
-}: {
-  statusKey: 'belum' | 'menunggu' | 'selesai';
-  peserta: { name: string; whatsapp_number: string; gender: Gender };
-  setoranId: string | null;
-  kelas:
-    | {
-        name: string;
-        gender: Gender;
-        musyrif: { name: string; gender: Gender; whatsapp_number: string };
-      }
-    | undefined;
-  origin: string;
-  deadlineLabel: string;
-}) {
-  if (statusKey === 'belum') {
-    const setorUrl = `${origin}/2in1/peserta`;
-    const waUrl = buildWaMeUrl(
-      peserta.whatsapp_number,
-      tplReminderPesertaBelumSetor({
-        pesertaName: peserta.name,
-        pesertaGender: peserta.gender,
-        setorUrl,
-        deadlineLabel,
-      })
-    );
-    return (
-      <a href={waUrl} target="_blank" rel="noopener" className="act-btn wa">
-        {Icon.wa(11)} Ingatkan peserta
-      </a>
-    );
-  }
-  if (statusKey === 'menunggu' && setoranId && kelas) {
-    const cekUrl = absUrl(`/2in1/musyrif/cek/${setoranId}`);
-    const waUrl = buildWaMeUrl(
-      kelas.musyrif.whatsapp_number,
-      tplReminderMusyrifBelumCek({
-        musyrifName: kelas.musyrif.name,
-        musyrifGender: kelas.musyrif.gender,
-        pesertaName: peserta.name,
-        kelasName: kelas.name,
-        cekUrl,
-      })
-    );
-    return (
-      <a href={waUrl} target="_blank" rel="noopener" className="act-btn wa warn">
-        {Icon.wa(11)} Ingatkan musyrif
-      </a>
-    );
-  }
-  return <span style={{ color: 'var(--muted-2)', fontSize: 12 }}>—</span>;
-}
-
-function MonthlyStatusCell({
-  status,
-  setoranId,
-  rekaman,
-}: {
-  status: 'belum' | 'menunggu' | 'selesai';
-  setoranId?: string;
-  rekaman: NilaiRekaman[];
-}) {
-  if (status === 'belum') {
-    return <span className="badge badge-merah" style={{ fontSize: 10 }}><span className="dot" />belum</span>;
-  }
-  if (status === 'menunggu' && setoranId) {
-    return (
-      <Link href={`/2in1/musyrif/cek/${setoranId}`} className="badge badge-kuning" style={{ textDecoration: 'none', fontSize: 10 }}>
-        <span className="dot" />Cek
-      </Link>
-    );
-  }
-  if (status === 'selesai' && rekaman.length > 0) {
-    return (
-      <span className="nilai-trio" style={{ justifyContent: 'center' }}>
-        {rekaman.slice(0, 3).map((n, i) => <span key={i} className={`d ${n}`} />)}
-        {Array.from({ length: Math.max(0, 3 - rekaman.length) }).map((_, i) => <span key={`e${i}`} className="d" />)}
-      </span>
-    );
-  }
-  return <span className="badge badge-hijau" style={{ fontSize: 10 }}><span className="dot" />selesai</span>;
 }
 
 function formatTime(iso: string): string {

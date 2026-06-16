@@ -3,14 +3,42 @@ import { redirect } from 'next/navigation';
 import { requireKetuaKelompok } from '@/lib/session';
 import { supabaseAdmin } from '@/lib/supabase-admin';
 import { PenilaianPedagogisForm } from './PenilaianPedagogisForm';
+import { MonthNavSelect, monthOptionsSince } from '@/components/MonthNavSelect';
 
 export const dynamic = 'force-dynamic';
+
+const PEDAGOGIS_START = '2026-06';
+const PED_FIELDS = [
+  'skor_metode_pengajaran',
+  'skor_kepatuhan_silabus',
+  'skor_manajemen_halaqah',
+  'skor_evaluasi_penguasaan',
+] as const;
 
 function currentYearMonth(): string {
   return new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Jakarta' }).slice(0, 7);
 }
+function monthLabelOf(ym: string): string {
+  const [y, m] = ym.split('-').map(Number);
+  return new Date(Date.UTC(y, m - 1, 1)).toLocaleDateString('id-ID', { month: 'long', year: 'numeric', timeZone: 'UTC' });
+}
+// N bulan terakhir s/d `endYm` (inklusif), urut lama→baru.
+function lastMonths(endYm: string, n: number): string[] {
+  const [ey, em] = endYm.split('-').map(Number);
+  const out: string[] = [];
+  for (let i = n - 1; i >= 0; i--) {
+    const d = new Date(Date.UTC(ey, em - 1 - i, 1));
+    const ym = `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`;
+    if (ym >= PEDAGOGIS_START) out.push(ym);
+  }
+  return out;
+}
 
-export default async function PenilaianPedagogisPage() {
+export default async function PenilaianPedagogisPage({
+  searchParams,
+}: {
+  searchParams: { month?: string };
+}) {
   let session;
   try {
     session = await requireKetuaKelompok();
@@ -18,10 +46,10 @@ export default async function PenilaianPedagogisPage() {
     redirect('/');
   }
 
-  const ym = currentYearMonth();
-  const monthLabel = new Date().toLocaleDateString('id-ID', {
-    timeZone: 'Asia/Jakarta', year: 'numeric', month: 'long',
-  });
+  const cur = currentYearMonth();
+  const ym = searchParams.month && /^\d{4}-\d{2}$/.test(searchParams.month) ? searchParams.month : cur;
+  const monthOptions = monthOptionsSince(PEDAGOGIS_START);
+  const overviewMonths = lastMonths(cur, 6);
 
   const { data: members } = await supabaseAdmin
     .from('pengajar')
@@ -30,39 +58,97 @@ export default async function PenilaianPedagogisPage() {
     .eq('active', true)
     .order('name');
 
-  const memberIds = (members ?? []).map((m) => m.id);
+  const anggota = (members ?? []).filter((m) => !m.is_ketua);
+  const memberIds = anggota.map((m) => m.id);
+  const noId = ['00000000-0000-0000-0000-000000000000'];
+
+  // Penilaian bulan terpilih (untuk form edit)
   const { data: existing } = await supabaseAdmin
     .from('penilaian_pedagogis')
     .select('pengajar_id, skor_metode_pengajaran, keterangan_metode, skor_kepatuhan_silabus, keterangan_silabus, skor_manajemen_halaqah, keterangan_halaqah, skor_evaluasi_penguasaan, keterangan_evaluasi, skor_kepatuhan_sop, keterangan_sop')
     .eq('year_month', ym)
-    .in('pengajar_id', memberIds.length ? memberIds : ['00000000-0000-0000-0000-000000000000']);
-
+    .in('pengajar_id', memberIds.length ? memberIds : noId);
   const existingMap = new Map((existing ?? []).map((e) => [e.pengajar_id, e]));
 
-  const membersWithPenilaian = (members ?? [])
-    .filter((m) => !m.is_ketua) // ketua tidak menilai diri sendiri
-    .map((m) => ({
-      id: m.id,
-      name: m.name,
-      penilaian: existingMap.get(m.id) ?? null,
-    }));
+  // Riwayat bulan-ke-bulan (avg 4 aspek pedagogis)
+  const { data: history } = await supabaseAdmin
+    .from('penilaian_pedagogis')
+    .select('pengajar_id, year_month, skor_metode_pengajaran, skor_kepatuhan_silabus, skor_manajemen_halaqah, skor_evaluasi_penguasaan')
+    .in('year_month', overviewMonths.length ? overviewMonths : ['0000-00'])
+    .in('pengajar_id', memberIds.length ? memberIds : noId);
+  const avgByMemberMonth = new Map<string, number | null>();
+  for (const h of history ?? []) {
+    const scores = PED_FIELDS.map((f) => (h as Record<string, number | null>)[f]).filter((s): s is number => s !== null && s !== undefined);
+    const avg = scores.length ? Math.round((scores.reduce((a, b) => a + b, 0) / scores.length) * 10) / 10 : null;
+    avgByMemberMonth.set(`${h.pengajar_id}:${h.year_month}`, avg);
+  }
+
+  const membersWithPenilaian = anggota.map((m) => ({
+    id: m.id,
+    name: m.name,
+    penilaian: existingMap.get(m.id) ?? null,
+  }));
 
   return (
     <main style={{ minHeight: '100vh' }}>
-      <div style={{ maxWidth: 560, margin: '0 auto' }}>
+      <div style={{ maxWidth: 640, margin: '0 auto' }}>
         <div className="page" style={{ paddingTop: 20 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14, flexWrap: 'wrap' }}>
             <Link href="/kehadiran/ketua-kelompok" className="btn btn-sm btn-ghost" style={{ textDecoration: 'none' }}>←</Link>
-            <div>
+            <div style={{ flex: 1 }}>
               <h1 className="t-h1" style={{ margin: 0 }}>Penilaian Pedagogis</h1>
-              <p className="t-small" style={{ margin: 0, color: 'var(--muted-2)' }}>{monthLabel} · skala 0–4 · auto-simpan</p>
+              <p className="t-small" style={{ margin: 0, color: 'var(--muted-2)' }}>Skala 0–4 · auto-simpan · anggota kelompok Anda</p>
             </div>
+            <MonthNavSelect options={monthOptions} value={ym} />
           </div>
 
           {membersWithPenilaian.length === 0 ? (
             <p className="t-small" style={{ color: 'var(--muted-2)' }}>Tidak ada anggota kelompok.</p>
           ) : (
-            <PenilaianPedagogisForm members={membersWithPenilaian} yearMonth={ym} />
+            <>
+              <div className="t-tiny" style={{ marginBottom: 8 }}>EDIT {monthLabelOf(ym).toUpperCase()}</div>
+              <PenilaianPedagogisForm members={membersWithPenilaian} yearMonth={ym} />
+
+              {/* Riwayat bulan-ke-bulan */}
+              <div style={{ marginTop: 28 }}>
+                <div className="t-tiny" style={{ marginBottom: 8 }}>KONDISI ANGGOTA — RATA² PEDAGOGIS PER BULAN</div>
+                <div className="card-flat" style={{ padding: 0, overflow: 'hidden' }}>
+                  <div className="table-scroll">
+                    <table className="k-table">
+                      <thead>
+                        <tr>
+                          <th style={{ minWidth: 140 }}>Anggota</th>
+                          {overviewMonths.map((mo) => (
+                            <th key={mo} style={{ textAlign: 'center' }}>
+                              {new Date(Date.UTC(Number(mo.split('-')[0]), Number(mo.split('-')[1]) - 1, 1)).toLocaleDateString('id-ID', { month: 'short', timeZone: 'UTC' })}
+                            </th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {anggota.map((m) => (
+                          <tr key={m.id}>
+                            <td style={{ fontWeight: 600 }}>{m.name}</td>
+                            {overviewMonths.map((mo) => {
+                              const v = avgByMemberMonth.get(`${m.id}:${mo}`);
+                              return (
+                                <td key={mo} style={{ textAlign: 'center' }}>
+                                  {v != null ? (
+                                    <span style={{ fontWeight: 700, color: v >= 3 ? 'var(--hijau-ink)' : v >= 2 ? 'var(--kuning-ink)' : 'var(--merah-ink)' }}>{v.toFixed(1)}</span>
+                                  ) : (
+                                    <span style={{ color: 'var(--muted-2)' }}>—</span>
+                                  )}
+                                </td>
+                              );
+                            })}
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+            </>
           )}
         </div>
       </div>

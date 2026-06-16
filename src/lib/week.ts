@@ -89,6 +89,25 @@ export function formatCycleRange(cycleStartISO: string): string {
 }
 
 /**
+ * Label rentang cycle tanpa tahun, mis: "1 – 14 Juni" atau lintas-bulan
+ * "29 Juni – 12 Juli". Dipakai untuk tag "Periode …" di header.
+ */
+export function formatCycleRangeShort(cycleStartISO: string): string {
+  const [y, m, d] = cycleStartISO.split('-').map(Number);
+  const start = new Date(Date.UTC(y, m - 1, d));
+  const end = new Date(start);
+  end.setUTCDate(end.getUTCDate() + (CYCLE_LENGTH_DAYS - 1));
+  const sameMonth =
+    start.getUTCMonth() === end.getUTCMonth() &&
+    start.getUTCFullYear() === end.getUTCFullYear();
+  const fmtDayMonth = (dt: Date) =>
+    dt.toLocaleDateString('id-ID', { day: 'numeric', month: 'long', timeZone: 'UTC' });
+  const fmtDay = (dt: Date) => dt.toLocaleDateString('id-ID', { day: 'numeric', timeZone: 'UTC' });
+  if (sameMonth) return `${fmtDay(start)} – ${fmtDayMonth(end)}`;
+  return `${fmtDayMonth(start)} – ${fmtDayMonth(end)}`;
+}
+
+/**
  * Label deadline cycle untuk pesan WA, mis: "Ahad, 14 Juni 2026".
  * Cycle berakhir selalu hari Ahad (start = Senin + 13 hari); prefiks
  * "Ahad," ditulis literal karena `weekday: 'long'` id-ID memunculkan
@@ -120,6 +139,37 @@ export function previousCycles(count: number): string[] {
     result.push(toJakartaDateString(dt));
   }
   return result;
+}
+
+/**
+ * Semua cycle start dari anchor (2026-06-01) s/d cycle berjalan, inklusif.
+ * Urut menaik (terlama → terbaru). Dipakai untuk riwayat & deteksi periode
+ * terlewat di POV peserta.
+ */
+export function allCyclesSinceAnchor(): string[] {
+  const current = currentCycleStart();
+  const [ay, am, ad] = CYCLE_ANCHOR.split('-').map(Number);
+  const anchorUTC = new Date(Date.UTC(ay, am - 1, ad));
+  const result: string[] = [];
+  for (let i = 0; ; i++) {
+    const dt = new Date(anchorUTC);
+    dt.setUTCDate(dt.getUTCDate() + CYCLE_LENGTH_DAYS * i);
+    const iso = toJakartaDateString(dt);
+    result.push(iso);
+    if (iso >= current) break;
+  }
+  return result;
+}
+
+/**
+ * Validasi cycle start untuk backfill: harus benar-benar awal cycle, tidak
+ * sebelum anchor, dan tidak di masa depan (≤ cycle berjalan).
+ */
+export function isValidCycleStart(s: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) return false;
+  const [y, m, d] = s.split('-').map(Number);
+  if (cycleStartOf(new Date(Date.UTC(y, m - 1, d))) !== s) return false;
+  return s >= CYCLE_ANCHOR && s <= currentCycleStart();
 }
 
 /**

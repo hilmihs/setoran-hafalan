@@ -8,8 +8,18 @@ import {
 } from '@/components/PesertaSetoranForm';
 import { Icon } from '@/components/icons';
 import { FeatureNav } from '@/components/FeatureNav';
-import { logout } from '@/lib/auth';
-import { currentCycleStart, formatCycleRange } from '@/lib/week';
+import {
+  RiwayatPenilaian,
+  type RiwayatCycle,
+} from '@/components/RiwayatPenilaian';
+import { LogoutButton } from '@/components/LogoutButton';
+import {
+  CYCLE_ANCHOR,
+  allCyclesSinceAnchor,
+  currentCycleStart,
+  formatCycleRange,
+} from '@/lib/week';
+import { formatCycleRangeShort } from '@/lib/week';
 import { buildWaMeUrl, musyrifTitle, tplPesertaSubmitToMusyrif } from '@/lib/whatsapp';
 import { absUrl } from '@/lib/url';
 import type { JenisRekaman, NilaiRekaman } from '@/types/db';
@@ -99,6 +109,79 @@ export default async function PesertaPage() {
     };
   }
 
+  // --- Riwayat + backfill periode lampau (Juni 2026+) ---
+  const allCycles = allCyclesSinceAnchor();
+  const { data: allSetoran } = await supabaseAdmin
+    .from('setoran')
+    .select('id, week_start, status')
+    .eq('peserta_id', session.peserta_id)
+    .gte('week_start', CYCLE_ANCHOR);
+  const setoranIds = (allSetoran ?? []).map((s) => s.id);
+  const { data: allRekaman } = setoranIds.length
+    ? await supabaseAdmin
+        .from('rekaman')
+        .select('setoran_id, jenis, nilai, masukan, audio_url')
+        .in('setoran_id', setoranIds)
+    : { data: [] };
+
+  type RekRow = {
+    setoran_id: string;
+    jenis: JenisRekaman;
+    nilai: NilaiRekaman | null;
+    masukan: string | null;
+    audio_url: string | null;
+  };
+  const rekamanBySetoran = new Map<string, RekRow[]>();
+  for (const r of (allRekaman ?? []) as RekRow[]) {
+    const arr = rekamanBySetoran.get(r.setoran_id) ?? [];
+    arr.push(r);
+    rekamanBySetoran.set(r.setoran_id, arr);
+  }
+  const setoranByCycle = new Map(
+    (allSetoran ?? []).map((s) => [s.week_start as string, s])
+  );
+
+  // Periode lampau (selain cycle berjalan) yang belum dicek & belum lengkap (<3
+  // rekaman ber-audio) → bisa di-backfill peserta.
+  const backfillCycles: Array<{
+    cycleStart: string;
+    label: string;
+    submittedJenis: JenisRekaman[];
+  }> = [];
+  // Periode lampau yang sudah disetor (submitted/checked) → tampil di riwayat.
+  const riwayatCycles: RiwayatCycle[] = [];
+
+  for (const cycle of allCycles) {
+    if (cycle === week) continue; // cycle berjalan ditangani form utama
+    const s = setoranByCycle.get(cycle);
+    const reks = s ? rekamanBySetoran.get(s.id) ?? [] : [];
+    const submittedJenis = reks.filter((r) => r.audio_url).map((r) => r.jenis);
+    const status = s?.status as 'draft' | 'submitted' | 'checked' | undefined;
+
+    if (status !== 'checked' && submittedJenis.length < 3) {
+      backfillCycles.push({
+        cycleStart: cycle,
+        label: formatCycleRange(cycle),
+        submittedJenis,
+      });
+    }
+    if ((status === 'submitted' || status === 'checked') && submittedJenis.length > 0) {
+      riwayatCycles.push({
+        cycleStart: cycle,
+        label: formatCycleRange(cycle),
+        status,
+        rekaman: reks.map((r) => ({
+          jenis: r.jenis,
+          nilai: r.nilai,
+          masukan: r.masukan,
+          submitted: !!r.audio_url,
+        })),
+      });
+    }
+  }
+  // Riwayat: terbaru dulu. Backfill: terlama dulu (lunasi yang paling lama).
+  riwayatCycles.reverse();
+
   return (
     <main style={{ minHeight: '100vh' }}>
       <div style={{ maxWidth: 480, margin: '0 auto' }}>
@@ -114,15 +197,7 @@ export default async function PesertaPage() {
             >
               Akun
             </Link>
-            <form action={logout}>
-              <button
-                type="submit"
-                className="btn btn-sm btn-ghost"
-                style={{ height: 30, padding: '0 10px' }}
-              >
-                {Icon.logout(12)} Keluar
-              </button>
-            </form>
+            <LogoutButton />
           </div>
         </div>
 
@@ -141,7 +216,7 @@ export default async function PesertaPage() {
             </div>
             <span className="pekan-tag">
               <span className="dot" />
-              Pekan {formatCycleRange(week)}
+              Periode {formatCycleRangeShort(week)}
             </span>
           </div>
 
@@ -195,6 +270,56 @@ export default async function PesertaPage() {
               Belum ada musyrif untuk kelas Anda. Hubungi koordinator.
             </p>
           )}
+
+          {musyrif && backfillCycles.length > 0 && (
+            <div style={{ marginTop: 28 }}>
+              <h2 className="t-h1" style={{ fontSize: 18, marginBottom: 2 }}>
+                Setor periode terlewat
+              </h2>
+              <p className="t-small" style={{ marginBottom: 14 }}>
+                Periode lalu yang belum lengkap. Boleh kirim walau hanya 1 rekaman —
+                rekaman yang tak disetor dihitung 0 pada rata-rata.
+              </p>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                {backfillCycles.map((bc) => (
+                  <details key={bc.cycleStart} className="card" style={{ padding: 14 }}>
+                    <summary
+                      style={{
+                        cursor: 'pointer',
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                        gap: 8,
+                        listStyle: 'none',
+                      }}
+                    >
+                      <span style={{ fontSize: 14, fontWeight: 600 }}>
+                        Periode {bc.label}
+                      </span>
+                      <span className="t-small">
+                        {bc.submittedJenis.length}/3 · setor →
+                      </span>
+                    </summary>
+                    <div style={{ marginTop: 12 }}>
+                      <PesertaSetoranForm
+                        musyrifName={musyrif.name}
+                        musyrifInitials={initialsOf(musyrif.name)}
+                        existing={null}
+                        targetRoleLabel={`${musyrifTitle(musyrif.gender)} kelas Anda`}
+                        endpoint="/api/2in1/setoran/submit"
+                        singleSubmitEndpoint="/api/2in1/rekaman/submit-single"
+                        cacheKey={bc.cycleStart}
+                        periodWeekStart={bc.cycleStart}
+                        submittedJenis={bc.submittedJenis}
+                      />
+                    </div>
+                  </details>
+                ))}
+              </div>
+            </div>
+          )}
+
+          <RiwayatPenilaian cycles={riwayatCycles} />
         </div>
       </div>
     </main>

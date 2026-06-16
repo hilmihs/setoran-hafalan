@@ -1,6 +1,6 @@
 import { requireKoordinatorKetuaKelas } from '@/lib/session';
 import { supabaseAdmin } from '@/lib/supabase-admin';
-import { logout } from '@/lib/auth';
+import { LogoutButton } from '@/components/LogoutButton';
 import { Icon } from '@/components/icons';
 import { FeatureNav } from '@/components/FeatureNav';
 import { StatCard } from '@/components/ui/StatCard';
@@ -220,15 +220,7 @@ export default async function KoordinatorKetuaKelasPage({
             <div className="wordmark">
               <span className="mark">M</span> Koordinator KK
             </div>
-            <form action={logout}>
-              <button
-                type="submit"
-                className="btn btn-sm btn-ghost"
-                style={{ height: 30, padding: '0 10px' }}
-              >
-                {Icon.logout(12)} Keluar
-              </button>
-            </form>
+            <LogoutButton />
           </div>
 
           <FeatureNav current="/observasi/koordinator" />

@@ -9,7 +9,8 @@ import {
   cyclesOfMonth,
   currentYearMonth,
 } from '@/lib/week';
-import { logout } from '@/lib/auth';
+import { formatCycleRangeShort } from '@/lib/week';
+import { LogoutButton } from '@/components/LogoutButton';
 import { Icon, Initials } from '@/components/icons';
 import { FeatureNav } from '@/components/FeatureNav';
 import { StatCard } from '@/components/ui/StatCard';
@@ -225,11 +226,7 @@ export default async function MusyrifDashboard() {
             >
               Akun
             </Link>
-            <form action={logout}>
-              <button type="submit" className="btn btn-sm btn-ghost" style={{ height: 30, padding: '0 10px' }}>
-                {Icon.logout(12)} Keluar
-              </button>
-            </form>
+            <LogoutButton />
           </div>
         </div>
 
@@ -248,7 +245,7 @@ export default async function MusyrifDashboard() {
             </div>
             <span className="pekan-tag">
               <span className="dot" />
-              Pekan {formatCycleRange(cycle)}
+              Periode {formatCycleRangeShort(cycle)}
             </span>
           </div>
 
@@ -266,7 +263,7 @@ export default async function MusyrifDashboard() {
           </div>
 
           {/* Stats peserta cycle berjalan */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10, marginBottom: 14 }}>
+          <div className="stat-grid-3" style={{ marginBottom: 14 }}>
             <StatCard value={counters.belum} label="Belum" valueColor="var(--merah-ink)" dotColor="var(--merah)" />
             <StatCard value={counters.menunggu} label="Menunggu" valueColor="var(--kuning-ink)" dotColor="var(--kuning)" />
             <StatCard value={counters.selesai} label="Selesai" valueColor="var(--hijau-ink)" dotColor="var(--hijau)" />

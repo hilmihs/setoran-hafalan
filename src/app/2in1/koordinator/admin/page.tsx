@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { getSession } from '@/lib/session';
-import { logout } from '@/lib/auth';
+import { LogoutButton } from '@/components/LogoutButton';
 import { Icon } from '@/components/icons';
 import { SeedCard } from '@/components/SeedCard';
 
@@ -21,15 +21,7 @@ export default async function KoordinatorAdminPage() {
           <Link href="/2in1/koordinator" className="back">
             {Icon.back(12)} dashboard
           </Link>
-          <form action={logout}>
-            <button
-              type="submit"
-              className="btn btn-sm btn-ghost"
-              style={{ height: 30, padding: '0 10px' }}
-            >
-              {Icon.logout(12)} Keluar
-            </button>
-          </form>
+          <LogoutButton />
         </div>
 
         <div className="page">

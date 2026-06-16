@@ -64,6 +64,9 @@ const mono = IBM_Plex_Mono({
   weight: ['400', '500'],
   variable: '--font-mono',
   display: 'swap',
+  // Mono jarang dipakai di atas lipatan → jangan preload (hilangkan warning
+  // "preloaded but not used" di console).
+  preload: false,
 });
 
 export const metadata: Metadata = {

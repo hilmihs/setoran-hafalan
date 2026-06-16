@@ -3,7 +3,8 @@ import { redirect } from 'next/navigation';
 import { getSession } from '@/lib/session';
 import { supabaseAdmin } from '@/lib/supabase-admin';
 import { currentCycleStart, formatCycleDeadline, formatCycleRange, cyclesOfMonth, currentYearMonth } from '@/lib/week';
-import { logout } from '@/lib/auth';
+import { formatCycleRangeShort } from '@/lib/week';
+import { LogoutButton } from '@/components/LogoutButton';
 import { Icon, Initials } from '@/components/icons';
 import { FeatureNav } from '@/components/FeatureNav';
 import { StatCard } from '@/components/ui/StatCard';
@@ -240,15 +241,7 @@ export default async function SyaikhDashboard() {
             >
               Akun
             </Link>
-            <form action={logout}>
-              <button
-                type="submit"
-                className="btn btn-sm btn-ghost"
-                style={{ height: 30, padding: '0 10px' }}
-              >
-                {Icon.logout(12)} Keluar
-              </button>
-            </form>
+            <LogoutButton />
           </div>
         </div>
 
@@ -267,11 +260,11 @@ export default async function SyaikhDashboard() {
             </div>
             <span className="pekan-tag">
               <span className="dot" />
-              Pekan {formatCycleRange(cycle)}
+              Periode {formatCycleRangeShort(cycle)}
             </span>
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10, marginBottom: 14 }}>
+          <div className="stat-grid-3" style={{ marginBottom: 14 }}>
             <StatCard value={counters.belum} label="Belum" valueColor="var(--merah-ink)" dotColor="var(--merah)" />
             <StatCard value={counters.menunggu} label="Menunggu" valueColor="var(--kuning-ink)" dotColor="var(--kuning)" />
             <StatCard value={counters.selesai} label="Selesai" valueColor="var(--hijau-ink)" dotColor="var(--hijau)" />
@@ -282,7 +275,7 @@ export default async function SyaikhDashboard() {
               <div style={{ padding: '10px 16px', background: 'var(--surface-2)', borderBottom: '1px solid var(--line)' }}>
                 <div className="t-tiny">Aktivitas Rekan Masyaikh — {ym}</div>
               </div>
-              <div style={{ overflowX: 'auto' }}>
+              <div className="table-scroll">
               <table className="t-mono" style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
                 <thead>
                   <tr style={{ textAlign: 'left' }}>

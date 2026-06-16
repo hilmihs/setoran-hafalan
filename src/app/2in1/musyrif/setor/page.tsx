@@ -7,8 +7,9 @@ import {
   type ExistingSetoran,
 } from '@/components/PesertaSetoranForm';
 import { Icon } from '@/components/icons';
-import { logout } from '@/lib/auth';
+import { LogoutButton } from '@/components/LogoutButton';
 import { currentCycleStart, formatCycleRange } from '@/lib/week';
+import { formatCycleRangeShort } from '@/lib/week';
 import {
   buildWaMeUrl,
   salutation,
@@ -95,11 +96,7 @@ export default async function MusyrifSetorPage() {
             >
               {Icon.back(12)} Dashboard
             </Link>
-            <form action={logout}>
-              <button type="submit" className="btn btn-sm btn-ghost" style={{ height: 30, padding: '0 10px' }}>
-                {Icon.logout(12)} Keluar
-              </button>
-            </form>
+            <LogoutButton />
           </div>
         </div>
 
@@ -111,7 +108,7 @@ export default async function MusyrifSetorPage() {
             </div>
             <span className="pekan-tag">
               <span className="dot" />
-              Pekan {formatCycleRange(cycle)}
+              Periode {formatCycleRangeShort(cycle)}
             </span>
           </div>
 

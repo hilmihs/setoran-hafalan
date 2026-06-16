@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase-admin';
 import { getSession } from '@/lib/session';
 import { ensureAudioBucket, uploadAudio } from '@/lib/storage';
-import { currentCycleStart } from '@/lib/week';
+import { currentCycleStart, isValidCycleStart } from '@/lib/week';
 import { buildWaMeUrl, tplPesertaSubmitToMusyrif } from '@/lib/whatsapp';
 import { absUrl } from '@/lib/url';
 import { JENIS_REKAMAN, type JenisRekaman } from '@/types/db';
@@ -38,6 +38,11 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    const weekStartParam = form.get('week_start') as string | null;
+    if (weekStartParam && !isValidCycleStart(weekStartParam)) {
+      return NextResponse.json({ error: 'Periode tidak valid.' }, { status: 400 });
+    }
+
     const { data: peserta, error: pErr } = await supabaseAdmin
       .from('peserta')
       .select('id, name, gender, kelas:kelas_id(id, name, musyrif:musyrif_id(id, name, gender, whatsapp_number))')
@@ -54,7 +59,7 @@ export async function POST(req: NextRequest) {
     };
     const musyrif = kelas.musyrif;
 
-    const weekStart = currentCycleStart();
+    const weekStart = weekStartParam ?? currentCycleStart();
 
     const { data: existing } = await supabaseAdmin
       .from('setoran')

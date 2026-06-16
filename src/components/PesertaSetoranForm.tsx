@@ -47,6 +47,8 @@ export function PesertaSetoranForm({
   singleSubmitEndpoint,
   targetRoleLabel = 'Musyrif kelas Anda',
   cacheKey,
+  periodWeekStart,
+  submittedJenis,
 }: {
   musyrifName: string;
   musyrifInitials: string;
@@ -55,6 +57,8 @@ export function PesertaSetoranForm({
   singleSubmitEndpoint?: string;
   targetRoleLabel?: string;
   cacheKey?: string;
+  periodWeekStart?: string;
+  submittedJenis?: JenisRekaman[];
 }) {
   const [recordings, setRecordings] = useState<Recordings>(EMPTY);
   const [initialRecordings, setInitialRecordings] = useState<Partial<Recordings>>({});
@@ -64,11 +68,12 @@ export function PesertaSetoranForm({
     existing?.status === 'submitted' ? existing.musyrifWaUrl : null
   );
 
-  // Per-rekaman submit (2in1 mode)
+  // Per-rekaman submit (2in1 mode). Jenis yang sudah disetor di periode ini
+  // (backfill) langsung ditandai 'done' agar tak dikirim ulang.
   const [perJenisState, setPerJenisState] = useState<Record<JenisRekaman, SubmitState>>({
-    tuhfatul_athfal: 'idle',
-    jazariyyah: 'idle',
-    syawahid: 'idle',
+    tuhfatul_athfal: submittedJenis?.includes('tuhfatul_athfal') ? 'done' : 'idle',
+    jazariyyah: submittedJenis?.includes('jazariyyah') ? 'done' : 'idle',
+    syawahid: submittedJenis?.includes('syawahid') ? 'done' : 'idle',
   });
   const [perJenisError, setPerJenisError] = useState<Partial<Record<JenisRekaman, string>>>({});
   const [singleWaUrl, setSingleWaUrl] = useState<string | null>(null);
@@ -104,6 +109,7 @@ export function PesertaSetoranForm({
       fd.append('jenis', jenis);
       fd.append('audio_file', rec.blob, `${jenis}.webm`);
       fd.append('duration_sec', String(rec.durationSec));
+      if (periodWeekStart) fd.append('week_start', periodWeekStart);
       const res = await fetch(singleSubmitEndpoint, { method: 'POST', body: fd });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error ?? 'Gagal submit');
@@ -128,6 +134,7 @@ export function PesertaSetoranForm({
         fd.append(`audio_${j}`, r.blob, `${j}.webm`);
         fd.append(`duration_${j}`, String(r.durationSec));
       }
+      if (periodWeekStart) fd.append('week_start', periodWeekStart);
       const res = await fetch(endpoint, { method: 'POST', body: fd });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error ?? 'Gagal submit');

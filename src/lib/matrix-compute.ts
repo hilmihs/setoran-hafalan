@@ -10,6 +10,7 @@
 
 import { supabaseAdmin } from '@/lib/supabase-admin';
 import { cyclesOfMonth } from '@/lib/week';
+import { JENIS_REKAMAN } from '@/types/db';
 
 function pctTo4(pct: number): number {
   if (pct >= 0.9) return 4;
@@ -110,16 +111,24 @@ export async function computeMatrixForMonth(yearMonth: string): Promise<MatrixRo
   const { data: rekamanList } = setoranIds.length
     ? await supabaseAdmin
         .from('rekaman')
-        .select('setoran_id, nilai')
+        .select('setoran_id, jenis, nilai')
         .in('setoran_id', setoranIds)
-        .not('nilai', 'is', null)
     : { data: [] };
-  const tajwidScores = new Map<string, number[]>(); // peserta_id → skor[]
+  // nilai per (setoran, jenis); jenis yang hilang/ungraded di setoran checked
+  // dihitung 0 (penalty) — peserta yang setor <3 rekaman menurunkan rata-rata.
+  const nilaiBySetoranJenis = new Map<string, string | null>();
   for (const r of rekamanList ?? []) {
-    const pid = setoranPeserta.get(r.setoran_id);
-    if (!pid || !r.nilai) continue;
+    nilaiBySetoranJenis.set(`${r.setoran_id}|${r.jenis}`, r.nilai ?? null);
+  }
+  const tajwidScores = new Map<string, number[]>(); // peserta_id → skor[]
+  for (const s of setoranList ?? []) {
+    const pid = setoranPeserta.get(s.id);
+    if (!pid) continue;
     const arr = tajwidScores.get(pid) ?? [];
-    arr.push(nilaiToSkor(r.nilai));
+    for (const jenis of JENIS_REKAMAN) {
+      const nilai = nilaiBySetoranJenis.get(`${s.id}|${jenis}`);
+      arr.push(nilai ? nilaiToSkor(nilai) : 0);
+    }
     tajwidScores.set(pid, arr);
   }
 

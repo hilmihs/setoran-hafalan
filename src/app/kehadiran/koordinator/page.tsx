@@ -2,7 +2,7 @@ import { requireKoordinatorHits } from '@/lib/session';
 import { supabaseAdmin } from '@/lib/supabase-admin';
 import { buildWaMeUrl, tplReminderKetuaKelompokTugas } from '@/lib/whatsapp';
 import { absUrl } from '@/lib/url';
-import { logout } from '@/lib/auth';
+import { LogoutButton } from '@/components/LogoutButton';
 import { Icon } from '@/components/icons';
 import { FeatureNav } from '@/components/FeatureNav';
 import { StatCard } from '@/components/ui/StatCard';
@@ -111,15 +111,7 @@ export default async function KoordinatorKehadiranPage() {
             <div className="wordmark">
               <span className="mark">M</span> Koordinator Pengajar
             </div>
-            <form action={logout}>
-              <button
-                type="submit"
-                className="btn btn-sm btn-ghost"
-                style={{ height: 30, padding: '0 10px' }}
-              >
-                {Icon.logout(12)} Keluar
-              </button>
-            </form>
+            <LogoutButton />
           </div>
 
           <FeatureNav current="/kehadiran/koordinator" />

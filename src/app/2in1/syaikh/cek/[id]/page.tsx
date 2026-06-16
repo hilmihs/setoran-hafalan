@@ -6,6 +6,7 @@ import { signedAudioUrl } from '@/lib/storage';
 import { CekForm, type RekamanView } from '@/components/CekForm';
 import { Icon } from '@/components/icons';
 import { formatCycleRange } from '@/lib/week';
+import { formatCycleRangeShort } from '@/lib/week';
 import { salutation } from '@/lib/whatsapp';
 import { JENIS_REKAMAN, type JenisRekaman, type Gender } from '@/types/db';
 import { submitCekSyaikh } from './actions';
@@ -92,7 +93,7 @@ export default async function SyaikhCekPage({ params }: { params: { id: string }
         </Link>
         <span className="pekan-tag">
           <span className="dot" />
-          Pekan {formatCycleRange(setoran.week_start)}
+          Periode {formatCycleRangeShort(setoran.week_start)}
         </span>
       </div>
       <div className="page">

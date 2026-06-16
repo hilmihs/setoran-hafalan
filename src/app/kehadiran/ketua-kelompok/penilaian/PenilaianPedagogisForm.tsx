@@ -1,16 +1,20 @@
 'use client';
 
 import { useCallback, useRef, useState } from 'react';
+import { ScoreSelector } from '@/components/ScoreSelector';
 
-const ASPECTS = [
-  { key: 'metode', skorField: 'skor_metode_pengajaran', ketField: 'keterangan_metode', label: 'Metode Pengajaran' },
-  { key: 'silabus', skorField: 'skor_kepatuhan_silabus', ketField: 'keterangan_silabus', label: 'Kepatuhan Silabus' },
-  { key: 'halaqah', skorField: 'skor_manajemen_halaqah', ketField: 'keterangan_halaqah', label: 'Manajemen Halaqah' },
-  { key: 'evaluasi', skorField: 'skor_evaluasi_penguasaan', ketField: 'keterangan_evaluasi', label: 'Evaluasi & Penguasaan' },
-  { key: 'sop', skorField: 'skor_kepatuhan_sop', ketField: 'keterangan_sop', label: 'Kepatuhan SOP Teknis' },
+const PEDAGOGIS = [
+  { skorField: 'skor_metode_pengajaran', ketField: 'keterangan_metode', label: 'Metode Pengajaran Modul' },
+  { skorField: 'skor_kepatuhan_silabus', ketField: 'keterangan_silabus', label: 'Kepatuhan Silabus' },
+  { skorField: 'skor_manajemen_halaqah', ketField: 'keterangan_halaqah', label: 'Manajemen Halaqah' },
+  { skorField: 'skor_evaluasi_penguasaan', ketField: 'keterangan_evaluasi', label: 'Evaluasi & Penguasaan' },
 ] as const;
 
-const SCORES = [0, 1, 2, 3, 4] as const;
+const SOP = [
+  { skorField: 'skor_kepatuhan_sop', ketField: 'keterangan_sop', label: 'Kepatuhan SOP Teknis' },
+] as const;
+
+const ALL = [...PEDAGOGIS, ...SOP];
 
 type PenilaianData = {
   skor_metode_pengajaran: number | null;
@@ -25,50 +29,27 @@ type PenilaianData = {
   keterangan_sop: string | null;
 };
 
-type Member = {
-  id: string;
-  name: string;
-  penilaian: PenilaianData | null;
-};
-
-type RowState = PenilaianData & {
-  status: 'idle' | 'saving' | 'saved' | 'error';
-  error?: string;
-};
+type Member = { id: string; name: string; penilaian: PenilaianData | null };
+type RowState = PenilaianData & { status: 'idle' | 'saving' | 'saved' | 'error'; error?: string };
 
 const EMPTY: PenilaianData = {
-  skor_metode_pengajaran: null,
-  keterangan_metode: null,
-  skor_kepatuhan_silabus: null,
-  keterangan_silabus: null,
-  skor_manajemen_halaqah: null,
-  keterangan_halaqah: null,
-  skor_evaluasi_penguasaan: null,
-  keterangan_evaluasi: null,
-  skor_kepatuhan_sop: null,
-  keterangan_sop: null,
+  skor_metode_pengajaran: null, keterangan_metode: null,
+  skor_kepatuhan_silabus: null, keterangan_silabus: null,
+  skor_manajemen_halaqah: null, keterangan_halaqah: null,
+  skor_evaluasi_penguasaan: null, keterangan_evaluasi: null,
+  skor_kepatuhan_sop: null, keterangan_sop: null,
 };
 
-export function PenilaianPedagogisForm({
-  members,
-  yearMonth,
-}: {
-  members: Member[];
-  yearMonth: string;
-}) {
+export function PenilaianPedagogisForm({ members, yearMonth }: { members: Member[]; yearMonth: string }) {
   const initialRows = (): Record<string, RowState> => {
     const out: Record<string, RowState> = {};
-    for (const m of members) {
-      out[m.id] = {
-        ...(m.penilaian ?? EMPTY),
-        status: m.penilaian ? 'saved' : 'idle',
-      };
-    }
+    for (const m of members) out[m.id] = { ...(m.penilaian ?? EMPTY), status: m.penilaian ? 'saved' : 'idle' };
     return out;
   };
 
   const [rows, setRows] = useState<Record<string, RowState>>(initialRows);
   const [expanded, setExpanded] = useState<string | null>(members[0]?.id ?? null);
+  const [openNote, setOpenNote] = useState<Record<string, boolean>>({});
   const debounceRefs = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
 
   const save = useCallback(async (pengajarId: string, state: RowState) => {
@@ -110,12 +91,47 @@ export function PenilaianPedagogisForm({
     });
   }
 
-  function avgOf(row: RowState): string {
-    const scores = ASPECTS
-      .map((a) => row[a.skorField as keyof PenilaianData] as number | null)
-      .filter((s): s is number => s !== null);
+  function pedagogisAvg(row: RowState): string {
+    const scores = PEDAGOGIS.map((a) => row[a.skorField] as number | null).filter((s): s is number => s !== null);
     if (!scores.length) return '—';
     return (scores.reduce((a, b) => a + b, 0) / scores.length).toFixed(1);
+  }
+  function filledCount(row: RowState): number {
+    return ALL.filter((a) => (row[a.skorField] as number | null) !== null).length;
+  }
+
+  function renderAspect(m: Member, row: RowState, a: (typeof ALL)[number]) {
+    const skor = row[a.skorField] as number | null;
+    const ket = (row[a.ketField] as string | null) ?? '';
+    const noteKey = `${m.id}:${a.skorField}`;
+    const noteOpen = !!openNote[noteKey];
+    return (
+      <div key={a.skorField} style={{ borderTop: '1px solid var(--line)', paddingTop: 10 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6, gap: 8 }}>
+          <span style={{ fontSize: 13, fontWeight: 600 }}>{a.label}</span>
+          <button
+            type="button"
+            className={`note-btn${ket ? ' filled' : ''}`}
+            onClick={() => setOpenNote((p) => ({ ...p, [noteKey]: !p[noteKey] }))}
+            aria-label="Catatan"
+            title="Catatan"
+          >
+            ✎{ket && <span className="ndot" />}
+          </button>
+        </div>
+        <ScoreSelector label={`${a.label} — ${m.name}`} value={skor} onChange={(v) => updateRow(m.id, { [a.skorField]: v } as Partial<PenilaianData>)} />
+        {noteOpen && (
+          <input
+            type="text"
+            className="note-field"
+            style={{ marginTop: 6 }}
+            placeholder="Catatan (opsional)…"
+            value={ket}
+            onChange={(e) => updateRow(m.id, { [a.ketField]: e.target.value || null } as Partial<PenilaianData>)}
+          />
+        )}
+      </div>
+    );
   }
 
   return (
@@ -128,78 +144,33 @@ export function PenilaianPedagogisForm({
             <button
               type="button"
               onClick={() => setExpanded(isOpen ? null : m.id)}
-              style={{
-                width: '100%',
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-                padding: '12px 16px',
-                background: 'none',
-                border: 'none',
-                cursor: 'pointer',
-                textAlign: 'left',
-              }}
+              style={{ width: '100%', display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 16px', background: 'none', border: 'none', cursor: 'pointer', textAlign: 'left' }}
             >
               <div style={{ fontWeight: 600, fontSize: 14 }}>{m.name}</div>
               <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
-                <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--hijau-ink, #2e7d32)' }}>
-                  {avgOf(row)}
-                </span>
-                {row.status === 'saving' && <span style={{ fontSize: 12, color: 'var(--muted-2)' }}>⟳</span>}
+                <span className={`prog-pill${filledCount(row) === ALL.length ? ' done' : ''}`}>{filledCount(row)}/{ALL.length}</span>
+                <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--hijau-ink)' }}>{pedagogisAvg(row)}</span>
+                {row.status === 'saving' && <span className="spin" style={{ fontSize: 12, color: 'var(--muted-2)', display: 'inline-block' }}>⟳</span>}
                 {row.status === 'saved' && <span style={{ fontSize: 12, color: 'var(--hijau-ink)' }}>✓</span>}
-                {row.status === 'error' && <span title={row.error} style={{ fontSize: 12, color: 'var(--merah-ink, #c62828)' }}>✗</span>}
+                {row.status === 'error' && <span title={row.error} style={{ fontSize: 12, color: 'var(--merah-ink)' }}>✗</span>}
                 <span style={{ fontSize: 12, color: 'var(--muted-2)' }}>{isOpen ? '▲' : '▼'}</span>
               </div>
             </button>
 
             {isOpen && (
-              <div style={{ padding: '0 16px 14px', display: 'flex', flexDirection: 'column', gap: 12 }}>
-                {ASPECTS.map((a) => {
-                  const skor = row[a.skorField as keyof PenilaianData] as number | null;
-                  const ket = (row[a.ketField as keyof PenilaianData] as string | null) ?? '';
-                  return (
-                    <div key={a.key}>
-                      <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 4 }}>{a.label}</div>
-                      <div style={{ display: 'flex', gap: 3 }}>
-                        {SCORES.map((s) => (
-                          <button
-                            key={s}
-                            type="button"
-                            onClick={() => updateRow(m.id, { [a.skorField]: skor === s ? null : s } as Partial<PenilaianData>)}
-                            style={{
-                              flex: 1,
-                              padding: '5px 0',
-                              fontSize: 13,
-                              fontWeight: skor === s ? 700 : 400,
-                              background: skor === s ? scoreBg(s) : 'var(--bg-input, #f0f0f0)',
-                              color: skor === s ? scoreColor(s) : 'var(--muted-2)',
-                              border: skor === s ? `1.5px solid ${scoreBorder(s)}` : '1.5px solid transparent',
-                              borderRadius: 6,
-                              cursor: 'pointer',
-                            }}
-                          >
-                            {s}
-                          </button>
-                        ))}
-                      </div>
-                      <input
-                        type="text"
-                        placeholder="catatan (opsional)..."
-                        value={ket}
-                        onChange={(e) => updateRow(m.id, { [a.ketField]: e.target.value || null } as Partial<PenilaianData>)}
-                        style={{
-                          marginTop: 4,
-                          width: '100%',
-                          fontSize: 11,
-                          padding: '4px 8px',
-                          borderRadius: 6,
-                          border: '1px solid var(--border)',
-                          background: 'var(--bg-input, #fafafa)',
-                        }}
-                      />
-                    </div>
-                  );
-                })}
+              <div style={{ padding: '0 16px 16px', display: 'flex', flexDirection: 'column', gap: 14 }}>
+                <div>
+                  <div className="t-tiny" style={{ color: 'var(--emas-ink)', margin: '4px 0 2px' }}>KOMPETENSI PEDAGOGIS (4 aspek → Matrix)</div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                    {PEDAGOGIS.map((a) => renderAspect(m, row, a))}
+                  </div>
+                </div>
+                <div>
+                  <div className="t-tiny" style={{ color: 'var(--muted)', margin: '2px 0' }}>SOP TEKNIS (Soft Skill)</div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                    {SOP.map((a) => renderAspect(m, row, a))}
+                  </div>
+                </div>
               </div>
             )}
           </div>
@@ -207,20 +178,4 @@ export function PenilaianPedagogisForm({
       })}
     </div>
   );
-}
-
-function scoreBg(s: number): string {
-  if (s >= 3) return '#e8f5e9';
-  if (s === 2) return '#fff9c4';
-  return '#ffebee';
-}
-function scoreColor(s: number): string {
-  if (s >= 3) return '#2e7d32';
-  if (s === 2) return '#f57f17';
-  return '#c62828';
-}
-function scoreBorder(s: number): string {
-  if (s >= 3) return '#4caf50';
-  if (s === 2) return '#ffc107';
-  return '#f44336';
 }

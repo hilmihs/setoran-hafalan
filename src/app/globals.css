@@ -634,3 +634,153 @@ dialog[open] {
     max-width: 200px;
   }
 }
+
+/* =========================================================
+   Responsive layer — dashboards & shared mobile fixes
+   ========================================================= */
+
+:root {
+  --emas:      oklch(0.78 0.10 80);
+  --emas-tint: oklch(0.96 0.035 85);
+  --emas-line: oklch(0.88 0.07 82);
+  --emas-ink:  oklch(0.50 0.09 70);
+}
+
+/* Dashboard shell: full-width header + centered body */
+.dash-header {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 12px; flex-wrap: wrap;
+  padding: 16px 28px;
+  border-bottom: 1px solid var(--line);
+  background: var(--surface);
+}
+.dash-header .grp { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.dash-body {
+  padding: 24px 28px;
+  display: flex; flex-direction: column; gap: 18px;
+  max-width: 1200px; margin: 0 auto;
+}
+
+/* Stat grid: 4-col desktop → 2-col mobile */
+.stat-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+.stat-grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+
+/* Horizontal-scroll wrapper for wide tables */
+.table-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+
+@media (max-width: 640px) {
+  .dash-header { padding: 12px 14px; gap: 8px; }
+  .dash-header .grp { gap: 8px; }
+  .dash-body { padding: 14px 12px; gap: 14px; }
+  .stat-grid { grid-template-columns: repeat(2, 1fr); }
+  .stat-grid-3 { grid-template-columns: repeat(3, 1fr); gap: 8px; }
+  .stat { padding: 12px; }
+  .stat .v { font-size: 22px; }
+  .page { padding: 0 14px 24px; }
+  .topbar { padding: 12px 14px 8px; }
+  .section-row { margin: 14px 2px 8px; }
+  .k-table { font-size: 12px; }
+  .k-table thead th { padding: 8px 10px; }
+  .k-table tbody td { padding: 10px 10px; }
+  .filter-bar { gap: 6px; padding: 10px; }
+  .search { max-width: none; min-width: 140px; flex: 1 1 100%; }
+  /* tap targets */
+  .act-btn { height: 34px; }
+}
+
+/* =========================================================
+   Penilaian Peserta — fast data-entry (aesthetic B)
+   ========================================================= */
+
+.pen-sec { margin-bottom: 18px; }
+.pen-sec-head {
+  display: flex; align-items: center; gap: 10px;
+  width: 100%;
+  padding: 10px 14px;
+  background: var(--emas-tint);
+  border: 1px solid var(--emas-line);
+  border-radius: var(--r-md);
+  cursor: pointer;
+  text-align: left;
+}
+.pen-sec-head .ttl { font-size: 14px; font-weight: 700; color: var(--emas-ink); letter-spacing: 0.01em; }
+.pen-sec-head .caret { margin-left: auto; color: var(--emas-ink); transition: transform 0.15s; font-size: 12px; }
+.pen-sec-head.collapsed .caret { transform: rotate(-90deg); }
+
+.prog-pill {
+  display: inline-flex; align-items: center; gap: 5px;
+  font-size: 11px; font-weight: 600;
+  padding: 3px 9px; border-radius: 999px;
+  background: var(--surface); border: 1px solid var(--emas-line); color: var(--emas-ink);
+  white-space: nowrap;
+}
+.prog-pill.done { background: var(--hijau-tint); border-color: var(--hijau-line); color: var(--hijau-ink); }
+
+/* table */
+.pen-table { width: 100%; border-collapse: separate; border-spacing: 0; }
+.pen-table thead th {
+  position: sticky; top: 0; z-index: 3;
+  background: var(--surface-2);
+  font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em;
+  color: var(--muted); text-align: center;
+  padding: 8px 8px; border-bottom: 1px solid var(--line);
+}
+.pen-table thead th.name-col { text-align: left; }
+.pen-table th.name-col, .pen-table td.name-col {
+  position: sticky; left: 0; z-index: 2;
+  background: var(--surface);
+  min-width: 150px; max-width: 200px;
+}
+.pen-table thead th.name-col { z-index: 4; background: var(--surface-2); }
+.pen-row td {
+  padding: 8px; border-bottom: 1px solid var(--line); vertical-align: middle;
+}
+.pen-row:hover td, .pen-row:focus-within td { background: var(--surface-2); }
+.pen-row:focus-within td.name-col { background: var(--surface-2); }
+.pen-name { font-size: 13px; font-weight: 600; color: var(--ink); line-height: 1.2; }
+.pen-sub  { font-size: 11px; color: var(--muted); margin-top: 1px; }
+
+/* segmented score selector */
+.score-seg { display: flex; gap: 4px; align-items: stretch; }
+.score-pill {
+  flex: 1; min-width: 36px; min-height: 40px;
+  display: inline-flex; align-items: center; justify-content: center;
+  font-size: 15px; font-weight: 600; color: var(--muted);
+  background: var(--surface-2);
+  border: 1.5px solid var(--line);
+  border-radius: var(--r-sm);
+  cursor: pointer; transition: transform 0.06s, background 0.1s, border-color 0.1s;
+  user-select: none;
+}
+.score-pill:hover { border-color: var(--line-2); }
+.score-pill:active { transform: scale(0.94); }
+.score-pill:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.score-pill.on { font-weight: 800; }
+.score-pill.on[data-v="0"] { background: var(--merah-tint); border-color: var(--merah); color: var(--merah-ink); }
+.score-pill.on[data-v="1"] { background: oklch(0.95 0.05 45); border-color: oklch(0.70 0.14 45); color: oklch(0.48 0.13 40); }
+.score-pill.on[data-v="2"] { background: var(--kuning-tint); border-color: var(--kuning); color: var(--kuning-ink); }
+.score-pill.on[data-v="3"] { background: oklch(0.95 0.05 150); border-color: oklch(0.70 0.11 150); color: var(--hijau-ink); }
+.score-pill.on[data-v="4"] { background: var(--hijau-tint); border-color: var(--hijau); color: var(--hijau-ink); }
+
+/* notes toggle + field */
+.note-btn {
+  width: 30px; height: 30px; border-radius: var(--r-sm);
+  display: inline-flex; align-items: center; justify-content: center;
+  border: 1px solid var(--line); background: var(--surface); color: var(--muted-2);
+  cursor: pointer; position: relative;
+}
+.note-btn.filled { color: var(--emas-ink); border-color: var(--emas-line); background: var(--emas-tint); }
+.note-btn .ndot {
+  position: absolute; top: -3px; right: -3px;
+  width: 8px; height: 8px; border-radius: 50%; background: var(--emas);
+  border: 1.5px solid var(--surface);
+}
+.note-row td { padding: 0 8px 8px; }
+.note-field {
+  width: 100%; font-size: 12px; padding: 7px 9px;
+  background: var(--surface-2); border: 1px solid var(--line); border-radius: var(--r-sm);
+  color: var(--ink); outline: none;
+}
+.note-field:focus { border-color: var(--accent); background: var(--surface); }
+
+.pen-status { width: 22px; text-align: center; font-size: 14px; }

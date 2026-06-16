@@ -1,6 +1,6 @@
 import { requireOneOfRoles } from '@/lib/session';
 import { supabaseAdmin } from '@/lib/supabase-admin';
-import { logout } from '@/lib/auth';
+import { LogoutButton } from '@/components/LogoutButton';
 import { Icon } from '@/components/icons';
 import { FeatureNav } from '@/components/FeatureNav';
 import Link from 'next/link';
@@ -130,15 +130,7 @@ export default async function MatrixKoordinatorPage({
               >
                 {Icon.back(12)} Dashboard
               </Link>
-              <form action={logout}>
-                <button
-                  type="submit"
-                  className="btn btn-sm btn-ghost"
-                  style={{ height: 30, padding: '0 10px' }}
-                >
-                  {Icon.logout(12)} Keluar
-                </button>
-              </form>
+              <LogoutButton />
             </div>
           </div>
 

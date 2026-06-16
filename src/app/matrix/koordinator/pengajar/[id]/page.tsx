@@ -1,6 +1,6 @@
 import { requireOneOfRoles } from '@/lib/session';
 import { supabaseAdmin } from '@/lib/supabase-admin';
-import { logout } from '@/lib/auth';
+import { LogoutButton } from '@/components/LogoutButton';
 import { Icon } from '@/components/icons';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
@@ -172,11 +172,7 @@ export default async function PengajarDetailPage({ params }: { params: { id: str
               <Link href="/matrix/koordinator" className="btn btn-sm btn-ghost" style={{ height: 30, padding: '0 10px' }}>
                 {Icon.back(12)} Matrix
               </Link>
-              <form action={logout}>
-                <button type="submit" className="btn btn-sm btn-ghost" style={{ height: 30, padding: '0 10px' }}>
-                  {Icon.logout(12)} Keluar
-                </button>
-              </form>
+              <LogoutButton />
             </div>
           </div>
 

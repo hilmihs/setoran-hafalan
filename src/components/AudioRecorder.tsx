@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { Icon, Waveform } from './icons';
+import { LiveWaveform } from './LiveWaveform';
 
 const MAX_DURATION_SEC = 15 * 60;
 const MAX_UPLOAD_BYTES = 25 * 1024 * 1024;
@@ -250,9 +251,7 @@ export function AudioRecorder({
 
       {(state.kind === 'recording' || state.kind === 'paused') && (
         <div>
-          <div className="wave rec">
-            <Waveform full progress={1} height={36} />
-          </div>
+          <LiveWaveform stream={streamRef.current} paused={state.kind === 'paused'} height={60} />
           <div className="rec-action">
             <button
               type="button"
@@ -316,12 +315,32 @@ export function AudioRecorder({
             <span className="time">
               {formatTime(Math.round(playPos * state.durationSec))} / {formatTime(state.durationSec)}
             </span>
+            <a
+              href={state.url}
+              download={downloadName(label, state.blob.type)}
+              className="redo"
+              style={{ textDecoration: 'none' }}
+              title="Unduh rekaman ke perangkat"
+            >
+              ↓ unduh
+            </a>
             {!submitted && (
               <button type="button" className="redo" onClick={reset} disabled={disabled}>
                 {Icon.redo()} rekam ulang
               </button>
             )}
           </div>
+          {!submitted && (
+            <p
+              style={{
+                fontSize: 11,
+                color: 'var(--hijau-ink)',
+                margin: '6px 0 0',
+              }}
+            >
+              ✓ Tersimpan di perangkat — aman walau koneksi putus, tinggal kirim ulang.
+            </p>
+          )}
         </div>
       )}
     </div>
@@ -375,6 +394,15 @@ function Status({
       <span className="dot" /> belum direkam
     </span>
   );
+}
+
+function downloadName(label: string, mime: string): string {
+  const slug = label.trim().toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
+  let ext = 'webm';
+  if (mime.includes('mp4')) ext = 'm4a';
+  else if (mime.includes('ogg')) ext = 'ogg';
+  else if (mime.includes('mpeg')) ext = 'mp3';
+  return `rekaman-${slug || 'audio'}.${ext}`;
 }
 
 function pickMime(): string | null {
