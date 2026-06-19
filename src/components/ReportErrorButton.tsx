@@ -17,7 +17,6 @@ const ROLE_LABELS: Record<string, string> = {
   koordinator: 'Koordinator',
   syaikh: 'Syaikh',
   pengajar: 'Pengajar',
-  koordinator_hits: 'Koordinator HITS',
   ketua_kelas: 'Ketua Kelas',
   koordinator_ketua_kelas: 'Koordinator Ketua Kelas',
 };
@@ -28,7 +27,6 @@ const ROLE_LANDING: Record<string, string> = {
   koordinator: '/2in1/koordinator',
   syaikh: '/2in1/syaikh',
   pengajar: '/kehadiran/pengajar',
-  koordinator_hits: '/kehadiran/koordinator',
   ketua_kelas: '/observasi/ketua-kelas',
   koordinator_ketua_kelas: '/observasi/koordinator',
 };

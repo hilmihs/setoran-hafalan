@@ -7,7 +7,6 @@ import { revalidatePath } from 'next/cache';
 
 function actorIdOf(a: { role: string } & Record<string, unknown>): string | null {
   for (const k of [
-    'koordinator_hits_id',
     'koordinator_kk_id',
     'syaikh_id',
     'koordinator_id',
@@ -23,7 +22,6 @@ function actorIdOf(a: { role: string } & Record<string, unknown>): string | null
 
 const ALLOWED_AUTHOR_ROLES = new Set([
   'koordinator',
-  'koordinator_hits',
   'koordinator_ketua_kelas',
   'syaikh',
 ]);

@@ -11,7 +11,6 @@ const PAGE_SIZE = 50;
 
 const ACTOR_TABLE_BY_ROLE: Record<string, { table: string; nameCol: string }> = {
   koordinator: { table: 'koordinator', nameCol: 'name' },
-  koordinator_hits: { table: 'koordinator_hits', nameCol: 'name' },
   koordinator_ketua_kelas: { table: 'koordinator_ketua_kelas', nameCol: 'name' },
   syaikh: { table: 'syaikh', nameCol: 'name' },
   pengajar: { table: 'pengajar', nameCol: 'name' },
@@ -23,14 +22,12 @@ const ACTOR_TABLE_BY_ROLE: Record<string, { table: string; nameCol: string }> = 
 const ACTION_LABEL: Record<string, string> = {
   'libur.create': 'Buat libur',
   'tabayyun.decide': 'Putuskan tabayyun',
-  'shakwa.status_update': 'Update status shakwa',
   'alasan.decide': 'Putuskan alasan',
   'alasan.submit': 'Ajukan alasan',
   'checkin.submit': 'Check-in',
   'checkin.invalidate': 'Batalkan check-in',
   'observasi.submit': 'Submit observasi',
   'ketua_kelas.elect': 'Pilih ketua kelas',
-  'shakwa.submit_pengajar': 'Submit shakwa',
   'cek.submit_syaikh': 'Cek setoran (syaikh)',
   'cek.submit_musyrif': 'Cek setoran (musyrif)',
 };

@@ -7,7 +7,6 @@ import type {
   KoordinatorSession,
   SyaikhSession,
   PengajarSession,
-  KoordinatorHitsSession,
   KetuaKelasSession,
   KoordinatorKetuaKelasSession,
 } from '@/types/db';
@@ -54,7 +53,6 @@ export const requireMusyrif = requireRole<MusyrifSession>('musyrif');
 export const requireKoordinator = requireRole<KoordinatorSession>('koordinator');
 export const requireSyaikh = requireRole<SyaikhSession>('syaikh');
 export const requirePengajar = requireRole<PengajarSession>('pengajar');
-export const requireKoordinatorHits = requireRole<KoordinatorHitsSession>('koordinator_hits');
 export const requireKetuaKelas = requireRole<KetuaKelasSession>('ketua_kelas');
 export const requireKoordinatorKetuaKelas = requireRole<KoordinatorKetuaKelasSession>('koordinator_ketua_kelas');
 

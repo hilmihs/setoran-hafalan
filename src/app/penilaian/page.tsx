@@ -4,9 +4,8 @@ import { getSession } from '@/lib/session';
 import { supabaseAdmin } from '@/lib/supabase-admin';
 import { LogoutButton } from '@/components/LogoutButton';
 import { currentYearMonth } from '@/lib/week';
-import { Icon } from '@/components/icons';
 import { FeatureNav } from '@/components/FeatureNav';
-import { PenilaianPesertaForm } from '@/components/PenilaianPesertaForm';
+import { PenilaianMasyaikhForm } from '@/components/PenilaianMasyaikhForm';
 
 export const dynamic = 'force-dynamic';
 
@@ -20,51 +19,62 @@ export default async function PenilaianPage() {
   const { year, month, label: monthLabel } = currentYearMonth();
   const yearMonth = `${year}-${String(month).padStart(2, '0')}`;
 
-  const { data: allKelas } = await supabaseAdmin
-    .from('kelas')
-    .select('id, name, gender')
+  const { data: allKelompok } = await supabaseAdmin
+    .from('kelompok_pengajar')
+    .select('id, name')
     .order('name');
 
-  const { data: allPeserta } = await supabaseAdmin
-    .from('peserta')
-    .select('id, name, gender, kelas_id')
+  const { data: allPengajar } = await supabaseAdmin
+    .from('pengajar')
+    .select('id, name, gender, kelompok_id, is_ketua')
     .eq('active', true)
     .order('name');
 
-  const pesertaIds = (allPeserta ?? []).map((p) => p.id);
+  const pengajarIds = (allPengajar ?? []).map((p) => p.id);
 
   const { data: existingPenilaian } = await supabaseAdmin
-    .from('penilaian_peserta')
-    .select('id, peserta_id, skor_bacaan, ket_bacaan, skor_hafalan, ket_hafalan, assessor_role')
+    .from('penilaian_masyaikh')
+    .select('id, pengajar_id, skor_bacaan, keterangan_bacaan, skor_hafalan, keterangan_hafalan, assessor_role')
     .eq('year_month', yearMonth)
-    .in('peserta_id', pesertaIds.length ? pesertaIds : ['00000000-0000-0000-0000-000000000000']);
+    .in('pengajar_id', pengajarIds.length ? pengajarIds : ['00000000-0000-0000-0000-000000000000']);
 
-  const penilaianByPeserta = new Map<string, {
+  const penilaianByPengajar = new Map<string, {
     skor_bacaan: number | null;
-    ket_bacaan: string | null;
+    keterangan_bacaan: string | null;
     skor_hafalan: number | null;
-    ket_hafalan: string | null;
+    keterangan_hafalan: string | null;
     assessor_role: string | null;
   }>();
   for (const p of existingPenilaian ?? []) {
-    penilaianByPeserta.set(p.peserta_id, {
+    penilaianByPengajar.set(p.pengajar_id, {
       skor_bacaan: p.skor_bacaan,
-      ket_bacaan: p.ket_bacaan,
+      keterangan_bacaan: p.keterangan_bacaan,
       skor_hafalan: p.skor_hafalan,
-      ket_hafalan: p.ket_hafalan,
+      keterangan_hafalan: p.keterangan_hafalan,
       assessor_role: p.assessor_role,
     });
   }
 
-  const kelasMap = new Map((allKelas ?? []).map((k) => [k.id, k]));
-  const pesertaWithPenilaian = (allPeserta ?? []).map((p) => ({
-    ...p,
-    kelas: kelasMap.get(p.kelas_id) ?? null,
-    penilaian: penilaianByPeserta.get(p.id) ?? null,
+  const kelompokMap = new Map((allKelompok ?? []).map((k) => [k.id, k]));
+  const pengajarWithPenilaian = (allPengajar ?? []).map((p) => ({
+    id: p.id,
+    name: p.name,
+    gender: p.gender as 'ikhwan' | 'akhwat',
+    is_ketua: p.is_ketua,
+    kelompokLabel: kelompokMap.get(p.kelompok_id)?.name ?? null,
+    penilaian: penilaianByPengajar.get(p.id) ?? null,
   }));
 
-  const ikhwanList = pesertaWithPenilaian.filter((p) => p.gender === 'ikhwan');
-  const akhwatList = pesertaWithPenilaian.filter((p) => p.gender === 'akhwat');
+  // Urut: kelompok → ketua dulu → nama
+  const sortPengajar = <T extends { kelompokLabel: string | null; is_ketua: boolean; name: string }>(arr: T[]) =>
+    [...arr].sort((a, b) =>
+      (a.kelompokLabel ?? '').localeCompare(b.kelompokLabel ?? '', 'id', { numeric: true }) ||
+      Number(b.is_ketua) - Number(a.is_ketua) ||
+      a.name.localeCompare(b.name, 'id')
+    );
+
+  const ikhwanList = sortPengajar(pengajarWithPenilaian.filter((p) => p.gender === 'ikhwan'));
+  const akhwatList = sortPengajar(pengajarWithPenilaian.filter((p) => p.gender === 'akhwat'));
 
   return (
     <main style={{ minHeight: '100vh' }}>
@@ -75,7 +85,7 @@ export default async function PenilaianPage() {
           </Link>
           <span style={{ width: 1, height: 16, background: 'var(--line-2)' }} />
           <span className="t-small" style={{ color: 'var(--ink-2)', fontWeight: 500 }}>
-            Penilaian Peserta
+            Penilaian Pengajar
           </span>
         </div>
         <div className="grp">
@@ -91,21 +101,21 @@ export default async function PenilaianPage() {
 
         <div>
           <h1 className="t-h1" style={{ fontSize: 22, marginBottom: 4 }}>
-            Penilaian Peserta — {monthLabel}
+            Penilaian Pengajar — {monthLabel}
           </h1>
           <p className="t-small">
-            Skor bacaan &amp; hafalan 0–4. Ketuk angka (atau tekan 0–4 saat baris fokus).
-            Tersimpan otomatis.
+            Kualitas Bacaan &amp; Hafalan pengajar (skala 0–4). Ketuk angka (atau tekan 0–4 saat
+            baris fokus). Lihat “Panduan Standar Skala” untuk kriteria tiap nilai. Tersimpan otomatis.
           </p>
         </div>
 
         {ikhwanList.length === 0 && akhwatList.length === 0 && (
-          <p className="t-body">Belum ada peserta aktif.</p>
+          <p className="t-body">Belum ada pengajar aktif.</p>
         )}
 
-        <PenilaianPesertaForm pesertaList={ikhwanList} yearMonth={yearMonth} title="Ikhwan" />
-        <PenilaianPesertaForm
-          pesertaList={akhwatList}
+        <PenilaianMasyaikhForm pengajarList={ikhwanList} yearMonth={yearMonth} title="Ikhwan" />
+        <PenilaianMasyaikhForm
+          pengajarList={akhwatList}
           yearMonth={yearMonth}
           title="Akhwat"
           defaultCollapsed={ikhwanList.length > 0}

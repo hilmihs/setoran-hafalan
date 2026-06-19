@@ -127,7 +127,7 @@ export default async function PesertaDossierPage({ params }: { params: { id: str
   const authorIds = Array.from(new Set((notesRaw ?? []).map((n) => n.author_id)));
   const authorMap = new Map<string, string>();
   if (authorIds.length) {
-    const tables = ['koordinator', 'syaikh', 'koordinator_hits', 'koordinator_ketua_kelas'];
+    const tables = ['koordinator', 'syaikh', 'koordinator_ketua_kelas'];
     for (const t of tables) {
       const { data } = await supabaseAdmin.from(t).select('id, name').in('id', authorIds);
       for (const r of data ?? []) authorMap.set(r.id, r.name);

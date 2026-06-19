@@ -16,10 +16,6 @@ export interface RiskResult {
   factors: RiskFactor[];
 }
 
-function currentYearMonth(): string {
-  return new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Jakarta' }).slice(0, 7);
-}
-
 function previousYearMonth(offset: number): string {
   const now = new Date();
   now.setMonth(now.getMonth() - offset);
@@ -30,65 +26,57 @@ function previousYearMonth(offset: number): string {
  * On-demand risk computation untuk satu pengajar. Pakai React cache supaya
  * pengajar yang sama tidak ulang-query dalam satu request.
  *
- * Faktor & bobot:
- *   1. Teguran kumulatif (40pt). 0→0, 1→10, 2→25, 3→40, 4+→40.
- *   2. Trend kehadiran turun (20pt). Bulan ini < bulan lalu.
- *   3. Tabayyun bukan-udzur 3 bulan terakhir (20pt). 0→0, 1→10, 2+→20.
+ * Faktor & bobot (batch-native HITS — tanpa checkin):
+ *   1. Teguran kumulatif (40pt) dari hits_teguran. 0→0, 1→10, 2→25, 3+→40.
+ *   2. Trend matrix turun (20pt). rata_rata_keseluruhan bulan ini < bulan lalu.
+ *   3. Tabayyun bukan-udzur 3 bulan terakhir (20pt) dari hits_tabayyun. 0→0, 1→10, 2+→20.
  *   4. Matrix rata-rata bulan terakhir < 3.0 (20pt).
  *
  * Level: <30 low, 30-60 medium, >60 high.
  */
 export const computeRiskPengajar = cache(async (pengajarId: string): Promise<RiskResult> => {
-  const ym = currentYearMonth();
-  const ymPrev = previousYearMonth(1);
   const threeMonthsAgo = previousYearMonth(3);
 
   const [
-    { data: matrixNow },
-    { data: checkinsAll },
+    { data: matrixSnaps },
+    { count: teguranKum },
     { data: tabayyunRecent },
   ] = await Promise.all([
     supabaseAdmin
       .from('matrix_rekap')
-      .select('total_teguran_kumulatif, rata_rata_keseluruhan, year_month')
+      .select('rata_rata_keseluruhan, year_month')
       .eq('pengajar_id', pengajarId)
       .order('year_month', { ascending: false })
-      .limit(1),
+      .limit(2),
     supabaseAdmin
-      .from('checkin_pengajar')
-      .select('tanggal, status')
-      .eq('pengajar_id', pengajarId)
-      .is('invalidated_at', null)
-      .gte('tanggal', `${ymPrev}-01`),
+      .from('hits_teguran')
+      .select('id', { count: 'exact', head: true })
+      .eq('pengajar_id', pengajarId),
     supabaseAdmin
-      .from('tabayyun')
+      .from('hits_tabayyun')
       .select('is_udzur_syari, decided_at, status')
       .eq('pengajar_id', pengajarId)
       .eq('status', 'decided')
       .gte('decided_at', `${threeMonthsAgo}-01`),
   ]);
 
-  const m = matrixNow?.[0];
-  const teguranKum = m?.total_teguran_kumulatif ?? 0;
-  const rataMatrix = m?.rata_rata_keseluruhan != null ? Number(m.rata_rata_keseluruhan) : null;
+  const mNow = matrixSnaps?.[0];
+  const mPrev = matrixSnaps?.[1];
+  const teguranCount = teguranKum ?? 0;
+  const rataMatrix = mNow?.rata_rata_keseluruhan != null ? Number(mNow.rata_rata_keseluruhan) : null;
+  const rataPrev = mPrev?.rata_rata_keseluruhan != null ? Number(mPrev.rata_rata_keseluruhan) : null;
 
   // Factor 1: teguran
-  const teguranPts = teguranKum === 0 ? 0 : teguranKum === 1 ? 10 : teguranKum === 2 ? 25 : 40;
+  const teguranPts = teguranCount === 0 ? 0 : teguranCount === 1 ? 10 : teguranCount === 2 ? 25 : 40;
 
-  // Factor 2: kehadiran trend
-  const ymHadirNow = (checkinsAll ?? []).filter((c) => c.tanggal.startsWith(ym) && c.status === 'hadir').length;
-  const ymTotalNow = (checkinsAll ?? []).filter((c) => c.tanggal.startsWith(ym)).length;
-  const ymHadirPrev = (checkinsAll ?? []).filter((c) => c.tanggal.startsWith(ymPrev) && c.status === 'hadir').length;
-  const ymTotalPrev = (checkinsAll ?? []).filter((c) => c.tanggal.startsWith(ymPrev)).length;
-  const pctNow = ymTotalNow > 0 ? ymHadirNow / ymTotalNow : null;
-  const pctPrev = ymTotalPrev > 0 ? ymHadirPrev / ymTotalPrev : null;
+  // Factor 2: trend matrix bulan-ke-bulan (delta dinormalisasi ke skala 0-1 atas 4)
   let kehadiranPts = 0;
   let kehadiranDetail = 'tidak ada data';
-  if (pctNow != null && pctPrev != null) {
-    const delta = pctNow - pctPrev;
+  if (rataMatrix != null && rataPrev != null) {
+    const delta = (rataMatrix - rataPrev) / 4;
     if (delta < -0.15) kehadiranPts = 20;
     else if (delta < -0.05) kehadiranPts = 10;
-    kehadiranDetail = `bulan ini ${Math.round(pctNow * 100)}% vs bulan lalu ${Math.round(pctPrev * 100)}%`;
+    kehadiranDetail = `matrix ${rataMatrix.toFixed(2)} vs bulan lalu ${rataPrev.toFixed(2)}`;
   }
 
   // Factor 3: tabayyun bukan udzur
@@ -105,9 +93,9 @@ export const computeRiskPengajar = cache(async (pengajarId: string): Promise<Ris
       name: 'Teguran kumulatif',
       weight: 40,
       points: teguranPts,
-      detail: `${teguranKum} teguran (${teguranKum >= 3 ? 'kritis — sisa ' + (4 - teguranKum) + ' lagi → nonaktif' : 'aman'})`,
+      detail: `${teguranCount} teguran (${teguranCount >= 3 ? 'kritis — sisa ' + Math.max(0, 4 - teguranCount) + ' lagi → nonaktif' : 'aman'})`,
     },
-    { name: 'Trend kehadiran', weight: 20, points: kehadiranPts, detail: kehadiranDetail },
+    { name: 'Trend matrix', weight: 20, points: kehadiranPts, detail: kehadiranDetail },
     {
       name: 'Tabayyun bukan udzur',
       weight: 20,

@@ -17,7 +17,9 @@
     "set-password": "tsx --env-file=.env.local scripts/set-password.ts",
     "cleanup-audio": "tsx --env-file=.env.local scripts/cleanup-audio.ts",
     "reset-setoran": "tsx --env-file=.env.local scripts/reset-setoran.ts",
-    "seed-hits": "tsx --env-file=.env.local scripts/seed-hits-demo.ts"
+    "seed-hits": "tsx --env-file=.env.local scripts/seed-hits-demo.ts",
+    "seed-hits-presensi": "tsx --env-file=.env.local scripts/seed-hits-presensi.ts",
+    "seed-matrix-mei": "tsx --env-file=.env.local scripts/seed-matrix-mei2026.ts"
   },
   "dependencies": {
     "@supabase/ssr": "^0.5.0",

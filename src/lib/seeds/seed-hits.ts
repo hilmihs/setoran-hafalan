@@ -282,14 +282,6 @@ const AKHWAT_KELOMPOK: KelompokData[] = [
 
 const ALL_KELOMPOK = [...IKHWAN_KELOMPOK, ...AKHWAT_KELOMPOK];
 
-const KOORDINATOR_HITS = [
-  { name: 'Abdul Muhsin', gender: 'ikhwan' as G, wa: '+62 812-8067-2014' },
-  { name: 'Ahmad Abdus Syukur', gender: 'ikhwan' as G, wa: '085822950406' },
-  { name: 'Salma', gender: 'akhwat' as G, wa: '+62 821-3657-3097' },
-  { name: 'Wildatun Uyun', gender: 'akhwat' as G, wa: '+62 813-5343-0149' },
-  { name: 'Radiatam Mardhiyah', gender: 'akhwat' as G, wa: '+62 812-6130-6563' },
-];
-
 const KOORDINATOR_KK = [
   { name: 'Koordinator KK Ikhwan', gender: 'ikhwan' as G, wa: '+62 812-8063-0437' },
   { name: 'Koordinator KK Akhwat', gender: 'akhwat' as G, wa: '+62 878-7361-1753' },
@@ -308,10 +300,6 @@ export async function runSeedHits(log: (s: string) => void) {
   const hash = await bcrypt.hash(PWD, 12);
 
   // -- Preserve superadmin records --
-  const { data: existingKoorHits } = await supabaseAdmin
-    .from('koordinator_hits')
-    .select('name, gender, whatsapp_number, password_hash')
-    .not('whatsapp_number', 'in', `(${KOORDINATOR_HITS.map(k => normalizeWhatsApp(k.wa)).join(',')})`);
   const { data: existingKoorKK } = await supabaseAdmin
     .from('koordinator_ketua_kelas')
     .select('name, gender, whatsapp_number, password_hash')
@@ -334,7 +322,6 @@ export async function runSeedHits(log: (s: string) => void) {
   await del('pengajar');
   await del('kelompok_pengajar');
   await del('koordinator_ketua_kelas');
-  await del('koordinator_hits');
   await del('program_kehadiran');
   log('✓ Bersih');
 
@@ -345,25 +332,6 @@ export async function runSeedHits(log: (s: string) => void) {
     .select('id, name');
   if (progErr) throw progErr;
   log(`✓ ${progs!.length} program kehadiran`);
-
-  // -- Koordinator HITS --
-  const { data: koorHits, error: khErr } = await supabaseAdmin
-    .from('koordinator_hits')
-    .insert(KOORDINATOR_HITS.map((k) => ({
-      name: k.name,
-      gender: k.gender,
-      whatsapp_number: normalizeWhatsApp(k.wa),
-      password_hash: hash,
-    })))
-    .select('id, name, gender');
-  if (khErr) throw khErr;
-  log(`✓ ${koorHits!.length} koordinator HITS`);
-
-  // Re-insert preserved superadmin koordinator_hits
-  if (existingKoorHits && existingKoorHits.length > 0) {
-    const { error } = await supabaseAdmin.from('koordinator_hits').insert(existingKoorHits);
-    if (!error) log(`✓ ${existingKoorHits.length} koordinator HITS tambahan di-restore`);
-  }
 
   // -- Koordinator Ketua Kelas --
   const { data: koorKK, error: kkErr } = await supabaseAdmin
@@ -489,12 +457,12 @@ export async function runSeedHits(log: (s: string) => void) {
   nextSaturday.setDate(nextSaturday.getDate() + ((6 - nextSaturday.getDay() + 7) % 7 || 7));
   const saturdayStr = nextSaturday.toISOString().slice(0, 10);
 
-  if (tibyanId && koorHits) {
+  if (tibyanId && koorKK) {
     const { error: libErr } = await supabaseAdmin.from('libur_program').insert({
       program_id: tibyanId,
       tanggal: saturdayStr,
       keterangan: 'Libur demo — Kajian At-Tibyan ditiadakan',
-      created_by_id: koorHits[0].id,
+      created_by_id: koorKK[0].id,
     });
     if (libErr) log(`⚠ Libur error: ${libErr.message}`);
     else log(`✓ 1 demo libur (${saturdayStr})`);

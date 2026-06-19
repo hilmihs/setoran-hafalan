@@ -452,6 +452,10 @@ export function tplKetuaKelasTerpilih(args: {
   kelasName: string;
   magicUrl: string;
   linkGrupWa: string | null;
+  // HITS soft-skill: login WA + password.
+  loginUrl?: string;
+  loginWa?: string;
+  initialPassword?: string;
 }): string {
   const sapaan = salutation(args.ketuaKelasGender);
   const lines = [
@@ -459,11 +463,25 @@ export function tplKetuaKelasTerpilih(args: {
     ``,
     `Anda telah dipilih sebagai *Ketua Kelas ${args.kelasName}*.`,
     ``,
-    `Tugas Anda adalah mengisi observasi harian kelas melalui link berikut:`,
-    args.magicUrl,
-    ``,
-    `(Link ini khusus untuk Anda, jangan dibagikan)`,
+    `Tugas Anda adalah mengisi keterangan pengajar & latihan tiap pertemuan.`,
   ];
+  if (args.loginUrl && args.initialPassword) {
+    lines.push(``);
+    lines.push(`*Cara masuk:*`);
+    lines.push(args.loginUrl);
+    lines.push(`Nomor WA: ${args.loginWa ?? '(nomor ini)'}`);
+    lines.push(`Password awal: *${args.initialPassword}*`);
+    lines.push(`(mohon ganti password setelah login)`);
+    lines.push(``);
+    lines.push(`Atau langsung lewat link khusus berikut:`);
+    lines.push(args.magicUrl);
+  } else {
+    lines.push(``);
+    lines.push(`Silakan masuk melalui link berikut:`);
+    lines.push(args.magicUrl);
+    lines.push(``);
+    lines.push(`(Link ini khusus untuk Anda, jangan dibagikan)`);
+  }
   if (args.linkGrupWa) {
     lines.push(``);
     lines.push(`Silakan bergabung ke grup koordinasi ketua kelas:`);

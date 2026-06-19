@@ -11,10 +11,13 @@ export function ScoreSelector({
   value,
   onChange,
   label,
+  titles,
 }: {
   value: number | null;
   onChange: (v: number | null) => void;
   label: string;
+  /** Tooltip per skala (index 0–4), mis. panduan standar. */
+  titles?: string[];
 }) {
   function handleKey(e: React.KeyboardEvent<HTMLDivElement>) {
     const k = e.key;
@@ -44,6 +47,7 @@ export function ScoreSelector({
           aria-checked={value === s}
           tabIndex={-1}
           data-v={s}
+          title={titles?.[s]}
           className={`score-pill${value === s ? ' on' : ''}`}
           onClick={() => onChange(value === s ? null : s)}
         >

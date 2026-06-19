@@ -52,26 +52,26 @@ const DAY_NAME: Record<number, string> = {
 };
 
 /** Nama hari (format seed) untuk tanggal kalender 'YYYY-MM-DD'. */
-function dayNameOf(dateStr: string): string {
+export function dayNameOf(dateStr: string): string {
   const [y, m, d] = dateStr.split('-').map(Number);
   const idx = new Date(Date.UTC(y, m - 1, d)).getUTCDay();
   return DAY_NAME[idx];
 }
 
 /** Hari ini (Asia/Jakarta) sebagai 'YYYY-MM-DD'. */
-function todayJakarta(): string {
+export function todayJakarta(): string {
   return new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Jakarta' });
 }
 
-/** Semua tanggal dari anchor s/d today (inklusif), urut menaik. */
-function datesFromAnchor(today: string): string[] {
+/** Semua tanggal dalam rentang [start, end] (inklusif), urut menaik. 'YYYY-MM-DD'. */
+export function datesInRange(start: string, end: string): string[] {
   const out: string[] = [];
-  const [ay, am, ad] = PRESENSI_ANCHOR.split('-').map(Number);
-  const [ty, tm, td] = today.split('-').map(Number);
+  const [ay, am, ad] = start.split('-').map(Number);
+  const [ty, tm, td] = end.split('-').map(Number);
   let cur = Date.UTC(ay, am - 1, ad);
-  const end = Date.UTC(ty, tm - 1, td);
+  const last = Date.UTC(ty, tm - 1, td);
   const DAY = 86400000;
-  while (cur <= end) {
+  while (cur <= last) {
     const dt = new Date(cur);
     out.push(
       `${dt.getUTCFullYear()}-${String(dt.getUTCMonth() + 1).padStart(2, '0')}-${String(
@@ -83,11 +83,20 @@ function datesFromAnchor(today: string): string[] {
   return out;
 }
 
-type Expected = Omit<UnfilledDay, 'totalRemaining'>;
+export type ExpectedDay = Omit<UnfilledDay, 'totalRemaining'>;
 
-/** Hari program yang diharapkan untuk satu kelas, dari anchor s/d today. */
-function expectedDaysForKelas(k: ProgramKelasRow, dates: string[]): Expected[] {
-  const out: Expected[] = [];
+/** Hari program yang diharapkan untuk satu kelas dalam rentang [start, end]. */
+export function expectedDaysInRange(
+  k: ProgramKelasRow,
+  start: string,
+  end: string
+): ExpectedDay[] {
+  return expectedDaysForKelas(k, datesInRange(start, end));
+}
+
+/** Hari program yang diharapkan untuk satu kelas, untuk daftar tanggal yang diberikan. */
+function expectedDaysForKelas(k: ProgramKelasRow, dates: string[]): ExpectedDay[] {
+  const out: ExpectedDay[] = [];
   const jadwal = new Set(k.jadwal_hari ?? []);
   for (const tanggal of dates) {
     const hari = dayNameOf(tanggal);
@@ -142,11 +151,10 @@ export async function getUnfilledMaahirDays(wa: string): Promise<UnfilledDay[]> 
   if (myKelas.length === 0) return [];
 
   const today = todayJakarta();
-  const dates = datesFromAnchor(today);
 
-  // Hari yang diharapkan untuk semua kelas yang dipimpin.
-  const expected: Expected[] = [];
-  for (const k of myKelas) expected.push(...expectedDaysForKelas(k, dates));
+  // Hari yang diharapkan untuk semua kelas yang dipimpin (anchor s/d hari ini).
+  const expected: ExpectedDay[] = [];
+  for (const k of myKelas) expected.push(...expectedDaysInRange(k, PRESENSI_ANCHOR, today));
   if (expected.length === 0) return [];
 
   const kelasIds = myKelas.map((k) => k.id);

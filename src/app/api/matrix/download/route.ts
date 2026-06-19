@@ -9,8 +9,8 @@ export const maxDuration = 60;
 export async function GET(req: NextRequest) {
   const s = await getSession();
   const acc = s.accesses?.find(
-    (a) => a.role === 'koordinator_hits' || a.role === 'koordinator_ketua_kelas'
-  ) ?? (s.session && (s.session.role === 'koordinator_hits' || s.session.role === 'koordinator_ketua_kelas')
+    (a) => a.role === 'koordinator_ketua_kelas'
+  ) ?? (s.session && s.session.role === 'koordinator_ketua_kelas'
     ? s.session
     : null);
   if (!acc) {
@@ -24,7 +24,8 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: 'Parameter bulan harus YYYY-MM.' }, { status: 400 });
   }
 
-  const gender = acc.gender;
+  const genderParam = searchParams.get('gender');
+  const gender = genderParam === 'ikhwan' || genderParam === 'akhwat' ? genderParam : acc.gender;
 
   const { data: kelompokList } = await supabaseAdmin
     .from('kelompok_pengajar')

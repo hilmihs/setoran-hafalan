@@ -12,7 +12,6 @@ const ROLE_LABELS: Record<string, string> = {
   koordinator: 'Koordinator',
   syaikh: 'Syaikh',
   pengajar: 'Pengajar',
-  koordinator_hits: 'Koordinator HITS',
   ketua_kelas: 'Ketua Kelas',
   koordinator_ketua_kelas: 'Koordinator Ketua Kelas',
 };
@@ -23,7 +22,6 @@ const ROLE_DASHBOARD: Record<string, string> = {
   koordinator: '/2in1/koordinator',
   syaikh: '/2in1/syaikh',
   pengajar: '/kehadiran/pengajar',
-  koordinator_hits: '/kehadiran/koordinator',
   ketua_kelas: '/observasi/ketua-kelas',
   koordinator_ketua_kelas: '/observasi/koordinator',
 };
@@ -34,7 +32,6 @@ const ROLE_TABLE: Record<string, { table: string; idField: string }> = {
   koordinator: { table: 'koordinator', idField: 'koordinator_id' },
   syaikh: { table: 'syaikh', idField: 'syaikh_id' },
   pengajar: { table: 'pengajar', idField: 'pengajar_id' },
-  koordinator_hits: { table: 'koordinator_hits', idField: 'koordinator_hits_id' },
   ketua_kelas: { table: 'ketua_kelas', idField: 'ketua_kelas_id' },
   koordinator_ketua_kelas: { table: 'koordinator_ketua_kelas', idField: 'koordinator_kk_id' },
 };

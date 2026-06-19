@@ -5,6 +5,7 @@ import { getSessionWa, findKetuaProgramKelas } from '@/lib/program-kelas';
 import { getUnfilledMaahirDays } from '@/lib/maahir-presensi';
 import { Icon } from '@/components/icons';
 import { SectionHeader } from '@/components/ui/SectionHeader';
+import { FeatureNav } from '@/components/FeatureNav';
 
 export const dynamic = 'force-dynamic';
 
@@ -94,6 +95,7 @@ export default async function KetuaKelasPage() {
         </div>
 
         <div className="page">
+          <FeatureNav current="/2in1/ketua-kelas" />
           <p className="t-small" style={{ color: 'var(--muted-2)', marginBottom: 16 }}>
             {myKelas.map((k) => k.name).join(' · ')}
           </p>
@@ -109,6 +111,29 @@ export default async function KetuaKelasPage() {
               </div>
             </Link>
           )}
+
+          <Link
+            href="/2in1/ketua-kelas/rekap"
+            className="card-flat"
+            style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              padding: '12px 14px',
+              marginBottom: 12,
+              textDecoration: 'none',
+              color: 'inherit',
+              borderRadius: 10,
+            }}
+          >
+            <div>
+              <div style={{ fontSize: 13, fontWeight: 600 }}>Rekap Kehadiran Bulanan</div>
+              <div className="t-tiny" style={{ color: 'var(--muted-2)' }}>
+                Riwayat H/I/S/A/T per anggota
+              </div>
+            </div>
+            <span style={{ color: 'var(--muted-2)' }}>→</span>
+          </Link>
 
           {/* Jadwal info */}
           {myKelas.map((k) => (

@@ -739,6 +739,30 @@ dialog[open] {
 .pen-row:focus-within td.name-col { background: var(--surface-2); }
 .pen-name { font-size: 13px; font-weight: 600; color: var(--ink); line-height: 1.2; }
 .pen-sub  { font-size: 11px; color: var(--muted); margin-top: 1px; }
+.ketua-badge {
+  display: inline-block; margin-left: 6px; padding: 1px 6px;
+  font-size: 10px; font-weight: 700; line-height: 1.4; vertical-align: middle;
+  color: var(--hijau-ink); background: var(--hijau-tint);
+  border: 1px solid var(--hijau); border-radius: 999px;
+}
+
+/* panduan standar (rubrik) */
+.rubrik-panduan summary { color: var(--ink); list-style-position: inside; }
+.rubrik-panduan summary::-webkit-details-marker { color: var(--muted-2); }
+.rubrik-grid {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 14px 18px;
+}
+@media (max-width: 600px) { .rubrik-grid { grid-template-columns: 1fr; } }
+.rubrik-item.is-standar { background: var(--surface-2); border-radius: var(--r-sm); }
+.rubrik-skala {
+  flex: 0 0 auto; width: 20px; height: 20px; margin-top: 1px;
+  display: inline-flex; align-items: center; justify-content: center;
+  font-size: 11px; font-weight: 700; border-radius: var(--r-sm);
+  color: var(--muted); background: var(--surface-2); border: 1px solid var(--line);
+}
+.rubrik-skala[data-v="0"] { color: var(--merah-ink); border-color: var(--merah); }
+.rubrik-skala[data-v="3"] { color: var(--hijau-ink); border-color: var(--hijau); }
+.rubrik-skala[data-v="4"] { color: var(--hijau-ink); border-color: var(--hijau); }
 
 /* segmented score selector */
 .score-seg { display: flex; gap: 4px; align-items: stretch; }
@@ -784,3 +808,34 @@ dialog[open] {
 .note-field:focus { border-color: var(--accent); background: var(--surface); }
 
 .pen-status { width: 22px; text-align: center; font-size: 14px; }
+
+/* ===== Matrix Skill Guru — tabel rincian (MatrixTable.tsx) ===== */
+.matrix-grid { color: var(--ink); }
+.matrix-grid .mg-head {
+  padding: 9px 10px; font-weight: 600; font-size: 11.5px; color: var(--muted);
+  background: var(--surface-2); position: sticky; top: 0; z-index: 2;
+  white-space: nowrap; border-bottom: 1px solid var(--line-2);
+}
+.matrix-grid .mg-num { text-align: right; font-variant-numeric: tabular-nums; }
+.matrix-grid td { padding: 9px 10px; border-top: 1px solid var(--line); }
+.matrix-grid td.mg-num { text-align: right; font-variant-numeric: tabular-nums; }
+.matrix-grid .mg-row:hover td { background: var(--accent-tint); }
+.matrix-grid .mg-row:hover .mg-sticky { background: var(--accent-tint) !important; }
+.mg-sticky { position: sticky; background: var(--surface); }
+.matrix-grid .mg-name { min-width: 230px; }
+.matrix-grid .mg-kelompok { color: var(--muted); white-space: nowrap; }
+.mg-rank {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-width: 22px; height: 22px; font-size: 12px; font-weight: 700;
+  color: var(--muted-2); font-variant-numeric: tabular-nums;
+}
+.mg-link {
+  color: inherit; text-decoration: none; font-weight: 600;
+  border-bottom: 1px dashed var(--line-2);
+}
+.mg-link:hover { border-bottom-color: var(--accent); color: var(--accent-2); }
+
+/* Detail pengajar: profil kompetensi (radar + rincian) stack di layar kecil */
+@media (max-width: 720px) {
+  .matrix-profil-grid { grid-template-columns: 1fr !important; }
+}

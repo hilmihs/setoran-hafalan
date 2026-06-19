@@ -1,3 +1,4 @@
+import { redirect } from 'next/navigation';
 import { requireKetuaKelas } from '@/lib/session';
 import { supabaseAdmin } from '@/lib/supabase-admin';
 import { LogoutButton } from '@/components/LogoutButton';
@@ -15,6 +16,8 @@ function jakartaToday(): string {
 
 export default async function KetuaKelasObservasiPage() {
   const session = await requireKetuaKelas();
+  // Ketua kelas HITS (batch-native) pakai halaman /hits/ketua, bukan observasi lama.
+  if (session.hits_halaqah_id) redirect('/hits/ketua');
   const today = jakartaToday();
 
   const { data: kelas } = await supabaseAdmin

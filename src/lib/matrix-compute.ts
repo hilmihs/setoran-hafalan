@@ -2,15 +2,26 @@
 // Idempotent — aman dipanggil berulang, hasil di-upsert ke matrix_rekap.
 //
 // Sumber data (pengajar ↔ peserta di-link via nomor WA):
-//   Hard skill : penilaian_peserta (bacaan, hafalan), rekaman setoran (tajwid),
+//   Hard skill : penilaian_masyaikh (bacaan, hafalan), rekaman setoran (tajwid),
 //                kehadiran_peserta via program_kelas_anggota (3 program)
 //   Pedagogis  : penilaian_pedagogis (4 aspek, oleh ketua kelompok)
-//   Soft skill : observasi_kelas (kedisiplinan), checkin_pengajar (komitmen),
-//                penilaian_pedagogis.skor_kepatuhan_sop (SOP)
+//   Soft skill : hits_keterangan_harian via hits_halaqah (kedisiplinan = %KBBS,
+//                tanggung jawab = %latihan beres), penilaian_pedagogis.skor_kepatuhan_sop (SOP).
+//                komitmen_jadwal: tak ada sumber (checkin dihapus dari scope).
 
 import { supabaseAdmin } from '@/lib/supabase-admin';
 import { cyclesOfMonth } from '@/lib/week';
 import { JENIS_REKAMAN } from '@/types/db';
+
+// Bulan ≥ anchor ini dihitung live dari sumber data. Bulan < anchor (mis. 2026-05)
+// adalah data historis yang di-seed manual ke matrix_rekap — JANGAN di-recompute,
+// karena sumber live-nya kosong dan akan menimpa seed jadi null.
+export const MATRIX_LIVE_ANCHOR = '2026-06';
+
+/** True bila bulan ini dihitung live (≥ anchor), bukan data seed historis. */
+export function isLiveMatrixMonth(yearMonth: string): boolean {
+  return yearMonth >= MATRIX_LIVE_ANCHOR;
+}
 
 function pctTo4(pct: number): number {
   if (pct >= 0.9) return 4;
@@ -90,13 +101,15 @@ export async function computeMatrixForMonth(yearMonth: string): Promise<MatrixRo
   }
   const linkedPesertaIds = [...pesertaIdOf.values()];
 
-  // 3. Penilaian bacaan + hafalan
-  const { data: penilaianList } = await supabaseAdmin
-    .from('penilaian_peserta')
-    .select('peserta_id, skor_bacaan, skor_hafalan')
+  // 3. Penilaian bacaan + hafalan dari penilaian_masyaikh (diisi syaikh/koordinator
+  //    via /penilaian), di-key langsung per pengajar_id.
+  const pengajarIds = pengajars.map((p) => p.id);
+  const { data: masyaikhList } = await supabaseAdmin
+    .from('penilaian_masyaikh')
+    .select('pengajar_id, skor_bacaan, skor_hafalan')
     .eq('year_month', yearMonth)
-    .in('peserta_id', linkedPesertaIds.length ? linkedPesertaIds : ['00000000-0000-0000-0000-000000000000']);
-  const penilaianByPeserta = new Map((penilaianList ?? []).map((p) => [p.peserta_id, p]));
+    .in('pengajar_id', pengajarIds);
+  const masyaikhByPengajar = new Map((masyaikhList ?? []).map((p) => [p.pengajar_id, p]));
 
   // 4. Tajwid: rata-rata nilai rekaman setoran checked di 2 cycle bulan ini
   const [h1, h2] = cyclesOfMonth(year, month);
@@ -171,7 +184,6 @@ export async function computeMatrixForMonth(yearMonth: string): Promise<MatrixRo
   }
 
   // 6. Pedagogis + SOP
-  const pengajarIds = pengajars.map((p) => p.id);
   const { data: pedagogisList } = await supabaseAdmin
     .from('penilaian_pedagogis')
     .select('pengajar_id, skor_metode_pengajaran, skor_kepatuhan_silabus, skor_manajemen_halaqah, skor_evaluasi_penguasaan, skor_kepatuhan_sop')
@@ -179,51 +191,45 @@ export async function computeMatrixForMonth(yearMonth: string): Promise<MatrixRo
     .in('pengajar_id', pengajarIds);
   const pedagogisByPengajar = new Map((pedagogisList ?? []).map((p) => [p.pengajar_id, p]));
 
-  // 7. Kedisiplinan waktu: % observasi KBBS pada kelas HITS pengajar
-  const { data: kelasHitsList } = await supabaseAdmin
-    .from('kelas_hits')
-    .select('id, pengajar_id');
-  const pengajarOfKelasHits = new Map((kelasHitsList ?? []).map((k) => [k.id, k.pengajar_id]));
-  const kelasHitsIds = (kelasHitsList ?? []).map((k) => k.id);
-  const { data: observasiList } = kelasHitsIds.length
+  // 7. Soft skill dari keterangan harian HITS (batch-native):
+  //    kedisiplinan = %KBBS, tanggung jawab = %latihan beres.
+  const { data: halaqahList } = await supabaseAdmin
+    .from('hits_halaqah')
+    .select('id, pengajar_id')
+    .not('pengajar_id', 'is', null);
+  const pengajarOfHalaqah = new Map(
+    (halaqahList ?? []).map((h) => [h.id as string, h.pengajar_id as string])
+  );
+  const halaqahIds = (halaqahList ?? []).map((h) => h.id);
+  const { data: keteranganList } = halaqahIds.length
     ? await supabaseAdmin
-        .from('observasi_kelas')
-        .select('kelas_hits_id, kondisi')
+        .from('hits_keterangan_harian')
+        .select('halaqah_id, kondisi, latihan_diberikan, semua_selesai, status_latihan')
         .gte('tanggal', monthStart)
         .lt('tanggal', nextMonth)
-        .in('kelas_hits_id', kelasHitsIds)
+        .in('halaqah_id', halaqahIds)
         .neq('kondisi', 'LIBUR')
     : { data: [] };
-  const observasiByPengajar = new Map<string, { baik: number; total: number }>();
-  for (const o of observasiList ?? []) {
-    const pgId = pengajarOfKelasHits.get(o.kelas_hits_id);
+  const disiplinByPengajar = new Map<string, { baik: number; total: number }>();
+  const latihanByPengajar = new Map<string, { done: number; total: number }>();
+  for (const k of keteranganList ?? []) {
+    const pgId = pengajarOfHalaqah.get(k.halaqah_id);
     if (!pgId) continue;
-    const c = observasiByPengajar.get(pgId) ?? { baik: 0, total: 0 };
-    c.total += 1;
-    if (o.kondisi === 'KBBS') c.baik += 1;
-    observasiByPengajar.set(pgId, c);
-  }
+    const d = disiplinByPengajar.get(pgId) ?? { baik: 0, total: 0 };
+    d.total += 1;
+    if (k.kondisi === 'KBBS') d.baik += 1;
+    disiplinByPengajar.set(pgId, d);
 
-  // 8. Komitmen jadwal: % checkin hadir
-  const { data: checkinList } = await supabaseAdmin
-    .from('checkin_pengajar')
-    .select('pengajar_id, status')
-    .gte('tanggal', monthStart)
-    .lt('tanggal', nextMonth)
-    .is('invalidated_at', null)
-    .in('pengajar_id', pengajarIds);
-  const checkinByPengajar = new Map<string, { hadir: number; total: number }>();
-  for (const c of checkinList ?? []) {
-    const cc = checkinByPengajar.get(c.pengajar_id) ?? { hadir: 0, total: 0 };
-    cc.total += 1;
-    if (c.status === 'hadir') cc.hadir += 1;
-    checkinByPengajar.set(c.pengajar_id, cc);
+    const l = latihanByPengajar.get(pgId) ?? { done: 0, total: 0 };
+    l.total += 1;
+    if (k.latihan_diberikan && (k.semua_selesai || k.status_latihan === 'SML')) l.done += 1;
+    latihanByPengajar.set(pgId, l);
   }
 
   // 9. Compose rows
   const rows: MatrixRow[] = pengajars.map((pg) => {
     const pesertaId = pesertaIdOf.get(pg.id);
-    const penilaian = pesertaId ? penilaianByPeserta.get(pesertaId) : undefined;
+    const masyaikh = masyaikhByPengajar.get(pg.id);
 
     const tajwidArr = pesertaId ? tajwidScores.get(pesertaId) : undefined;
     const skorTajwid = tajwidArr?.length
@@ -251,15 +257,15 @@ export async function computeMatrixForMonth(yearMonth: string): Promise<MatrixRo
 
     const ped = pedagogisByPengajar.get(pg.id);
 
-    const obs = observasiByPengajar.get(pg.id);
-    const skorKedisiplinan = obs && obs.total > 0 ? pctTo4(obs.baik / obs.total) : null;
+    const disp = disiplinByPengajar.get(pg.id);
+    const skorKedisiplinan = disp && disp.total > 0 ? pctTo4(disp.baik / disp.total) : null;
 
-    const ci = checkinByPengajar.get(pg.id);
-    const skorKomitmen = ci && ci.total > 0 ? pctTo4(ci.hadir / ci.total) : null;
+    const lat = latihanByPengajar.get(pg.id);
+    const skorTanggungJawab = lat && lat.total > 0 ? pctTo4(lat.done / lat.total) : null;
 
     const hard = {
-      skor_bacaan: penilaian?.skor_bacaan ?? null,
-      skor_hafalan: penilaian?.skor_hafalan ?? null,
+      skor_bacaan: masyaikh?.skor_bacaan ?? null,
+      skor_hafalan: masyaikh?.skor_hafalan ?? null,
       skor_tajwid: skorTajwid,
       skor_kehadiran_maahir: kehadiranSkor('kelas_maahir'),
       skor_kehadiran_tibyan: kehadiranSkor('at_tibyan'),
@@ -273,8 +279,8 @@ export async function computeMatrixForMonth(yearMonth: string): Promise<MatrixRo
     };
     const soft = {
       skor_kedisiplinan_waktu: skorKedisiplinan,
-      skor_komitmen_jadwal: skorKomitmen,
-      skor_tanggung_jawab: null as number | null, // sumber data belum tersedia
+      skor_komitmen_jadwal: null as number | null, // checkin di luar scope HITS soft-skill
+      skor_tanggung_jawab: skorTanggungJawab,
       skor_kepatuhan_sop: ped?.skor_kepatuhan_sop ?? null,
     };
 

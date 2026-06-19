@@ -11,7 +11,6 @@ const ROLE_TABLE_MAP: Record<RoleAccess['role'], { table: string; idField: keyof
   koordinator: { table: 'koordinator', idField: 'koordinator_id' },
   syaikh: { table: 'syaikh', idField: 'syaikh_id' },
   pengajar: { table: 'pengajar', idField: 'pengajar_id' },
-  koordinator_hits: { table: 'koordinator_hits', idField: 'koordinator_hits_id' },
   ketua_kelas: { table: 'ketua_kelas', idField: 'ketua_kelas_id' },
   koordinator_ketua_kelas: { table: 'koordinator_ketua_kelas', idField: 'koordinator_kk_id' },
 };

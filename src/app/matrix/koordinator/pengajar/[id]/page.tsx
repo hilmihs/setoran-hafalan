@@ -5,8 +5,17 @@ import { Icon } from '@/components/icons';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { MatrixTrendChart } from '@/components/charts/MatrixTrendChart';
+import { MatrixRadarChart } from '@/components/charts/MatrixRadarChart';
 import { computeRiskPengajar, levelColor, levelLabel } from '@/lib/risk';
 import { NotesPanel } from '@/components/NotesPanel';
+import {
+  INDIKATOR_BY_KATEGORI,
+  KATEGORI_LABEL as KATEGORI_NAMA,
+  INDIKATOR,
+  type Kategori,
+  type IndikatorKey,
+} from '@/lib/matrix-indicators';
+import type { Gender } from '@/types/db';
 
 interface NoteRow {
   id: string;
@@ -43,6 +52,9 @@ const KATEGORI_LABEL: Record<string, { label: string; color: string }> = {
   kepatuhan_sop: { label: 'Kepatuhan SOP', color: 'var(--merah-ink)' },
 };
 
+const SCORE_COLS_DETAIL =
+  'skor_bacaan, skor_hafalan, skor_tajwid, skor_kehadiran_maahir, skor_kehadiran_tibyan, skor_kehadiran_muallim, skor_metode_pengajaran, skor_kepatuhan_silabus, skor_manajemen_halaqah, skor_evaluasi_penguasaan, skor_kedisiplinan_waktu, skor_komitmen_jadwal, skor_tanggung_jawab, skor_kepatuhan_sop';
+
 const KONDISI_LABEL: Record<string, { label: string; badge: string }> = {
   KBBS: { label: 'KBBS — Kelas Berlangsung Baik', badge: 'badge-hijau' },
   KMT: { label: 'KMT — Kelas Mulai Terlambat', badge: 'badge-kuning' },
@@ -51,14 +63,28 @@ const KONDISI_LABEL: Record<string, { label: string; badge: string }> = {
   LIBUR: { label: 'LIBUR', badge: 'badge-neutral' },
 };
 
-export default async function PengajarDetailPage({ params }: { params: { id: string } }) {
-  const session = await requireOneOfRoles(['koordinator_hits', 'koordinator_ketua_kelas']);
+function currentYearMonth(): string {
+  return new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Jakarta' }).slice(0, 7);
+}
+
+export default async function PengajarDetailPage({
+  params,
+  searchParams,
+}: {
+  params: { id: string };
+  searchParams: { bulan?: string; gender?: string };
+}) {
+  const session = await requireOneOfRoles(['koordinator', 'koordinator_ketua_kelas']);
+  const gender: Gender =
+    searchParams.gender === 'ikhwan' || searchParams.gender === 'akhwat'
+      ? searchParams.gender
+      : session.gender;
 
   const { data: pengajar } = await supabaseAdmin
     .from('pengajar')
     .select('id, name, gender, whatsapp_number, kelompok_id, is_ketua, active, last_login_at')
     .eq('id', params.id)
-    .eq('gender', session.gender)
+    .eq('gender', gender)
     .maybeSingle();
 
   if (!pengajar) notFound();
@@ -109,7 +135,7 @@ export default async function PengajarDetailPage({ params }: { params: { id: str
     supabaseAdmin
       .from('penilaian_pedagogis')
       .select(
-        'year_month, skor_metode_pengajaran, skor_kepatuhan_silabus, skor_manajemen_halaqah, skor_evaluasi_penguasaan, updated_at'
+        'year_month, skor_metode_pengajaran, keterangan_metode, skor_kepatuhan_silabus, keterangan_silabus, skor_manajemen_halaqah, keterangan_halaqah, skor_evaluasi_penguasaan, keterangan_evaluasi, skor_kepatuhan_sop, keterangan_sop, updated_at'
       )
       .eq('pengajar_id', params.id)
       .order('year_month', { ascending: false })
@@ -129,8 +155,44 @@ export default async function PengajarDetailPage({ params }: { params: { id: str
 
   const risk = await computeRiskPengajar(params.id);
 
+  // Bulan terpilih → radar chart + rincian per indikator.
+  const monthSel =
+    searchParams.bulan && /^\d{4}-\d{2}$/.test(searchParams.bulan)
+      ? searchParams.bulan
+      : matrixHistory?.[0]?.year_month ?? currentYearMonth();
+
+  const { data: matrixCurrent } = await supabaseAdmin
+    .from('matrix_rekap')
+    .select(SCORE_COLS_DETAIL)
+    .eq('pengajar_id', params.id)
+    .eq('year_month', monthSel)
+    .maybeSingle();
+  const mc = matrixCurrent as Record<string, unknown> | null;
+
+  const masyaikhSel = (penilaianMasyaikh ?? []).find((p) => p.year_month === monthSel) as
+    | { keterangan_bacaan?: string | null; keterangan_hafalan?: string | null }
+    | undefined;
+  const pedagogisSel = (penilaianPedagogis ?? []).find((p) => p.year_month === monthSel) as
+    | Record<string, string | null>
+    | undefined;
+  const keteranganOf: Partial<Record<IndikatorKey, string | null>> = {
+    skor_bacaan: masyaikhSel?.keterangan_bacaan ?? null,
+    skor_hafalan: masyaikhSel?.keterangan_hafalan ?? null,
+    skor_metode_pengajaran: pedagogisSel?.keterangan_metode ?? null,
+    skor_kepatuhan_silabus: pedagogisSel?.keterangan_silabus ?? null,
+    skor_manajemen_halaqah: pedagogisSel?.keterangan_halaqah ?? null,
+    skor_evaluasi_penguasaan: pedagogisSel?.keterangan_evaluasi ?? null,
+    skor_kepatuhan_sop: pedagogisSel?.keterangan_sop ?? null,
+  };
+
+  const skorOf = (k: IndikatorKey): number | null => {
+    const v = mc?.[k];
+    return v === null || v === undefined ? null : Number(v);
+  };
+  const radarData = INDIKATOR.map((ind) => ({ indikator: ind.short, skor: skorOf(ind.key), standar: ind.standar }));
+
   // Notes: tampilkan peer notes + own private notes
-  const sessionAuthorId = session.role === 'koordinator_hits' ? session.koordinator_hits_id : session.koordinator_kk_id;
+  const sessionAuthorId = session.role === 'koordinator' ? session.koordinator_id : session.koordinator_kk_id;
   const { data: notesRaw } = await supabaseAdmin
     .from('koordinator_notes')
     .select('id, author_role, author_id, body, visibility, created_at')
@@ -143,7 +205,7 @@ export default async function PengajarDetailPage({ params }: { params: { id: str
   const authorIds = Array.from(new Set((notesRaw ?? []).map((n) => n.author_id)));
   const authorMap = new Map<string, string>();
   if (authorIds.length) {
-    const tables = ['koordinator_hits', 'koordinator_ketua_kelas', 'koordinator', 'syaikh'];
+    const tables = ['koordinator_ketua_kelas', 'koordinator', 'syaikh'];
     for (const t of tables) {
       const { data } = await supabaseAdmin.from(t).select('id, name').in('id', authorIds);
       for (const r of data ?? []) authorMap.set(r.id, r.name);
@@ -169,7 +231,7 @@ export default async function PengajarDetailPage({ params }: { params: { id: str
               <span className="mark">M</span> Pengajar
             </div>
             <div style={{ display: 'flex', gap: 8 }}>
-              <Link href="/matrix/koordinator" className="btn btn-sm btn-ghost" style={{ height: 30, padding: '0 10px' }}>
+              <Link href={`/matrix/koordinator?bulan=${monthSel}&gender=${gender}`} className="btn btn-sm btn-ghost" style={{ height: 30, padding: '0 10px' }}>
                 {Icon.back(12)} Matrix
               </Link>
               <LogoutButton />
@@ -202,6 +264,53 @@ export default async function PengajarDetailPage({ params }: { params: { id: str
                 )}
               </div>
             </div>
+          </div>
+
+          {/* Profil kompetensi — spider chart + rincian per indikator */}
+          <div className="card-flat" style={{ padding: 18, marginBottom: 24, borderRadius: 'var(--r-lg)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 8, marginBottom: 6, flexWrap: 'wrap' }}>
+              <h2 className="t-h2" style={{ margin: 0 }}>Profil Kompetensi</h2>
+              <span className="t-small" style={{ color: 'var(--muted-2)' }}>Bulan {monthSel}</span>
+            </div>
+            {mc ? (
+              <div style={{ display: 'grid', gridTemplateColumns: 'minmax(280px, 380px) 1fr', gap: 20, alignItems: 'start' }} className="matrix-profil-grid">
+                <div>
+                  <MatrixRadarChart data={radarData} height={300} />
+                  <p className="t-tiny" style={{ color: 'var(--muted-2)', textAlign: 'center', marginTop: 4 }}>
+                    Garis putus-putus = standar · area = skor pengajar
+                  </p>
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 12 }}>
+                  {(['hard', 'pedagogis', 'soft'] as Kategori[]).map((kat) => (
+                    <div key={kat} style={{ background: 'var(--surface-2)', borderRadius: 'var(--r-md)', padding: 12 }}>
+                      <div className="t-tiny" style={{ marginBottom: 8, color: 'var(--ink-2)' }}>{KATEGORI_NAMA[kat]}</div>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                        {INDIKATOR_BY_KATEGORI[kat].map((ind) => {
+                          const v = skorOf(ind.key);
+                          const ket = keteranganOf[ind.key];
+                          return (
+                            <div key={ind.key}>
+                              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 6 }}>
+                                <span className="t-small" style={{ fontWeight: 600 }}>{ind.label}</span>
+                                <span className="t-mono" style={{ fontWeight: 700, color: scoreColor(v, ind.standar) }}>
+                                  {v ?? '—'}<span style={{ color: 'var(--muted-2)', fontWeight: 400, fontSize: 11 }}>/{ind.standar}</span>
+                                </span>
+                              </div>
+                              <div className="t-tiny" style={{ color: 'var(--muted-2)', lineHeight: 1.35 }}>{ind.deskripsi}</div>
+                              {ket && (
+                                <div className="t-tiny" style={{ color: 'var(--ink-2)', fontStyle: 'italic', marginTop: 2 }}>“{ket}”</div>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : (
+              <p className="t-small" style={{ color: 'var(--muted)' }}>Belum ada data matrix untuk bulan {monthSel}.</p>
+            )}
           </div>
 
           {/* Notes panel */}

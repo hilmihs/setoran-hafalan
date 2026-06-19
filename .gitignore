@@ -17,3 +17,4 @@ pnpm-workspace.yaml
 
 # data files
 *.xlsx
+*.pdf

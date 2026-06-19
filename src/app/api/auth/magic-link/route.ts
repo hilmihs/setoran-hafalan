@@ -10,7 +10,7 @@ export async function GET(req: NextRequest) {
 
   const { data: ketua } = await supabaseAdmin
     .from('ketua_kelas')
-    .select('id, name, gender, kelas_hits_id, active')
+    .select('id, name, gender, kelas_hits_id, hits_halaqah_id, active')
     .eq('magic_token', token)
     .maybeSingle();
 
@@ -28,6 +28,7 @@ export async function GET(req: NextRequest) {
     name: ketua.name,
     gender: ketua.gender,
     kelas_hits_id: ketua.kelas_hits_id,
+    hits_halaqah_id: ketua.hits_halaqah_id ?? null,
   };
   s.session = access;
   s.accesses = [access];
@@ -38,5 +39,7 @@ export async function GET(req: NextRequest) {
     .update({ last_login_at: new Date().toISOString() })
     .eq('id', ketua.id);
 
-  return NextResponse.redirect(new URL('/observasi/ketua-kelas', req.url));
+  // HITS soft-skill ketua kelas -> dashboard HITS; observasi lama -> /observasi
+  const landing = ketua.hits_halaqah_id ? '/hits/ketua' : '/observasi/ketua-kelas';
+  return NextResponse.redirect(new URL(landing, req.url));
 }

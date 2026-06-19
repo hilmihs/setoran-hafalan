@@ -474,6 +474,13 @@ export default async function KoordinatorDashboard({
             <span style={{ fontSize: 13, fontWeight: 600 }}>{s.session.name}</span>
           </div>
           <Link
+            href="/2in1/koordinator/kehadiran"
+            className="btn btn-sm btn-ghost"
+            style={{ height: 30, padding: '0 12px', textDecoration: 'none' }}
+          >
+            Kehadiran
+          </Link>
+          <Link
             href="/2in1/koordinator/pedagogis"
             className="btn btn-sm btn-ghost"
             style={{ height: 30, padding: '0 12px', textDecoration: 'none' }}

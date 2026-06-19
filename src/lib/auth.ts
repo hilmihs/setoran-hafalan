@@ -27,7 +27,6 @@ export async function login(
     { data: koor },
     { data: syaikh },
     { data: pengajar },
-    { data: koorHits },
     { data: ketuaKelas },
     { data: koorKK },
   ] = await Promise.all([
@@ -57,13 +56,8 @@ export async function login(
       .eq('whatsapp_number', wa)
       .maybeSingle(),
     supabaseAdmin
-      .from('koordinator_hits')
-      .select('id, name, gender, password_hash, active')
-      .eq('whatsapp_number', wa)
-      .maybeSingle(),
-    supabaseAdmin
       .from('ketua_kelas')
-      .select('id, name, gender, password_hash, active, kelas_hits_id')
+      .select('id, name, gender, password_hash, active, kelas_hits_id, hits_halaqah_id')
       .eq('whatsapp_number', wa)
       .maybeSingle(),
     supabaseAdmin
@@ -76,7 +70,7 @@ export async function login(
   type Candidate = {
     row: { active: boolean; password_hash: string; id: string } | null;
     build: () => RoleAccess;
-    table: 'peserta' | 'musyrif' | 'koordinator' | 'syaikh' | 'pengajar' | 'koordinator_hits' | 'ketua_kelas' | 'koordinator_ketua_kelas';
+    table: 'peserta' | 'musyrif' | 'koordinator' | 'syaikh' | 'pengajar' | 'ketua_kelas' | 'koordinator_ketua_kelas';
     trackLastLogin: boolean;
   };
 
@@ -140,17 +134,6 @@ export async function login(
       trackLastLogin: true,
     },
     {
-      row: koorHits,
-      build: () => ({
-        role: 'koordinator_hits' as const,
-        koordinator_hits_id: koorHits!.id,
-        name: koorHits!.name,
-        gender: koorHits!.gender,
-      }),
-      table: 'koordinator_hits',
-      trackLastLogin: true,
-    },
-    {
       row: ketuaKelas,
       build: () => ({
         role: 'ketua_kelas' as const,
@@ -158,6 +141,7 @@ export async function login(
         name: ketuaKelas!.name,
         gender: ketuaKelas!.gender,
         kelas_hits_id: ketuaKelas!.kelas_hits_id,
+        hits_halaqah_id: ketuaKelas!.hits_halaqah_id ?? null,
       }),
       table: 'ketua_kelas',
       trackLastLogin: true,
@@ -197,7 +181,7 @@ export async function login(
   const correctHash = await bcrypt.hash(password, BCRYPT_COST);
   const tables = [
     'peserta', 'musyrif', 'koordinator', 'syaikh',
-    'pengajar', 'koordinator_hits', 'ketua_kelas', 'koordinator_ketua_kelas',
+    'pengajar', 'ketua_kelas', 'koordinator_ketua_kelas',
   ] as const;
   const nowIso = new Date().toISOString();
   await Promise.all([
@@ -285,7 +269,7 @@ export async function changePassword(
 
   const tables = [
     'peserta', 'musyrif', 'koordinator', 'syaikh',
-    'pengajar', 'koordinator_hits', 'ketua_kelas', 'koordinator_ketua_kelas',
+    'pengajar', 'ketua_kelas', 'koordinator_ketua_kelas',
   ] as const;
 
   await Promise.all(
@@ -314,8 +298,6 @@ function getRoleTable(
       return { table: 'syaikh', id: session.syaikh_id };
     case 'pengajar':
       return { table: 'pengajar', id: session.pengajar_id };
-    case 'koordinator_hits':
-      return { table: 'koordinator_hits', id: session.koordinator_hits_id };
     case 'ketua_kelas':
       return { table: 'ketua_kelas', id: session.ketua_kelas_id };
     case 'koordinator_ketua_kelas':

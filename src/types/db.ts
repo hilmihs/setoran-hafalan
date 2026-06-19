@@ -185,16 +185,6 @@ export interface Pengajar {
   created_at: string;
 }
 
-export interface KoordinatorHits {
-  id: string;
-  name: string;
-  gender: Gender;
-  whatsapp_number: string;
-  active: boolean;
-  last_login_at: string | null;
-  created_at: string;
-}
-
 export interface KelasHits {
   id: string;
   name: string;
@@ -212,9 +202,11 @@ export interface KetuaKelas {
   gender: Gender;
   whatsapp_number: string;
   password_hash: string | null;
-  kelas_hits_id: string;
+  kelas_hits_id: string | null;
   batch_id: string | null;
   magic_token: string | null;
+  hits_halaqah_id: string | null;
+  hits_halaqah_peserta_id: string | null;
   active: boolean;
   last_login_at: string | null;
   created_at: string;
@@ -235,6 +227,166 @@ export interface BatchConfig {
   id: string;
   name: string;
   start_date: string;
+  created_at: string;
+}
+
+// ---------- HITS soft-skill (batch-native, spreadsheet-driven) ----------
+
+export type HitsLevel = 'qoidah_nuroniyyah' | 'perbaikan_bacaan';
+export type HitsKondisi = 'KBBS' | 'KMT' | 'JKG' | 'KBLA' | 'LIBUR';
+export type HitsStatusLatihan = 'TAL' | 'PTML' | 'SML';
+export type HitsSource = 'sheet' | 'manual';
+export type HitsStatusTabayyun = 'pending' | 'awaiting_reason' | 'decided';
+
+export const HITS_LEVEL_LABEL: Record<HitsLevel, string> = {
+  qoidah_nuroniyyah: 'Qoidah Nuroniyyah',
+  perbaikan_bacaan: 'Perbaikan Bacaan',
+};
+
+export const HITS_KONDISI_LABEL: Record<HitsKondisi, string> = {
+  KBBS: 'Kelas Berjalan Baik & Sesuai',
+  KMT: 'Kelas Mulai Terlambat (>5 menit)',
+  JKG: 'Jadwal Kelas Ganti',
+  KBLA: 'Kelas Berakhir Lebih Awal',
+  LIBUR: 'Libur / Tidak Ada Kelas',
+};
+
+export const HITS_STATUS_LATIHAN_LABEL: Record<HitsStatusLatihan, string> = {
+  TAL: 'Tidak Ada Latihan',
+  PTML: 'Peserta Tidak Mengerjakan Latihan',
+  SML: 'Semua Mengerjakan Latihan',
+};
+
+export interface HitsBatch {
+  id: string;
+  name: string;
+  slug: string;
+  start_date: string;
+  active: boolean;
+  created_at: string;
+}
+
+export interface HitsKaldikHari {
+  id: string;
+  batch_id: string;
+  level: HitsLevel;
+  tanggal: string;
+  hari: string;
+  pekan: number | null;
+  is_libur: boolean;
+  libur_note: string | null;
+  source: HitsSource;
+  created_at: string;
+}
+
+export interface HitsKaldikPertemuan {
+  id: string;
+  halaqah_id: string;
+  pertemuan_no: number;
+  tanggal: string;
+  pekan: number | null;
+  is_skipped: boolean;
+  note: string | null;
+  set_by_role: string;
+  set_by_id: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface HitsHalaqah {
+  id: string;
+  batch_id: string;
+  level: HitsLevel | null;
+  name: string;
+  sheet_gid: string | null;
+  jadwal_raw: string | null;
+  jadwal_hari: string[];
+  waktu_mulai: string | null;
+  waktu_selesai: string | null;
+  gender: Gender | null;
+  pengajar_nama_sheet: string | null;
+  pengajar_id: string | null;
+  pengajar_wa: string | null;
+  source: HitsSource;
+  active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface HitsHalaqahPeserta {
+  id: string;
+  halaqah_id: string;
+  murid_id: string | null;
+  nama: string;
+  jenis_kelamin: string | null;
+  status_peserta: string | null;
+  is_ketua: boolean;
+  ketua_wa: string | null;
+  source: HitsSource;
+  active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface HitsKeteranganHarian {
+  id: string;
+  halaqah_id: string;
+  pertemuan_no: number;
+  tanggal: string;
+  kondisi: HitsKondisi;
+  terlambat: boolean;
+  latihan_diberikan: boolean | null;
+  status_latihan: HitsStatusLatihan | null;
+  semua_selesai: boolean | null;
+  catatan: string | null;
+  diisi_by_role: string;
+  diisi_by_id: string;
+  editable: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface HitsTabayyun {
+  id: string;
+  keterangan_id: string;
+  halaqah_id: string;
+  pengajar_id: string | null;
+  koordinator_kk_id: string | null;
+  kondisi: HitsKondisi;
+  alasan_pengajar: string | null;
+  alasan_submitted_at: string | null;
+  is_udzur_syari: boolean | null;
+  keputusan_catatan: string | null;
+  decided_at: string | null;
+  status: HitsStatusTabayyun;
+  deadline_at: string;
+  created_at: string;
+}
+
+export interface HitsTeguran {
+  id: string;
+  pengajar_id: string;
+  year_month: string;
+  category: string;
+  nomor_teguran: number;
+  source_ref_type: string | null;
+  source_ref_id: string | null;
+  keterangan: string | null;
+  issued_by_role: string;
+  issued_by_id: string;
+  created_at: string;
+}
+
+export interface HitsSheetSource {
+  id: string;
+  batch_id: string | null;
+  kind: 'kaldik' | 'presensi';
+  spreadsheet_id: string;
+  gid: string | null;
+  label: string | null;
+  last_synced_at: string | null;
+  last_sync_status: string | null;
+  active: boolean;
   created_at: string;
 }
 
@@ -384,27 +536,6 @@ export const INDIKATOR_STANDAR: Record<string, number> = {
   kepatuhan_sop: 4,
 };
 
-// ========== SHAKWA ==========
-
-export type PelaporType = 'peserta' | 'pengajar';
-export type StatusShakwa = 'submitted' | 'in_review' | 'resolved' | 'closed';
-
-export interface Shakwa {
-  id: string;
-  pelapor_type: PelaporType;
-  pengajar_id: string | null;
-  nama: string;
-  gender: Gender;
-  kategori: string;
-  halaqoh: string | null;
-  isi: string;
-  saran_kritik: string | null;
-  status: StatusShakwa;
-  catatan_reviewer: string | null;
-  reviewed_at: string | null;
-  created_at: string;
-}
-
 // ========== Password reset request ==========
 
 export type StatusResetRequest = 'pending' | 'accepted' | 'declined';
@@ -459,19 +590,13 @@ export interface PengajarSession {
   is_ketua: boolean;
 }
 
-export interface KoordinatorHitsSession {
-  role: 'koordinator_hits';
-  koordinator_hits_id: string;
-  name: string;
-  gender: Gender;
-}
-
 export interface KetuaKelasSession {
   role: 'ketua_kelas';
   ketua_kelas_id: string;
   name: string;
   gender: Gender;
-  kelas_hits_id: string;
+  kelas_hits_id: string | null;
+  hits_halaqah_id?: string | null;
 }
 
 export interface KoordinatorKetuaKelasSession {
@@ -487,7 +612,6 @@ export type RoleAccess =
   | KoordinatorSession
   | SyaikhSession
   | PengajarSession
-  | KoordinatorHitsSession
   | KetuaKelasSession
   | KoordinatorKetuaKelasSession;
 

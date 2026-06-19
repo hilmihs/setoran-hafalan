@@ -3,7 +3,8 @@ import { redirect } from 'next/navigation';
 import { requireKetuaKelompok } from '@/lib/session';
 import { supabaseAdmin } from '@/lib/supabase-admin';
 import { PenilaianPedagogisForm } from './PenilaianPedagogisForm';
-import { MonthNavSelect, monthOptionsSince } from '@/components/MonthNavSelect';
+import { MonthNavSelect } from '@/components/MonthNavSelect';
+import { monthOptionsSince } from '@/lib/month';
 
 export const dynamic = 'force-dynamic';
 

@@ -66,7 +66,7 @@ export default async function PresensiWizardPage() {
   const pesertaRows = (anggotaList ?? []).map((a) => ({
     id: a.id,
     name: a.name + (a.is_ketua ? ' (Ketua)' : a.is_wakil ? ' (Wakil)' : ''),
-    status: (existingMap.get(a.id)?.status ?? 'tidak_ada_keterangan') as StatusType,
+    status: (existingMap.get(a.id)?.status ?? 'hadir') as StatusType,
     catatan: existingMap.get(a.id)?.catatan ?? '',
   }));
 
@@ -123,6 +123,7 @@ export default async function PresensiWizardPage() {
           </p>
 
           <PresensiWizardForm
+            key={pertemuan.id}
             pertemuanId={pertemuan.id}
             pesertaList={pesertaRows}
             remaining={total}

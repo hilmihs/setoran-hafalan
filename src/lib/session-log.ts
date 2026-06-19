@@ -2,7 +2,6 @@ import { supabaseAdmin } from '@/lib/supabase-admin';
 import type { RoleAccess } from '@/types/db';
 
 function actorIdOf(actor: RoleAccess): string | null {
-  if ('koordinator_hits_id' in actor) return actor.koordinator_hits_id;
   if ('koordinator_kk_id' in actor) return actor.koordinator_kk_id;
   if ('syaikh_id' in actor) return actor.syaikh_id;
   if ('koordinator_id' in actor) return actor.koordinator_id;

@@ -18,7 +18,6 @@ const ROLE_TABLES = [
   'koordinator',
   'syaikh',
   'pengajar',
-  'koordinator_hits',
   'ketua_kelas',
   'koordinator_ketua_kelas',
 ] as const;
