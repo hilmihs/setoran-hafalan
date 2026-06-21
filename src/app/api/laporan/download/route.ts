@@ -6,6 +6,7 @@ import { JENIS_REKAMAN_LABEL, type Gender } from '@/types/db';
 import { musyrifTitle } from '@/lib/whatsapp';
 
 export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
 
 export async function GET(req: NextRequest) {

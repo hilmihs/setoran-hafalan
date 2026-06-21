@@ -158,7 +158,7 @@ export function HitsKoordinatorTable({ rows }: { rows: HitsRekapRow[] }) {
       </p>
 
       <div className="table-scroll">
-        <table className="k-table" style={{ minWidth: 920 }}>
+        <table className="k-table tbl-cards" style={{ minWidth: 920 }}>
           <thead>
             <tr>
               <th onClick={() => toggleSort('halaqah')} style={{ ...STICKY_TH, cursor: 'pointer' }}>
@@ -181,15 +181,15 @@ export function HitsKoordinatorTable({ rows }: { rows: HitsRekapRow[] }) {
                 r.kondisiCount.KBBS + r.kondisiCount.KMT + r.kondisiCount.JKG + r.kondisiCount.KBLA;
               return (
                 <tr key={r.halaqahId}>
-                  <td style={STICKY_TD}>{r.halaqahName}</td>
-                  <td className="t-tiny">
+                  <td className="tbl-cardhead" style={STICKY_TD}>{r.halaqahName}</td>
+                  <td className="t-tiny" data-label="Batch / Level">
                     {r.batchName}
                     <br />
                     <span style={{ color: r.level ? 'var(--muted-2)' : 'var(--kuning-ink)' }}>
                       {r.level ? HITS_LEVEL_LABEL[r.level] : '⚠ belum ditag'}
                     </span>
                   </td>
-                  <td>
+                  <td data-label="Pengajar">
                     {r.pengajarNama ?? '—'}
                     {!r.pengajarLinked && (
                       <span
@@ -201,13 +201,13 @@ export function HitsKoordinatorTable({ rows }: { rows: HitsRekapRow[] }) {
                       </span>
                     )}
                   </td>
-                  <td className="t-tiny">
+                  <td className="t-tiny" data-label="Ketua">
                     {r.ketuaNama ?? (
                       <span style={{ color: 'var(--kuning-ink)' }}>belum ada</span>
                     )}
                   </td>
-                  <td style={{ textAlign: 'right' }} className="t-mono">{r.pesertaCount}</td>
-                  <td>
+                  <td style={{ textAlign: 'right' }} className="t-mono" data-label="Peserta">{r.pesertaCount}</td>
+                  <td data-label="Belum diisi">
                     {r.belumDiisi > 0 ? (
                       <span className="badge badge-merah">{r.belumDiisi}</span>
                     ) : (
@@ -215,10 +215,10 @@ export function HitsKoordinatorTable({ rows }: { rows: HitsRekapRow[] }) {
                     )}
                     <span className="t-tiny" style={{ color: 'var(--muted-2)' }}> /{r.expected}</span>
                   </td>
-                  <td><span className={pctBadge(r.pctKbbs)}>{r.pctKbbs == null ? '—' : `${r.pctKbbs}%`}</span></td>
-                  <td><span className={pctBadge(r.pctLatihan)}>{r.pctLatihan == null ? '—' : `${r.pctLatihan}%`}</span></td>
-                  <td>{r.terlambat}</td>
-                  <td>
+                  <td data-label="%KBBS"><span className={pctBadge(r.pctKbbs)}>{r.pctKbbs == null ? '—' : `${r.pctKbbs}%`}</span></td>
+                  <td data-label="%Latihan"><span className={pctBadge(r.pctLatihan)}>{r.pctLatihan == null ? '—' : `${r.pctLatihan}%`}</span></td>
+                  <td data-label="Telat">{r.terlambat}</td>
+                  <td data-label="Rincian">
                     {totalKondisi === 0 ? (
                       <span className="t-tiny" style={{ color: 'var(--muted-2)' }}>—</span>
                     ) : (

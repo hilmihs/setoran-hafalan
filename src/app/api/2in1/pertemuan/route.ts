@@ -35,7 +35,7 @@ export async function POST(req: NextRequest) {
       .from('program_kelas')
       .select('id, ketua_wa, wakil_wa')
       .eq('id', program_kelas_id)
-      .single();
+      .maybeSingle();
     if (!kelas || (kelas.ketua_wa !== wa && kelas.wakil_wa !== wa)) {
       return NextResponse.json({ error: 'Hanya ketua/wakil kelas yang bisa membuat pertemuan.' }, { status: 403 });
     }

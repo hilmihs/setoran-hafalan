@@ -2,8 +2,8 @@
 
 import { useState, useTransition } from 'react';
 import { decideTabayyun, reminderTabayyunPengajar } from './actions';
-import { KONDISI_KELAS_LABEL } from '@/types/db';
-import type { KondisiKelas } from '@/types/db';
+import { HITS_KONDISI_LABEL } from '@/types/db';
+import type { HitsKondisi } from '@/types/db';
 
 interface Props {
   tabayyun: {
@@ -12,7 +12,7 @@ interface Props {
     pengajar_name: string;
     kelas_name: string;
     tanggal: string;
-    kondisi: KondisiKelas;
+    kondisi: HitsKondisi;
     alasan_pengajar: string | null;
     status: string;
     deadline_at: string;
@@ -83,7 +83,7 @@ export function TabayyunCard({ tabayyun: t }: Props) {
         <div className="t-small" style={{ color: 'var(--muted-2)' }}>
           {t.kelas_name} &bull; {t.tanggal} &bull;{' '}
           <span style={{ color: 'var(--kuning-ink)', fontWeight: 600 }}>
-            {t.kondisi} — {KONDISI_KELAS_LABEL[t.kondisi]}
+            {t.kondisi} — {HITS_KONDISI_LABEL[t.kondisi]}
           </span>
         </div>
         {t.alasan_pengajar && (

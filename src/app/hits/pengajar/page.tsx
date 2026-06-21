@@ -7,6 +7,8 @@ import { FeatureNav } from '@/components/FeatureNav';
 import { deriveHalaqahPertemuanWithOverrides, type PertemuanOverride } from '@/lib/hits-pertemuan';
 import { todayJakarta } from '@/lib/maahir-presensi';
 import { AssignKetuaPanel, type HalaqahForAssign } from './AssignKetuaStep';
+import { TabayyunAlasanPanel, type TabayyunForPengajar } from './TabayyunAlasanForm';
+import type { HitsKondisi } from '@/types/db';
 
 export const dynamic = 'force-dynamic';
 
@@ -27,10 +29,32 @@ export default async function HitsPengajarPage() {
   const halaqah = halaqahRows ?? [];
 
   let panelData: HalaqahForAssign[] = [];
+  let tabayyunItems: TabayyunForPengajar[] = [];
 
   if (halaqah.length) {
     const halaqahIds = halaqah.map((h) => h.id);
     const batchIds = [...new Set(halaqah.map((h) => h.batch_id))];
+    const halaqahNameById = new Map(halaqah.map((h) => [h.id, h.name]));
+
+    // Tabayyun menunggu alasan/klarifikasi pengajar.
+    const { data: tabRows } = await supabaseAdmin
+      .from('hits_tabayyun')
+      .select('id, halaqah_id, kondisi, status, alasan_pengajar, hits_keterangan_harian:keterangan_id(tanggal, pertemuan_no)')
+      .in('halaqah_id', halaqahIds)
+      .in('status', ['pending', 'awaiting_reason'])
+      .order('created_at', { ascending: false });
+    tabayyunItems = (tabRows ?? []).map((t) => {
+      const ket = t.hits_keterangan_harian as unknown as { tanggal: string; pertemuan_no: number } | null;
+      return {
+        id: t.id,
+        halaqah_name: halaqahNameById.get(t.halaqah_id) ?? '?',
+        kondisi: t.kondisi as HitsKondisi,
+        tanggal: ket?.tanggal ?? '—',
+        pertemuan_no: ket?.pertemuan_no ?? 0,
+        status: t.status,
+        alasan_pengajar: t.alasan_pengajar,
+      };
+    });
 
     const [{ data: kaldikList }, { data: overrideList }, { data: pesertaList }] = await Promise.all([
       supabaseAdmin
@@ -105,6 +129,8 @@ export default async function HitsPengajarPage() {
           </div>
 
           <FeatureNav current="/hits/pengajar" />
+
+          <TabayyunAlasanPanel items={tabayyunItems} />
 
           <h1 className="t-h1" style={{ marginBottom: 4 }}>Penunjukan Ketua Kelas</h1>
           <p className="t-small" style={{ color: 'var(--muted-2)', marginBottom: 16 }}>

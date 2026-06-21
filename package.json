@@ -19,7 +19,10 @@
     "reset-setoran": "tsx --env-file=.env.local scripts/reset-setoran.ts",
     "seed-hits": "tsx --env-file=.env.local scripts/seed-hits-demo.ts",
     "seed-hits-presensi": "tsx --env-file=.env.local scripts/seed-hits-presensi.ts",
-    "seed-matrix-mei": "tsx --env-file=.env.local scripts/seed-matrix-mei2026.ts"
+    "seed-matrix-mei": "tsx --env-file=.env.local scripts/seed-matrix-mei2026.ts",
+    "import-hits-docs": "tsx --env-file=.env.local scripts/import-hits-docs.ts",
+    "link-hits-pengajar-wa": "tsx --env-file=.env.local scripts/link-hits-pengajar-wa.ts",
+    "cleanup-legacy-observasi": "tsx --env-file=.env.local scripts/cleanup-legacy-observasi.ts"
   },
   "dependencies": {
     "@supabase/ssr": "^0.5.0",

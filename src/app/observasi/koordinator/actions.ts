@@ -5,13 +5,13 @@ import { requireKoordinatorKetuaKelas } from '@/lib/session';
 import {
   buildWaMeUrl,
   tplReminderKetuaKelasObservasi,
-  tplReminderPengajarCheckin,
   tplTabayyunToPengajar,
 } from '@/lib/whatsapp';
 import { absUrl } from '@/lib/url';
 import { logAudit } from '@/lib/audit';
 import { logWaReminder } from '@/lib/wa-log';
 
+/** Koordinator KK memutuskan tabayyun HITS (udzur syar'i atau tidak). */
 export async function decideTabayyun(
   _prev: { error?: string; ok?: boolean } | undefined,
   formData: FormData
@@ -25,7 +25,7 @@ export async function decideTabayyun(
   if (!tabayyunId) return { error: 'ID tabayyun tidak ditemukan.' };
 
   const { error } = await supabaseAdmin
-    .from('tabayyun')
+    .from('hits_tabayyun')
     .update({
       is_udzur_syari: isUdzur,
       keputusan_catatan: catatan || null,
@@ -39,8 +39,8 @@ export async function decideTabayyun(
 
   await logAudit({
     actor: session,
-    action: 'tabayyun.decide',
-    targetTable: 'tabayyun',
+    action: 'hits.tabayyun.decide',
+    targetTable: 'hits_tabayyun',
     targetId: tabayyunId,
     detail: { is_udzur_syari: isUdzur, keputusan_catatan: catatan || null },
   });
@@ -48,6 +48,7 @@ export async function decideTabayyun(
   return { ok: true };
 }
 
+/** Reminder WA ke ketua kelas agar mengisi keterangan harian (HITS). */
 export async function reminderKetuaKelas(
   ketuaKelasId: string,
   kelasName: string
@@ -66,7 +67,7 @@ export async function reminderKetuaKelas(
     ketuaKelasName: ketua.name,
     ketuaKelasGender: ketua.gender,
     kelasName,
-    observasiUrl: absUrl('/observasi/ketua-kelas'),
+    observasiUrl: absUrl('/hits/ketua'),
   });
 
   const waUrl = buildWaMeUrl(ketua.whatsapp_number, msg);
@@ -82,40 +83,7 @@ export async function reminderKetuaKelas(
   return { waUrl };
 }
 
-export async function reminderPengajarCheckin(
-  pengajarId: string,
-  kelasName: string
-): Promise<{ waUrl?: string; error?: string }> {
-  const session = await requireKoordinatorKetuaKelas();
-
-  const { data: pengajar } = await supabaseAdmin
-    .from('pengajar')
-    .select('name, whatsapp_number, gender')
-    .eq('id', pengajarId)
-    .maybeSingle();
-
-  if (!pengajar) return { error: 'Pengajar tidak ditemukan.' };
-
-  const msg = tplReminderPengajarCheckin({
-    pengajarName: pengajar.name,
-    pengajarGender: pengajar.gender,
-    programName: kelasName,
-    checkinUrl: absUrl('/kehadiran/pengajar'),
-  });
-
-  const waUrl = buildWaMeUrl(pengajar.whatsapp_number, msg);
-
-  await logWaReminder({
-    sender: session,
-    recipientTable: 'pengajar',
-    recipientId: pengajarId,
-    recipientWa: pengajar.whatsapp_number,
-    templateKind: 'checkin_reminder',
-  });
-
-  return { waUrl };
-}
-
+/** Reminder WA ke pengajar agar mengirim alasan tabayyun (HITS). */
 export async function reminderTabayyunPengajar(
   pengajarId: string,
   kondisi: string,
@@ -138,7 +106,7 @@ export async function reminderTabayyunPengajar(
     kondisi,
     tanggal,
     kelasName,
-    formUrl: absUrl('/kehadiran/pengajar'),
+    formUrl: absUrl('/hits/pengajar'),
   });
 
   const waUrl = buildWaMeUrl(pengajar.whatsapp_number, msg);
@@ -149,7 +117,7 @@ export async function reminderTabayyunPengajar(
     recipientId: pengajarId,
     recipientWa: pengajar.whatsapp_number,
     templateKind: 'tabayyun_notify',
-    targetTable: 'observasi_kelas',
+    targetTable: 'hits_keterangan_harian',
   });
 
   return { waUrl };

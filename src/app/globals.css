@@ -839,3 +839,33 @@ dialog[open] {
 @media (max-width: 720px) {
   .matrix-profil-grid { grid-template-columns: 1fr !important; }
 }
+
+/* ===== Tabel → kartu di HP (.tbl-cards) ===== */
+@media (max-width: 640px) {
+  table.tbl-cards { min-width: 0 !important; display: block; width: 100%; }
+  table.tbl-cards thead { display: none; }
+  table.tbl-cards tbody { display: block; }
+  table.tbl-cards > tbody > tr {
+    display: block; border: 1px solid var(--line); border-radius: var(--r-md);
+    background: var(--surface); padding: 12px 14px; margin-bottom: 10px;
+    box-shadow: var(--shadow-card);
+  }
+  table.tbl-cards > tbody > tr > td {
+    display: flex; justify-content: space-between; align-items: baseline; gap: 12px;
+    padding: 5px 0 !important; border: none !important; text-align: right !important;
+    position: static !important; white-space: normal !important; min-width: 0 !important;
+  }
+  table.tbl-cards > tbody > tr > td::before {
+    content: attr(data-label); color: var(--muted); font-weight: 600;
+    font-size: 11px; text-align: left; letter-spacing: .02em; flex: 0 0 auto;
+  }
+  /* kolom pertama = header kartu (nama/bulan) */
+  table.tbl-cards > tbody > tr > td.tbl-cardhead {
+    display: block; text-align: left !important; padding: 0 0 8px !important;
+    margin-bottom: 8px; border-bottom: 1px solid var(--line) !important;
+    background: transparent !important; font-weight: 600;
+  }
+  table.tbl-cards > tbody > tr > td.tbl-cardhead::before { content: none; }
+  /* tap target lebih besar di layar sentuh */
+  .btn-xs { min-height: 32px; }
+}

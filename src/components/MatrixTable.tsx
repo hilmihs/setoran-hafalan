@@ -67,7 +67,7 @@ export function MatrixTable({ rows, month, gender }: { rows: MatrixTableRow[]; m
       </div>
 
       <div className="card-flat" style={{ padding: 0, overflowX: 'auto', borderRadius: 'var(--r-lg)' }}>
-        <table className="matrix-grid" style={{ width: '100%', borderCollapse: 'separate', borderSpacing: 0, fontSize: 13, minWidth: detail ? 1180 : 820 }}>
+        <table className="matrix-grid tbl-cards" style={{ width: '100%', borderCollapse: 'separate', borderSpacing: 0, fontSize: 13, minWidth: detail ? 1180 : 820 }}>
           <thead>
             {detail && (
               <tr>
@@ -116,42 +116,42 @@ export function MatrixTable({ rows, month, gender }: { rows: MatrixTableRow[]; m
               const md = medal(r.ranking);
               return (
                 <tr key={r.id} className="mg-row" style={{ background: flagged ? 'var(--merah-tint)' : undefined }}>
-                  <td className="mg-sticky mg-name" style={{ left: 0, background: flagged ? 'var(--merah-tint)' : 'var(--surface)' }}>
+                  <td className="mg-sticky mg-name tbl-cardhead" style={{ left: 0, background: flagged ? 'var(--merah-tint)' : 'var(--surface)' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
                       <span className="mg-rank">{md ?? (r.ranking ?? '—')}</span>
                       <Link href={detailHref(r.id)} className="mg-link">{r.name}</Link>
                       {!r.active && <span className="badge badge-merah" style={{ fontSize: 9, height: 18 }}>Nonaktif</span>}
                     </div>
                   </td>
-                  <td className="mg-kelompok">{r.kelompokName}</td>
+                  <td className="mg-kelompok" data-label="Kelompok">{r.kelompokName}</td>
                   {detail
                     ? INDIKATOR.map((ind) => {
                         const v = r.scores[ind.key];
                         return (
-                          <td key={ind.key} className="mg-num" style={{ color: scoreColor(v ?? null, ind.standar) }}>
+                          <td key={ind.key} className="mg-num" data-label={ind.short} style={{ color: scoreColor(v ?? null, ind.standar) }}>
                             {v === null || v === undefined ? '—' : v}
                           </td>
                         );
                       })
                     : (
                       <>
-                        <td className="mg-num" style={{ color: scoreColor(r.hard, KATEGORI_STANDAR.hard) }}>{fmt(r.hard)}</td>
-                        <td className="mg-num" style={{ color: scoreColor(r.pedagogis, KATEGORI_STANDAR.pedagogis) }}>{fmt(r.pedagogis)}</td>
-                        <td className="mg-num" style={{ color: scoreColor(r.soft, KATEGORI_STANDAR.soft) }}>{fmt(r.soft)}</td>
+                        <td className="mg-num" data-label="Hard" style={{ color: scoreColor(r.hard, KATEGORI_STANDAR.hard) }}>{fmt(r.hard)}</td>
+                        <td className="mg-num" data-label="Pedagogis" style={{ color: scoreColor(r.pedagogis, KATEGORI_STANDAR.pedagogis) }}>{fmt(r.pedagogis)}</td>
+                        <td className="mg-num" data-label="Soft" style={{ color: scoreColor(r.soft, KATEGORI_STANDAR.soft) }}>{fmt(r.soft)}</td>
                       </>
                     )}
-                  <td className="mg-num" style={{ fontWeight: 700, color: scoreColor(r.keseluruhan, 3.5) }}>{fmt(r.keseluruhan)}</td>
-                  <td className="mg-num" style={{ color: flagged ? 'var(--merah-ink)' : 'var(--muted)', fontWeight: flagged ? 700 : 400 }}>
+                  <td className="mg-num" data-label="Rata²" style={{ fontWeight: 700, color: scoreColor(r.keseluruhan, 3.5) }}>{fmt(r.keseluruhan)}</td>
+                  <td className="mg-num" data-label="Teguran" style={{ color: flagged ? 'var(--merah-ink)' : 'var(--muted)', fontWeight: flagged ? 700 : 400 }}>
                     {r.teguranBulan}/{r.teguranKum}
                   </td>
-                  <td style={{ textAlign: 'center', padding: '8px' }}>
+                  <td data-label="Risk" style={{ textAlign: 'center', padding: '8px' }}>
                     {r.risk ? (
                       <span className="badge" style={{ background: 'transparent', borderColor: r.risk.color, color: r.risk.color, fontSize: 11 }} title={`Score ${r.risk.score}/100`}>
                         {r.risk.label} {r.risk.score}
                       </span>
                     ) : <span className="t-tiny" style={{ color: 'var(--muted-2)' }}>—</span>}
                   </td>
-                  <td style={{ textAlign: 'center', padding: '8px' }}>
+                  <td data-label="Status" style={{ textAlign: 'center', padding: '8px' }}>
                     {r.finalized ? (
                       <span className="badge badge-hijau"><span className="dot" />Final</span>
                     ) : r.hasMatrix ? (

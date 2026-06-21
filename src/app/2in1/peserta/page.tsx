@@ -22,6 +22,7 @@ import {
 import { formatCycleRangeShort } from '@/lib/week';
 import { buildWaMeUrl, musyrifTitle, tplPesertaSubmitToMusyrif } from '@/lib/whatsapp';
 import { absUrl } from '@/lib/url';
+import { signedAudioUrl } from '@/lib/storage';
 import type { JenisRekaman, NilaiRekaman } from '@/types/db';
 
 export const dynamic = 'force-dynamic';
@@ -120,7 +121,7 @@ export default async function PesertaPage() {
   const { data: allRekaman } = setoranIds.length
     ? await supabaseAdmin
         .from('rekaman')
-        .select('setoran_id, jenis, nilai, masukan, audio_url')
+        .select('setoran_id, jenis, nilai, masukan, audio_url, duration_seconds')
         .in('setoran_id', setoranIds)
     : { data: [] };
 
@@ -130,6 +131,7 @@ export default async function PesertaPage() {
     nilai: NilaiRekaman | null;
     masukan: string | null;
     audio_url: string | null;
+    duration_seconds: number | null;
   };
   const rekamanBySetoran = new Map<string, RekRow[]>();
   for (const r of (allRekaman ?? []) as RekRow[]) {
@@ -140,6 +142,22 @@ export default async function PesertaPage() {
   const setoranByCycle = new Map(
     (allSetoran ?? []).map((s) => [s.week_start as string, s])
   );
+
+  // Pulihkan rekaman cycle berjalan dari server (anti-hilang saat refresh / ganti HP).
+  const curSetoran = setoranByCycle.get(week);
+  const curReks = curSetoran ? rekamanBySetoran.get(curSetoran.id) ?? [] : [];
+  const currentSubmittedJenis: JenisRekaman[] = curReks
+    .filter((r) => r.audio_url)
+    .map((r) => r.jenis);
+  const restoredCurrent: Partial<Record<JenisRekaman, { audioUrl: string; durationSec: number }>> = {};
+  for (const r of curReks) {
+    if (r.audio_url) {
+      restoredCurrent[r.jenis] = {
+        audioUrl: await signedAudioUrl(r.audio_url, 86400),
+        durationSec: r.duration_seconds ?? 0,
+      };
+    }
+  }
 
   // Periode lampau (selain cycle berjalan) yang belum dicek & belum lengkap (<3
   // rekaman ber-audio) → bisa di-backfill peserta.
@@ -264,6 +282,8 @@ export default async function PesertaPage() {
               endpoint="/api/2in1/setoran/submit"
               singleSubmitEndpoint="/api/2in1/rekaman/submit-single"
               cacheKey={week}
+              submittedJenis={currentSubmittedJenis}
+              restored={restoredCurrent}
             />
           ) : (
             <p className="t-body">

@@ -23,6 +23,31 @@ export function isLiveMatrixMonth(yearMonth: string): boolean {
   return yearMonth >= MATRIX_LIVE_ANCHOR;
 }
 
+const RECOMPUTE_TTL_MS = 5 * 60 * 1000; // 5 menit
+
+/**
+ * Recompute matrix bulan ini HANYA bila perlu: bulan historis tak pernah dihitung
+ * (lindungi seed), dan bulan live di-skip bila data masih segar (<5 menit) kecuali
+ * `force` (tombol Sinkronkan). Hindari recompute berat tiap page-load.
+ */
+export async function syncMatrixIfStale(yearMonth: string, force = false): Promise<void> {
+  if (!isLiveMatrixMonth(yearMonth)) return;
+  if (!force) {
+    const { data } = await supabaseAdmin
+      .from('matrix_rekap')
+      .select('updated_at')
+      .eq('year_month', yearMonth)
+      .order('updated_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (data?.updated_at) {
+      const age = Date.now() - new Date(data.updated_at).getTime();
+      if (age < RECOMPUTE_TTL_MS) return; // masih segar
+    }
+  }
+  await computeMatrixForMonth(yearMonth);
+}
+
 function pctTo4(pct: number): number {
   if (pct >= 0.9) return 4;
   if (pct >= 0.75) return 3;

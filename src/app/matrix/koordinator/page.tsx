@@ -7,7 +7,7 @@ import { StatCard } from '@/components/ui/StatCard';
 import { MatrixTable, type MatrixTableRow } from '@/components/MatrixTable';
 import Link from 'next/link';
 import { computeRiskPengajar, levelColor, levelLabel, type RiskResult } from '@/lib/risk';
-import { computeMatrixForMonth, isLiveMatrixMonth } from '@/lib/matrix-compute';
+import { syncMatrixIfStale, isLiveMatrixMonth } from '@/lib/matrix-compute';
 import { INDIKATOR, scoreColor, type IndikatorKey } from '@/lib/matrix-indicators';
 import type { Gender } from '@/types/db';
 
@@ -26,6 +26,7 @@ interface SearchParams {
   bulan?: string;
   kelompok?: string;
   gender?: string;
+  sync?: string;
 }
 
 const SCORE_COLS =
@@ -36,7 +37,7 @@ export default async function MatrixKoordinatorPage({
 }: {
   searchParams: SearchParams;
 }) {
-  const session = await requireOneOfRoles(['koordinator', 'koordinator_ketua_kelas']);
+  const session = await requireOneOfRoles(['koordinator']);
   const selectedMonth = searchParams.bulan || currentYearMonth();
   const selectedKelompok = searchParams.kelompok || '';
   const gender: Gender =
@@ -47,14 +48,12 @@ export default async function MatrixKoordinatorPage({
   const backHref = isKoordinator ? '/2in1/koordinator' : '/observasi/koordinator';
   const live = isLiveMatrixMonth(selectedMonth);
 
-  // Auto-sinkronisasi: bulan live (≥ anchor) dihitung ulang dari semua sumber
-  // tiap kali halaman dibuka. Bulan historis (mis. 2026-05) dibiarkan (data seed).
-  if (live) {
-    try {
-      await computeMatrixForMonth(selectedMonth);
-    } catch (e) {
-      console.error('auto-sync matrix gagal:', e);
-    }
+  // Sinkronisasi hemat: hanya recompute bila data basi (>5 mnt) atau ?sync=1 (tombol).
+  // Bulan historis (seed) tak pernah dihitung ulang.
+  try {
+    await syncMatrixIfStale(selectedMonth, searchParams.sync === '1');
+  } catch (e) {
+    console.error('sync matrix gagal:', e);
   }
 
   const { data: kelompokList } = await supabaseAdmin
@@ -246,7 +245,7 @@ export default async function MatrixKoordinatorPage({
             </div>
             <button type="submit" className="btn btn-ghost btn-sm" style={{ height: 38 }}>Terapkan</button>
             {live && (
-              <Link href={qs({})} className="btn btn-ghost btn-sm" style={{ height: 38 }} title="Hitung ulang dari sumber data">
+              <Link href={`${qs({})}${qs({}).includes('?') ? '&' : '?'}sync=1`} className="btn btn-ghost btn-sm" style={{ height: 38 }} title="Hitung ulang dari sumber data">
                 ↻ Sinkronkan
               </Link>
             )}

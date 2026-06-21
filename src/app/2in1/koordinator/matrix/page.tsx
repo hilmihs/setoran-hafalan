@@ -2,7 +2,7 @@ import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { getSession } from '@/lib/session';
 import { supabaseAdmin } from '@/lib/supabase-admin';
-import { computeMatrixForMonth } from '@/lib/matrix-compute';
+import { syncMatrixIfStale, type MatrixRow } from '@/lib/matrix-compute';
 import { MatrixDashboard, type MatrixListItem } from '@/components/matrix/MatrixDashboard';
 import { Initials } from '@/components/icons';
 
@@ -34,8 +34,10 @@ export default async function Matrix2in1Page({
     : currentYearMonth();
   const prevMonth = prevYm(ym);
 
-  // Hitung ulang matrix bulan ini (idempotent — tidak menimpa snapshot lain)
-  const rows = await computeMatrixForMonth(ym);
+  // Sinkron hemat (skip bila segar / historis), lalu baca snapshot dari matrix_rekap.
+  await syncMatrixIfStale(ym);
+  const { data: matrixRows } = await supabaseAdmin.from('matrix_rekap').select('*').eq('year_month', ym);
+  const rows = (matrixRows ?? []) as MatrixRow[];
 
   // Fetch pengajar metadata
   const { data: pengajarList } = await supabaseAdmin

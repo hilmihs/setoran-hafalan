@@ -150,7 +150,7 @@ export default async function KoordinatorPedagogisPage({ searchParams }: { searc
                   <div className="t-small" style={{ color: 'var(--muted-2)', marginTop: 10 }}>Tidak ada anggota.</div>
                 ) : (
                   <div className="table-scroll" style={{ marginTop: 10 }}>
-                    <table className="k-table">
+                    <table className="k-table tbl-cards">
                       <thead>
                         <tr>
                           <th style={{ minWidth: 130 }}>Pengajar</th>
@@ -168,18 +168,18 @@ export default async function KoordinatorPedagogisPage({ searchParams }: { searc
                           const avg = avgByPengajar.get(p.id);
                           return (
                             <tr key={p.id}>
-                              <td>
+                              <td className="tbl-cardhead">
                                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                                   <div className="avatar" style={{ width: 24, height: 24, fontSize: 10 }}><Initials name={p.name} /></div>
                                   <span style={{ fontSize: 13, fontWeight: 600 }}>{p.name}</span>
                                 </div>
                               </td>
-                              <ScoreCell v={sc?.skor_metode_pengajaran ?? null} />
-                              <ScoreCell v={sc?.skor_kepatuhan_silabus ?? null} />
-                              <ScoreCell v={sc?.skor_manajemen_halaqah ?? null} />
-                              <ScoreCell v={sc?.skor_evaluasi_penguasaan ?? null} />
-                              <ScoreCell v={sc?.skor_kepatuhan_sop ?? null} muted />
-                              <td style={{ textAlign: 'center' }}>
+                              <ScoreCell v={sc?.skor_metode_pengajaran ?? null} label="Metode" />
+                              <ScoreCell v={sc?.skor_kepatuhan_silabus ?? null} label="Silabus" />
+                              <ScoreCell v={sc?.skor_manajemen_halaqah ?? null} label="Halaqah" />
+                              <ScoreCell v={sc?.skor_evaluasi_penguasaan ?? null} label="Evaluasi" />
+                              <ScoreCell v={sc?.skor_kepatuhan_sop ?? null} muted label="SOP" />
+                              <td data-label="Rata²" style={{ textAlign: 'center' }}>
                                 {avg != null ? (
                                   <span style={{ fontSize: 14, fontWeight: 800, color: avg >= 3 ? 'var(--hijau-ink)' : avg >= 2 ? 'var(--kuning-ink)' : 'var(--merah-ink)' }}>{avg.toFixed(1)}</span>
                                 ) : (
@@ -202,13 +202,13 @@ export default async function KoordinatorPedagogisPage({ searchParams }: { searc
   );
 }
 
-function ScoreCell({ v, muted }: { v: number | null; muted?: boolean }) {
+function ScoreCell({ v, muted, label }: { v: number | null; muted?: boolean; label?: string }) {
   if (v === null || v === undefined) {
-    return <td style={{ textAlign: 'center', color: 'var(--muted-2)' }}>—</td>;
+    return <td data-label={label} style={{ textAlign: 'center', color: 'var(--muted-2)' }}>—</td>;
   }
   const color = v >= 3 ? 'var(--hijau-ink)' : v >= 2 ? 'var(--kuning-ink)' : 'var(--merah-ink)';
   return (
-    <td style={{ textAlign: 'center' }}>
+    <td data-label={label} style={{ textAlign: 'center' }}>
       <span style={{ fontSize: 13, fontWeight: 700, color, opacity: muted ? 0.85 : 1 }}>{v}</span>
     </td>
   );

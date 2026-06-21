@@ -1,6 +1,7 @@
 'use server';
 
 import bcrypt from 'bcryptjs';
+import { revalidatePath } from 'next/cache';
 import { supabaseAdmin } from '@/lib/supabase-admin';
 import { requirePengajar } from '@/lib/session';
 import { getSessionWa } from '@/lib/program-kelas';
@@ -11,6 +12,50 @@ import { logAudit } from '@/lib/audit';
 const BCRYPT_COST = 12;
 
 type Res = { error?: string; ok?: boolean; waUrl?: string };
+
+/** Pengajar mengirim alasan/klarifikasi atas tabayyun (kondisi kelas non-KBBS). */
+export async function submitAlasanTabayyun(_prev: Res | undefined, fd: FormData): Promise<Res> {
+  const session = await requirePengajar();
+  const wa = await getSessionWa();
+
+  const tabayyunId = String(fd.get('tabayyun_id') ?? '');
+  const alasan = String(fd.get('alasan_pengajar') ?? '').trim();
+  if (!tabayyunId) return { error: 'Tabayyun tidak ditemukan.' };
+  if (!alasan) return { error: 'Alasan wajib diisi.' };
+
+  // Pastikan tabayyun ini milik halaqah pengajar yang login.
+  const { data: tab } = await supabaseAdmin
+    .from('hits_tabayyun')
+    .select('id, status, halaqah_id, hits_halaqah:halaqah_id(pengajar_id, pengajar_wa)')
+    .eq('id', tabayyunId)
+    .maybeSingle();
+  if (!tab) return { error: 'Tabayyun tidak ditemukan.' };
+  const h = tab.hits_halaqah as unknown as { pengajar_id: string | null; pengajar_wa: string | null } | null;
+  const owned = h?.pengajar_id === session.pengajar_id || (!!wa && h?.pengajar_wa === wa);
+  if (!owned) return { error: 'Tabayyun ini bukan untuk halaqah Anda.' };
+  if (tab.status === 'decided') return { error: 'Tabayyun ini sudah diputuskan.' };
+
+  const { error } = await supabaseAdmin
+    .from('hits_tabayyun')
+    .update({
+      alasan_pengajar: alasan,
+      alasan_submitted_at: new Date().toISOString(),
+      status: 'awaiting_reason',
+    })
+    .eq('id', tabayyunId);
+  if (error) return { error: `Gagal menyimpan: ${error.message}` };
+
+  await logAudit({
+    actor: session,
+    action: 'hits.tabayyun.alasan',
+    targetTable: 'hits_tabayyun',
+    targetId: tabayyunId,
+    detail: { halaqah_id: tab.halaqah_id },
+  });
+
+  revalidatePath('/hits/pengajar');
+  return { ok: true };
+}
 
 export async function electKetua(_prev: Res | undefined, fd: FormData): Promise<Res> {
   const session = await requirePengajar();

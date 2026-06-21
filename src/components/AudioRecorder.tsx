@@ -11,7 +11,7 @@ type State =
   | { kind: 'idle' }
   | { kind: 'recording'; startedAt: number; base: number }
   | { kind: 'paused' }
-  | { kind: 'recorded'; blob: Blob; url: string; durationSec: number };
+  | { kind: 'recorded'; blob: Blob | null; url: string; durationSec: number };
 
 export function AudioRecorder({
   label,
@@ -19,12 +19,18 @@ export function AudioRecorder({
   disabled,
   submitted,
   initialRecording,
+  initialAudioUrl,
+  initialDurationSec,
 }: {
   label: string;
   onChange: (blob: Blob | null, durationSec: number | null) => void;
   disabled?: boolean;
   submitted?: boolean;
   initialRecording?: { blob: Blob; durationSec: number };
+  // Rekaman yang sudah tersimpan di server — dipulihkan untuk diputar.
+  // Tidak memicu onChange (sudah ada di server, jangan auto-submit ulang).
+  initialAudioUrl?: string;
+  initialDurationSec?: number;
 }) {
   const [state, setState] = useState<State>({ kind: 'idle' });
   const [mode, setMode] = useState<'rec' | 'upload'>('rec');
@@ -45,6 +51,9 @@ export function AudioRecorder({
       const url = URL.createObjectURL(initialRecording.blob);
       setState({ kind: 'recorded', blob: initialRecording.blob, url, durationSec: initialRecording.durationSec });
       onChange(initialRecording.blob, initialRecording.durationSec);
+    } else if (initialAudioUrl) {
+      // Sudah tersimpan di server — tampilkan untuk diputar, JANGAN panggil onChange.
+      setState({ kind: 'recorded', blob: null, url: initialAudioUrl, durationSec: initialDurationSec ?? 0 });
     }
     return () => {
       stopStream();
@@ -317,7 +326,7 @@ export function AudioRecorder({
             </span>
             <a
               href={state.url}
-              download={downloadName(label, state.blob.type)}
+              download={downloadName(label, state.blob?.type ?? 'audio/webm')}
               className="redo"
               style={{ textDecoration: 'none' }}
               title="Unduh rekaman ke perangkat"
@@ -338,7 +347,7 @@ export function AudioRecorder({
                 margin: '6px 0 0',
               }}
             >
-              ✓ Tersimpan di perangkat — aman walau koneksi putus, tinggal kirim ulang.
+              ✓ Rekaman tersimpan — otomatis terkirim ke server, aman walau ganti perangkat.
             </p>
           )}
         </div>

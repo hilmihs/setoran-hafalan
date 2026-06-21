@@ -9,8 +9,8 @@ export const maxDuration = 60;
 export async function GET(req: NextRequest) {
   const s = await getSession();
   const acc = s.accesses?.find(
-    (a) => a.role === 'koordinator_ketua_kelas'
-  ) ?? (s.session && s.session.role === 'koordinator_ketua_kelas'
+    (a) => a.role === 'koordinator'
+  ) ?? (s.session && s.session.role === 'koordinator'
     ? s.session
     : null);
   if (!acc) {

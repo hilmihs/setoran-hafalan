@@ -1,4 +1,4 @@
-import type { Metadata } from 'next';
+import type { Metadata, Viewport } from 'next';
 import { Plus_Jakarta_Sans, IBM_Plex_Mono } from 'next/font/google';
 import './globals.css';
 import { getActiveSession } from '@/lib/session';
@@ -69,6 +69,12 @@ const mono = IBM_Plex_Mono({
 export const metadata: Metadata = {
   title: 'Muhajir Project Tilawah',
   description: 'Platform setoran hafalan, kehadiran pengajar, dan monitoring observasi.',
+};
+
+// Mobile-first: device-width, zoom diizinkan (aksesibilitas).
+export const viewport: Viewport = {
+  width: 'device-width',
+  initialScale: 1,
 };
 
 export default async function RootLayout({

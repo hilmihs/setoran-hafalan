@@ -49,6 +49,7 @@ export function PesertaSetoranForm({
   cacheKey,
   periodWeekStart,
   submittedJenis,
+  restored,
 }: {
   musyrifName: string;
   musyrifInitials: string;
@@ -59,6 +60,8 @@ export function PesertaSetoranForm({
   cacheKey?: string;
   periodWeekStart?: string;
   submittedJenis?: JenisRekaman[];
+  // Rekaman yang sudah tersimpan di server → dipulihkan untuk diputar.
+  restored?: Partial<Record<JenisRekaman, { audioUrl: string; durationSec: number }>>;
 }) {
   const [recordings, setRecordings] = useState<Recordings>(EMPTY);
   const [initialRecordings, setInitialRecordings] = useState<Partial<Recordings>>({});
@@ -96,11 +99,29 @@ export function PesertaSetoranForm({
       if (blob && durationSec) saveRecording(cacheKey, jenis, blob, durationSec);
       else deleteRecording(cacheKey, jenis);
     }
+    // Rekam ulang (blob null) → reset status agar bisa dikirim lagi.
+    if (!blob) {
+      setPerJenisState((p) => (p[jenis] === 'done' ? { ...p, [jenis]: 'idle' } : p));
+    }
+    // Auto-save ke server begitu rekaman selesai (single mode). Lewati bila jenis
+    // ini sudah tersimpan (restore dari server) atau sedang dikirim.
+    if (
+      singleSubmitEndpoint &&
+      blob &&
+      durationSec &&
+      perJenisState[jenis] !== 'done' &&
+      perJenisState[jenis] !== 'submitting'
+    ) {
+      void submitSingle(jenis, { blob, durationSec });
+    }
   }
 
-  async function submitSingle(jenis: JenisRekaman) {
+  async function submitSingle(
+    jenis: JenisRekaman,
+    recOverride?: { blob: Blob; durationSec: number }
+  ) {
     if (!singleSubmitEndpoint) return;
-    const rec = recordings[jenis];
+    const rec = recOverride ?? recordings[jenis];
     if (!rec) return;
     setPerJenisState((p) => ({ ...p, [jenis]: 'submitting' }));
     setPerJenisError((p) => ({ ...p, [jenis]: undefined }));
@@ -303,6 +324,8 @@ export function PesertaSetoranForm({
                 disabled={submitting || isSubmitting || isSubmitted}
                 submitted={isSubmitted}
                 initialRecording={initialRecordings[j] ?? undefined}
+                initialAudioUrl={restored?.[j]?.audioUrl}
+                initialDurationSec={restored?.[j]?.durationSec}
                 onChange={(blob, durationSec) => handleRecordingChange(j, blob, durationSec)}
               />
               {hasSingleMode && rec && !isSubmitted && (

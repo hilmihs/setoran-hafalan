@@ -74,7 +74,7 @@ export default async function PengajarDetailPage({
   params: { id: string };
   searchParams: { bulan?: string; gender?: string };
 }) {
-  const session = await requireOneOfRoles(['koordinator', 'koordinator_ketua_kelas']);
+  const session = await requireOneOfRoles(['koordinator']);
   const gender: Gender =
     searchParams.gender === 'ikhwan' || searchParams.gender === 'akhwat'
       ? searchParams.gender
@@ -98,9 +98,10 @@ export default async function PengajarDetailPage({
     : { data: null };
 
   const { data: kelasList } = await supabaseAdmin
-    .from('kelas_hits')
+    .from('hits_halaqah')
     .select('id')
-    .eq('pengajar_id', params.id);
+    .eq('pengajar_id', params.id)
+    .eq('active', true);
   const kelasIds = (kelasList ?? []).map((k) => k.id);
 
   const [
@@ -142,12 +143,12 @@ export default async function PengajarDetailPage({
       .limit(6),
     kelasIds.length
       ? supabaseAdmin
-          .from('observasi_kelas')
-          .select('id, kelas_hits_id, tanggal, kondisi, catatan')
-          .in('kelas_hits_id', kelasIds)
+          .from('hits_keterangan_harian')
+          .select('id, halaqah_id, tanggal, kondisi, catatan')
+          .in('halaqah_id', kelasIds)
           .order('tanggal', { ascending: false })
           .limit(20)
-      : Promise.resolve({ data: [] as Array<{ id: string; kelas_hits_id: string; tanggal: string; kondisi: string; catatan: string | null }> }),
+      : Promise.resolve({ data: [] as Array<{ id: string; halaqah_id: string; tanggal: string; kondisi: string; catatan: string | null }> }),
   ]);
 
   const totalTeguranKum = matrixHistory?.[0]?.total_teguran_kumulatif ?? teguranList?.length ?? 0;
@@ -192,7 +193,7 @@ export default async function PengajarDetailPage({
   const radarData = INDIKATOR.map((ind) => ({ indikator: ind.short, skor: skorOf(ind.key), standar: ind.standar }));
 
   // Notes: tampilkan peer notes + own private notes
-  const sessionAuthorId = session.role === 'koordinator' ? session.koordinator_id : session.koordinator_kk_id;
+  const sessionAuthorId = session.koordinator_id;
   const { data: notesRaw } = await supabaseAdmin
     .from('koordinator_notes')
     .select('id, author_role, author_id, body, visibility, created_at')
@@ -375,7 +376,7 @@ export default async function PengajarDetailPage({
           <h2 className="t-h2" style={{ marginBottom: 10 }}>Riwayat Matrix Bulanan</h2>
           {matrixHistory && matrixHistory.length > 0 ? (
             <div className="card-flat" style={{ padding: 0, overflowX: 'auto', marginBottom: 24 }}>
-              <table className="t-mono" style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13, minWidth: 640 }}>
+              <table className="t-mono tbl-cards" style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13, minWidth: 640 }}>
                 <thead>
                   <tr style={{ background: 'var(--surface-2)', textAlign: 'left' }}>
                     <th style={{ padding: '10px 12px', fontWeight: 600 }}>Bulan</th>
@@ -391,14 +392,14 @@ export default async function PengajarDetailPage({
                 <tbody>
                   {matrixHistory.map((m, i) => (
                     <tr key={m.year_month} style={{ borderTop: '1px solid var(--line)', background: i % 2 ? 'var(--surface)' : 'transparent' }}>
-                      <td style={{ padding: '10px 12px', fontWeight: 600 }}>{m.year_month}</td>
-                      <td style={{ padding: '10px 8px', textAlign: 'right', color: scoreColor(Number(m.rata_rata_hard_skill), 3) }}>{fmtNum(m.rata_rata_hard_skill)}</td>
-                      <td style={{ padding: '10px 8px', textAlign: 'right', color: scoreColor(Number(m.rata_rata_pedagogis), 4) }}>{fmtNum(m.rata_rata_pedagogis)}</td>
-                      <td style={{ padding: '10px 8px', textAlign: 'right', color: scoreColor(Number(m.rata_rata_soft_skill), 4) }}>{fmtNum(m.rata_rata_soft_skill)}</td>
-                      <td style={{ padding: '10px 8px', textAlign: 'right', fontWeight: 700, color: scoreColor(Number(m.rata_rata_keseluruhan), 3.5) }}>{fmtNum(m.rata_rata_keseluruhan)}</td>
-                      <td style={{ padding: '10px 8px', textAlign: 'right', color: 'var(--muted)' }}>{m.ranking ?? '—'}</td>
-                      <td style={{ padding: '10px 8px', textAlign: 'right' }}>{m.total_teguran_bulan} / {m.total_teguran_kumulatif}</td>
-                      <td style={{ padding: '10px 8px', textAlign: 'center' }}>
+                      <td className="tbl-cardhead" style={{ padding: '10px 12px', fontWeight: 600 }}>{m.year_month}</td>
+                      <td data-label="Hard" style={{ padding: '10px 8px', textAlign: 'right', color: scoreColor(Number(m.rata_rata_hard_skill), 3) }}>{fmtNum(m.rata_rata_hard_skill)}</td>
+                      <td data-label="Pedagogis" style={{ padding: '10px 8px', textAlign: 'right', color: scoreColor(Number(m.rata_rata_pedagogis), 4) }}>{fmtNum(m.rata_rata_pedagogis)}</td>
+                      <td data-label="Soft" style={{ padding: '10px 8px', textAlign: 'right', color: scoreColor(Number(m.rata_rata_soft_skill), 4) }}>{fmtNum(m.rata_rata_soft_skill)}</td>
+                      <td data-label="Rata²" style={{ padding: '10px 8px', textAlign: 'right', fontWeight: 700, color: scoreColor(Number(m.rata_rata_keseluruhan), 3.5) }}>{fmtNum(m.rata_rata_keseluruhan)}</td>
+                      <td data-label="Ranking" style={{ padding: '10px 8px', textAlign: 'right', color: 'var(--muted)' }}>{m.ranking ?? '—'}</td>
+                      <td data-label="Teguran" style={{ padding: '10px 8px', textAlign: 'right' }}>{m.total_teguran_bulan} / {m.total_teguran_kumulatif}</td>
+                      <td data-label="Status" style={{ padding: '10px 8px', textAlign: 'center' }}>
                         {m.finalized_at ? <span className="badge badge-hijau"><span className="dot" />Final</span> : <span className="badge badge-kuning"><span className="dot" />Draft</span>}
                       </td>
                     </tr>
@@ -416,7 +417,7 @@ export default async function PengajarDetailPage({
           <h2 className="t-h2" style={{ marginBottom: 10 }}>Penilaian Masyaikh — Bacaan &amp; Hafalan</h2>
           {penilaianMasyaikh && penilaianMasyaikh.length > 0 ? (
             <div className="card-flat" style={{ padding: 0, overflowX: 'auto', marginBottom: 24 }}>
-              <table className="t-mono" style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13, minWidth: 560 }}>
+              <table className="t-mono tbl-cards" style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13, minWidth: 560 }}>
                 <thead>
                   <tr style={{ background: 'var(--surface-2)', textAlign: 'left' }}>
                     <th style={{ padding: '10px 12px', fontWeight: 600 }}>Bulan</th>
@@ -428,10 +429,10 @@ export default async function PengajarDetailPage({
                 <tbody>
                   {penilaianMasyaikh.map((p, i) => (
                     <tr key={p.year_month} style={{ borderTop: '1px solid var(--line)', background: i % 2 ? 'var(--surface)' : 'transparent' }}>
-                      <td style={{ padding: '10px 12px', fontWeight: 600 }}>{p.year_month}</td>
-                      <td style={{ padding: '10px 8px', textAlign: 'right', color: scoreColor(p.skor_bacaan, 3) }}>{p.skor_bacaan ?? '—'}</td>
-                      <td style={{ padding: '10px 8px', textAlign: 'right', color: scoreColor(p.skor_hafalan, 1) }}>{p.skor_hafalan ?? '—'}</td>
-                      <td style={{ padding: '10px 12px', color: 'var(--muted)' }}>{p.assessor_role}</td>
+                      <td className="tbl-cardhead" style={{ padding: '10px 12px', fontWeight: 600 }}>{p.year_month}</td>
+                      <td data-label="Bacaan (≥3)" style={{ padding: '10px 8px', textAlign: 'right', color: scoreColor(p.skor_bacaan, 3) }}>{p.skor_bacaan ?? '—'}</td>
+                      <td data-label="Hafalan (≥1)" style={{ padding: '10px 8px', textAlign: 'right', color: scoreColor(p.skor_hafalan, 1) }}>{p.skor_hafalan ?? '—'}</td>
+                      <td data-label="Assessor" style={{ padding: '10px 12px', color: 'var(--muted)' }}>{p.assessor_role}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -447,7 +448,7 @@ export default async function PengajarDetailPage({
           <h2 className="t-h2" style={{ marginBottom: 10 }}>Penilaian Pedagogis (≥4)</h2>
           {penilaianPedagogis && penilaianPedagogis.length > 0 ? (
             <div className="card-flat" style={{ padding: 0, overflowX: 'auto', marginBottom: 24 }}>
-              <table className="t-mono" style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13, minWidth: 640 }}>
+              <table className="t-mono tbl-cards" style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13, minWidth: 640 }}>
                 <thead>
                   <tr style={{ background: 'var(--surface-2)', textAlign: 'left' }}>
                     <th style={{ padding: '10px 12px', fontWeight: 600 }}>Bulan</th>
@@ -460,11 +461,11 @@ export default async function PengajarDetailPage({
                 <tbody>
                   {penilaianPedagogis.map((p, i) => (
                     <tr key={p.year_month} style={{ borderTop: '1px solid var(--line)', background: i % 2 ? 'var(--surface)' : 'transparent' }}>
-                      <td style={{ padding: '10px 12px', fontWeight: 600 }}>{p.year_month}</td>
-                      <td style={{ padding: '10px 8px', textAlign: 'right', color: scoreColor(p.skor_metode_pengajaran, 4) }}>{p.skor_metode_pengajaran ?? '—'}</td>
-                      <td style={{ padding: '10px 8px', textAlign: 'right', color: scoreColor(p.skor_kepatuhan_silabus, 4) }}>{p.skor_kepatuhan_silabus ?? '—'}</td>
-                      <td style={{ padding: '10px 8px', textAlign: 'right', color: scoreColor(p.skor_manajemen_halaqah, 4) }}>{p.skor_manajemen_halaqah ?? '—'}</td>
-                      <td style={{ padding: '10px 8px', textAlign: 'right', color: scoreColor(p.skor_evaluasi_penguasaan, 4) }}>{p.skor_evaluasi_penguasaan ?? '—'}</td>
+                      <td className="tbl-cardhead" style={{ padding: '10px 12px', fontWeight: 600 }}>{p.year_month}</td>
+                      <td data-label="Metode" style={{ padding: '10px 8px', textAlign: 'right', color: scoreColor(p.skor_metode_pengajaran, 4) }}>{p.skor_metode_pengajaran ?? '—'}</td>
+                      <td data-label="Silabus" style={{ padding: '10px 8px', textAlign: 'right', color: scoreColor(p.skor_kepatuhan_silabus, 4) }}>{p.skor_kepatuhan_silabus ?? '—'}</td>
+                      <td data-label="Manajemen" style={{ padding: '10px 8px', textAlign: 'right', color: scoreColor(p.skor_manajemen_halaqah, 4) }}>{p.skor_manajemen_halaqah ?? '—'}</td>
+                      <td data-label="Evaluasi" style={{ padding: '10px 8px', textAlign: 'right', color: scoreColor(p.skor_evaluasi_penguasaan, 4) }}>{p.skor_evaluasi_penguasaan ?? '—'}</td>
                     </tr>
                   ))}
                 </tbody>

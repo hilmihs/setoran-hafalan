@@ -60,7 +60,7 @@ export async function submitKeteranganHarian(
   const finalStatus = !isLibur && latihanDiberikan && STATUS.includes(statusLatihan) ? statusLatihan : null;
   const semuaSelesai = !isLibur && latihanDiberikan ? semuaSelesaiRaw === 'true' : null;
 
-  const { error } = await supabaseAdmin
+  const { data: saved, error } = await supabaseAdmin
     .from('hits_keterangan_harian')
     .upsert(
       {
@@ -77,8 +77,39 @@ export async function submitKeteranganHarian(
         diisi_by_id: session.ketua_kelas_id,
       },
       { onConflict: 'halaqah_id,pertemuan_no' }
+    )
+    .select('id')
+    .single();
+  if (error || !saved) return { error: `Gagal menyimpan: ${error?.message ?? 'tidak diketahui'}` };
+
+  // Lifecycle tabayyun: kondisi non-KBBS/LIBUR memicu klarifikasi pengajar.
+  // KBBS/LIBUR (atau edit kembali ke baik) menghapus tabayyun pending.
+  const perluTabayyun = kondisi === 'KMT' || kondisi === 'JKG' || kondisi === 'KBLA';
+  if (perluTabayyun) {
+    const { data: halaqah } = await supabaseAdmin
+      .from('hits_halaqah')
+      .select('pengajar_id')
+      .eq('id', halaqahId)
+      .maybeSingle();
+    // Insert hanya bila belum ada (unique keterangan_id). Pakai upsert ignore.
+    await supabaseAdmin.from('hits_tabayyun').upsert(
+      {
+        keterangan_id: saved.id,
+        halaqah_id: halaqahId,
+        pengajar_id: halaqah?.pengajar_id ?? null,
+        kondisi,
+        status: 'pending',
+      },
+      { onConflict: 'keterangan_id', ignoreDuplicates: true }
     );
-  if (error) return { error: `Gagal menyimpan: ${error.message}` };
+  } else {
+    // kondisi KBBS / LIBUR → batalkan tabayyun yang masih pending utk keterangan ini.
+    await supabaseAdmin
+      .from('hits_tabayyun')
+      .delete()
+      .eq('keterangan_id', saved.id)
+      .eq('status', 'pending');
+  }
 
   await logAudit({
     actor: session,

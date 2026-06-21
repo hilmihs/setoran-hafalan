@@ -39,7 +39,6 @@ export async function GET(req: NextRequest) {
     .update({ last_login_at: new Date().toISOString() })
     .eq('id', ketua.id);
 
-  // HITS soft-skill ketua kelas -> dashboard HITS; observasi lama -> /observasi
-  const landing = ketua.hits_halaqah_id ? '/hits/ketua' : '/observasi/ketua-kelas';
-  return NextResponse.redirect(new URL(landing, req.url));
+  // Semua ketua kelas kini diarahkan ke dashboard HITS (observasi lama di-retire).
+  return NextResponse.redirect(new URL('/hits/ketua', req.url));
 }

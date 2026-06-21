@@ -1,7 +1,7 @@
 import { requireKoordinatorKetuaKelas } from '@/lib/session';
 import { supabaseAdmin } from '@/lib/supabase-admin';
+import { getHitsHarian } from '@/lib/hits-harian';
 import { LogoutButton } from '@/components/LogoutButton';
-import { Icon } from '@/components/icons';
 import { FeatureNav } from '@/components/FeatureNav';
 import { StatCard } from '@/components/ui/StatCard';
 import { SectionHeader } from '@/components/ui/SectionHeader';
@@ -9,7 +9,7 @@ import { MiniDistribution } from '@/components/ui/MiniDistribution';
 import { TabayyunCard } from './TabayyunCard';
 import { ReminderButton } from './ReminderButton';
 import { ObservasiFilterBar } from './ObservasiFilterBar';
-import type { KondisiKelas } from '@/types/db';
+import type { HitsKondisi } from '@/types/db';
 
 export const dynamic = 'force-dynamic';
 
@@ -28,186 +28,112 @@ export default async function KoordinatorKetuaKelasPage({
   const today = jakartaToday();
 
   const q = (searchParams.q ?? '').trim().toLowerCase();
-  const hariFilter = searchParams.hari ?? null;
   const statusObs = searchParams.statusObs ?? null;
   const statusTab = searchParams.statusTab ?? null;
 
-  const { data: allKelas } = await supabaseAdmin
-    .from('kelas_hits')
-    .select('id, name, gender, pengajar_id, jadwal_hari')
-    .eq('gender', session.gender)
-    .order('name');
+  const { rows: harianRows, kaldikMissing } = await getHitsHarian(today, session.gender);
 
-  const filteredKelas = (allKelas ?? []).filter((k) => {
-    if (hariFilter && k.jadwal_hari) {
-      const days = (k.jadwal_hari as string).split(',').map((d: string) => d.trim());
-      if (!days.includes(hariFilter)) return false;
-    }
-    return true;
-  });
+  const matchesSearch = (kelasName: string, pengajarName: string | null) =>
+    !q || kelasName.toLowerCase().includes(q) || (pengajarName ?? '').toLowerCase().includes(q);
 
-  const kelasIds = filteredKelas.map((k) => k.id);
-  const pengajarIds = [...new Set(filteredKelas.map((k) => k.pengajar_id))];
+  const inScope = harianRows.filter((r) => matchesSearch(r.halaqah_name, r.pengajar_name));
 
-  const tabayyunStatuses = statusTab === 'decided'
-    ? ['decided']
-    : statusTab === 'pending'
-      ? ['pending', 'awaiting_reason']
-      : ['pending', 'awaiting_reason', 'decided'];
+  const totalKelas = harianRows.length;
+  const filled = harianRows.filter((r) => r.keterangan);
+  const filledCount = filled.length;
 
-  const [
-    { data: allKetuaKelas },
-    { data: todayObservasi },
-    { data: todayCheckins },
-    { data: rawTabayyun },
-    { data: pengajarList },
-  ] = await Promise.all([
-    supabaseAdmin
-      .from('ketua_kelas')
-      .select('id, name, kelas_hits_id, whatsapp_number')
-      .in('kelas_hits_id', kelasIds.length > 0 ? kelasIds : ['__none__'])
-      .eq('active', true),
-    supabaseAdmin
-      .from('observasi_kelas')
-      .select('id, kelas_hits_id, kondisi, tanggal')
-      .eq('tanggal', today)
-      .in('kelas_hits_id', kelasIds.length > 0 ? kelasIds : ['__none__']),
-    supabaseAdmin
-      .from('checkin_pengajar')
-      .select('id, pengajar_id, kelas_hits_id, status')
-      .eq('tanggal', today)
-      .in('kelas_hits_id', kelasIds.length > 0 ? kelasIds : ['__none__'])
-      .is('invalidated_at', null),
-    supabaseAdmin
-      .from('tabayyun')
-      .select(`
-        id, observasi_id, pengajar_id, alasan_pengajar,
-        status, deadline_at,
-        observasi_kelas!inner(tanggal, kondisi, kelas_hits_id)
-      `)
-      .in('status', tabayyunStatuses)
-      .order('created_at', { ascending: false }),
-    supabaseAdmin
-      .from('pengajar')
-      .select('id, name, whatsapp_number')
-      .in('id', pengajarIds.length > 0 ? pengajarIds : ['__none__']),
-  ]);
+  // Distribusi kondisi hari ini
+  const kondisiKbbs = filled.filter((r) => r.keterangan!.kondisi === 'KBBS').length;
+  const kondisiLibur = filled.filter((r) => r.keterangan!.kondisi === 'LIBUR').length;
+  const kondisiCatatan = filledCount - kondisiKbbs - kondisiLibur;
 
-  // Tabayyun analytics: monthly aggregate (semua tabayyun yg observasi-nya di kelas gender koordinator bulan ini)
+  const terlambatRows = inScope.filter((r) => r.keterangan?.terlambat);
+
+  const unfilled = inScope.filter((r) => !r.keterangan);
+  const filledInScope = inScope.filter((r) => r.keterangan);
+
+  // ── Tabayyun (sumber hits_tabayyun) ──
+  const tabayyunStatuses =
+    statusTab === 'decided' ? ['decided'] : statusTab === 'pending' ? ['pending', 'awaiting_reason'] : ['pending', 'awaiting_reason', 'decided'];
+
+  const { data: tabRaw } = await supabaseAdmin
+    .from('hits_tabayyun')
+    .select(
+      `id, kondisi, status, alasan_pengajar, deadline_at, pengajar_id,
+       pengajar:pengajar_id(name),
+       halaqah:halaqah_id(name, gender),
+       keterangan:keterangan_id(tanggal)`
+    )
+    .in('status', tabayyunStatuses)
+    .order('created_at', { ascending: false });
+
+  type TabRow = {
+    id: string;
+    kondisi: HitsKondisi;
+    status: string;
+    alasan_pengajar: string | null;
+    deadline_at: string;
+    pengajar_id: string | null;
+    pengajar: { name: string } | null;
+    halaqah: { name: string; gender: string } | null;
+    keterangan: { tanggal: string } | null;
+  };
+  const tabayyunItems = ((tabRaw ?? []) as unknown as TabRow[])
+    .filter((t) => t.halaqah?.gender === session.gender)
+    .map((t) => ({
+      id: t.id,
+      pengajar_id: t.pengajar_id ?? '',
+      pengajar_name: t.pengajar?.name ?? '?',
+      kelas_name: t.halaqah?.name ?? '?',
+      tanggal: t.keterangan?.tanggal ?? '—',
+      kondisi: t.kondisi,
+      alasan_pengajar: t.alasan_pengajar,
+      status: t.status,
+      deadline_at: t.deadline_at,
+    }))
+    .filter((t) => !q || t.pengajar_name.toLowerCase().includes(q) || t.kelas_name.toLowerCase().includes(q));
+
+  // ── Analitik tabayyun bulan ini ──
   const ymStart = today.slice(0, 7) + '-01';
-  const { data: monthlyTab } = kelasIds.length
-    ? await supabaseAdmin
-        .from('tabayyun')
-        .select(`id, status, is_udzur_syari, decided_at, created_at, observasi_kelas!inner(kelas_hits_id, tanggal)`)
-        .gte('created_at', ymStart)
-    : { data: [] as Array<{ id: string; status: string; is_udzur_syari: boolean | null; decided_at: string | null; created_at: string; observasi_kelas: { kelas_hits_id: string; tanggal: string } | { kelas_hits_id: string; tanggal: string }[] }> };
-
-  const tabAnalytics = (monthlyTab ?? []).filter((t) => {
-    const obs = Array.isArray(t.observasi_kelas) ? t.observasi_kelas[0] : t.observasi_kelas;
-    return obs && kelasIds.includes(obs.kelas_hits_id);
-  });
+  const { data: monthlyRaw } = await supabaseAdmin
+    .from('hits_tabayyun')
+    .select(`id, status, is_udzur_syari, decided_at, created_at, halaqah:halaqah_id(gender), koordinator_kk_id`)
+    .gte('created_at', ymStart);
+  type MonthRow = {
+    id: string;
+    status: string;
+    is_udzur_syari: boolean | null;
+    decided_at: string | null;
+    created_at: string;
+    halaqah: { gender: string } | null;
+    koordinator_kk_id: string | null;
+  };
+  const tabAnalytics = ((monthlyRaw ?? []) as unknown as MonthRow[]).filter((t) => t.halaqah?.gender === session.gender);
   const tabTotalBulan = tabAnalytics.length;
   const tabDecidedBulan = tabAnalytics.filter((t) => t.status === 'decided');
   const tabUdzurDiterima = tabDecidedBulan.filter((t) => t.is_udzur_syari === true).length;
-  const tabUdzurRate = tabDecidedBulan.length > 0
-    ? Math.round((tabUdzurDiterima / tabDecidedBulan.length) * 100)
-    : 0;
-  const tabAvgHours = tabDecidedBulan.length > 0
-    ? Math.round(
-        tabDecidedBulan.reduce((sum, t) => {
-          if (!t.decided_at) return sum;
-          return sum + (new Date(t.decided_at).getTime() - new Date(t.created_at).getTime()) / 3600_000;
-        }, 0) / tabDecidedBulan.length
-      )
-    : 0;
+  const tabUdzurRate = tabDecidedBulan.length > 0 ? Math.round((tabUdzurDiterima / tabDecidedBulan.length) * 100) : 0;
+  const tabAvgHours =
+    tabDecidedBulan.length > 0
+      ? Math.round(
+          tabDecidedBulan.reduce((sum, t) => {
+            if (!t.decided_at) return sum;
+            return sum + (new Date(t.decided_at).getTime() - new Date(t.created_at).getTime()) / 3600_000;
+          }, 0) / tabDecidedBulan.length
+        )
+      : 0;
 
-  // Peer view: aktivitas rekan koordinator_ketua_kelas bulan ini
+  // ── Peer view: rekan koordinator KK ──
   const { data: rekanKK } = await supabaseAdmin
     .from('koordinator_ketua_kelas')
     .select('id, name, last_login_at')
     .eq('gender', session.gender)
     .eq('active', true)
     .order('name');
-  const rekanKkIds = (rekanKK ?? []).map((r) => r.id);
   const tabDecisionsByRekan = new Map<string, number>();
-  if (rekanKkIds.length) {
-    const { data: tabDecisions } = await supabaseAdmin
-      .from('tabayyun')
-      .select('koordinator_kk_id, decided_at')
-      .eq('status', 'decided')
-      .in('koordinator_kk_id', rekanKkIds)
-      .gte('decided_at', ymStart);
-    for (const t of tabDecisions ?? []) {
-      if (t.koordinator_kk_id) {
-        tabDecisionsByRekan.set(t.koordinator_kk_id, (tabDecisionsByRekan.get(t.koordinator_kk_id) ?? 0) + 1);
-      }
-    }
+  for (const t of tabDecidedBulan) {
+    if (t.koordinator_kk_id) tabDecisionsByRekan.set(t.koordinator_kk_id, (tabDecisionsByRekan.get(t.koordinator_kk_id) ?? 0) + 1);
   }
-
-  const pengajarMap = new Map((pengajarList ?? []).map((p) => [p.id, p]));
-  const kelasMap = new Map(filteredKelas.map((k) => [k.id, k]));
-  const ketuaMap = new Map((allKetuaKelas ?? []).map((k) => [k.kelas_hits_id, k]));
-  const observasiSet = new Set((todayObservasi ?? []).map((o) => o.kelas_hits_id));
-  const checkinSet = new Set((todayCheckins ?? []).map((c) => c.kelas_hits_id));
-
-  function matchesSearch(kelasName: string, pengajarId: string): boolean {
-    if (!q) return true;
-    const pengajar = pengajarMap.get(pengajarId);
-    return (
-      kelasName.toLowerCase().includes(q) ||
-      (pengajar?.name ?? '').toLowerCase().includes(q)
-    );
-  }
-
-  const filledCount = (todayObservasi ?? []).filter((o) => kelasIds.includes(o.kelas_hits_id)).length;
-  const totalKelas = filteredKelas.length;
-
-  // Distribusi kondisi observasi hari ini (untuk MiniDistribution)
-  const obsInScope = (todayObservasi ?? []).filter((o) => kelasIds.includes(o.kelas_hits_id));
-  const kondisiKbbs = obsInScope.filter((o) => o.kondisi === 'KBBS').length;
-  const kondisiLibur = obsInScope.filter((o) => o.kondisi === 'LIBUR').length;
-  const kondisiCatatan = obsInScope.length - kondisiKbbs - kondisiLibur;
-
-  const unfilledKelas = filteredKelas
-    .filter((k) => !observasiSet.has(k.id))
-    .filter((k) => matchesSearch(k.name, k.pengajar_id));
-
-  const uncheckedKelas = filteredKelas
-    .filter((k) => !checkinSet.has(k.id))
-    .filter((k) => matchesSearch(k.name, k.pengajar_id));
-
-  const filledKelas = (todayObservasi ?? [])
-    .filter((o) => kelasMap.has(o.kelas_hits_id))
-    .filter((o) => {
-      const kelas = kelasMap.get(o.kelas_hits_id);
-      return kelas ? matchesSearch(kelas.name, kelas.pengajar_id) : false;
-    });
-
-  const tabayyunItems = (rawTabayyun ?? [])
-    .filter((t) => {
-      const obs = t.observasi_kelas as unknown as { kelas_hits_id: string; tanggal: string; kondisi: KondisiKelas };
-      return kelasIds.includes(obs.kelas_hits_id);
-    })
-    .map((t) => {
-      const obs = t.observasi_kelas as unknown as { kelas_hits_id: string; tanggal: string; kondisi: KondisiKelas };
-      const kelas = kelasMap.get(obs.kelas_hits_id);
-      const pengajar = pengajarMap.get(t.pengajar_id);
-      return {
-        id: t.id,
-        pengajar_id: t.pengajar_id,
-        pengajar_name: pengajar?.name ?? '?',
-        kelas_name: kelas?.name ?? '?',
-        tanggal: obs.tanggal,
-        kondisi: obs.kondisi,
-        alasan_pengajar: t.alasan_pengajar,
-        status: t.status,
-        deadline_at: t.deadline_at,
-      };
-    })
-    .filter((t) => {
-      if (!q) return true;
-      return t.pengajar_name.toLowerCase().includes(q) || t.kelas_name.toLowerCase().includes(q);
-    });
 
   const showFilled = !statusObs || statusObs === 'sudah';
   const showUnfilled = !statusObs || statusObs === 'belum';
@@ -226,74 +152,44 @@ export default async function KoordinatorKetuaKelasPage({
           <FeatureNav current="/observasi/koordinator" />
 
           <h1 className="t-h1" style={{ marginBottom: 4 }}>
-            Monitoring Observasi
+            Monitoring Observasi HITS
           </h1>
           <p className="t-small" style={{ color: 'var(--muted-2)', marginBottom: 12 }}>
             {session.name} — {session.gender === 'ikhwan' ? 'Ikhwan' : 'Akhwat'} — {today}
           </p>
 
+          {kaldikMissing && (
+            <div className="card-flat" style={{ padding: '12px 14px', marginBottom: 12, borderLeft: '3px solid var(--kuning)' }}>
+              <div className="t-small" style={{ color: 'var(--kuning-ink)' }}>
+                Kaldik belum diupload — pertemuan tidak bisa diturunkan, sehingga belum ada halaqah terjadwal hari ini. Upload kaldik per batch di{' '}
+                <a href="/hits/koordinator/validasi" style={{ color: 'var(--accent-2)', fontWeight: 600 }}>Validasi &amp; Sumber Data</a>.
+              </div>
+            </div>
+          )}
+
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 10, marginBottom: 16 }}>
-            <a
-              href="/matrix/koordinator"
-              className="card-flat"
-              style={{
-                display: 'block',
-                padding: '12px 16px',
-                textDecoration: 'none',
-                color: 'inherit',
-                borderLeft: '3px solid var(--accent)',
-              }}
-            >
-              <div style={{ fontWeight: 600, marginBottom: 2 }}>Matrix HITS</div>
-              <div className="t-small" style={{ color: 'var(--muted-2)' }}>
-                14 indikator + ranking
-              </div>
+            <a href="/hits/koordinator" className="card-flat" style={{ display: 'block', padding: '12px 16px', textDecoration: 'none', color: 'inherit', borderLeft: '3px solid var(--accent)' }}>
+              <div style={{ fontWeight: 600, marginBottom: 2 }}>Rekap Soft Skill HITS</div>
+              <div className="t-small" style={{ color: 'var(--muted-2)' }}>%KBBS &amp; %Latihan per halaqah</div>
             </a>
-            <a
-              href="/audit/koordinator_ketua_kelas"
-              className="card-flat"
-              style={{
-                display: 'block',
-                padding: '12px 16px',
-                textDecoration: 'none',
-                color: 'inherit',
-                borderLeft: '3px solid var(--ink-2)',
-              }}
-            >
+            <a href="/audit/koordinator_ketua_kelas" className="card-flat" style={{ display: 'block', padding: '12px 16px', textDecoration: 'none', color: 'inherit', borderLeft: '3px solid var(--ink-2)' }}>
               <div style={{ fontWeight: 600, marginBottom: 2 }}>Audit Trail</div>
-              <div className="t-small" style={{ color: 'var(--muted-2)' }}>
-                Aktivitas rekan koordinator KK
-              </div>
+              <div className="t-small" style={{ color: 'var(--muted-2)' }}>Aktivitas rekan koordinator KK</div>
             </a>
           </div>
 
-          <ObservasiFilterBar
-            current={{
-              q: searchParams.q ?? '',
-              hari: hariFilter,
-              statusObs,
-              statusTab,
-            }}
-          />
+          <ObservasiFilterBar current={{ q: searchParams.q ?? '', hari: searchParams.hari ?? null, statusObs, statusTab }} />
 
           {/* Stats hari ini */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 10, marginBottom: 12 }}>
-            <StatCard value={totalKelas} label="Total Halaqah" />
-            <StatCard
-              value={`${filledCount}/${totalKelas}`}
-              label="Observasi Hari Ini"
-              valueColor={filledCount === totalKelas ? 'var(--hijau-ink)' : 'var(--kuning-ink)'}
-            />
-            <StatCard
-              value={tabayyunItems.length}
-              label="Tabayyun Pending"
-              valueColor={tabayyunItems.length > 0 ? 'var(--merah-ink)' : undefined}
-            />
+            <StatCard value={totalKelas} label="Halaqah Hari Ini" />
+            <StatCard value={`${filledCount}/${totalKelas}`} label="Keterangan Terisi" valueColor={totalKelas > 0 && filledCount === totalKelas ? 'var(--hijau-ink)' : 'var(--kuning-ink)'} />
+            <StatCard value={tabayyunItems.filter((t) => t.status !== 'decided').length} label="Tabayyun Pending" valueColor={tabayyunItems.some((t) => t.status !== 'decided') ? 'var(--merah-ink)' : undefined} />
           </div>
 
-          {obsInScope.length > 0 && (
+          {filledCount > 0 && (
             <div className="card-flat" style={{ padding: 14, marginBottom: 12 }}>
-              <div className="t-tiny" style={{ marginBottom: 8 }}>Kondisi observasi hari ini</div>
+              <div className="t-tiny" style={{ marginBottom: 8 }}>Kondisi keterangan hari ini</div>
               <MiniDistribution
                 segments={[
                   { value: kondisiKbbs, color: 'var(--hijau)', label: 'KBBS' },
@@ -304,7 +200,7 @@ export default async function KoordinatorKetuaKelasPage({
             </div>
           )}
 
-          {/* Tabayyun analytics bulan ini */}
+          {/* Analitik Tabayyun */}
           <SectionHeader title="Analitik Tabayyun bulan ini" />
           <div className="matrix-stat-grid" style={{ marginBottom: 20 }}>
             <StatCard value={tabTotalBulan} label="Total" />
@@ -313,51 +209,47 @@ export default async function KoordinatorKetuaKelasPage({
             <StatCard value={`${tabAvgHours}j`} label="Avg waktu putusan" />
           </div>
 
-          {/* Peer view: rekan koordinator KK */}
+          {/* Peer view */}
           {(rekanKK ?? []).length > 1 && (
             <div style={{ marginBottom: 24 }}>
-              <h2 className="t-h2" style={{ marginBottom: 12 }}>
-                Aktivitas Rekan Koordinator KK — {today.slice(0, 7)}
-              </h2>
+              <h2 className="t-h2" style={{ marginBottom: 12 }}>Aktivitas Rekan Koordinator KK — {today.slice(0, 7)}</h2>
               <div className="card-flat" style={{ padding: 0, overflow: 'hidden' }}>
                 <div style={{ overflowX: 'auto' }}>
-                <table className="k-table">
-                  <thead>
-                    <tr>
-                      <th>Nama</th>
-                      <th style={{ textAlign: 'right' }}>Tabayyun Diputuskan</th>
-                      <th style={{ textAlign: 'right' }}>Login Terakhir</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {(rekanKK ?? []).map((r) => {
-                      const isMe = r.id === session.koordinator_kk_id;
-                      return (
-                        <tr key={r.id} style={{ background: isMe ? 'var(--accent-tint)' : 'transparent' }}>
-                          <td className="nm" style={{ fontWeight: isMe ? 700 : 500 }}>
-                            {r.name} {isMe && <span className="t-tiny" style={{ color: 'var(--accent-2)' }}>(saya)</span>}
-                          </td>
-                          <td className="t-mono" style={{ textAlign: 'right' }}>{tabDecisionsByRekan.get(r.id) ?? 0}</td>
-                          <td className="t-mono" style={{ textAlign: 'right', color: 'var(--muted)' }}>
-                            {r.last_login_at
-                              ? new Date(r.last_login_at).toLocaleDateString('id-ID', { day: 'numeric', month: 'short' })
-                              : '—'}
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
+                  <table className="k-table">
+                    <thead>
+                      <tr>
+                        <th>Nama</th>
+                        <th style={{ textAlign: 'right' }}>Tabayyun Diputuskan</th>
+                        <th style={{ textAlign: 'right' }}>Login Terakhir</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {(rekanKK ?? []).map((r) => {
+                        const isMe = r.id === session.koordinator_kk_id;
+                        return (
+                          <tr key={r.id} style={{ background: isMe ? 'var(--accent-tint)' : 'transparent' }}>
+                            <td className="nm" style={{ fontWeight: isMe ? 700 : 500 }}>
+                              {r.name} {isMe && <span className="t-tiny" style={{ color: 'var(--accent-2)' }}>(saya)</span>}
+                            </td>
+                            <td className="t-mono" style={{ textAlign: 'right' }}>{tabDecisionsByRekan.get(r.id) ?? 0}</td>
+                            <td className="t-mono" style={{ textAlign: 'right', color: 'var(--muted)' }}>
+                              {r.last_login_at ? new Date(r.last_login_at).toLocaleDateString('id-ID', { day: 'numeric', month: 'short' }) : '—'}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
                 </div>
               </div>
             </div>
           )}
 
-          {/* Tabayyun */}
+          {/* Tabayyun cards */}
           {tabayyunItems.length > 0 && (
             <div style={{ marginBottom: 24 }}>
               <h2 className="t-h2" style={{ marginBottom: 12 }}>
-                {statusTab === 'decided' ? 'Tabayyun Sudah Diputuskan' : 'Tabayyun Menunggu Keputusan'} ({tabayyunItems.length})
+                {statusTab === 'decided' ? 'Tabayyun Sudah Diputuskan' : 'Tabayyun'} ({tabayyunItems.length})
               </h2>
               {tabayyunItems.map((t) => (
                 <TabayyunCard key={t.id} tabayyun={t} />
@@ -365,107 +257,59 @@ export default async function KoordinatorKetuaKelasPage({
             </div>
           )}
 
-          {/* Unfilled observasi today */}
-          {showUnfilled && unfilledKelas.length > 0 && (
+          {/* Pengajar terlambat hari ini */}
+          {terlambatRows.length > 0 && (
             <div style={{ marginBottom: 24 }}>
-              <h2 className="t-h2" style={{ marginBottom: 12 }}>
-                Halaqah Belum Terisi Observasi ({unfilledKelas.length})
-              </h2>
-              {unfilledKelas.map((k) => {
-                const ketua = ketuaMap.get(k.id);
-                const pengajar = pengajarMap.get(k.pengajar_id);
-                return (
-                  <div
-                    key={k.id}
-                    className="card-flat"
-                    style={{
-                      padding: '10px 14px', marginBottom: 6,
-                      display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                    }}
-                  >
-                    <div>
-                      <div style={{ fontWeight: 600, fontSize: 14 }}>{k.name}</div>
-                      <div className="t-small" style={{ color: 'var(--muted-2)' }}>
-                        Pengajar: {pengajar?.name ?? '?'}
-                        {ketua ? ` · Ketua: ${ketua.name}` : ' · Tanpa ketua kelas'}
-                      </div>
-                    </div>
-                    {ketua && (
-                      <ReminderButton
-                        type="ketua_kelas"
-                        targetId={ketua.id}
-                        kelasName={k.name}
-                        label="Reminder Observasi"
-                      />
-                    )}
+              <h2 className="t-h2" style={{ marginBottom: 12 }}>Pengajar Terlambat Hari Ini ({terlambatRows.length})</h2>
+              {terlambatRows.map((r) => (
+                <div key={r.halaqah_id} className="card-flat" style={{ padding: '10px 14px', marginBottom: 6 }}>
+                  <div style={{ fontWeight: 600, fontSize: 14 }}>{r.halaqah_name}</div>
+                  <div className="t-small" style={{ color: 'var(--muted-2)' }}>
+                    Pengajar: {r.pengajar_name ?? '?'} · Pertemuan {r.pertemuan_no}
                   </div>
-                );
-              })}
+                </div>
+              ))}
             </div>
           )}
 
-          {/* Unchecked pengajar (no checkin today) */}
-          {showUnfilled && uncheckedKelas.length > 0 && (
+          {/* Belum diisi */}
+          {showUnfilled && unfilled.length > 0 && (
             <div style={{ marginBottom: 24 }}>
-              <h2 className="t-h2" style={{ marginBottom: 12 }}>
-                Pengajar Belum Check-in ({uncheckedKelas.length})
-              </h2>
-              {uncheckedKelas.map((k) => {
-                const pengajar = pengajarMap.get(k.pengajar_id);
-                return (
-                  <div
-                    key={k.id}
-                    className="card-flat"
-                    style={{
-                      padding: '10px 14px', marginBottom: 6,
-                      display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                    }}
-                  >
-                    <div>
-                      <div style={{ fontWeight: 600, fontSize: 14 }}>{k.name}</div>
-                      <div className="t-small" style={{ color: 'var(--muted-2)' }}>
-                        Pengajar: {pengajar?.name ?? '?'}
-                      </div>
+              <h2 className="t-h2" style={{ marginBottom: 12 }}>Halaqah Belum Terisi Keterangan ({unfilled.length})</h2>
+              {unfilled.map((r) => (
+                <div key={r.halaqah_id} className="card-flat" style={{ padding: '10px 14px', marginBottom: 6, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <div>
+                    <div style={{ fontWeight: 600, fontSize: 14 }}>{r.halaqah_name}</div>
+                    <div className="t-small" style={{ color: 'var(--muted-2)' }}>
+                      Pengajar: {r.pengajar_name ?? '?'} · Pertemuan {r.pertemuan_no}
+                      {r.ketua ? ` · Ketua: ${r.ketua.name}` : ' · Tanpa ketua kelas'}
                     </div>
-                    {pengajar && (
-                      <ReminderButton
-                        type="pengajar"
-                        targetId={pengajar.id}
-                        kelasName={k.name}
-                        label="Reminder Check-in"
-                      />
-                    )}
                   </div>
-                );
-              })}
+                  {r.ketua && <ReminderButton targetId={r.ketua.id} kelasName={r.halaqah_name} label="Reminder Keterangan" />}
+                </div>
+              ))}
             </div>
           )}
 
-          {/* Today's observasi results */}
-          {showFilled && filledKelas.length > 0 && (
+          {/* Sudah diisi */}
+          {showFilled && filledInScope.length > 0 && (
             <div style={{ marginBottom: 24 }}>
-              <h2 className="t-h2" style={{ marginBottom: 12 }}>
-                Observasi Sudah Terisi Hari Ini ({filledKelas.length})
-              </h2>
-              {filledKelas.map((o) => {
-                const kelas = kelasMap.get(o.kelas_hits_id);
+              <h2 className="t-h2" style={{ marginBottom: 12 }}>Keterangan Sudah Terisi Hari Ini ({filledInScope.length})</h2>
+              {filledInScope.map((r) => {
+                const k = r.keterangan!;
                 return (
-                  <div
-                    key={o.id}
-                    className="card-flat"
-                    style={{ padding: '10px 14px', marginBottom: 6 }}
-                  >
+                  <div key={r.halaqah_id} className="card-flat" style={{ padding: '10px 14px', marginBottom: 6 }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <div style={{ fontWeight: 600, fontSize: 14 }}>{kelas?.name ?? '?'}</div>
+                      <div style={{ fontWeight: 600, fontSize: 14 }}>{r.halaqah_name}</div>
                       <span
                         className="badge"
                         style={{
-                          background: o.kondisi === 'KBBS' ? 'var(--hijau-tint)' : o.kondisi === 'LIBUR' ? 'var(--surface-3)' : 'var(--kuning-tint)',
-                          borderColor: o.kondisi === 'KBBS' ? 'var(--hijau-line)' : o.kondisi === 'LIBUR' ? 'var(--line)' : 'var(--kuning-line)',
-                          color: o.kondisi === 'KBBS' ? 'var(--hijau-ink)' : o.kondisi === 'LIBUR' ? 'var(--muted)' : 'var(--kuning-ink)',
+                          background: k.kondisi === 'KBBS' ? 'var(--hijau-tint)' : k.kondisi === 'LIBUR' ? 'var(--surface-3)' : 'var(--kuning-tint)',
+                          borderColor: k.kondisi === 'KBBS' ? 'var(--hijau-line)' : k.kondisi === 'LIBUR' ? 'var(--line)' : 'var(--kuning-line)',
+                          color: k.kondisi === 'KBBS' ? 'var(--hijau-ink)' : k.kondisi === 'LIBUR' ? 'var(--muted)' : 'var(--kuning-ink)',
                         }}
                       >
-                        {o.kondisi}
+                        {k.kondisi}
                       </span>
                     </div>
                   </div>
@@ -475,10 +319,10 @@ export default async function KoordinatorKetuaKelasPage({
           )}
 
           {/* Empty state */}
-          {tabayyunItems.length === 0 && unfilledKelas.length === 0 && uncheckedKelas.length === 0 && filledKelas.length === 0 && (
+          {!kaldikMissing && tabayyunItems.length === 0 && unfilled.length === 0 && filledInScope.length === 0 && terlambatRows.length === 0 && (
             <div className="card-flat" style={{ padding: '24px 20px', textAlign: 'center' }}>
               <p className="t-body" style={{ color: 'var(--muted-2)' }}>
-                {q || hariFilter ? 'Tidak ada data yang cocok dengan filter.' : 'Tidak ada data hari ini.'}
+                {q ? 'Tidak ada data yang cocok dengan filter.' : 'Tidak ada halaqah terjadwal hari ini.'}
               </p>
             </div>
           )}
