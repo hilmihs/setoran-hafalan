@@ -7,7 +7,7 @@ import { StatCard } from '@/components/ui/StatCard';
 import { SectionHeader } from '@/components/ui/SectionHeader';
 import { MiniDistribution } from '@/components/ui/MiniDistribution';
 import { TabayyunCard } from './TabayyunCard';
-import { ReminderButton } from './ReminderButton';
+import { TunjukKetuaButton } from './TunjukKetuaButton';
 import { ReminderMassalPanel } from './ReminderMassalPanel';
 import { ObservasiFilterBar } from './ObservasiFilterBar';
 import { OBSERVASI_EFEKTIF } from '@/lib/hits-harian';
@@ -17,6 +17,11 @@ export const dynamic = 'force-dynamic';
 
 function jakartaToday(): string {
   return new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Jakarta' });
+}
+
+// "20:00:00" → "20:00"
+function jam(t: string): string {
+  return t.slice(0, 5);
 }
 
 type SP = { q?: string; hari?: string; statusObs?: string; statusTab?: string };
@@ -309,15 +314,23 @@ export default async function KoordinatorKetuaKelasPage({
             <div style={{ marginBottom: 24 }}>
               <h2 className="t-h2" style={{ marginBottom: 12 }}>Halaqah Belum Terisi Keterangan ({unfilled.length})</h2>
               {unfilled.map((r) => (
-                <div key={r.halaqah_id} className="card-flat" style={{ padding: '10px 14px', marginBottom: 6, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div key={r.halaqah_id} className="card-flat" style={{ padding: '10px 14px', marginBottom: 6, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
                   <div>
                     <div style={{ fontWeight: 600, fontSize: 14 }}>{r.halaqah_name}</div>
                     <div className="t-small" style={{ color: 'var(--muted-2)' }}>
                       Pengajar: {r.pengajar_name ?? '?'} · Pertemuan {r.pertemuan_no}
                       {r.ketua ? ` · Ketua: ${r.ketua.name}` : ' · Tanpa ketua kelas'}
                     </div>
+                    {(r.jadwal_hari.length > 0 || r.waktu_mulai) && (
+                      <div className="t-tiny" style={{ color: 'var(--muted)', marginTop: 2 }}>
+                        🕒 {r.jadwal_hari.join(', ')}
+                        {r.waktu_mulai ? ` · ${jam(r.waktu_mulai)}${r.waktu_selesai ? `–${jam(r.waktu_selesai)}` : ''} WIB` : ''}
+                      </div>
+                    )}
                   </div>
-                  {r.ketua && <ReminderButton targetId={r.ketua.id} kelasName={r.halaqah_name} label="Reminder Keterangan" />}
+                  {!r.ketua && r.pengajar_id && r.pengajar_wa && (
+                    <TunjukKetuaButton pengajarId={r.pengajar_id} kelasName={r.halaqah_name} />
+                  )}
                 </div>
               ))}
             </div>

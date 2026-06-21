@@ -24,6 +24,10 @@ export type HalaqahHariIni = {
   tanggal: string;
   pengajar_id: string | null;
   pengajar_name: string | null;
+  pengajar_wa: string | null;
+  jadwal_hari: string[];
+  waktu_mulai: string | null;
+  waktu_selesai: string | null;
   ketua: { id: string; name: string; whatsapp_number: string } | null;
   keterangan: {
     id: string;
@@ -44,7 +48,7 @@ export type HitsHarian = {
 export async function getHitsHarian(today: string, gender: Gender): Promise<HitsHarian> {
   const { data: halaqahRows } = await supabaseAdmin
     .from('hits_halaqah')
-    .select('id, batch_id, level, program, name, jadwal_hari, pengajar_id')
+    .select('id, batch_id, level, program, name, jadwal_hari, waktu_mulai, waktu_selesai, pengajar_id, pengajar_wa')
     .eq('active', true)
     .eq('gender', gender);
   const halaqah = halaqahRows ?? [];
@@ -111,8 +115,8 @@ export async function getHitsHarian(today: string, gender: Gender): Promise<Hits
       .in('hits_halaqah_id', schedIds)
       .eq('active', true),
     pengajarIds.length
-      ? supabaseAdmin.from('pengajar').select('id, name').in('id', pengajarIds)
-      : Promise.resolve({ data: [] as { id: string; name: string }[] }),
+      ? supabaseAdmin.from('pengajar').select('id, name, whatsapp_number').in('id', pengajarIds)
+      : Promise.resolve({ data: [] as { id: string; name: string; whatsapp_number: string }[] }),
   ]);
 
   type KetRow = {
@@ -126,17 +130,22 @@ export async function getHitsHarian(today: string, gender: Gender): Promise<Hits
   for (const k of ketuaRows ?? []) {
     if (k.hits_halaqah_id) ketuaByHalaqah.set(k.hits_halaqah_id, { id: k.id, name: k.name, whatsapp_number: k.whatsapp_number });
   }
-  const pengajarById = new Map((pengajarRows ?? []).map((p) => [p.id, p.name]));
+  const pengajarById = new Map((pengajarRows ?? []).map((p) => [p.id, { name: p.name, wa: p.whatsapp_number }]));
 
   const rows: HalaqahHariIni[] = scheduled.map(({ halaqah: h, pertemuan_no }) => {
     const ket = ketByHalaqah.get(h.id);
+    const peng = h.pengajar_id ? pengajarById.get(h.pengajar_id) : undefined;
     return {
       halaqah_id: h.id,
       halaqah_name: h.name,
       pertemuan_no,
       tanggal: today,
       pengajar_id: h.pengajar_id,
-      pengajar_name: h.pengajar_id ? pengajarById.get(h.pengajar_id) ?? null : null,
+      pengajar_name: peng?.name ?? null,
+      pengajar_wa: peng?.wa ?? h.pengajar_wa ?? null,
+      jadwal_hari: (h.jadwal_hari as string[]) ?? [],
+      waktu_mulai: h.waktu_mulai ?? null,
+      waktu_selesai: h.waktu_selesai ?? null,
       ketua: ketuaByHalaqah.get(h.id) ?? null,
       keterangan: ket
         ? {

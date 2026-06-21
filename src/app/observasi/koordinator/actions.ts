@@ -5,6 +5,7 @@ import { requireKoordinatorKetuaKelas } from '@/lib/session';
 import {
   buildWaMeUrl,
   tplReminderKetuaKelasObservasi,
+  tplReminderPengajarTunjukKetua,
   tplTabayyunToPengajar,
 } from '@/lib/whatsapp';
 import { absUrl } from '@/lib/url';
@@ -128,6 +129,39 @@ export async function reminderTabayyunPengajar(
     recipientWa: pengajar.whatsapp_number,
     templateKind: 'tabayyun_notify',
     targetTable: 'hits_keterangan_harian',
+  });
+
+  return { waUrl };
+}
+
+/** Reminder WA ke pengajar agar menunjuk ketua kelas (halaqah tanpa ketua). */
+export async function reminderTunjukKetua(
+  pengajarId: string,
+  kelasName: string
+): Promise<{ waUrl?: string; error?: string }> {
+  const session = await requireKoordinatorKetuaKelas();
+
+  const { data: pengajar } = await supabaseAdmin
+    .from('pengajar')
+    .select('name, whatsapp_number, gender')
+    .eq('id', pengajarId)
+    .maybeSingle();
+  if (!pengajar || !pengajar.whatsapp_number) return { error: 'Pengajar / WA tidak ditemukan.' };
+
+  const msg = tplReminderPengajarTunjukKetua({
+    pengajarName: pengajar.name,
+    pengajarGender: pengajar.gender,
+    kelasName,
+    url: absUrl('/hits/pengajar'),
+  });
+  const waUrl = buildWaMeUrl(pengajar.whatsapp_number, msg);
+
+  await logWaReminder({
+    sender: session,
+    recipientTable: 'pengajar',
+    recipientId: pengajarId,
+    recipientWa: pengajar.whatsapp_number,
+    templateKind: 'tunjuk_ketua',
   });
 
   return { waUrl };

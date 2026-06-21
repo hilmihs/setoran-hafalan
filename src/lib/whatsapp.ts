@@ -428,6 +428,25 @@ export function tplReminderKetuaKelasObservasi(args: {
   ].join('\n');
 }
 
+export function tplReminderPengajarTunjukKetua(args: {
+  pengajarName: string;
+  pengajarGender: Gender;
+  kelasName: string;
+  url: string;
+}): string {
+  const sapaan = salutation(args.pengajarGender);
+  return [
+    `Assalamu'alaikum ${sapaan} ${args.pengajarName},`,
+    ``,
+    `Pengingat — halaqah *${args.kelasName}* belum memiliki ketua kelas. Mohon segera tunjuk salah satu peserta sebagai ketua melalui tautan:`,
+    args.url,
+    ``,
+    `Ketua kelas bertugas mengisi keterangan pengajar & latihan tiap pertemuan.`,
+    ``,
+    `Jazakumullahu khairan.`,
+  ].join('\n');
+}
+
 export function tplMagicLinkKetuaKelas(args: {
   ketuaKelasName: string;
   ketuaKelasGender: Gender;
