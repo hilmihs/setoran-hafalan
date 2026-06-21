@@ -4,10 +4,11 @@ import Link from 'next/link';
 import { useFormState, useFormStatus } from 'react-dom';
 import { login } from '@/lib/auth';
 
-export function LoginForm() {
+export function LoginForm({ next }: { next?: string }) {
   const [state, formAction] = useFormState(login, undefined);
   return (
     <form action={formAction} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+      {next && <input type="hidden" name="next" value={next} />}
       <div>
         <label className="field-label" htmlFor="login_whatsapp_number">Nomor WhatsApp</label>
         <input

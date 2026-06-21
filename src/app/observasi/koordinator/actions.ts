@@ -10,6 +10,16 @@ import {
 import { absUrl } from '@/lib/url';
 import { logAudit } from '@/lib/audit';
 import { logWaReminder } from '@/lib/wa-log';
+import { getHitsHarian, OBSERVASI_EFEKTIF } from '@/lib/hits-harian';
+
+function jakartaToday(): string {
+  return new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Jakarta' });
+}
+
+/** URL isi keterangan untuk ketua: magic-link (auto-login) bila ada token. */
+function ketuaFillUrl(magicToken: string | null): string {
+  return magicToken ? absUrl(`/api/auth/magic-link?token=${magicToken}`) : absUrl('/hits/ketua');
+}
 
 /** Koordinator KK memutuskan tabayyun HITS (udzur syar'i atau tidak). */
 export async function decideTabayyun(
@@ -57,7 +67,7 @@ export async function reminderKetuaKelas(
 
   const { data: ketua } = await supabaseAdmin
     .from('ketua_kelas')
-    .select('name, whatsapp_number, gender')
+    .select('name, whatsapp_number, gender, magic_token')
     .eq('id', ketuaKelasId)
     .maybeSingle();
 
@@ -67,7 +77,7 @@ export async function reminderKetuaKelas(
     ketuaKelasName: ketua.name,
     ketuaKelasGender: ketua.gender,
     kelasName,
-    observasiUrl: absUrl('/hits/ketua'),
+    observasiUrl: ketuaFillUrl(ketua.magic_token),
   });
 
   const waUrl = buildWaMeUrl(ketua.whatsapp_number, msg);
@@ -121,4 +131,51 @@ export async function reminderTabayyunPengajar(
   });
 
   return { waUrl };
+}
+
+export type ReminderItem = { ketuaName: string; kelasName: string; waUrl: string };
+
+/**
+ * Reminder massal: semua ketua kelas yang halaqahnya ada pertemuan hari ini &
+ * keterangan belum diisi. Tiap item berisi link wa.me + magic-link auto-login
+ * ke form pengisian. Efektif mulai OBSERVASI_EFEKTIF (2026-06-22).
+ */
+export async function reminderMassalHariIni(): Promise<{ items?: ReminderItem[]; error?: string }> {
+  const session = await requireKoordinatorKetuaKelas();
+  const today = jakartaToday();
+  if (today < OBSERVASI_EFEKTIF) {
+    return { error: `Sistem observasi mulai efektif ${OBSERVASI_EFEKTIF}.` };
+  }
+
+  const { rows } = await getHitsHarian(today, session.gender);
+  const targets = rows.filter((r) => !r.keterangan && r.ketua);
+  if (targets.length === 0) return { items: [] };
+
+  const ketuaIds = targets.map((r) => r.ketua!.id);
+  const { data: ketuaRows } = await supabaseAdmin
+    .from('ketua_kelas')
+    .select('id, name, whatsapp_number, gender, magic_token')
+    .in('id', ketuaIds);
+  const ketuaById = new Map((ketuaRows ?? []).map((k) => [k.id, k]));
+
+  const items: ReminderItem[] = [];
+  for (const r of targets) {
+    const k = ketuaById.get(r.ketua!.id);
+    if (!k) continue;
+    const msg = tplReminderKetuaKelasObservasi({
+      ketuaKelasName: k.name,
+      ketuaKelasGender: k.gender,
+      kelasName: r.halaqah_name,
+      observasiUrl: ketuaFillUrl(k.magic_token),
+    });
+    items.push({ ketuaName: k.name, kelasName: r.halaqah_name, waUrl: buildWaMeUrl(k.whatsapp_number, msg) });
+    await logWaReminder({
+      sender: session,
+      recipientTable: 'ketua_kelas',
+      recipientId: k.id,
+      recipientWa: k.whatsapp_number,
+      templateKind: 'observasi_reminder',
+    });
+  }
+  return { items };
 }

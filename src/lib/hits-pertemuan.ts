@@ -4,6 +4,7 @@
 
 import { HARI_INDEX } from '@/lib/hits';
 import { dayNameOf } from '@/lib/maahir-presensi';
+import type { HitsLevel } from '@/types/db';
 
 export type KaldikHariLite = {
   tanggal: string;
@@ -15,6 +16,18 @@ export type DerivedPertemuan = {
   pertemuan_no: number;
   tanggal: string;
   pekan: number;
+  level?: HitsLevel; // diisi oleh deriveHalaqahProgram (multi-tahap)
+};
+
+// Tahap per program. Dasar 2 tahap (Nuroniyyah → Perbaikan), Lanjutan 1 tahap.
+export const PROGRAM_STAGES: Record<string, HitsLevel[]> = {
+  dasar: ['qoidah_nuroniyyah', 'perbaikan_bacaan'],
+  lanjutan: ['perbaikan_bacaan'],
+};
+
+export const HITS_LEVEL_SHORT: Record<HitsLevel, string> = {
+  qoidah_nuroniyyah: 'Nuroniyyah',
+  perbaikan_bacaan: 'Perbaikan',
 };
 
 /** jadwal_hari (nama) -> set index getUTCDay(). */
@@ -117,4 +130,33 @@ export function pertemuanByDate(derived: DerivedPertemuan[]): Map<string, number
 /** Label pertemuan ringkas, mis. "Pertemuan 3 · Rabu 17 Jun". */
 export function pertemuanLabel(d: DerivedPertemuan): string {
   return `Pertemuan ${d.pertemuan_no} · ${dayNameOf(d.tanggal)} ${d.tanggal}`;
+}
+
+/**
+ * Derivasi seluruh tahap sebuah halaqah (multi-tahap, override-aware).
+ * Untuk tiap tahap (level) di program halaqah, derive pertemuan dari kaldik
+ * level tsb lalu tag `level`. Hasil digabung & diurutkan menurut tanggal —
+ * timeline kontinu (pertemuan_no tetap reset per tahap).
+ */
+export function deriveHalaqahProgram(
+  program: string,
+  jadwalHari: string[],
+  kaldikByLevel: Map<HitsLevel, KaldikHariLite[]>,
+  overridesByLevel: Map<HitsLevel, PertemuanOverride[]>
+): DerivedPertemuan[] {
+  const stages = PROGRAM_STAGES[program] ?? PROGRAM_STAGES.dasar;
+  const out: DerivedPertemuan[] = [];
+  // Tahap sekuensial: tahap-N hanya tanggal setelah tahap sebelumnya berakhir
+  // (mencegah overlap bila kaldik perbaikan dimulai berbarengan dgn nuroniyyah).
+  let prevLast: string | null = null;
+  for (const level of stages) {
+    const kaldik = kaldikByLevel.get(level) ?? [];
+    if (kaldik.length === 0) continue;
+    let derived = deriveHalaqahPertemuanWithOverrides(jadwalHari, kaldik, overridesByLevel.get(level) ?? []);
+    if (prevLast) derived = derived.filter((d) => d.tanggal > prevLast!);
+    if (derived.length === 0) continue;
+    for (const d of derived) out.push({ ...d, level });
+    prevLast = derived.reduce((mx, d) => (d.tanggal > mx ? d.tanggal : mx), prevLast ?? '');
+  }
+  return out.sort((a, b) => (a.tanggal < b.tanggal ? -1 : a.tanggal > b.tanggal ? 1 : 0));
 }

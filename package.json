@@ -22,7 +22,10 @@
     "seed-matrix-mei": "tsx --env-file=.env.local scripts/seed-matrix-mei2026.ts",
     "import-hits-docs": "tsx --env-file=.env.local scripts/import-hits-docs.ts",
     "link-hits-pengajar-wa": "tsx --env-file=.env.local scripts/link-hits-pengajar-wa.ts",
-    "cleanup-legacy-observasi": "tsx --env-file=.env.local scripts/cleanup-legacy-observasi.ts"
+    "cleanup-legacy-observasi": "tsx --env-file=.env.local scripts/cleanup-legacy-observasi.ts",
+    "import-hits-kaldik": "tsx --env-file=.env.local scripts/import-hits-kaldik.ts",
+    "import-hits-observasi": "tsx --env-file=.env.local scripts/import-hits-observasi.ts",
+    "seed-hits-demo-flow": "tsx --env-file=.env.local scripts/seed-hits-demo-flow.ts"
   },
   "dependencies": {
     "@supabase/ssr": "^0.5.0",

@@ -42,6 +42,13 @@ const MAP: Record<Gender, { name: string; wa: string }[]> = {
     { name: 'Zalfa Ayu Adillah', wa: '6281237110700' },
     { name: 'Nur Latifah Anshoriah', wa: '628811644171' },
     { name: 'Rinny Chandrawatty', wa: '628118000683' },
+    // Safar/Khusus Januari
+    { name: 'Aisyah Muhammad', wa: '6281374520890' },
+    { name: 'Fathia Alya Nisrina', wa: '6281281192703' },
+    { name: 'Juliani Kasim', wa: '6285827856925' },
+    { name: 'Nur Fidha Alifah', wa: '6285710711676' },
+    { name: 'Salma Khoiriyyah', wa: '6281904434357' },
+    { name: 'Zulfah Masitoh', wa: '6283103727282' },
   ],
   ikhwan: [
     { name: 'Abdullah Mubarak Al Habsy', wa: '6285718965202' },
@@ -49,6 +56,10 @@ const MAP: Record<Gender, { name: string; wa: string }[]> = {
     { name: 'Muhammad Habibie', wa: '6289506847572' },
     { name: 'Muhammad Abdul Razaq', wa: '6281282873891' },
     { name: 'Muhammad Afif Hamude', wa: '6282245934001' },
+    // Safar/Khusus Januari
+    { name: 'Dimas Raka Listiyo Pambudi', wa: '62895375366456' },
+    { name: 'Izha Richardinata', wa: '6285934517467' },
+    { name: 'Andi', wa: '6281938591581' }, // Andi Razif
   ],
 };
 
@@ -66,7 +77,7 @@ async function main() {
   // halaqah yang masih null pengajar di 3 batch
   const { data: batches, error: bErr } = await supabaseAdmin
     .from('hits_batch').select('id')
-    .in('slug', ['hits-online-januari-2026', 'hits-online-april-2026', 'hits-online-juni-2026']);
+    .in('slug', ['hits-online-januari-2026', 'hits-online-april-2026', 'hits-online-juni-2026', 'hits-safar-januari-2026', 'hits-reguler-januari-khusus-2026']);
   if (bErr) throw bErr;
   const batchIds = (batches ?? []).map((b) => b.id);
 

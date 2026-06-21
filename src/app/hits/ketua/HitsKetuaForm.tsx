@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef, useTransition } from 'react';
 import { submitKeteranganHarian } from './actions';
 import { HITS_KONDISI_LABEL, HITS_STATUS_LATIHAN_LABEL } from '@/types/db';
-import type { HitsKondisi, HitsStatusLatihan } from '@/types/db';
+import type { HitsKondisi, HitsStatusLatihan, HitsLevel } from '@/types/db';
 
 export type SlotKeterangan = {
   kondisi: HitsKondisi;
@@ -17,11 +17,15 @@ export type SlotKeterangan = {
 
 export type PertemuanSlot = {
   pertemuanNo: number;
+  level: HitsLevel;
+  levelLabel: string;
   tanggal: string;
   hari: string;
   isToday: boolean;
   keterangan: SlotKeterangan | null;
 };
+
+const slotKey = (s: { level: HitsLevel; pertemuanNo: number }) => `${s.level}-${s.pertemuanNo}`;
 
 interface Props {
   halaqahName: string;
@@ -32,7 +36,7 @@ interface Props {
 
 export function HitsKetuaForm({ halaqahName, pengajarName, slots: initialSlots, todayUnfilled }: Props) {
   const [slots, setSlots] = useState(initialSlots);
-  const [editingNo, setEditingNo] = useState<number | null>(null);
+  const [editingKey, setEditingKey] = useState<string | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
   const dialogRef = useRef<HTMLDialogElement>(null);
 
@@ -40,7 +44,7 @@ export function HitsKetuaForm({ halaqahName, pengajarName, slots: initialSlots, 
   const [success, setSuccess] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
-  const editing = slots.find((s) => s.pertemuanNo === editingNo) ?? null;
+  const editing = slots.find((s) => slotKey(s) === editingKey) ?? null;
 
   const [kondisi, setKondisi] = useState<HitsKondisi>('KBBS');
   const [terlambat, setTerlambat] = useState(false);
@@ -73,7 +77,7 @@ export function HitsKetuaForm({ halaqahName, pengajarName, slots: initialSlots, 
     setStatusLatihan(k?.status_latihan ?? 'SML');
     setSemuaSelesai(k?.semua_selesai ?? true);
     setCatatan(k?.catatan ?? '');
-    setEditingNo(slot.pertemuanNo);
+    setEditingKey(slotKey(slot));
     setError(null);
     setSuccess(null);
   }
@@ -103,7 +107,7 @@ export function HitsKetuaForm({ halaqahName, pengajarName, slots: initialSlots, 
           editable: true,
         };
         setSlots((prev) =>
-          prev.map((s) => (s.pertemuanNo === editing.pertemuanNo ? { ...s, keterangan: updated } : s))
+          prev.map((s) => (slotKey(s) === slotKey(editing) ? { ...s, keterangan: updated } : s))
         );
         setSuccess('Keterangan berhasil disimpan.');
         setTimeout(() => setModalOpen(false), 1000);
@@ -124,6 +128,7 @@ export function HitsKetuaForm({ halaqahName, pengajarName, slots: initialSlots, 
 
       <form action={handleSubmit}>
         <input type="hidden" name="pertemuan_no" value={editing.pertemuanNo} />
+        <input type="hidden" name="level" value={editing.level} />
         <input type="hidden" name="tanggal" value={editing.tanggal} />
         <input type="hidden" name="terlambat" value={String(terlambat)} />
         <input type="hidden" name="latihan_diberikan" value={String(latihanDiberikan)} />
@@ -312,8 +317,11 @@ export function HitsKetuaForm({ halaqahName, pengajarName, slots: initialSlots, 
               slots.map((s) => {
                 const k = s.keterangan;
                 return (
-                  <tr key={s.pertemuanNo} style={s.isToday ? { background: 'var(--accent-tint)' } : undefined}>
-                    <td className="nm">{s.pertemuanNo}{s.isToday ? ' (hari ini)' : ''}</td>
+                  <tr key={slotKey(s)} style={s.isToday ? { background: 'var(--accent-tint)' } : undefined}>
+                    <td className="nm">
+                      {s.pertemuanNo}{s.isToday ? ' (hari ini)' : ''}
+                      <div className="t-tiny" style={{ color: 'var(--muted-2)' }}>{s.levelLabel}</div>
+                    </td>
                     <td className="t-small">{s.hari} {s.tanggal}</td>
                     <td>
                       {k ? (

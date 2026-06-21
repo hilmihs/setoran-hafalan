@@ -7,14 +7,15 @@ import { StatCard } from '@/components/ui/StatCard';
 import { loadHalaqahPertemuan } from '@/lib/hits-ketua';
 import { getHitsRekapForHalaqah } from '@/lib/hits-rekap';
 import { todayJakarta, dayNameOf } from '@/lib/maahir-presensi';
+import { HITS_LEVEL_SHORT } from '@/lib/hits-pertemuan';
 import { HitsKetuaForm, type PertemuanSlot } from './HitsKetuaForm';
-import type { HitsKeteranganHarian } from '@/types/db';
+import type { HitsKeteranganHarian, HitsLevel } from '@/types/db';
 
 export const dynamic = 'force-dynamic';
 
 export default async function HitsKetuaPage() {
   const session = await requireKetuaKelas();
-  if (!session.hits_halaqah_id) redirect('/observasi/ketua-kelas');
+  if (!session.hits_halaqah_id) redirect('/');
 
   const loaded = await loadHalaqahPertemuan(session.hits_halaqah_id);
   if (!loaded) {
@@ -35,18 +36,21 @@ export default async function HitsKetuaPage() {
     .from('hits_keterangan_harian')
     .select('*')
     .eq('halaqah_id', halaqah.id);
-  const ketByNo = new Map<number, HitsKeteranganHarian>(
-    (ketRows ?? []).map((r) => [r.pertemuan_no, r as HitsKeteranganHarian])
+  const ketByKey = new Map<string, HitsKeteranganHarian>(
+    (ketRows ?? []).map((r) => [`${r.level}-${r.pertemuan_no}`, r as HitsKeteranganHarian])
   );
 
   // Slot pertemuan s/d hari ini (paling baru di atas).
   const slots: PertemuanSlot[] = derived
     .filter((d) => d.tanggal <= today)
-    .sort((a, b) => b.pertemuan_no - a.pertemuan_no)
+    .sort((a, b) => (a.tanggal < b.tanggal ? 1 : a.tanggal > b.tanggal ? -1 : 0))
     .map((d) => {
-      const k = ketByNo.get(d.pertemuan_no) ?? null;
+      const lv = d.level as HitsLevel;
+      const k = ketByKey.get(`${lv}-${d.pertemuan_no}`) ?? null;
       return {
         pertemuanNo: d.pertemuan_no,
+        level: lv,
+        levelLabel: HITS_LEVEL_SHORT[lv],
         tanggal: d.tanggal,
         hari: dayNameOf(d.tanggal),
         isToday: d.tanggal === today,

@@ -2,7 +2,7 @@
 // per halaqah dalam satu bulan + ekspektasi pertemuan dari kaldik.
 
 import { supabaseAdmin } from '@/lib/supabase-admin';
-import { deriveHalaqahPertemuanWithOverrides, type PertemuanOverride } from '@/lib/hits-pertemuan';
+import { deriveHalaqahProgram, PROGRAM_STAGES, type KaldikHariLite, type PertemuanOverride } from '@/lib/hits-pertemuan';
 import { todayJakarta } from '@/lib/maahir-presensi';
 import type { Gender, HitsKondisi, HitsLevel } from '@/types/db';
 
@@ -59,7 +59,7 @@ export async function getHitsRekap(
   let hq = supabaseAdmin
     .from('hits_halaqah')
     .select(
-      'id, batch_id, level, name, gender, jadwal_raw, jadwal_hari, pengajar_nama_sheet, pengajar_id'
+      'id, batch_id, level, program, name, gender, jadwal_raw, jadwal_hari, pengajar_nama_sheet, pengajar_id'
     )
     .eq('active', true);
   if (opts?.halaqahId) hq = hq.eq('id', opts.halaqahId);
@@ -93,7 +93,7 @@ export async function getHitsRekap(
         .eq('active', true),
       supabaseAdmin
         .from('hits_kaldik_pertemuan')
-        .select('halaqah_id, pertemuan_no, tanggal, pekan, is_skipped')
+        .select('halaqah_id, level, pertemuan_no, tanggal, pekan, is_skipped')
         .in('halaqah_id', halaqahIds),
       supabaseAdmin
         .from('hits_halaqah_peserta')
@@ -110,15 +110,16 @@ export async function getHitsRekap(
   const batchName = new Map((batchList ?? []).map((b) => [b.id, b.name]));
   const ketuaByHalaqah = new Map((ketuaList ?? []).map((k) => [k.halaqah_id, k.nama]));
 
-  const overridesByHalaqah = new Map<string, PertemuanOverride[]>();
+  const overridesByHL = new Map<string, PertemuanOverride[]>();
   for (const o of overrideList ?? []) {
-    const arr = overridesByHalaqah.get(o.halaqah_id) ?? [];
+    const key = `${o.halaqah_id}|${o.level}`;
+    const arr = overridesByHL.get(key) ?? [];
     arr.push({ pertemuan_no: o.pertemuan_no, tanggal: o.tanggal, pekan: o.pekan, is_skipped: o.is_skipped });
-    overridesByHalaqah.set(o.halaqah_id, arr);
+    overridesByHL.set(key, arr);
   }
 
   // kaldik per (batch|level)
-  const kaldikByBL = new Map<string, { tanggal: string; pekan: number | null; is_libur: boolean }[]>();
+  const kaldikByBL = new Map<string, KaldikHariLite[]>();
   for (const r of kaldikList ?? []) {
     const key = `${r.batch_id}|${r.level}`;
     const arr = kaldikByBL.get(key) ?? [];
@@ -152,17 +153,16 @@ export async function getHitsRekap(
       if (k.latihan_diberikan && (k.semua_selesai || k.status_latihan === 'SML')) latihanDone += 1;
     }
 
-    // Ekspektasi pertemuan s/d hari ini (dari kaldik + jadwal).
-    let expected = 0;
-    if (h.level) {
-      const kaldik = kaldikByBL.get(`${h.batch_id}|${h.level}`) ?? [];
-      const derived = deriveHalaqahPertemuanWithOverrides(
-        h.jadwal_hari ?? [],
-        kaldik,
-        overridesByHalaqah.get(h.id) ?? []
-      );
-      expected = derived.filter((d) => d.tanggal >= start && d.tanggal < nextMonth && d.tanggal <= today).length;
+    // Ekspektasi pertemuan s/d hari ini (lintas tahap, dari kaldik + jadwal).
+    const stages = PROGRAM_STAGES[h.program] ?? PROGRAM_STAGES.dasar;
+    const kaldikByLevel = new Map<HitsLevel, KaldikHariLite[]>();
+    const ovByLevel = new Map<HitsLevel, PertemuanOverride[]>();
+    for (const lv of stages) {
+      kaldikByLevel.set(lv, kaldikByBL.get(`${h.batch_id}|${lv}`) ?? []);
+      ovByLevel.set(lv, overridesByHL.get(`${h.id}|${lv}`) ?? []);
     }
+    const derived = deriveHalaqahProgram(h.program, h.jadwal_hari ?? [], kaldikByLevel, ovByLevel);
+    const expected = derived.filter((d) => d.tanggal >= start && d.tanggal < nextMonth && d.tanggal <= today).length;
     const terisi = kets.length;
 
     return {

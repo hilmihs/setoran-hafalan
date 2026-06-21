@@ -8,7 +8,9 @@ import { SectionHeader } from '@/components/ui/SectionHeader';
 import { MiniDistribution } from '@/components/ui/MiniDistribution';
 import { TabayyunCard } from './TabayyunCard';
 import { ReminderButton } from './ReminderButton';
+import { ReminderMassalPanel } from './ReminderMassalPanel';
 import { ObservasiFilterBar } from './ObservasiFilterBar';
+import { OBSERVASI_EFEKTIF } from '@/lib/hits-harian';
 import type { HitsKondisi } from '@/types/db';
 
 export const dynamic = 'force-dynamic';
@@ -154,9 +156,65 @@ export default async function KoordinatorKetuaKelasPage({
           <h1 className="t-h1" style={{ marginBottom: 4 }}>
             Monitoring Observasi HITS
           </h1>
-          <p className="t-small" style={{ color: 'var(--muted-2)', marginBottom: 12 }}>
+          <p className="t-small" style={{ color: 'var(--muted-2)', marginBottom: 14 }}>
             {session.name} — {session.gender === 'ikhwan' ? 'Ikhwan' : 'Akhwat'} — {today}
           </p>
+
+          {/* ── Hero: Status Hari Ini ── */}
+          {(() => {
+            const pct = totalKelas > 0 ? Math.round((filledCount / totalKelas) * 100) : 0;
+            const R = 34, C = 2 * Math.PI * R;
+            const ringInk = pct === 100 ? 'var(--hijau-ink)' : pct >= 50 ? 'var(--kuning-ink)' : 'var(--muted)';
+            const ringCol = pct === 100 ? 'var(--hijau)' : pct >= 50 ? 'var(--kuning)' : 'var(--muted-2)';
+            const pendingTab = tabayyunItems.filter((t) => t.status !== 'decided').length;
+            return (
+              <div
+                style={{
+                  borderRadius: 'var(--r-xl)', padding: '18px 20px', marginBottom: 18,
+                  background: 'linear-gradient(135deg, var(--accent-tint), var(--surface))',
+                  border: '1px solid var(--accent-line)', boxShadow: 'var(--shadow-raised)',
+                  display: 'flex', alignItems: 'center', gap: 20, flexWrap: 'wrap',
+                }}
+              >
+                <div style={{ position: 'relative', width: 84, height: 84, flexShrink: 0 }}>
+                  <svg width="84" height="84" viewBox="0 0 84 84">
+                    <circle cx="42" cy="42" r={R} fill="none" stroke="var(--line)" strokeWidth="8" />
+                    <circle
+                      cx="42" cy="42" r={R} fill="none" stroke={ringCol} strokeWidth="8" strokeLinecap="round"
+                      strokeDasharray={C} strokeDashoffset={C - (C * pct) / 100}
+                      transform="rotate(-90 42 42)"
+                    />
+                  </svg>
+                  <div style={{ position: 'absolute', inset: 0, display: 'grid', placeItems: 'center' }}>
+                    <div style={{ textAlign: 'center', lineHeight: 1 }}>
+                      <div style={{ fontSize: 20, fontWeight: 700, color: ringInk }}>{pct}%</div>
+                      <div className="t-tiny" style={{ color: 'var(--muted)' }}>terisi</div>
+                    </div>
+                  </div>
+                </div>
+                <div style={{ flex: 1, minWidth: 200 }}>
+                  <div style={{ fontWeight: 700, fontSize: 16, marginBottom: 2 }}>Status Pengisian Hari Ini</div>
+                  <div className="t-small" style={{ color: 'var(--muted-2)', marginBottom: 10 }}>
+                    {filledCount} dari {totalKelas} halaqah terjadwal sudah diisi keterangannya.
+                  </div>
+                  <div style={{ display: 'flex', gap: 18, flexWrap: 'wrap' }}>
+                    <div>
+                      <div style={{ fontSize: 18, fontWeight: 700 }}>{totalKelas}</div>
+                      <div className="t-tiny" style={{ color: 'var(--muted)' }}>Halaqah hari ini</div>
+                    </div>
+                    <div>
+                      <div style={{ fontSize: 18, fontWeight: 700, color: pendingTab > 0 ? 'var(--merah-ink)' : 'var(--ink)' }}>{pendingTab}</div>
+                      <div className="t-tiny" style={{ color: 'var(--muted)' }}>Tabayyun pending</div>
+                    </div>
+                    <div>
+                      <div style={{ fontSize: 18, fontWeight: 700, color: terlambatRows.length > 0 ? 'var(--kuning-ink)' : 'var(--ink)' }}>{terlambatRows.length}</div>
+                      <div className="t-tiny" style={{ color: 'var(--muted)' }}>Pengajar telat</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            );
+          })()}
 
           {kaldikMissing && (
             <div className="card-flat" style={{ padding: '12px 14px', marginBottom: 12, borderLeft: '3px solid var(--kuning)' }}>
@@ -180,12 +238,7 @@ export default async function KoordinatorKetuaKelasPage({
 
           <ObservasiFilterBar current={{ q: searchParams.q ?? '', hari: searchParams.hari ?? null, statusObs, statusTab }} />
 
-          {/* Stats hari ini */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 10, marginBottom: 12 }}>
-            <StatCard value={totalKelas} label="Halaqah Hari Ini" />
-            <StatCard value={`${filledCount}/${totalKelas}`} label="Keterangan Terisi" valueColor={totalKelas > 0 && filledCount === totalKelas ? 'var(--hijau-ink)' : 'var(--kuning-ink)'} />
-            <StatCard value={tabayyunItems.filter((t) => t.status !== 'decided').length} label="Tabayyun Pending" valueColor={tabayyunItems.some((t) => t.status !== 'decided') ? 'var(--merah-ink)' : undefined} />
-          </div>
+          <ReminderMassalPanel enabled={today >= OBSERVASI_EFEKTIF} efektif={OBSERVASI_EFEKTIF} />
 
           {filledCount > 0 && (
             <div className="card-flat" style={{ padding: 14, marginBottom: 12 }}>

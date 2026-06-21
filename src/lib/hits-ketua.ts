@@ -3,15 +3,19 @@
 
 import { supabaseAdmin } from '@/lib/supabase-admin';
 import {
-  deriveHalaqahPertemuanWithOverrides,
+  deriveHalaqahProgram,
+  PROGRAM_STAGES,
   type DerivedPertemuan,
+  type KaldikHariLite,
   type PertemuanOverride,
 } from '@/lib/hits-pertemuan';
+import type { HitsLevel } from '@/types/db';
 
 export type HalaqahLite = {
   id: string;
   batch_id: string;
   level: string | null;
+  program: string;
   name: string;
   jadwal_raw: string | null;
   jadwal_hari: string[];
@@ -29,36 +33,45 @@ export async function loadHalaqahPertemuan(
 ): Promise<HalaqahPertemuan | null> {
   const { data: halaqah } = await supabaseAdmin
     .from('hits_halaqah')
-    .select('id, batch_id, level, name, jadwal_raw, jadwal_hari, pengajar_nama_sheet')
+    .select('id, batch_id, level, program, name, jadwal_raw, jadwal_hari, pengajar_nama_sheet')
     .eq('id', halaqahId)
     .maybeSingle();
   if (!halaqah) return null;
 
-  let derived: DerivedPertemuan[] = [];
-  if (halaqah.level) {
-    const [{ data: kaldikList }, { data: overrideList }] = await Promise.all([
-      supabaseAdmin
-        .from('hits_kaldik_hari')
-        .select('tanggal, pekan, is_libur')
-        .eq('batch_id', halaqah.batch_id)
-        .eq('level', halaqah.level),
-      supabaseAdmin
-        .from('hits_kaldik_pertemuan')
-        .select('pertemuan_no, tanggal, pekan, is_skipped')
-        .eq('halaqah_id', halaqahId),
-    ]);
-    const overrides: PertemuanOverride[] = (overrideList ?? []).map((o) => ({
-      pertemuan_no: o.pertemuan_no,
-      tanggal: o.tanggal,
-      pekan: o.pekan,
-      is_skipped: o.is_skipped,
-    }));
-    derived = deriveHalaqahPertemuanWithOverrides(
-      halaqah.jadwal_hari ?? [],
-      (kaldikList ?? []).map((r) => ({ tanggal: r.tanggal, pekan: r.pekan, is_libur: r.is_libur })),
-      overrides
-    );
+  const stages = PROGRAM_STAGES[halaqah.program] ?? PROGRAM_STAGES.dasar;
+  const [{ data: kaldikList }, { data: overrideList }] = await Promise.all([
+    supabaseAdmin
+      .from('hits_kaldik_hari')
+      .select('level, tanggal, pekan, is_libur')
+      .eq('batch_id', halaqah.batch_id)
+      .in('level', stages),
+    supabaseAdmin
+      .from('hits_kaldik_pertemuan')
+      .select('level, pertemuan_no, tanggal, pekan, is_skipped')
+      .eq('halaqah_id', halaqahId),
+  ]);
+
+  const kaldikByLevel = new Map<HitsLevel, KaldikHariLite[]>();
+  for (const r of kaldikList ?? []) {
+    const lv = r.level as HitsLevel;
+    const arr = kaldikByLevel.get(lv) ?? [];
+    arr.push({ tanggal: r.tanggal, pekan: r.pekan, is_libur: r.is_libur });
+    kaldikByLevel.set(lv, arr);
   }
+  const overridesByLevel = new Map<HitsLevel, PertemuanOverride[]>();
+  for (const o of overrideList ?? []) {
+    const lv = o.level as HitsLevel;
+    const arr = overridesByLevel.get(lv) ?? [];
+    arr.push({ pertemuan_no: o.pertemuan_no, tanggal: o.tanggal, pekan: o.pekan, is_skipped: o.is_skipped });
+    overridesByLevel.set(lv, arr);
+  }
+
+  const derived: DerivedPertemuan[] = deriveHalaqahProgram(
+    halaqah.program,
+    halaqah.jadwal_hari ?? [],
+    kaldikByLevel,
+    overridesByLevel
+  );
 
   return { halaqah: halaqah as HalaqahLite, derived };
 }

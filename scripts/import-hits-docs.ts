@@ -38,6 +38,8 @@ const BATCHES = {
   jan: { name: 'HITS Online Januari 2026', start: '2026-01-01' },
   apr: { name: 'HITS Online April 2026', start: '2026-04-01' },
   jun: { name: 'HITS Online Juni 2026', start: '2026-06-01' },
+  safar: { name: 'HITS Safar Januari 2026', start: '2026-01-26' },
+  khusus: { name: 'HITS Reguler Januari Khusus 2026', start: '2026-01-26' },
 } as const;
 
 type BatchKey = keyof typeof BATCHES;
@@ -67,7 +69,16 @@ const SOURCES: Source[] = [
   { kind: 'pdf', file: 'DAFTAR PESERTA BARU HITS LANJUTAN JUNI 2026_18062026 - PENGAJAR IKHWAN.pdf', batch: 'jun', gender: 'ikhwan', level: 'perbaikan_bacaan' },
   { kind: 'pdf', file: 'DAFTAR PESERTA BARU HITS DASAR JUNI 2026_18062026 - PENGAJAR AKHWAT.pdf', batch: 'jun', gender: 'akhwat', level: 'qoidah_nuroniyyah' },
   { kind: 'pdf', file: 'DAFTAR PESERTA BARU HITS LANJUTAN JUNI 2026_18062026 - PENGAJAR AKHWAT.pdf', batch: 'jun', gender: 'akhwat', level: 'perbaikan_bacaan' },
+  { kind: 'xlsx', file: 'Presensi-Penilaian SAFAR 202602_Ikhwan_Dasar.xlsx', batch: 'safar', gender: 'ikhwan', level: 'qoidah_nuroniyyah' },
+  { kind: 'xlsx', file: 'Presensi-Penilaian SAFAR 202602_Akhwat_Dasar.xlsx', batch: 'safar', gender: 'akhwat', level: 'qoidah_nuroniyyah' },
+  { kind: 'xlsx', file: 'Presensi-Penilaian HITS_202601_Khusus_Ikhwan_QN.xlsx', batch: 'khusus', gender: 'ikhwan', level: 'qoidah_nuroniyyah' },
+  { kind: 'xlsx', file: 'Presensi-Penilaian HITS_202601_Khusus_Akhwat_QN.xlsx', batch: 'khusus', gender: 'akhwat', level: 'qoidah_nuroniyyah' },
 ];
+
+// Nama halaqah invalid (artefak spreadsheet).
+function isBadHalaqah(name: string): boolean {
+  return !name || name.startsWith('#') || /^(N\/A|REF!?)$/i.test(name);
+}
 
 // Tab xlsx yang bukan data peserta.
 const SKIP_TABS = new Set(
@@ -142,7 +153,7 @@ async function parseXlsx(src: XlsxSource): Promise<ParsedHalaqah[]> {
       const at = (k: string) => (ix[k] >= 0 && ix[k] < cells.length ? cells[ix[k]] : '');
       const mid = at('mid');
       const hal = at('hal');
-      if (!mid || mid === '#REF!' || !hal) continue;
+      if (!mid || mid === '#REF!' || !hal || isBadHalaqah(hal)) continue;
       into.push({ jk: at('jk'), hal, jadwal: at('jadwal'), guru: at('guru'), mid, nama: at('nama'), status: at('status') });
     }
   };
@@ -370,6 +381,7 @@ async function main() {
             waktu_selesai: jadwal.selesai,
             gender: src.gender,
             level: h.level,
+            program: h.level === 'perbaikan_bacaan' ? 'lanjutan' : 'dasar',
             pengajar_nama_sheet: h.pengajar_nama,
             pengajar_wa,
             pengajar_id,

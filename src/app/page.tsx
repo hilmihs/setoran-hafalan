@@ -10,11 +10,16 @@ import { getUnfilledMaahirDays } from '@/lib/maahir-presensi';
 
 export const dynamic = 'force-dynamic';
 
-export default async function HomePage() {
+export default async function HomePage({ searchParams }: { searchParams: { next?: string } }) {
   const s = await getSession();
   const accesses = await getAllAccesses();
+  const nextRaw = searchParams?.next ?? '';
+  const safeNext = nextRaw.startsWith('/') && !nextRaw.startsWith('//') ? nextRaw : null;
 
   if (accesses.length >= 1) {
+    // Sudah login tapi diarahkan dgn ?next= (mis. ganti akun) → ke tujuan.
+    if (safeNext) redirect(safeNext);
+
     // Ketua/wakil kelas Maahir wajib selesaikan presensi yang terluput dulu.
     const wa = await getSessionWa();
     const isKetuaMaahir = wa ? (await findKetuaProgramKelas(wa)).length > 0 : false;
@@ -122,7 +127,7 @@ export default async function HomePage() {
             Masuk dengan nomor WhatsApp dan password Anda.
           </p>
 
-          <LoginForm />
+          <LoginForm next={safeNext ?? undefined} />
 
           <p
             className="t-small"

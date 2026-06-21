@@ -209,7 +209,10 @@ export async function login(
 
   void logLogins({ accesses });
 
-  redirect('/');
+  // Redirect ke halaman tujuan (returnTo) bila valid & relatif, else landing role.
+  const nextRaw = String(formData.get('next') ?? '');
+  const safeNext = nextRaw.startsWith('/') && !nextRaw.startsWith('//') ? nextRaw : null;
+  redirect(safeNext ?? ROLE_LANDING[accesses[0].role] ?? '/');
 }
 
 export async function switchRole(role: RoleAccess['role']) {

@@ -14,6 +14,7 @@ export async function setPertemuanOverride(
   const session = await requireKoordinatorKetuaKelas();
 
   const halaqahId = String(fd.get('halaqah_id') ?? '');
+  const level = String(fd.get('level') ?? '');
   const pertemuanNo = Number(fd.get('pertemuan_no'));
   const tanggal = String(fd.get('tanggal') ?? '');
   const isSkipped = String(fd.get('is_skipped') ?? 'false') === 'true';
@@ -22,6 +23,7 @@ export async function setPertemuanOverride(
   if (!halaqahId || !Number.isFinite(pertemuanNo) || pertemuanNo < 1) {
     return { error: 'Data pertemuan tidak valid.' };
   }
+  if (level !== 'qoidah_nuroniyyah' && level !== 'perbaikan_bacaan') return { error: 'Tahap tidak valid.' };
   if (!isSkipped && !/^\d{4}-\d{2}-\d{2}$/.test(tanggal)) {
     return { error: 'Tanggal override wajib diisi (atau tandai skip).' };
   }
@@ -31,6 +33,7 @@ export async function setPertemuanOverride(
     .upsert(
       {
         halaqah_id: halaqahId,
+        level,
         pertemuan_no: pertemuanNo,
         tanggal: isSkipped && !tanggal ? '1970-01-01' : tanggal,
         is_skipped: isSkipped,
@@ -38,7 +41,7 @@ export async function setPertemuanOverride(
         set_by_role: 'koordinator_ketua_kelas',
         set_by_id: session.koordinator_kk_id,
       },
-      { onConflict: 'halaqah_id,pertemuan_no' }
+      { onConflict: 'halaqah_id,level,pertemuan_no' }
     );
   if (error) return { error: `Gagal menyimpan: ${error.message}` };
 
@@ -61,13 +64,15 @@ export async function clearPertemuanOverride(
 ): Promise<OverrideResult> {
   const session = await requireKoordinatorKetuaKelas();
   const halaqahId = String(fd.get('halaqah_id') ?? '');
+  const level = String(fd.get('level') ?? '');
   const pertemuanNo = Number(fd.get('pertemuan_no'));
-  if (!halaqahId || !Number.isFinite(pertemuanNo)) return { error: 'Data tidak valid.' };
+  if (!halaqahId || !level || !Number.isFinite(pertemuanNo)) return { error: 'Data tidak valid.' };
 
   const { error } = await supabaseAdmin
     .from('hits_kaldik_pertemuan')
     .delete()
     .eq('halaqah_id', halaqahId)
+    .eq('level', level)
     .eq('pertemuan_no', pertemuanNo);
   if (error) return { error: `Gagal menghapus: ${error.message}` };
 

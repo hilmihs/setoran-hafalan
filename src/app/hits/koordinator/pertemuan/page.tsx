@@ -3,8 +3,9 @@ import { redirect } from 'next/navigation';
 import { requireKoordinatorKetuaKelas } from '@/lib/session';
 import { supabaseAdmin } from '@/lib/supabase-admin';
 import { Icon } from '@/components/icons';
-import { deriveHalaqahPertemuan } from '@/lib/hits-pertemuan';
+import { deriveHalaqahProgram, PROGRAM_STAGES, HITS_LEVEL_SHORT, type KaldikHariLite } from '@/lib/hits-pertemuan';
 import { dayNameOf } from '@/lib/maahir-presensi';
+import type { HitsLevel } from '@/types/db';
 import { PertemuanOverrideClient, type HalaqahOverrideData, type OverrideRow } from './PertemuanOverrideClient';
 
 export const dynamic = 'force-dynamic';
@@ -18,7 +19,7 @@ export default async function HitsPertemuanPage() {
 
   const { data: halaqahRows } = await supabaseAdmin
     .from('hits_halaqah')
-    .select('id, batch_id, level, name, gender, jadwal_raw, jadwal_hari')
+    .select('id, batch_id, level, program, name, gender, jadwal_raw, jadwal_hari')
     .eq('active', true)
     .order('name');
   const halaqah = halaqahRows ?? [];
@@ -38,38 +39,39 @@ export default async function HitsPertemuanPage() {
         .in('batch_id', batchIds),
       supabaseAdmin
         .from('hits_kaldik_pertemuan')
-        .select('halaqah_id, pertemuan_no, tanggal, is_skipped, note')
+        .select('halaqah_id, level, pertemuan_no, tanggal, is_skipped, note')
         .in('halaqah_id', halaqahIds),
     ]);
 
     batches = batchList ?? [];
     const batchName = new Map(batches.map((b) => [b.id, b.name]));
 
-    const kaldikByBL = new Map<string, { tanggal: string; pekan: number | null; is_libur: boolean }[]>();
+    const kaldikByBL = new Map<string, KaldikHariLite[]>();
     for (const r of kaldikList ?? []) {
       const key = `${r.batch_id}|${r.level}`;
       const arr = kaldikByBL.get(key) ?? [];
       arr.push({ tanggal: r.tanggal, pekan: r.pekan, is_libur: r.is_libur });
       kaldikByBL.set(key, arr);
     }
-    const overrideByHalaqah = new Map<string, Map<number, { tanggal: string; is_skipped: boolean; note: string | null }>>();
+    // override per (halaqah|level|pertemuan)
+    const ovByKey = new Map<string, { tanggal: string; is_skipped: boolean; note: string | null }>();
     for (const o of overrideList ?? []) {
-      const m = overrideByHalaqah.get(o.halaqah_id) ?? new Map();
-      m.set(o.pertemuan_no, { tanggal: o.tanggal, is_skipped: o.is_skipped, note: o.note });
-      overrideByHalaqah.set(o.halaqah_id, m);
+      ovByKey.set(`${o.halaqah_id}|${o.level}|${o.pertemuan_no}`, { tanggal: o.tanggal, is_skipped: o.is_skipped, note: o.note });
     }
 
     data = halaqah.map((h) => {
-      const base = h.level
-        ? deriveHalaqahPertemuan(h.jadwal_hari ?? [], kaldikByBL.get(`${h.batch_id}|${h.level}`) ?? [])
-        : [];
-      const ovMap = overrideByHalaqah.get(h.id) ?? new Map();
-      const seen = new Set<number>();
+      const stages = PROGRAM_STAGES[h.program] ?? PROGRAM_STAGES.dasar;
+      const kaldikByLevel = new Map<HitsLevel, KaldikHariLite[]>();
+      for (const lv of stages) kaldikByLevel.set(lv, kaldikByBL.get(`${h.batch_id}|${lv}`) ?? []);
+      // derive tanpa override utk base (override ditampilkan terpisah)
+      const base = deriveHalaqahProgram(h.program, h.jadwal_hari ?? [], kaldikByLevel, new Map());
       const rows: OverrideRow[] = base.map((d) => {
-        seen.add(d.pertemuan_no);
-        const ov = ovMap.get(d.pertemuan_no);
+        const lv = d.level as HitsLevel;
+        const ov = ovByKey.get(`${h.id}|${lv}|${d.pertemuan_no}`);
         return {
           pertemuanNo: d.pertemuan_no,
+          level: lv,
+          levelLabel: HITS_LEVEL_SHORT[lv],
           baseDate: d.tanggal,
           baseHari: dayNameOf(d.tanggal),
           overrideDate: ov && !ov.is_skipped ? ov.tanggal : null,
@@ -77,19 +79,6 @@ export default async function HitsPertemuanPage() {
           note: ov?.note ?? null,
         };
       });
-      // Override manual tanpa basis derivasi.
-      for (const [no, ov] of ovMap.entries()) {
-        if (seen.has(no)) continue;
-        rows.push({
-          pertemuanNo: no,
-          baseDate: null,
-          baseHari: null,
-          overrideDate: ov.is_skipped ? null : ov.tanggal,
-          isSkipped: ov.is_skipped,
-          note: ov.note,
-        });
-      }
-      rows.sort((a, b) => a.pertemuanNo - b.pertemuanNo);
       return {
         halaqahId: h.id,
         name: h.name,

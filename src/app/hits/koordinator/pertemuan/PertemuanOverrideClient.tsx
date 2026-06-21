@@ -5,6 +5,8 @@ import { setPertemuanOverride, clearPertemuanOverride } from './actions';
 
 export type OverrideRow = {
   pertemuanNo: number;
+  level: string;
+  levelLabel: string;
   baseDate: string | null;
   baseHari: string | null;
   overrideDate: string | null;
@@ -35,6 +37,7 @@ function RowForm({ halaqahId, row }: { halaqahId: string; row: OverrideRow }) {
     setMsg(null);
     const fd = new FormData();
     fd.set('halaqah_id', halaqahId);
+    fd.set('level', row.level);
     fd.set('pertemuan_no', String(row.pertemuanNo));
     fd.set('tanggal', skip ? '' : date);
     fd.set('is_skipped', String(skip));
@@ -48,6 +51,7 @@ function RowForm({ halaqahId, row }: { halaqahId: string; row: OverrideRow }) {
     setMsg(null);
     const fd = new FormData();
     fd.set('halaqah_id', halaqahId);
+    fd.set('level', row.level);
     fd.set('pertemuan_no', String(row.pertemuanNo));
     startTransition(async () => {
       const res = await clearPertemuanOverride(undefined, fd);
@@ -60,7 +64,7 @@ function RowForm({ halaqahId, row }: { halaqahId: string; row: OverrideRow }) {
 
   return (
     <tr>
-      <td className="nm">{row.pertemuanNo}</td>
+      <td className="nm">{row.pertemuanNo}<div className="t-tiny" style={{ color: 'var(--muted-2)' }}>{row.levelLabel}</div></td>
       <td className="t-small">{row.baseDate ? `${row.baseHari} ${row.baseDate}` : '— (manual)'}</td>
       <td>
         <input
@@ -163,7 +167,7 @@ export function PertemuanOverrideClient({
                 </tr>
               ) : (
                 selected.rows.map((r) => (
-                  <RowForm key={r.pertemuanNo} halaqahId={selected.halaqahId} row={r} />
+                  <RowForm key={`${r.level}-${r.pertemuanNo}`} halaqahId={selected.halaqahId} row={r} />
                 ))
               )}
             </tbody>

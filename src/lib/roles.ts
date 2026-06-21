@@ -6,6 +6,6 @@ export const ROLE_LANDING: Record<RoleAccess['role'], string> = {
   koordinator: '/2in1/koordinator',
   syaikh: '/2in1/syaikh',
   pengajar: '/kehadiran/pengajar',
-  ketua_kelas: '/observasi/ketua-kelas',
+  ketua_kelas: '/hits/ketua',
   koordinator_ketua_kelas: '/observasi/koordinator',
 };

@@ -53,13 +53,6 @@ export const FEATURE_LINKS: FeatureLink[] = [
     match: (a) => a.role === 'pengajar' && a.is_ketua,
   },
   {
-    href: '/observasi/ketua-kelas',
-    title: 'Observasi Kelas',
-    navLabel: 'Observasi',
-    description: 'Laporan kondisi kelas dan performa pengajar',
-    match: (a) => a.role === 'ketua_kelas',
-  },
-  {
     href: '/matrix/koordinator',
     title: 'Matrix Skill Guru',
     navLabel: 'Matrix Guru',
@@ -93,6 +86,13 @@ export const FEATURE_LINKS: FeatureLink[] = [
     navLabel: 'Tunjuk Ketua HITS',
     description: 'Tunjuk peserta sebagai ketua kelas halaqah HITS Anda',
     match: (a) => a.role === 'pengajar',
+  },
+  {
+    href: '/akun',
+    title: 'Akun',
+    navLabel: 'Akun',
+    description: 'Ganti password & informasi akun Anda',
+    match: () => true,
   },
 ];
 

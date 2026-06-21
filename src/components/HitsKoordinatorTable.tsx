@@ -181,7 +181,11 @@ export function HitsKoordinatorTable({ rows }: { rows: HitsRekapRow[] }) {
                 r.kondisiCount.KBBS + r.kondisiCount.KMT + r.kondisiCount.JKG + r.kondisiCount.KBLA;
               return (
                 <tr key={r.halaqahId}>
-                  <td className="tbl-cardhead" style={STICKY_TD}>{r.halaqahName}</td>
+                  <td className="tbl-cardhead" style={STICKY_TD}>
+                    <a href={`/hits/koordinator/halaqah/${r.halaqahId}`} style={{ color: 'var(--accent-2)', fontWeight: 600, textDecoration: 'none' }}>
+                      {r.halaqahName}
+                    </a>
+                  </td>
                   <td className="t-tiny" data-label="Batch / Level">
                     {r.batchName}
                     <br />

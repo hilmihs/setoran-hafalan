@@ -6,7 +6,7 @@ import { requireKetuaKelas } from '@/lib/session';
 import { loadHalaqahPertemuan } from '@/lib/hits-ketua';
 import { todayJakarta } from '@/lib/maahir-presensi';
 import { logAudit } from '@/lib/audit';
-import type { HitsKondisi, HitsStatusLatihan } from '@/types/db';
+import type { HitsKondisi, HitsStatusLatihan, HitsLevel } from '@/types/db';
 
 export type KetuaHarianResult = { ok?: boolean; error?: string };
 
@@ -22,6 +22,7 @@ export async function submitKeteranganHarian(
   if (!halaqahId) return { error: 'Akun ini bukan ketua kelas HITS.' };
 
   const pertemuanNo = Number(fd.get('pertemuan_no'));
+  const level = String(fd.get('level') ?? '') as HitsLevel;
   const tanggal = String(fd.get('tanggal') ?? '');
   const kondisi = String(fd.get('kondisi') ?? '') as HitsKondisi;
   const terlambat = String(fd.get('terlambat') ?? 'false') === 'true';
@@ -32,23 +33,22 @@ export async function submitKeteranganHarian(
 
   if (!Number.isFinite(pertemuanNo) || pertemuanNo < 1) return { error: 'Pertemuan tidak valid.' };
   if (!KONDISI.includes(kondisi)) return { error: 'Kondisi tidak valid.' };
+  if (level !== 'qoidah_nuroniyyah' && level !== 'perbaikan_bacaan') return { error: 'Tahap tidak valid.' };
 
-  // Validasi server-side: (pertemuan_no, tanggal) harus pertemuan sah & tidak di masa depan.
+  // Validasi server-side: (level, pertemuan_no, tanggal) harus pertemuan sah & tidak di masa depan.
   const loaded = await loadHalaqahPertemuan(halaqahId);
   if (!loaded) return { error: 'Halaqah tidak ditemukan.' };
   const today = todayJakarta();
-  const match = loaded.derived.find((d) => d.pertemuan_no === pertemuanNo);
+  const match = loaded.derived.find((d) => d.pertemuan_no === pertemuanNo && d.level === level);
   if (!match) return { error: 'Pertemuan tidak ada di kaldik halaqah ini.' };
   if (match.tanggal > today) return { error: 'Tidak bisa mengisi pertemuan yang belum berlangsung.' };
-  if (tanggal && tanggal !== match.tanggal) {
-    // gunakan tanggal kanonik dari derivasi, abaikan input client
-  }
 
   // Cek baris lama: hormati flag editable.
   const { data: existing } = await supabaseAdmin
     .from('hits_keterangan_harian')
     .select('id, editable')
     .eq('halaqah_id', halaqahId)
+    .eq('level', level)
     .eq('pertemuan_no', pertemuanNo)
     .maybeSingle();
   if (existing && existing.editable === false) {
@@ -65,6 +65,7 @@ export async function submitKeteranganHarian(
     .upsert(
       {
         halaqah_id: halaqahId,
+        level,
         pertemuan_no: pertemuanNo,
         tanggal: match.tanggal,
         kondisi,
@@ -76,7 +77,7 @@ export async function submitKeteranganHarian(
         diisi_by_role: 'ketua_kelas',
         diisi_by_id: session.ketua_kelas_id,
       },
-      { onConflict: 'halaqah_id,pertemuan_no' }
+      { onConflict: 'halaqah_id,level,pertemuan_no' }
     )
     .select('id')
     .single();
