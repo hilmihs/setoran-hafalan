@@ -20,6 +20,14 @@ export function middleware(req: NextRequest) {
   url.pathname = '/';
   url.search = '';
   url.searchParams.set('next', pathname + (search || ''));
+  // Di belakang reverse proxy, nextUrl bisa berisi host internal (0.0.0.0:xxxx).
+  // Pakai host/proto yang diteruskan proxy agar redirect tetap ke domain publik.
+  const fwdHost = req.headers.get('x-forwarded-host') ?? req.headers.get('host');
+  if (fwdHost) {
+    url.host = fwdHost;
+    url.protocol = (req.headers.get('x-forwarded-proto') ?? 'https') + ':';
+    url.port = '';
+  }
   return NextResponse.redirect(url);
 }
 
