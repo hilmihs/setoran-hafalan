@@ -1,5 +1,6 @@
 import { getIronSession, SessionOptions } from 'iron-session';
-import { cookies } from 'next/headers';
+import { cookies, headers } from 'next/headers';
+import { redirect } from 'next/navigation';
 import type {
   RoleAccess,
   PesertaSession,
@@ -36,6 +37,17 @@ export async function getSession() {
   return getIronSession<IronSessionData>(cookies(), sessionOptions);
 }
 
+/**
+ * Sesi tak valid / role salah → arahkan ke login (bukan 500). Pakai x-pathname
+ * (di-inject middleware) untuk redirect-after-login. Aman di page & server action.
+ */
+function unauthorized(): never {
+  let next = '/';
+  try { next = headers().get('x-pathname') || '/'; } catch { /* di luar request scope */ }
+  const q = next.startsWith('/') && !next.startsWith('//') ? `?next=${encodeURIComponent(next)}` : '';
+  redirect(`/${q}`);
+}
+
 function requireRole<T extends RoleAccess>(role: T['role']) {
   return async (): Promise<T> => {
     const s = await getSession();
@@ -44,7 +56,7 @@ function requireRole<T extends RoleAccess>(role: T['role']) {
       if (match) return match as T;
     }
     if (s.session?.role === role) return s.session as T;
-    throw new Error('UNAUTHORIZED');
+    return unauthorized();
   };
 }
 
@@ -67,7 +79,7 @@ export async function requireKetuaKelompok(): Promise<PengajarSession> {
   if (s.session?.role === 'pengajar' && s.session.is_ketua) {
     return s.session;
   }
-  throw new Error('UNAUTHORIZED');
+  return unauthorized();
 }
 
 export async function requireOneOfRoles<R extends RoleAccess['role']>(
@@ -81,7 +93,7 @@ export async function requireOneOfRoles<R extends RoleAccess['role']>(
   if (s.session && roles.includes(s.session.role as R)) {
     return s.session as Extract<RoleAccess, { role: R }>;
   }
-  throw new Error('UNAUTHORIZED');
+  return unauthorized();
 }
 
 export async function getActiveSession(): Promise<RoleAccess | null> {

@@ -12,9 +12,15 @@ const SESSION_COOKIE = 'maahir-hits-session';
 
 export function middleware(req: NextRequest) {
   const { pathname, search } = req.nextUrl;
+  // Sebarkan path ke server component (dipakai guard untuk redirect-after-login).
+  const withPath = () => {
+    const h = new Headers(req.headers);
+    h.set('x-pathname', pathname + (search || ''));
+    return NextResponse.next({ request: { headers: h } });
+  };
   const isProtected = PROTECTED.some((p) => pathname === p || pathname.startsWith(p + '/'));
-  if (!isProtected) return NextResponse.next();
-  if (req.cookies.has(SESSION_COOKIE)) return NextResponse.next();
+  if (!isProtected) return withPath();
+  if (req.cookies.has(SESSION_COOKIE)) return withPath();
 
   const url = req.nextUrl.clone();
   url.pathname = '/';
