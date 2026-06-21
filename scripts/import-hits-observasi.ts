@@ -21,6 +21,7 @@ import bcrypt from 'bcryptjs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { normalizeWhatsApp } from '../src/lib/whatsapp';
+import { parseJadwal } from '../src/lib/hits-presensi-parse';
 import { deriveHalaqahProgram, PROGRAM_STAGES, type KaldikHariLite } from '../src/lib/hits-pertemuan';
 import type { HitsKondisi, HitsLevel, HitsStatusLatihan } from '../src/types/db';
 
@@ -79,7 +80,7 @@ type HalaqahLite = { id: string; program: string; jadwalHari: string[]; pengajar
 async function main() {
   console.log('\n📥 Import observasi HITS (backfill)\n');
 
-  const report = { keterangan: 0, ketua: 0, unmatchedRows: [] as string[], unmatchedKetua: [] as string[] };
+  const report = { keterangan: 0, ketua: 0, ketuaUpdated: 0, halaqahBaru: 0, skipped: 0, unmatchedRows: [] as string[] };
 
   for (const { file, slug } of FILES) {
     console.log(`\n── ${file} (${slug})`);
@@ -138,111 +139,131 @@ async function main() {
       const key = nameKey(pengajar);
       let cands = byPengajar.get(key);
       if (!cands) {
-        // fallback: cocokkan bila salah satu nama mengandung yang lain (nama terpotong).
+        // fuzzy: token-subset (nama terpotong/varian) atau ≥2 token sama.
+        const pt = new Set(key.split(' ').filter(Boolean));
         for (const [k, v] of byPengajar) {
-          if (k.includes(key) || key.includes(k)) { cands = v; break; }
+          const kt = new Set(k.split(' ').filter(Boolean));
+          const inter = [...pt].filter((x) => kt.has(x)).length;
+          if (inter >= 2 || (inter >= 1 && (inter === pt.size || inter === kt.size))) { cands = v; break; }
         }
       }
       if (!cands || cands.length === 0) return null;
       if (cands.length === 1) return cands[0];
-      // disambiguasi by program: perbaikan→lanjutan dulu, qoidah→dasar dulu.
       const want = level === 'perbaikan_bacaan' ? 'lanjutan' : 'dasar';
       return cands.find((c) => c.program === want) ?? cands[0];
     };
 
+    // akun pengajar akhwat → link halaqah augment.
+    const { data: pengAcc } = await supabaseAdmin.from('pengajar').select('id, name').eq('gender', 'akhwat');
+    const pengajarIdByName = new Map((pengAcc ?? []).map((p) => [nameKey(p.name), p.id]));
+
     const wb = new ExcelJS.Workbook();
     await wb.xlsx.readFile(join(DOCS, file));
+
+    // Data Ketua Kelas: halaqahName(lower) → nama ketua.
+    const ketuaNameByHalaqah = new Map<string, string>();
+    const dataSheet = wb.worksheets.find((w) => /data ketua/i.test(w.name));
+    if (dataSheet) {
+      for (let r = 4; r <= dataSheet.rowCount; r++) {
+        const hal = cell(dataSheet, r, 2).trim();
+        const nm = cell(dataSheet, r, 8).trim();
+        if (hal && nm) ketuaNameByHalaqah.set(hal.toLowerCase(), nm);
+      }
+    }
+
+    const extractWa = (s: string): string => {
+      const m = s.match(/wa\.me\/(\d+)/i);
+      const wa = normalizeWhatsApp((m ? m[1] : s).replace(/\.0$/, '').replace(/[^\d]/g, ''));
+      return wa.length >= 10 ? wa : '';
+    };
+
+    const createHalaqah = async (name: string, level: HitsLevel, jadwalRaw: string, pengajarName: string): Promise<HalaqahLite> => {
+      const program = level === 'perbaikan_bacaan' ? 'lanjutan' : 'dasar';
+      const jadwal = parseJadwal(jadwalRaw || '').hari;
+      const pengajarId = pengajarIdByName.get(nameKey(pengajarName)) ?? null;
+      const { data: ins } = await supabaseAdmin.from('hits_halaqah').upsert({
+        batch_id: batch.id, name: `${name} (observasi)`, gender: 'akhwat',
+        level, program, jadwal_raw: jadwalRaw || null, jadwal_hari: jadwal,
+        pengajar_nama_sheet: pengajarName, pengajar_id: pengajarId, source: 'manual', active: true,
+      }, { onConflict: 'batch_id,name' }).select('id').single();
+      const lite: HalaqahLite = { id: ins!.id, program, jadwalHari: jadwal, pengajarKey: nameKey(pengajarName) };
+      const k = nameKey(pengajarName);
+      const arr = byPengajar.get(k) ?? []; arr.push(lite); byPengajar.set(k, arr);
+      report.halaqahBaru += 1;
+      return lite;
+    };
+
+    const ensureKetua = async (halaqahId: string, wa: string, nama: string) => {
+      if (!wa) return;
+      const { data: ex } = await supabaseAdmin.from('ketua_kelas').select('id, whatsapp_number').eq('hits_halaqah_id', halaqahId).eq('active', true).maybeSingle();
+      if (ex) {
+        if (!ex.whatsapp_number) { await supabaseAdmin.from('ketua_kelas').update({ whatsapp_number: wa }).eq('id', ex.id); report.ketuaUpdated += 1; }
+        return;
+      }
+      const passwordHash = await bcrypt.hash(wa.slice(-6), 12);
+      const { error } = await supabaseAdmin.from('ketua_kelas').insert({
+        name: nama || `Ketua ${halaqahId.slice(0, 4)}`, gender: 'akhwat', whatsapp_number: wa,
+        hits_halaqah_id: halaqahId, magic_token: crypto.randomUUID(), password_hash: passwordHash, active: true,
+      });
+      if (!error) report.ketua += 1;
+    };
 
     // ── Observasi sheets ──
     const obsSheets = wb.worksheets.filter((w) => /observasi/i.test(w.name));
     for (const ws of obsSheets) {
-      // header di baris 2 (1-based), data dari baris 3. Kolom pertemuan mulai 7 (1-based).
-      const headerRow = 2;
-      const isHeader = cell(ws, headerRow, 2).toLowerCase().includes('halaqah');
-      if (!isHeader) continue;
-      // jumlah pertemuan = (kolom terisi - 6) / 2
-      const maxCol = ws.columnCount;
-      const maxPert = Math.floor((maxCol - 6) / 2);
+      if (!cell(ws, 2, 2).toLowerCase().includes('halaqah')) continue;
+      const maxPert = Math.floor((ws.columnCount - 6) / 2);
       for (let r = 3; r <= ws.rowCount; r++) {
         const halaqahName = cell(ws, r, 2).trim();
         const pengajar = cell(ws, r, 4).trim();
         if (!pengajar || !halaqahName || /^#/.test(halaqahName)) continue;
-        const levelText = cell(ws, r, 3);
-        const level = rowLevel(levelText);
-        const h = pickHalaqah(pengajar, level);
-        if (!h) { report.unmatchedRows.push(`[${slug}] ${ws.name}: ${halaqahName} / ${pengajar}`); continue; }
+        const level = rowLevel(cell(ws, r, 3));
+        const jadwalRaw = cell(ws, r, 5).trim();
+        const ketuaWa = extractWa(cell(ws, r, 6));
+
+        let h = pickHalaqah(pengajar, level);
+        if (!h) {
+          h = await createHalaqah(halaqahName, level, jadwalRaw, pengajar);
+          report.unmatchedRows.push(`[${slug}] dibuat: ${halaqahName} / ${pengajar}`);
+        }
 
         const rows: Record<string, unknown>[] = [];
         for (let p = 1; p <= maxPert; p++) {
-          const kondCol = 6 + 2 * (p - 1) + 1; // 1-based: pert1 kondisi di kolom 7
+          const kondCol = 6 + 2 * (p - 1) + 1;
           const kondRaw = cell(ws, r, kondCol).trim().toUpperCase();
           if (!kondRaw || !KONDISI.has(kondRaw as HitsKondisi)) continue;
+          const tanggal = dateOf(h, level, p);
+          if (!tanggal) { report.skipped += 1; continue; } // di luar kaldik → skip (tanpa placeholder)
           const kondisi = kondRaw as HitsKondisi;
-          const statRaw = cell(ws, r, kondCol + 1);
           const isLibur = kondisi === 'LIBUR';
-          const f = isLibur ? { latihan: null, status: null, semua: null } : statusToFlags(statRaw);
+          const f = isLibur ? { latihan: null, status: null, semua: null } : statusToFlags(cell(ws, r, kondCol + 1));
           rows.push({
-            halaqah_id: h.id,
-            level,
-            pertemuan_no: p,
-            tanggal: dateOf(h, level, p) ?? '1970-01-01', // tanggal kanonik dari kaldik
-            kondisi,
-            terlambat: false,
-            latihan_diberikan: f.latihan,
-            status_latihan: f.status && STATUS.has(f.status) ? f.status : null,
-            semua_selesai: f.semua,
-            catatan: null,
-            diisi_by_role: 'koordinator_ketua_kelas',
-            diisi_by_id: '00000000-0000-0000-0000-000000000000',
-            editable: false,
+            halaqah_id: h.id, level, pertemuan_no: p, tanggal, kondisi, terlambat: false,
+            latihan_diberikan: f.latihan, status_latihan: f.status && STATUS.has(f.status) ? f.status : null,
+            semua_selesai: f.semua, catatan: null,
+            diisi_by_role: 'koordinator_ketua_kelas', diisi_by_id: '00000000-0000-0000-0000-000000000000', editable: false,
           });
         }
         if (rows.length) {
           const { error } = await supabaseAdmin.from('hits_keterangan_harian').upsert(rows, { onConflict: 'halaqah_id,level,pertemuan_no' });
-          if (error) { console.log(`  ⚠ ${halaqahName}: ${error.message}`); continue; }
-          report.keterangan += rows.length;
+          if (error) console.log(`  ⚠ ${halaqahName}: ${error.message}`);
+          else report.keterangan += rows.length;
         }
-      }
-    }
-
-    // ── Data Ketua Kelas → ketua_kelas + is_ketua ──
-    const ketuaSheet = wb.worksheets.find((w) => /data ketua/i.test(w.name));
-    if (ketuaSheet) {
-      for (let r = 4; r <= ketuaSheet.rowCount; r++) {
-        const pengajar = cell(ketuaSheet, r, 3).trim();
-        const ketuaNama = cell(ketuaSheet, r, 8).trim();
-        const telp = cell(ketuaSheet, r, 9).trim();
-        if (!pengajar || !ketuaNama || !telp) continue;
-        const h = pickHalaqah(pengajar, 'qoidah_nuroniyyah');
-        if (!h) { report.unmatchedKetua.push(`[${slug}] ${pengajar} / ${ketuaNama}`); continue; }
-        const wa = normalizeWhatsApp(telp.replace(/\.0$/, ''));
-        if (wa.length < 10) continue;
-
-        // sudah ada ketua aktif utk halaqah? skip (jangan timpa).
-        const { data: existing } = await supabaseAdmin
-          .from('ketua_kelas').select('id').eq('hits_halaqah_id', h.id).eq('active', true).maybeSingle();
-        if (existing) continue;
-
-        const magicToken = crypto.randomUUID();
-        const passwordHash = await bcrypt.hash(wa.slice(-6), 12);
-        const { error } = await supabaseAdmin.from('ketua_kelas').insert({
-          name: ketuaNama, gender: 'akhwat', whatsapp_number: wa,
-          hits_halaqah_id: h.id, magic_token: magicToken, password_hash: passwordHash, active: true,
-        });
-        if (!error) report.ketua += 1;
+        await ensureKetua(h.id, ketuaWa, ketuaNameByHalaqah.get(halaqahName.toLowerCase()) ?? '');
       }
     }
   }
 
+  // Part C: cleanup keterangan placeholder (pertemuan di luar kaldik / tahap salah).
+  const { error: delErr, count } = await supabaseAdmin
+    .from('hits_keterangan_harian').delete({ count: 'exact' }).eq('tanggal', '1970-01-01');
+  if (!delErr) console.log(`\n🧹 Placeholder dihapus: ${count ?? 0}`);
+
   console.log('\n══════════ RINGKASAN ══════════');
   console.log(`  Keterangan ter-upsert : ${report.keterangan}`);
-  console.log(`  Ketua kelas dibuat    : ${report.ketua}`);
-  console.log(`  Baris observasi unmatched : ${report.unmatchedRows.length}`);
-  for (const u of report.unmatchedRows.slice(0, 25)) console.log(`     - ${u}`);
-  if (report.unmatchedRows.length > 25) console.log(`     … +${report.unmatchedRows.length - 25} lagi`);
-  console.log(`  Ketua unmatched : ${report.unmatchedKetua.length}`);
-  for (const u of report.unmatchedKetua.slice(0, 15)) console.log(`     - ${u}`);
-
+  console.log(`  Ketua kelas dibuat    : ${report.ketua} (update WA: ${report.ketuaUpdated})`);
+  console.log(`  Halaqah baru (augment): ${report.halaqahBaru}`);
+  console.log(`  Pertemuan di-skip (di luar kaldik): ${report.skipped}`);
   console.log('\n✅ Selesai.\n');
 }
 

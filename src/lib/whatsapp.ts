@@ -418,9 +418,8 @@ export function tplReminderKetuaKelasObservasi(args: {
   kelasName: string;
   observasiUrl: string;
 }): string {
-  const sapaan = salutation(args.ketuaKelasGender);
   return [
-    `Assalamu'alaikum ${sapaan} ${args.ketuaKelasName},`,
+    `Assalamu'alaikum ${args.ketuaKelasName},`,
     ``,
     `Pengingat — mohon isi laporan observasi kelas *${args.kelasName}* hari ini melalui tautan:`,
     args.observasiUrl,
@@ -435,9 +434,8 @@ export function tplMagicLinkKetuaKelas(args: {
   kelasName: string;
   magicUrl: string;
 }): string {
-  const sapaan = salutation(args.ketuaKelasGender);
   return [
-    `Assalamu'alaikum ${sapaan} ${args.ketuaKelasName},`,
+    `Assalamu'alaikum ${args.ketuaKelasName},`,
     ``,
     `Silakan isi observasi kelas *${args.kelasName}* hari ini:`,
     args.magicUrl,
@@ -457,9 +455,8 @@ export function tplKetuaKelasTerpilih(args: {
   loginWa?: string;
   initialPassword?: string;
 }): string {
-  const sapaan = salutation(args.ketuaKelasGender);
   const lines = [
-    `Assalamu'alaikum ${sapaan} ${args.ketuaKelasName},`,
+    `Assalamu'alaikum ${args.ketuaKelasName},`,
     ``,
     `Anda telah dipilih sebagai *Ketua Kelas ${args.kelasName}*.`,
     ``,

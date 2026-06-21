@@ -49,8 +49,6 @@ export default async function KoordinatorKetuaKelasPage({
   const kondisiLibur = filled.filter((r) => r.keterangan!.kondisi === 'LIBUR').length;
   const kondisiCatatan = filledCount - kondisiKbbs - kondisiLibur;
 
-  const terlambatRows = inScope.filter((r) => r.keterangan?.terlambat);
-
   const unfilled = inScope.filter((r) => !r.keterangan);
   const filledInScope = inScope.filter((r) => r.keterangan);
 
@@ -206,10 +204,6 @@ export default async function KoordinatorKetuaKelasPage({
                       <div style={{ fontSize: 18, fontWeight: 700, color: pendingTab > 0 ? 'var(--merah-ink)' : 'var(--ink)' }}>{pendingTab}</div>
                       <div className="t-tiny" style={{ color: 'var(--muted)' }}>Tabayyun pending</div>
                     </div>
-                    <div>
-                      <div style={{ fontSize: 18, fontWeight: 700, color: terlambatRows.length > 0 ? 'var(--kuning-ink)' : 'var(--ink)' }}>{terlambatRows.length}</div>
-                      <div className="t-tiny" style={{ color: 'var(--muted)' }}>Pengajar telat</div>
-                    </div>
                   </div>
                 </div>
               </div>
@@ -310,21 +304,6 @@ export default async function KoordinatorKetuaKelasPage({
             </div>
           )}
 
-          {/* Pengajar terlambat hari ini */}
-          {terlambatRows.length > 0 && (
-            <div style={{ marginBottom: 24 }}>
-              <h2 className="t-h2" style={{ marginBottom: 12 }}>Pengajar Terlambat Hari Ini ({terlambatRows.length})</h2>
-              {terlambatRows.map((r) => (
-                <div key={r.halaqah_id} className="card-flat" style={{ padding: '10px 14px', marginBottom: 6 }}>
-                  <div style={{ fontWeight: 600, fontSize: 14 }}>{r.halaqah_name}</div>
-                  <div className="t-small" style={{ color: 'var(--muted-2)' }}>
-                    Pengajar: {r.pengajar_name ?? '?'} · Pertemuan {r.pertemuan_no}
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-
           {/* Belum diisi */}
           {showUnfilled && unfilled.length > 0 && (
             <div style={{ marginBottom: 24 }}>
@@ -372,7 +351,7 @@ export default async function KoordinatorKetuaKelasPage({
           )}
 
           {/* Empty state */}
-          {!kaldikMissing && tabayyunItems.length === 0 && unfilled.length === 0 && filledInScope.length === 0 && terlambatRows.length === 0 && (
+          {!kaldikMissing && tabayyunItems.length === 0 && unfilled.length === 0 && filledInScope.length === 0 && (
             <div className="card-flat" style={{ padding: '24px 20px', textAlign: 'center' }}>
               <p className="t-body" style={{ color: 'var(--muted-2)' }}>
                 {q ? 'Tidak ada data yang cocok dengan filter.' : 'Tidak ada halaqah terjadwal hari ini.'}

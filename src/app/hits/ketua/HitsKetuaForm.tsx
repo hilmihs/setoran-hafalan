@@ -47,10 +47,8 @@ export function HitsKetuaForm({ halaqahName, pengajarName, slots: initialSlots, 
   const editing = slots.find((s) => slotKey(s) === editingKey) ?? null;
 
   const [kondisi, setKondisi] = useState<HitsKondisi>('KBBS');
-  const [terlambat, setTerlambat] = useState(false);
   const [latihanDiberikan, setLatihanDiberikan] = useState(true);
   const [statusLatihan, setStatusLatihan] = useState<HitsStatusLatihan>('SML');
-  const [semuaSelesai, setSemuaSelesai] = useState(true);
   const [catatan, setCatatan] = useState('');
 
   useEffect(() => {
@@ -72,10 +70,8 @@ export function HitsKetuaForm({ halaqahName, pengajarName, slots: initialSlots, 
   function loadInto(slot: PertemuanSlot) {
     const k = slot.keterangan;
     setKondisi(k?.kondisi ?? 'KBBS');
-    setTerlambat(k?.terlambat ?? false);
     setLatihanDiberikan(k?.latihan_diberikan ?? true);
     setStatusLatihan(k?.status_latihan ?? 'SML');
-    setSemuaSelesai(k?.semua_selesai ?? true);
     setCatatan(k?.catatan ?? '');
     setEditingKey(slotKey(slot));
     setError(null);
@@ -99,10 +95,10 @@ export function HitsKetuaForm({ halaqahName, pengajarName, slots: initialSlots, 
       if (res?.ok && editing) {
         const updated: SlotKeterangan = {
           kondisi,
-          terlambat: kondisi === 'LIBUR' ? false : terlambat,
+          terlambat: false,
           latihan_diberikan: kondisi === 'LIBUR' ? null : latihanDiberikan,
           status_latihan: kondisi !== 'LIBUR' && latihanDiberikan ? statusLatihan : null,
-          semua_selesai: kondisi !== 'LIBUR' && latihanDiberikan ? semuaSelesai : null,
+          semua_selesai: kondisi !== 'LIBUR' && latihanDiberikan ? statusLatihan === 'SML' : null,
           catatan: catatan || null,
           editable: true,
         };
@@ -130,9 +126,9 @@ export function HitsKetuaForm({ halaqahName, pengajarName, slots: initialSlots, 
         <input type="hidden" name="pertemuan_no" value={editing.pertemuanNo} />
         <input type="hidden" name="level" value={editing.level} />
         <input type="hidden" name="tanggal" value={editing.tanggal} />
-        <input type="hidden" name="terlambat" value={String(terlambat)} />
+        <input type="hidden" name="terlambat" value="false" />
         <input type="hidden" name="latihan_diberikan" value={String(latihanDiberikan)} />
-        <input type="hidden" name="semua_selesai" value={String(semuaSelesai)} />
+        <input type="hidden" name="semua_selesai" value={String(statusLatihan === 'SML')} />
 
         <div style={{ marginBottom: 14 }}>
           <label className="field-label">Keterangan Pengajar</label>
@@ -162,26 +158,6 @@ export function HitsKetuaForm({ halaqahName, pengajarName, slots: initialSlots, 
 
         {kondisi !== 'LIBUR' && (
           <>
-            <div style={{ marginBottom: 14 }}>
-              <label className="field-label">Pengajar terlambat (&gt;5 menit)?</label>
-              <div style={{ display: 'flex', gap: 8 }}>
-                {[true, false].map((v) => (
-                  <button
-                    type="button" key={String(v)} disabled={locked}
-                    onClick={() => setTerlambat(v)}
-                    style={{
-                      flex: 1, padding: '10px', borderRadius: 8, cursor: locked ? 'not-allowed' : 'pointer',
-                      border: `1px solid ${terlambat === v ? 'var(--accent)' : 'var(--line-2)'}`,
-                      background: terlambat === v ? 'var(--accent-tint)' : 'transparent',
-                      fontWeight: 500, fontSize: 13,
-                    }}
-                  >
-                    {v ? 'Ya' : 'Tidak'}
-                  </button>
-                ))}
-              </div>
-            </div>
-
             <div style={{ marginBottom: 14 }}>
               <label className="field-label">Latihan mandiri diberikan?</label>
               <div style={{ display: 'flex', gap: 8 }}>
@@ -226,26 +202,6 @@ export function HitsKetuaForm({ halaqahName, pengajarName, slots: initialSlots, 
                           <span className="t-small" style={{ marginLeft: 8 }}>{HITS_STATUS_LATIHAN_LABEL[s]}</span>
                         </div>
                       </label>
-                    ))}
-                  </div>
-                </div>
-
-                <div style={{ marginBottom: 14 }}>
-                  <label className="field-label">Semua peserta selesai latihan?</label>
-                  <div style={{ display: 'flex', gap: 8 }}>
-                    {[true, false].map((v) => (
-                      <button
-                        type="button" key={String(v)} disabled={locked}
-                        onClick={() => setSemuaSelesai(v)}
-                        style={{
-                          flex: 1, padding: '10px', borderRadius: 8, cursor: locked ? 'not-allowed' : 'pointer',
-                          border: `1px solid ${semuaSelesai === v ? 'var(--accent)' : 'var(--line-2)'}`,
-                          background: semuaSelesai === v ? 'var(--accent-tint)' : 'transparent',
-                          fontWeight: 500, fontSize: 13,
-                        }}
-                      >
-                        {v ? 'Ya' : 'Tidak'}
-                      </button>
                     ))}
                   </div>
                 </div>
@@ -300,7 +256,6 @@ export function HitsKetuaForm({ halaqahName, pengajarName, slots: initialSlots, 
               <th>Pertemuan</th>
               <th>Tanggal</th>
               <th>Keterangan</th>
-              <th>Telat</th>
               <th>Latihan</th>
               <th>Status</th>
               <th></th>
@@ -309,7 +264,7 @@ export function HitsKetuaForm({ halaqahName, pengajarName, slots: initialSlots, 
           <tbody>
             {slots.length === 0 ? (
               <tr>
-                <td colSpan={7} style={{ textAlign: 'center', padding: 24, color: 'var(--muted)' }}>
+                <td colSpan={6} style={{ textAlign: 'center', padding: 24, color: 'var(--muted)' }}>
                   Belum ada pertemuan berlangsung.
                 </td>
               </tr>
@@ -341,7 +296,6 @@ export function HitsKetuaForm({ halaqahName, pengajarName, slots: initialSlots, 
                         </span>
                       )}
                     </td>
-                    <td>{!k || k.kondisi === 'LIBUR' ? '—' : k.terlambat ? 'Ya' : 'Tidak'}</td>
                     <td>{!k || k.kondisi === 'LIBUR' ? '—' : k.latihan_diberikan ? 'Ya' : 'Tidak'}</td>
                     <td>{k?.status_latihan ?? '—'}</td>
                     <td>

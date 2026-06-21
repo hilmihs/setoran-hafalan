@@ -100,7 +100,7 @@ export default async function HalaqahDetailPage({ params }: { params: { id: stri
                           <td>
                             {k ? (
                               <span className="badge" style={{ background: st!.bg, borderColor: st!.bd, color: st!.ink }}>
-                                {k.kondisi}{k.terlambat ? ' · telat' : ''}
+                                {k.kondisi}
                               </span>
                             ) : (
                               <span className="t-small" style={{ color: future ? 'var(--muted)' : 'var(--kuning-ink)' }}>{future ? '—' : 'belum diisi'}</span>
