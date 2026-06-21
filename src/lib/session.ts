@@ -1,6 +1,7 @@
 import { getIronSession, SessionOptions } from 'iron-session';
 import { cookies, headers } from 'next/headers';
 import { redirect } from 'next/navigation';
+import { ROLE_LANDING } from '@/lib/roles';
 import type {
   RoleAccess,
   PesertaSession,
@@ -38,10 +39,14 @@ export async function getSession() {
 }
 
 /**
- * Sesi tak valid / role salah → arahkan ke login (bukan 500). Pakai x-pathname
- * (di-inject middleware) untuk redirect-after-login. Aman di page & server action.
+ * Akses ditolak (bukan 500):
+ * - Sudah login tapi role salah → ke landing role sendiri (HINDARI loop dgn
+ *   home yang redirect balik ke ?next).
+ * - Belum login → ke /?next=<path> (login + redirect-after-login).
  */
-function unauthorized(): never {
+function unauthorized(s: IronSessionData): never {
+  const current = s.session ?? s.accesses?.[0];
+  if (current) redirect(ROLE_LANDING[current.role] ?? '/');
   let next = '/';
   try { next = headers().get('x-pathname') || '/'; } catch { /* di luar request scope */ }
   const q = next.startsWith('/') && !next.startsWith('//') ? `?next=${encodeURIComponent(next)}` : '';
@@ -56,7 +61,7 @@ function requireRole<T extends RoleAccess>(role: T['role']) {
       if (match) return match as T;
     }
     if (s.session?.role === role) return s.session as T;
-    return unauthorized();
+    return unauthorized(s);
   };
 }
 
@@ -79,7 +84,7 @@ export async function requireKetuaKelompok(): Promise<PengajarSession> {
   if (s.session?.role === 'pengajar' && s.session.is_ketua) {
     return s.session;
   }
-  return unauthorized();
+  return unauthorized(s);
 }
 
 export async function requireOneOfRoles<R extends RoleAccess['role']>(
@@ -93,7 +98,7 @@ export async function requireOneOfRoles<R extends RoleAccess['role']>(
   if (s.session && roles.includes(s.session.role as R)) {
     return s.session as Extract<RoleAccess, { role: R }>;
   }
-  return unauthorized();
+  return unauthorized(s);
 }
 
 export async function getActiveSession(): Promise<RoleAccess | null> {
