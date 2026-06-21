@@ -8,6 +8,7 @@ import { supabaseAdmin } from '@/lib/supabase-admin';
 import {
   deriveHalaqahProgram,
   PROGRAM_STAGES,
+  programKaldikLevels,
   type KaldikHariLite,
   type PertemuanOverride,
 } from '@/lib/hits-pertemuan';
@@ -82,13 +83,10 @@ export async function getHitsHarian(today: string, gender: Gender): Promise<Hits
   // Tentukan halaqah yang punya pertemuan hari ini (lintas tahap).
   const scheduled: { halaqah: (typeof halaqah)[number]; pertemuan_no: number; level: HitsLevel }[] = [];
   for (const h of halaqah) {
-    const stages = PROGRAM_STAGES[h.program] ?? PROGRAM_STAGES.dasar;
     const kaldikByLevel = new Map<HitsLevel, KaldikHariLite[]>();
+    for (const lv of programKaldikLevels(h.program)) kaldikByLevel.set(lv, kaldikByBL.get(`${h.batch_id}|${lv}`) ?? []);
     const ovByLevel = new Map<HitsLevel, PertemuanOverride[]>();
-    for (const lv of stages) {
-      kaldikByLevel.set(lv, kaldikByBL.get(`${h.batch_id}|${lv}`) ?? []);
-      ovByLevel.set(lv, overridesByHL.get(`${h.id}|${lv}`) ?? []);
-    }
+    for (const lv of PROGRAM_STAGES[h.program] ?? PROGRAM_STAGES.dasar) ovByLevel.set(lv, overridesByHL.get(`${h.id}|${lv}`) ?? []);
     const derived = deriveHalaqahProgram(h.program, h.jadwal_hari ?? [], kaldikByLevel, ovByLevel);
     const todayPert = derived.find((d) => d.tanggal === today);
     if (todayPert) scheduled.push({ halaqah: h, pertemuan_no: todayPert.pertemuan_no, level: todayPert.level as HitsLevel });

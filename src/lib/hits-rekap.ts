@@ -2,7 +2,7 @@
 // per halaqah dalam satu bulan + ekspektasi pertemuan dari kaldik.
 
 import { supabaseAdmin } from '@/lib/supabase-admin';
-import { deriveHalaqahProgram, PROGRAM_STAGES, type KaldikHariLite, type PertemuanOverride } from '@/lib/hits-pertemuan';
+import { deriveHalaqahProgram, PROGRAM_STAGES, programKaldikLevels, type KaldikHariLite, type PertemuanOverride } from '@/lib/hits-pertemuan';
 import { todayJakarta } from '@/lib/maahir-presensi';
 import type { Gender, HitsKondisi, HitsLevel } from '@/types/db';
 
@@ -154,13 +154,10 @@ export async function getHitsRekap(
     }
 
     // Ekspektasi pertemuan s/d hari ini (lintas tahap, dari kaldik + jadwal).
-    const stages = PROGRAM_STAGES[h.program] ?? PROGRAM_STAGES.dasar;
     const kaldikByLevel = new Map<HitsLevel, KaldikHariLite[]>();
+    for (const lv of programKaldikLevels(h.program)) kaldikByLevel.set(lv, kaldikByBL.get(`${h.batch_id}|${lv}`) ?? []);
     const ovByLevel = new Map<HitsLevel, PertemuanOverride[]>();
-    for (const lv of stages) {
-      kaldikByLevel.set(lv, kaldikByBL.get(`${h.batch_id}|${lv}`) ?? []);
-      ovByLevel.set(lv, overridesByHL.get(`${h.id}|${lv}`) ?? []);
-    }
+    for (const lv of PROGRAM_STAGES[h.program] ?? PROGRAM_STAGES.dasar) ovByLevel.set(lv, overridesByHL.get(`${h.id}|${lv}`) ?? []);
     const derived = deriveHalaqahProgram(h.program, h.jadwal_hari ?? [], kaldikByLevel, ovByLevel);
     const expected = derived.filter((d) => d.tanggal >= start && d.tanggal < nextMonth && d.tanggal <= today).length;
     const terisi = kets.length;

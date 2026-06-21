@@ -3,7 +3,7 @@ import { redirect } from 'next/navigation';
 import { requireKoordinatorKetuaKelas } from '@/lib/session';
 import { supabaseAdmin } from '@/lib/supabase-admin';
 import { Icon } from '@/components/icons';
-import { deriveHalaqahProgram, PROGRAM_STAGES, HITS_LEVEL_SHORT, type KaldikHariLite } from '@/lib/hits-pertemuan';
+import { deriveHalaqahProgram, programKaldikLevels, HITS_LEVEL_SHORT, type KaldikHariLite } from '@/lib/hits-pertemuan';
 import { dayNameOf } from '@/lib/maahir-presensi';
 import type { HitsLevel } from '@/types/db';
 import { PertemuanOverrideClient, type HalaqahOverrideData, type OverrideRow } from './PertemuanOverrideClient';
@@ -60,9 +60,8 @@ export default async function HitsPertemuanPage() {
     }
 
     data = halaqah.map((h) => {
-      const stages = PROGRAM_STAGES[h.program] ?? PROGRAM_STAGES.dasar;
       const kaldikByLevel = new Map<HitsLevel, KaldikHariLite[]>();
-      for (const lv of stages) kaldikByLevel.set(lv, kaldikByBL.get(`${h.batch_id}|${lv}`) ?? []);
+      for (const lv of programKaldikLevels(h.program)) kaldikByLevel.set(lv, kaldikByBL.get(`${h.batch_id}|${lv}`) ?? []);
       // derive tanpa override utk base (override ditampilkan terpisah)
       const base = deriveHalaqahProgram(h.program, h.jadwal_hari ?? [], kaldikByLevel, new Map());
       const rows: OverrideRow[] = base.map((d) => {

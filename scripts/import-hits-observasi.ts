@@ -22,7 +22,7 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { normalizeWhatsApp } from '../src/lib/whatsapp';
 import { parseJadwal } from '../src/lib/hits-presensi-parse';
-import { deriveHalaqahProgram, PROGRAM_STAGES, type KaldikHariLite } from '../src/lib/hits-pertemuan';
+import { deriveHalaqahProgram, programKaldikLevels, type KaldikHariLite } from '../src/lib/hits-pertemuan';
 import type { HitsKondisi, HitsLevel, HitsStatusLatihan } from '../src/types/db';
 
 const supabaseAdmin = createClient(
@@ -124,9 +124,8 @@ async function main() {
       let m = dateCache.get(h.id);
       if (!m) {
         m = new Map();
-        const stages = PROGRAM_STAGES[h.program] ?? PROGRAM_STAGES.dasar;
         const kl = new Map<HitsLevel, KaldikHariLite[]>();
-        for (const lv of stages) kl.set(lv, kaldikByLevel.get(lv) ?? []);
+        for (const lv of programKaldikLevels(h.program)) kl.set(lv, kaldikByLevel.get(lv) ?? []);
         for (const d of deriveHalaqahProgram(h.program, h.jadwalHari, kl, new Map())) {
           m.set(`${d.level}-${d.pertemuan_no}`, d.tanggal);
         }

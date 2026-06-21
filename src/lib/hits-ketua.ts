@@ -4,7 +4,7 @@
 import { supabaseAdmin } from '@/lib/supabase-admin';
 import {
   deriveHalaqahProgram,
-  PROGRAM_STAGES,
+  programKaldikLevels,
   type DerivedPertemuan,
   type KaldikHariLite,
   type PertemuanOverride,
@@ -38,13 +38,13 @@ export async function loadHalaqahPertemuan(
     .maybeSingle();
   if (!halaqah) return null;
 
-  const stages = PROGRAM_STAGES[halaqah.program] ?? PROGRAM_STAGES.dasar;
+  const kaldikLevels = programKaldikLevels(halaqah.program);
   const [{ data: kaldikList }, { data: overrideList }] = await Promise.all([
     supabaseAdmin
       .from('hits_kaldik_hari')
       .select('level, tanggal, pekan, is_libur')
       .eq('batch_id', halaqah.batch_id)
-      .in('level', stages),
+      .in('level', kaldikLevels),
     supabaseAdmin
       .from('hits_kaldik_pertemuan')
       .select('level, pertemuan_no, tanggal, pekan, is_skipped')

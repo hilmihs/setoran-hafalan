@@ -19,11 +19,31 @@ export type DerivedPertemuan = {
   level?: HitsLevel; // diisi oleh deriveHalaqahProgram (multi-tahap)
 };
 
-// Tahap per program. Dasar 2 tahap (Nuroniyyah → Perbaikan), Lanjutan 1 tahap.
+// Definisi tahap per program.
+// - level      = tahap yang dicatat di keterangan (qoidah_nuroniyyah / perbaikan_bacaan)
+// - kaldikLevel = kaldik mana yang dipakai untuk turunkan tanggal pertemuannya.
+// Dasar: 2 tahap (Nuroniyyah pakai kaldik qoidah, lalu Perbaikan pakai kaldik perbaikan).
+// Lanjutan: 1 tahap (Perbaikan) TAPI berjalan sejak KBM batch → pakai kaldik qoidah.
+export type StageDef = { level: HitsLevel; kaldikLevel: HitsLevel };
+export const PROGRAM_STAGE_DEFS: Record<string, StageDef[]> = {
+  dasar: [
+    { level: 'qoidah_nuroniyyah', kaldikLevel: 'qoidah_nuroniyyah' },
+    { level: 'perbaikan_bacaan', kaldikLevel: 'perbaikan_bacaan' },
+  ],
+  lanjutan: [{ level: 'perbaikan_bacaan', kaldikLevel: 'qoidah_nuroniyyah' }],
+};
+
+// Level keterangan per program (untuk listing/grouping).
 export const PROGRAM_STAGES: Record<string, HitsLevel[]> = {
   dasar: ['qoidah_nuroniyyah', 'perbaikan_bacaan'],
   lanjutan: ['perbaikan_bacaan'],
 };
+
+/** Kaldik level yang perlu dimuat untuk sebuah program (distinct). */
+export function programKaldikLevels(program: string): HitsLevel[] {
+  const defs = PROGRAM_STAGE_DEFS[program] ?? PROGRAM_STAGE_DEFS.dasar;
+  return [...new Set(defs.map((d) => d.kaldikLevel))];
+}
 
 export const HITS_LEVEL_SHORT: Record<HitsLevel, string> = {
   qoidah_nuroniyyah: 'Nuroniyyah',
@@ -141,21 +161,20 @@ export function pertemuanLabel(d: DerivedPertemuan): string {
 export function deriveHalaqahProgram(
   program: string,
   jadwalHari: string[],
-  kaldikByLevel: Map<HitsLevel, KaldikHariLite[]>,
-  overridesByLevel: Map<HitsLevel, PertemuanOverride[]>
+  kaldikByLevel: Map<HitsLevel, KaldikHariLite[]>, // keyed by KALDIK level
+  overridesByLevel: Map<HitsLevel, PertemuanOverride[]> // keyed by KETERANGAN level
 ): DerivedPertemuan[] {
-  const stages = PROGRAM_STAGES[program] ?? PROGRAM_STAGES.dasar;
+  const defs = PROGRAM_STAGE_DEFS[program] ?? PROGRAM_STAGE_DEFS.dasar;
   const out: DerivedPertemuan[] = [];
-  // Tahap sekuensial: tahap-N hanya tanggal setelah tahap sebelumnya berakhir
-  // (mencegah overlap bila kaldik perbaikan dimulai berbarengan dgn nuroniyyah).
+  // Tahap sekuensial: tahap-N hanya tanggal setelah tahap sebelumnya berakhir.
   let prevLast: string | null = null;
-  for (const level of stages) {
-    const kaldik = kaldikByLevel.get(level) ?? [];
+  for (const def of defs) {
+    const kaldik = kaldikByLevel.get(def.kaldikLevel) ?? [];
     if (kaldik.length === 0) continue;
-    let derived = deriveHalaqahPertemuanWithOverrides(jadwalHari, kaldik, overridesByLevel.get(level) ?? []);
+    let derived = deriveHalaqahPertemuanWithOverrides(jadwalHari, kaldik, overridesByLevel.get(def.level) ?? []);
     if (prevLast) derived = derived.filter((d) => d.tanggal > prevLast!);
     if (derived.length === 0) continue;
-    for (const d of derived) out.push({ ...d, level });
+    for (const d of derived) out.push({ ...d, level: def.level });
     prevLast = derived.reduce((mx, d) => (d.tanggal > mx ? d.tanggal : mx), prevLast ?? '');
   }
   return out.sort((a, b) => (a.tanggal < b.tanggal ? -1 : a.tanggal > b.tanggal ? 1 : 0));
