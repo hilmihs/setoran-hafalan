@@ -111,7 +111,8 @@ export function HitsKetuaForm({ halaqahName, pengajarName, slots: initialSlots, 
     });
   }
 
-  const locked = editing?.keterangan?.editable === false;
+  // Ketua kelas boleh edit semua pertemuan yang tampil (termasuk hasil migrasi).
+  const locked = false;
 
   const formUI = editing && (
     <div style={{ padding: '16px 20px' }}>
@@ -272,7 +273,11 @@ export function HitsKetuaForm({ halaqahName, pengajarName, slots: initialSlots, 
               slots.map((s) => {
                 const k = s.keterangan;
                 return (
-                  <tr key={slotKey(s)} style={s.isToday ? { background: 'var(--accent-tint)' } : undefined}>
+                  <tr
+                    key={slotKey(s)}
+                    onClick={() => openEdit(s)}
+                    style={{ cursor: 'pointer', ...(s.isToday ? { background: 'var(--accent-tint)' } : {}) }}
+                  >
                     <td className="nm">
                       {s.pertemuanNo}{s.isToday ? ' (hari ini)' : ''}
                       <div className="t-tiny" style={{ color: 'var(--muted-2)' }}>{s.levelLabel}</div>
@@ -299,8 +304,11 @@ export function HitsKetuaForm({ halaqahName, pengajarName, slots: initialSlots, 
                     <td>{!k || k.kondisi === 'LIBUR' ? '—' : k.latihan_diberikan ? 'Ya' : 'Tidak'}</td>
                     <td>{k?.status_latihan ?? '—'}</td>
                     <td>
-                      <button onClick={() => openEdit(s)} className="act-btn">
-                        {k ? (k.editable === false ? 'Lihat' : 'Edit') : 'Isi'}
+                      <button
+                        onClick={(e) => { e.stopPropagation(); openEdit(s); }}
+                        className="act-btn"
+                      >
+                        {k ? 'Edit' : 'Isi'}
                       </button>
                     </td>
                   </tr>

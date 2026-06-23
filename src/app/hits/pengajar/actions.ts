@@ -63,9 +63,11 @@ export async function electKetua(_prev: Res | undefined, fd: FormData): Promise<
 
   const halaqahId = String(fd.get('halaqah_id') ?? '');
   const pesertaId = String(fd.get('peserta_id') ?? '');
+  // Mode manual: nama ketua diketik langsung saat tidak ada di daftar peserta.
+  const ketuaNamaManual = String(fd.get('ketua_nama') ?? '').trim();
   const ketuaWa = String(fd.get('ketua_wa') ?? '').trim();
-  if (!halaqahId || !pesertaId || !ketuaWa) {
-    return { error: 'Pilih peserta dan isi nomor WA ketua kelas.' };
+  if (!halaqahId || !ketuaWa || (!pesertaId && !ketuaNamaManual)) {
+    return { error: 'Pilih/tulis nama peserta dan isi nomor WA ketua kelas.' };
   }
 
   const { data: halaqah } = await supabaseAdmin
@@ -77,27 +79,35 @@ export async function electKetua(_prev: Res | undefined, fd: FormData): Promise<
   const owned = halaqah.pengajar_id === session.pengajar_id || (wa && halaqah.pengajar_wa === wa);
   if (!owned) return { error: 'Halaqah ini bukan milik Anda.' };
 
-  const { data: chosen } = await supabaseAdmin
-    .from('hits_halaqah_peserta')
-    .select('id, nama')
-    .eq('id', pesertaId)
-    .eq('halaqah_id', halaqahId)
-    .maybeSingle();
-  if (!chosen) return { error: 'Peserta tidak ditemukan di halaqah ini.' };
+  // Nama ketua: dari peserta terpilih, atau ketikan manual.
+  let ketuaNama = ketuaNamaManual;
+  if (pesertaId) {
+    const { data: chosen } = await supabaseAdmin
+      .from('hits_halaqah_peserta')
+      .select('id, nama')
+      .eq('id', pesertaId)
+      .eq('halaqah_id', halaqahId)
+      .maybeSingle();
+    if (!chosen) return { error: 'Peserta tidak ditemukan di halaqah ini.' };
+    ketuaNama = chosen.nama;
+  }
+  if (!ketuaNama) return { error: 'Nama ketua kelas wajib diisi.' };
 
   const normWa = normalizeWhatsApp(ketuaWa);
   const gender = halaqah.gender ?? session.gender;
 
-  // Reset ketua lama di halaqah, set yang baru.
-  await supabaseAdmin
-    .from('hits_halaqah_peserta')
-    .update({ is_ketua: false, ketua_wa: null })
-    .eq('halaqah_id', halaqahId)
-    .eq('is_ketua', true);
-  await supabaseAdmin
-    .from('hits_halaqah_peserta')
-    .update({ is_ketua: true, ketua_wa: normWa })
-    .eq('id', pesertaId);
+  // Reset ketua lama di halaqah, set yang baru (hanya bila pilih dari daftar peserta).
+  if (pesertaId) {
+    await supabaseAdmin
+      .from('hits_halaqah_peserta')
+      .update({ is_ketua: false, ketua_wa: null })
+      .eq('halaqah_id', halaqahId)
+      .eq('is_ketua', true);
+    await supabaseAdmin
+      .from('hits_halaqah_peserta')
+      .update({ is_ketua: true, ketua_wa: normWa })
+      .eq('id', pesertaId);
+  }
 
   // Nonaktifkan ketua_kelas lama utk halaqah ini, buat baru (magic-link).
   await supabaseAdmin
@@ -114,11 +124,11 @@ export async function electKetua(_prev: Res | undefined, fd: FormData): Promise<
   const { data: inserted, error } = await supabaseAdmin
     .from('ketua_kelas')
     .insert({
-      name: chosen.nama,
+      name: ketuaNama,
       gender,
       whatsapp_number: normWa,
       hits_halaqah_id: halaqahId,
-      hits_halaqah_peserta_id: pesertaId,
+      hits_halaqah_peserta_id: pesertaId || null,
       magic_token: magicToken,
       password_hash: passwordHash,
       active: true,
@@ -132,12 +142,12 @@ export async function electKetua(_prev: Res | undefined, fd: FormData): Promise<
     action: 'hits.ketua.elect',
     targetTable: 'ketua_kelas',
     targetId: inserted?.id ?? null,
-    detail: { halaqah_id: halaqahId, peserta_id: pesertaId },
+    detail: { halaqah_id: halaqahId, peserta_id: pesertaId || null, manual: !pesertaId },
   });
 
   const magicUrl = absUrl(`/api/auth/magic-link?token=${magicToken}`);
   const msg = tplKetuaKelasTerpilih({
-    ketuaKelasName: chosen.nama,
+    ketuaKelasName: ketuaNama,
     ketuaKelasGender: gender,
     kelasName: halaqah.name,
     magicUrl,

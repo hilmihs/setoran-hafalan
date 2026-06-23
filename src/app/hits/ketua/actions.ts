@@ -43,18 +43,8 @@ export async function submitKeteranganHarian(
   if (!match) return { error: 'Pertemuan tidak ada di kaldik halaqah ini.' };
   if (match.tanggal > today) return { error: 'Tidak bisa mengisi pertemuan yang belum berlangsung.' };
 
-  // Cek baris lama: hormati flag editable.
-  const { data: existing } = await supabaseAdmin
-    .from('hits_keterangan_harian')
-    .select('id, editable')
-    .eq('halaqah_id', halaqahId)
-    .eq('level', level)
-    .eq('pertemuan_no', pertemuanNo)
-    .maybeSingle();
-  if (existing && existing.editable === false) {
-    return { error: 'Pertemuan ini sudah dikunci, tidak bisa diubah.' };
-  }
-
+  // Ketua kelas boleh mengedit seluruh pertemuan yang tampil (termasuk hasil
+  // migrasi yang sebelumnya terkunci). Tidak ada gating editable di sini.
   const isLibur = kondisi === 'LIBUR';
   const latihanDiberikan = isLibur ? null : latihanDiberikanRaw === 'true';
   const finalStatus = !isLibur && latihanDiberikan && STATUS.includes(statusLatihan) ? statusLatihan : null;
@@ -74,6 +64,7 @@ export async function submitKeteranganHarian(
         status_latihan: finalStatus,
         semua_selesai: semuaSelesai,
         catatan,
+        editable: true,
         diisi_by_role: 'ketua_kelas',
         diisi_by_id: session.ketua_kelas_id,
       },

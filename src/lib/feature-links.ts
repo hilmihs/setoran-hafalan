@@ -57,7 +57,7 @@ export const FEATURE_LINKS: FeatureLink[] = [
     title: 'Matrix Skill Guru',
     navLabel: 'Matrix Guru',
     description: 'Dashboard matrix penilaian pengajar HITS — Hard/Pedagogis/Soft Skill',
-    match: (a) => a.role === 'koordinator' || a.role === 'koordinator_ketua_kelas',
+    match: (a) => a.role === 'koordinator',
   },
   {
     href: '/observasi/koordinator',

@@ -21,6 +21,8 @@ function AssignForm({
 }) {
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
+  // Mode manual: ketua tidak ada di daftar peserta → ketik nama sendiri.
+  const [manual, setManual] = useState(halaqah.peserta.length === 0);
 
   function handleSubmit(fd: FormData) {
     setError(null);
@@ -40,17 +42,40 @@ function AssignForm({
 
       <div style={{ marginBottom: 12 }}>
         <label className="t-small" style={{ fontWeight: 600, display: 'block', marginBottom: 4 }}>
-          Pilih peserta sebagai ketua kelas <span style={{ color: 'var(--danger)' }}>*</span>
+          {manual ? 'Tulis nama ketua kelas' : 'Pilih peserta sebagai ketua kelas'}{' '}
+          <span style={{ color: 'var(--danger)' }}>*</span>
         </label>
-        <select name="peserta_id" required className="input" style={{ width: '100%' }} defaultValue="">
-          <option value="" disabled>— Pilih peserta —</option>
-          {halaqah.peserta.map((p) => (
-            <option key={p.id} value={p.id}>{p.nama}</option>
-          ))}
-        </select>
-        {halaqah.peserta.length === 0 && (
-          <p className="t-small" style={{ color: 'var(--danger)', marginTop: 4 }}>
-            Belum ada peserta di halaqah ini. Hubungi koordinator.
+
+        {manual ? (
+          <input
+            type="text"
+            name="ketua_nama"
+            required
+            placeholder="Nama lengkap ketua kelas"
+            className="input"
+            style={{ width: '100%' }}
+          />
+        ) : (
+          <select name="peserta_id" required className="input" style={{ width: '100%' }} defaultValue="">
+            <option value="" disabled>— Pilih peserta —</option>
+            {halaqah.peserta.map((p) => (
+              <option key={p.id} value={p.id}>{p.nama}</option>
+            ))}
+          </select>
+        )}
+
+        {halaqah.peserta.length > 0 && (
+          <button
+            type="button"
+            onClick={() => setManual((m) => !m)}
+            style={{ background: 'none', border: 'none', padding: '4px 0', marginTop: 4, cursor: 'pointer', color: 'var(--accent)', fontSize: 12, fontWeight: 500 }}
+          >
+            {manual ? '← Pilih dari daftar peserta' : 'Ketua tidak ada di daftar? Tulis manual'}
+          </button>
+        )}
+        {manual && halaqah.peserta.length === 0 && (
+          <p className="t-small" style={{ color: 'var(--muted-2)', marginTop: 4 }}>
+            Tidak ada peserta terdaftar — tulis nama ketua secara manual.
           </p>
         )}
       </div>
