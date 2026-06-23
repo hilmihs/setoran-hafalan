@@ -146,11 +146,7 @@ export function MaahirRekapTable({ kelas }: { kelas: RekapKelas }) {
                                 className="t-tiny"
                                 style={{ color: 'var(--muted-2)', fontSize: 9 }}
                               >
-                                {p.program === 'kelas_maahir'
-                                  ? 'Maahir'
-                                  : p.program === 'muallim_najih'
-                                    ? 'Najih'
-                                    : 'Tibyan'}
+                                {p.program === 'kelas_maahir' ? 'Maahir' : 'Tibyan'}
                               </span>
                             </div>
                           ))}

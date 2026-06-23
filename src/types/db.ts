@@ -20,6 +20,14 @@ export const JENIS_REKAMAN_LABEL: Record<JenisRekaman, string> = {
   syawahid: 'Syawahid',
 };
 
+// Limit durasi maksimal rekaman per jenis (detik). Default 30 menit;
+// Matan Al-Jazariyyah 45 menit. Dipakai client (AudioRecorder auto-stop).
+export const JENIS_REKAMAN_MAX_DURASI_SEC: Record<JenisRekaman, number> = {
+  tuhfatul_athfal: 30 * 60,
+  jazariyyah: 45 * 60,
+  syawahid: 30 * 60,
+};
+
 export const NILAI_LABEL: Record<NilaiRekaman, string> = {
   hijau: 'Hijau (Baik)',
   kuning: 'Kuning (Perlu Perbaikan)',
@@ -491,7 +499,6 @@ export interface MatrixRekap {
   skor_tajwid: number | null;
   skor_kehadiran_maahir: number | null;
   skor_kehadiran_tibyan: number | null;
-  skor_kehadiran_muallim: number | null;
   rata_rata_hard_skill: number | null;
   skor_metode_pengajaran: number | null;
   skor_kepatuhan_silabus: number | null;
@@ -525,7 +532,6 @@ export const INDIKATOR_STANDAR: Record<string, number> = {
   tajwid: 2,
   kehadiran_maahir: 4,
   kehadiran_tibyan: 4,
-  kehadiran_muallim: 4,
   metode_pengajaran: 4,
   kepatuhan_silabus: 4,
   manajemen_halaqah: 4,

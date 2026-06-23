@@ -1,32 +1,28 @@
 // Deteksi hari presensi Maahir yang belum diisi oleh ketua/wakil kelas.
 // Strict: semua hari program sejak PRESENSI_ANCHOR wajib terisi.
-// 3 program: Kelas Maahir (jadwal per-kelas), Muallim Najih (Jum'at),
-// Kajian At-Tibyan (Sabtu).
+// 2 program: Kelas Maahir (jadwal per-kelas), Kajian At-Tibyan (Sabtu).
+// (Muallim Najih dihapus dari penilaian.)
 
 import { supabaseAdmin } from '@/lib/supabase-admin';
 import { findKetuaProgramKelas, type ProgramKelasRow } from '@/lib/program-kelas';
 
 export const PRESENSI_ANCHOR = '2026-06-01'; // strict mulai Juni 2026
-export const NAJIH_HARI = "Jum'at"; // muallim_najih 19:30–21:00
 export const TIBYAN_HARI = 'Sabtu'; // at_tibyan 08:30–10:00
 
-export const NAJIH_WAKTU = { mulai: '19:30', selesai: '21:00' };
 export const TIBYAN_WAKTU = { mulai: '08:30', selesai: '10:00' };
 
 export const PROGRAM_LABEL: Record<string, string> = {
   kelas_maahir: 'Kelas Maahir',
-  muallim_najih: 'Muallim Najih',
   at_tibyan: 'At-Tibyan',
 };
 
-// Urutan program kalau jatuh di tanggal yang sama (kelas dulu, lalu najih, tibyan).
+// Urutan program kalau jatuh di tanggal yang sama (kelas dulu, lalu tibyan).
 const PROGRAM_ORDER: Record<string, number> = {
   kelas_maahir: 0,
-  muallim_najih: 1,
-  at_tibyan: 2,
+  at_tibyan: 1,
 };
 
-export type MaahirProgram = 'kelas_maahir' | 'muallim_najih' | 'at_tibyan';
+export type MaahirProgram = 'kelas_maahir' | 'at_tibyan';
 
 export type UnfilledDay = {
   program_kelas_id: string;
@@ -111,18 +107,6 @@ function expectedDaysForKelas(k: ProgramKelasRow, dates: string[]): ExpectedDay[
         waktu_mulai: k.waktu_mulai,
         waktu_selesai: k.waktu_selesai,
         namaKegiatan: PROGRAM_LABEL.kelas_maahir,
-      });
-    }
-    if (hari === NAJIH_HARI) {
-      out.push({
-        program_kelas_id: k.id,
-        kelasName: k.name,
-        gender: k.gender,
-        program: 'muallim_najih',
-        tanggal,
-        waktu_mulai: NAJIH_WAKTU.mulai,
-        waktu_selesai: NAJIH_WAKTU.selesai,
-        namaKegiatan: PROGRAM_LABEL.muallim_najih,
       });
     }
     if (hari === TIBYAN_HARI) {

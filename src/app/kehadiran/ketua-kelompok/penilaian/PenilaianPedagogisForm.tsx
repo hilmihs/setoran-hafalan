@@ -2,6 +2,15 @@
 
 import { useCallback, useRef, useState } from 'react';
 import { ScoreSelector } from '@/components/ScoreSelector';
+import { RUBRIK_PEDAGOGIS, CATATAN_PEDAGOGIS } from '@/lib/penilaian-rubrik';
+
+// Tooltip per skala (0–4) per aspek pedagogis, dari RUBRIK_PEDAGOGIS.
+const PEDAGOGIS_TITLES: Record<string, string[]> = Object.fromEntries(
+  RUBRIK_PEDAGOGIS.map((r) => [
+    r.key,
+    r.skala.map((s) => `${s.skala}: ${s.teks}${s.standar ? ' (Standar)' : ''}`),
+  ])
+);
 
 const PEDAGOGIS = [
   { skorField: 'skor_metode_pengajaran', ketField: 'keterangan_metode', label: 'Metode Pengajaran Modul' },
@@ -100,6 +109,44 @@ export function PenilaianPedagogisForm({ members, yearMonth }: { members: Member
     return ALL.filter((a) => (row[a.skorField] as number | null) !== null).length;
   }
 
+  function PanduanPedagogis() {
+    return (
+      <details className="rubrik-panduan card-flat" style={{ padding: '10px 12px' }}>
+        <summary style={{ cursor: 'pointer', fontWeight: 600, fontSize: 13 }}>
+          Panduan Standar Skala — Pedagogis
+        </summary>
+        <div className="rubrik-grid" style={{ marginTop: 10 }}>
+          {RUBRIK_PEDAGOGIS.map((r) => (
+            <div key={r.key} className="rubrik-block">
+              <div className="t-small" style={{ fontWeight: 600, marginBottom: 6 }}>{r.judul}</div>
+              <ul className="t-small" style={{ color: 'var(--ink-2)', margin: '0 0 8px', paddingLeft: 16 }}>
+                {r.kriteria.map((k, i) => (
+                  <li key={i} style={{ padding: '1px 0' }}>{k}</li>
+                ))}
+              </ul>
+              <ul className="rubrik-list" style={{ listStyle: 'none', margin: 0, padding: 0 }}>
+                {r.skala.map((s) => (
+                  <li
+                    key={s.skala}
+                    className={`rubrik-item${s.standar ? ' is-standar' : ''}`}
+                    style={{ display: 'flex', gap: 8, alignItems: 'flex-start', padding: '3px 0' }}
+                  >
+                    <span className="rubrik-skala" data-v={s.skala}>{s.skala}</span>
+                    <span className="t-small">
+                      {s.teks}
+                      {s.standar && <strong style={{ color: 'var(--hijau-ink)' }}> (Standar)</strong>}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ))}
+        </div>
+        <p className="t-small" style={{ color: 'var(--ink-2)', marginTop: 8 }}>{CATATAN_PEDAGOGIS}</p>
+      </details>
+    );
+  }
+
   function renderAspect(m: Member, row: RowState, a: (typeof ALL)[number]) {
     const skor = row[a.skorField] as number | null;
     const ket = (row[a.ketField] as string | null) ?? '';
@@ -119,7 +166,7 @@ export function PenilaianPedagogisForm({ members, yearMonth }: { members: Member
             ✎{ket && <span className="ndot" />}
           </button>
         </div>
-        <ScoreSelector label={`${a.label} — ${m.name}`} value={skor} onChange={(v) => updateRow(m.id, { [a.skorField]: v } as Partial<PenilaianData>)} />
+        <ScoreSelector label={`${a.label} — ${m.name}`} value={skor} titles={PEDAGOGIS_TITLES[a.skorField]} onChange={(v) => updateRow(m.id, { [a.skorField]: v } as Partial<PenilaianData>)} />
         {noteOpen && (
           <input
             type="text"
@@ -136,6 +183,7 @@ export function PenilaianPedagogisForm({ members, yearMonth }: { members: Member
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+      <PanduanPedagogis />
       {members.map((m) => {
         const row = rows[m.id];
         const isOpen = expanded === m.id;

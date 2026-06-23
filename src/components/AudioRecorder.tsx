@@ -4,8 +4,30 @@ import { useEffect, useRef, useState } from 'react';
 import { Icon, Waveform } from './icons';
 import { LiveWaveform } from './LiveWaveform';
 
-const MAX_DURATION_SEC = 15 * 60;
+const DEFAULT_MAX_DURATION_SEC = 30 * 60;
 const MAX_UPLOAD_BYTES = 25 * 1024 * 1024;
+
+// Ekstensi audio yang diterima saat MIME type kosong/tidak dikenal (umum di
+// iPadOS/iOS: file dari app Files sering punya file.type = '').
+const AUDIO_EXT_MIME: Record<string, string> = {
+  mp3: 'audio/mpeg',
+  m4a: 'audio/mp4',
+  mp4: 'audio/mp4',
+  aac: 'audio/aac',
+  wav: 'audio/wav',
+  ogg: 'audio/ogg',
+  oga: 'audio/ogg',
+  opus: 'audio/opus',
+  webm: 'audio/webm',
+  caf: 'audio/x-caf',
+  amr: 'audio/amr',
+  '3gp': 'audio/3gpp',
+};
+
+function audioExt(name: string): string | null {
+  const m = name.toLowerCase().match(/\.([a-z0-9]+)$/);
+  return m && m[1] in AUDIO_EXT_MIME ? m[1] : null;
+}
 
 type State =
   | { kind: 'idle' }
@@ -21,6 +43,7 @@ export function AudioRecorder({
   initialRecording,
   initialAudioUrl,
   initialDurationSec,
+  maxDurationSec = DEFAULT_MAX_DURATION_SEC,
 }: {
   label: string;
   onChange: (blob: Blob | null, durationSec: number | null) => void;
@@ -31,6 +54,8 @@ export function AudioRecorder({
   // Tidak memicu onChange (sudah ada di server, jangan auto-submit ulang).
   initialAudioUrl?: string;
   initialDurationSec?: number;
+  // Limit durasi maksimal rekaman (detik). Default 30 menit.
+  maxDurationSec?: number;
 }) {
   const [state, setState] = useState<State>({ kind: 'idle' });
   const [mode, setMode] = useState<'rec' | 'upload'>('rec');
@@ -74,7 +99,7 @@ export function AudioRecorder({
       const total = base + Math.floor((Date.now() - startedAt) / 1000);
       setElapsed(total);
       elapsedRef.current = total;
-      if (total >= MAX_DURATION_SEC) stop();
+      if (total >= maxDurationSec) stop();
     }, 250);
   }
 
@@ -170,8 +195,12 @@ export function AudioRecorder({
   async function handleFileUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
-    if (!file.type.startsWith('audio/')) {
-      setError('Hanya file audio yang didukung (mp3, m4a, ogg, webm).');
+    // iPadOS/iOS sering kasih file.type kosong untuk file dari Files — fallback
+    // ke ekstensi nama supaya mp3/m4a hasil rekam iPad tetap bisa di-upload.
+    const ext = audioExt(file.name);
+    const isAudio = file.type.startsWith('audio/') || ext !== null;
+    if (!isAudio) {
+      setError('Hanya file audio yang didukung (mp3, m4a, ogg, webm, wav).');
       return;
     }
     if (file.size > MAX_UPLOAD_BYTES) {
@@ -179,6 +208,11 @@ export function AudioRecorder({
       return;
     }
     setError(null);
+    // Tentukan content-type: pakai file.type bila valid audio, jika tidak tebak
+    // dari ekstensi (default audio/mpeg untuk .mp3) supaya playback benar.
+    const contentType = file.type.startsWith('audio/')
+      ? file.type
+      : (ext ? AUDIO_EXT_MIME[ext] : 'audio/mpeg');
     const url = URL.createObjectURL(file);
     const audio = new Audio(url);
     const duration = await new Promise<number>((resolve) => {
@@ -186,7 +220,7 @@ export function AudioRecorder({
       audio.onerror = () => resolve(0);
     });
     const durationSec = Math.max(1, Math.round(duration));
-    const blob = new Blob([await file.arrayBuffer()], { type: file.type });
+    const blob = new Blob([await file.arrayBuffer()], { type: contentType });
     setState({ kind: 'recorded', blob, url, durationSec });
     onChange(blob, durationSec);
   }
@@ -231,14 +265,17 @@ export function AudioRecorder({
             >
               <span className="ic">{Icon.mic(16)}</span>
               <span className="txt">Mulai rekam</span>
-              <span className="hint">maks 15 min</span>
+              <span className="hint">maks {Math.round(maxDurationSec / 60)} min</span>
             </button>
           ) : (
             <div>
               <input
                 ref={uploadRef}
                 type="file"
-                accept="audio/*"
+                // Ekstensi eksplisit selain audio/* — iPadOS Files mem-grey-out
+                // file (mis. .mp3 dari app) bila hanya audio/*; daftar ekstensi
+                // bikin file bisa dipilih.
+                accept="audio/*,.mp3,.m4a,.aac,.wav,.ogg,.oga,.opus,.webm,.caf,.mp4,.amr,.3gp"
                 disabled={disabled}
                 onChange={handleFileUpload}
                 style={{ display: 'none' }}

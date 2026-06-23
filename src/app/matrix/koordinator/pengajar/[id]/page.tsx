@@ -53,7 +53,7 @@ const KATEGORI_LABEL: Record<string, { label: string; color: string }> = {
 };
 
 const SCORE_COLS_DETAIL =
-  'skor_bacaan, skor_hafalan, skor_tajwid, skor_kehadiran_maahir, skor_kehadiran_tibyan, skor_kehadiran_muallim, skor_metode_pengajaran, skor_kepatuhan_silabus, skor_manajemen_halaqah, skor_evaluasi_penguasaan, skor_kedisiplinan_waktu, skor_komitmen_jadwal, skor_tanggung_jawab, skor_kepatuhan_sop';
+  'skor_bacaan, skor_hafalan, skor_tajwid, skor_kehadiran_maahir, skor_kehadiran_tibyan, skor_metode_pengajaran, skor_kepatuhan_silabus, skor_manajemen_halaqah, skor_evaluasi_penguasaan, skor_kedisiplinan_waktu, skor_komitmen_jadwal, skor_tanggung_jawab, skor_kepatuhan_sop';
 
 const KONDISI_LABEL: Record<string, { label: string; badge: string }> = {
   KBBS: { label: 'KBBS — Kelas Berlangsung Baik', badge: 'badge-hijau' },

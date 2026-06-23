@@ -11,7 +11,6 @@ export const dynamic = 'force-dynamic';
 
 const PROGRAM_LABEL: Record<string, string> = {
   kelas_maahir: 'Kelas Maahir',
-  muallim_najih: 'Muallim Najih',
   at_tibyan: 'At-Tibyan',
 };
 

@@ -42,7 +42,7 @@ export const FEATURE_LINKS: FeatureLink[] = [
     href: '/kehadiran/pengajar',
     title: 'Kehadiran Program',
     navLabel: 'Kehadiran',
-    description: 'Check-in kehadiran Kelas Maahir, Kajian At-Tibyan, Muallim Najih',
+    description: 'Check-in kehadiran Kelas Maahir, Kajian At-Tibyan',
     match: (a) => a.role === 'pengajar',
   },
   {

@@ -6,6 +6,7 @@ import { Icon, Initials } from './icons';
 import {
   JENIS_REKAMAN,
   JENIS_REKAMAN_LABEL,
+  JENIS_REKAMAN_MAX_DURASI_SEC,
   type JenisRekaman,
   type NilaiRekaman,
 } from '@/types/db';
@@ -280,7 +281,7 @@ export function PesertaSetoranForm({
   return (
     <div>
       <p className="t-small" style={{ marginBottom: 14 }}>
-        {hasSingleMode ? 'Rekam dan kirim satu per satu, atau langsung 3 sekaligus.' : '3 rekaman · maks 15 menit per rekaman'}
+        {hasSingleMode ? 'Rekam dan kirim satu per satu, atau langsung 3 sekaligus.' : '3 rekaman · maks 30 menit (Al-Jazariyyah 45) per rekaman'}
       </p>
 
       <div className="section-row">
@@ -321,6 +322,7 @@ export function PesertaSetoranForm({
             <div key={j}>
               <AudioRecorder
                 label={JENIS_LABEL_FORM[j] ?? JENIS_REKAMAN_LABEL[j]}
+                maxDurationSec={JENIS_REKAMAN_MAX_DURASI_SEC[j]}
                 disabled={submitting || isSubmitting || isSubmitted}
                 submitted={isSubmitted}
                 initialRecording={initialRecordings[j] ?? undefined}

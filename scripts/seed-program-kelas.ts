@@ -274,7 +274,9 @@ const DATA: ProgramKelas[] = [
   {
     name: 'Maahir Alumni/Talaqqi',
     gender: 'ikhwan',
-    hari: ['Senin', 'Selasa', 'Rabu', 'Kamis', "Jum'at"],
+    // Alumni talaqqi 1x/pekan, hari tidak fixed → tanpa jadwal harian.
+    // Ketua input pertemuan manual saat talaqqi jalan (bukan wajib hadir tiap Senin–Jum'at).
+    hari: [],
     mulai: '09:00', selesai: '21:00',
     anggota: [
       { name: 'Faizil El Islami', wa: '081298205428' },

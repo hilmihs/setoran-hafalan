@@ -3,7 +3,8 @@
 //
 // Sumber data (pengajar ↔ peserta di-link via nomor WA):
 //   Hard skill : penilaian_masyaikh (bacaan, hafalan), rekaman setoran (tajwid),
-//                kehadiran_peserta via program_kelas_anggota (3 program)
+//                kehadiran_peserta via program_kelas_anggota (2 program: maahir, tibyan)
+//   Bobot hard skill: 9 porsi (maahir 3, tibyan 3, bacaan 1, hafalan 1, tajwid 1).
 //   Pedagogis  : penilaian_pedagogis (4 aspek, oleh ketua kelompok)
 //   Soft skill : hits_keterangan_harian via hits_halaqah (kedisiplinan = %KBBS,
 //                tanggung jawab = %latihan beres), penilaian_pedagogis.skor_kepatuhan_sop (SOP).
@@ -68,6 +69,23 @@ function avg(nums: Array<number | null>): number | null {
   return Math.round((v.reduce((a, b) => a + b, 0) / v.length) * 100) / 100;
 }
 
+/**
+ * Rata-rata berbobot, null di-skip beserta bobotnya (re-normalisasi atas bobot
+ * yang terisi). Dipakai hard skill: 9 porsi → maahir 3, tibyan 3, bacaan 1,
+ * hafalan 1, tajwid 1.
+ */
+function weightedAvg(parts: Array<{ v: number | null; w: number }>): number | null {
+  let sum = 0;
+  let wsum = 0;
+  for (const { v, w } of parts) {
+    if (v === null || v === undefined) continue;
+    sum += v * w;
+    wsum += w;
+  }
+  if (wsum === 0) return null;
+  return Math.round((sum / wsum) * 100) / 100;
+}
+
 export type MatrixRow = {
   pengajar_id: string;
   year_month: string;
@@ -76,7 +94,6 @@ export type MatrixRow = {
   skor_tajwid: number | null;
   skor_kehadiran_maahir: number | null;
   skor_kehadiran_tibyan: number | null;
-  skor_kehadiran_muallim: number | null;
   rata_rata_hard_skill: number | null;
   skor_metode_pengajaran: number | null;
   skor_kepatuhan_silabus: number | null;
@@ -294,7 +311,6 @@ export async function computeMatrixForMonth(yearMonth: string): Promise<MatrixRo
       skor_tajwid: skorTajwid,
       skor_kehadiran_maahir: kehadiranSkor('kelas_maahir'),
       skor_kehadiran_tibyan: kehadiranSkor('at_tibyan'),
-      skor_kehadiran_muallim: kehadiranSkor('muallim_najih'),
     };
     const pedagogis = {
       skor_metode_pengajaran: ped?.skor_metode_pengajaran ?? null,
@@ -309,7 +325,15 @@ export async function computeMatrixForMonth(yearMonth: string): Promise<MatrixRo
       skor_kepatuhan_sop: ped?.skor_kepatuhan_sop ?? null,
     };
 
-    const rataHard = avg(Object.values(hard));
+    // Hard skill berbobot 9 porsi: kehadiran maahir 3, kehadiran tibyan 3,
+    // bacaan 1, hafalan 1, tajwid 1. (Muallim Najih dihapus dari penilaian.)
+    const rataHard = weightedAvg([
+      { v: hard.skor_kehadiran_maahir, w: 3 },
+      { v: hard.skor_kehadiran_tibyan, w: 3 },
+      { v: hard.skor_bacaan, w: 1 },
+      { v: hard.skor_hafalan, w: 1 },
+      { v: hard.skor_tajwid, w: 1 },
+    ]);
     const rataPedagogis = avg(Object.values(pedagogis));
     const rataSoft = avg(Object.values(soft));
     const rataAll = avg([rataHard, rataPedagogis, rataSoft]);

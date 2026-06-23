@@ -24,7 +24,6 @@ const INDIKATOR: Array<{
   { field: 'skor_tajwid',            label: 'Tajwid (nilai rekaman)', short: 'Tajwid',    kategori: 'Hard Skill', standar: 2 },
   { field: 'skor_kehadiran_maahir',  label: 'Kehadiran Kelas Maahir',short: 'Hdr Maahir',kategori: 'Hard Skill', standar: 4 },
   { field: 'skor_kehadiran_tibyan',  label: 'Kehadiran At-Tibyan',   short: 'At-Tibyan', kategori: 'Hard Skill', standar: 4 },
-  { field: 'skor_kehadiran_muallim', label: 'Kehadiran Muallim Najih',short: 'Muallim',  kategori: 'Hard Skill', standar: 4 },
   { field: 'skor_metode_pengajaran', label: 'Metode Pengajaran',     short: 'Metode',    kategori: 'Pedagogis',  standar: 4 },
   { field: 'skor_kepatuhan_silabus', label: 'Kepatuhan Silabus',     short: 'Silabus',   kategori: 'Pedagogis',  standar: 4 },
   { field: 'skor_manajemen_halaqah', label: 'Manajemen Halaqah',     short: 'Halaqah',   kategori: 'Pedagogis',  standar: 4 },

@@ -68,7 +68,7 @@ export default async function HomePage({ searchParams }: { searchParams: { next?
                 >
                   <div style={{ fontWeight: 600, marginBottom: 4 }}>Presensi Kelas Maahir</div>
                   <div className="t-small" style={{ color: 'var(--muted-2)' }}>
-                    Isi kehadiran anggota kelas — Kelas Maahir, Muallim Najih, At-Tibyan
+                    Isi kehadiran anggota kelas — Kelas Maahir, At-Tibyan
                   </div>
                 </a>
               )}

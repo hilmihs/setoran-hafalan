@@ -14,7 +14,6 @@ export type IndikatorKey =
   | 'skor_tajwid'
   | 'skor_kehadiran_maahir'
   | 'skor_kehadiran_tibyan'
-  | 'skor_kehadiran_muallim'
   | 'skor_metode_pengajaran'
   | 'skor_kepatuhan_silabus'
   | 'skor_manajemen_halaqah'
@@ -56,6 +55,16 @@ export const KATEGORI_STANDAR: Record<Kategori, number> = {
 };
 
 export const STANDAR_KESELURUHAN = 3.67;
+
+// Bobot hard skill — total 9 porsi. Null di-skip beserta bobotnya saat hitung
+// rata_rata_hard_skill (lihat weightedAvg di matrix-compute.ts).
+export const HARD_BOBOT: Partial<Record<IndikatorKey, number>> = {
+  skor_kehadiran_maahir: 3,
+  skor_kehadiran_tibyan: 3,
+  skor_bacaan: 1,
+  skor_hafalan: 1,
+  skor_tajwid: 1,
+};
 
 export const INDIKATOR: Indikator[] = [
   // A. Hard Skill
@@ -104,15 +113,6 @@ export const INDIKATOR: Indikator[] = [
     kategori: 'hard',
     standar: 4,
     deskripsi: 'Kehadiran di Kajian At-Tibyan 80–100%.',
-    sumber: 'Kehadiran Pengembangan',
-  },
-  {
-    key: 'skor_kehadiran_muallim',
-    label: 'Kehadiran Program Muallim Najih',
-    short: 'Hadir Muallim',
-    kategori: 'hard',
-    standar: 4,
-    deskripsi: 'Kehadiran di Program Muallim Najih 80–100%.',
     sumber: 'Kehadiran Pengembangan',
   },
   // B. Pedagogis (Metodologi)

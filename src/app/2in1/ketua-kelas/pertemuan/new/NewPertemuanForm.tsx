@@ -5,7 +5,6 @@ import { useRouter } from 'next/navigation';
 
 const PROGRAMS = [
   { value: 'kelas_maahir', label: 'Kelas Maahir', mulai: '', selesai: '' },
-  { value: 'muallim_najih', label: 'Muallim Najih', mulai: '19:30', selesai: '21:00' },
   { value: 'at_tibyan', label: 'At-Tibyan', mulai: '08:30', selesai: '10:00' },
 ];
 
