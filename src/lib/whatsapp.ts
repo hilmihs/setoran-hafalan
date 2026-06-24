@@ -391,6 +391,28 @@ export function tplJadwalPindahToKoorKK(args: {
   ].join('\n');
 }
 
+export function tplHapusPertemuanToKoorKK(args: {
+  ketuaName: string;
+  kelasName: string;
+  pertemuanNo: number;
+  tanggal: string | null;
+  levelLabel: string;
+  alasan: string;
+  approveUrl: string;
+}): string {
+  return [
+    `Assalamu'alaikum,`,
+    ``,
+    `Ketua kelas *${args.ketuaName}* mengajukan penghapusan pertemuan yang dianggap kelebihan/salah:`,
+    `• Halaqah: ${args.kelasName}`,
+    `• Pertemuan: ${args.pertemuanNo} (${args.levelLabel})${args.tanggal ? ` · ${args.tanggal}` : ''}`,
+    `• Alasan: ${args.alasan || '-'}`,
+    ``,
+    `Setujui / tolak di sini:`,
+    args.approveUrl,
+  ].join('\n');
+}
+
 export function tplJadwalPindahToKetuaKelas(args: {
   ketuaKelasName: string;
   ketuaKelasGender: Gender;

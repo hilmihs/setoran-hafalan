@@ -6,9 +6,102 @@ import { requireKetuaKelas } from '@/lib/session';
 import { loadHalaqahPertemuan } from '@/lib/hits-ketua';
 import { todayJakarta } from '@/lib/maahir-presensi';
 import { logAudit } from '@/lib/audit';
+import { absUrl } from '@/lib/url';
+import { buildWaMeUrl, tplHapusPertemuanToKoorKK } from '@/lib/whatsapp';
+import { HITS_LEVEL_SHORT } from '@/lib/hits-pertemuan';
 import type { HitsKondisi, HitsStatusLatihan, HitsLevel } from '@/types/db';
 
 export type KetuaHarianResult = { ok?: boolean; error?: string };
+export type AjukanHapusResult = { ok?: boolean; error?: string; waUrl?: string };
+
+/** Ketua kelas mengajukan penghapusan pertemuan kelebihan/salah → koordinator KK. */
+export async function ajukanHapusPertemuan(
+  _prev: AjukanHapusResult | undefined,
+  fd: FormData
+): Promise<AjukanHapusResult> {
+  const session = await requireKetuaKelas();
+  const halaqahId = session.hits_halaqah_id;
+  if (!halaqahId) return { error: 'Akun ini bukan ketua kelas HITS.' };
+
+  const pertemuanNo = Number(fd.get('pertemuan_no'));
+  const level = String(fd.get('level') ?? '') as HitsLevel;
+  const tanggal = String(fd.get('tanggal') ?? '') || null;
+  const alasan = String(fd.get('alasan') ?? '').trim();
+  if (!Number.isFinite(pertemuanNo) || pertemuanNo < 1) return { error: 'Pertemuan tidak valid.' };
+  if (level !== 'qoidah_nuroniyyah' && level !== 'perbaikan_bacaan') return { error: 'Tahap tidak valid.' };
+
+  const { data: halaqah } = await supabaseAdmin
+    .from('hits_halaqah')
+    .select('id, name, gender')
+    .eq('id', halaqahId)
+    .maybeSingle();
+  if (!halaqah) return { error: 'Halaqah tidak ditemukan.' };
+  const gender = (halaqah.gender ?? session.gender) as 'ikhwan' | 'akhwat';
+
+  const token = crypto.randomUUID();
+  const { error: insErr } = await supabaseAdmin
+    .from('hits_pertemuan_hapus_request')
+    .insert({
+      halaqah_id: halaqahId,
+      level,
+      pertemuan_no: pertemuanNo,
+      tanggal,
+      alasan: alasan || null,
+      gender,
+      requested_by_ketua_id: session.ketua_kelas_id,
+      requested_by_name: session.name,
+      token,
+      status: 'pending',
+    });
+  if (insErr) {
+    if (insErr.code === '23505') return { error: 'Pertemuan ini sudah diajukan & menunggu keputusan koordinator.' };
+    return { error: `Gagal mengajukan: ${insErr.message}` };
+  }
+
+  // Routing ke koordinator ketua kelas sesuai gender halaqah.
+  const { data: koor } = await supabaseAdmin
+    .from('koordinator_ketua_kelas')
+    .select('whatsapp_number, name')
+    .eq('gender', gender)
+    .eq('active', true)
+    .ilike('name', 'Koordinator KK%')
+    .limit(1)
+    .maybeSingle();
+  const { data: koorFallback } = koor
+    ? { data: koor }
+    : await supabaseAdmin
+        .from('koordinator_ketua_kelas')
+        .select('whatsapp_number, name')
+        .eq('gender', gender)
+        .eq('active', true)
+        .limit(1)
+        .maybeSingle();
+  const target = koor ?? koorFallback;
+
+  await logAudit({
+    actor: session,
+    action: 'hits.pertemuan.hapus.ajukan',
+    targetTable: 'hits_pertemuan_hapus_request',
+    targetId: null,
+    detail: { halaqah_id: halaqahId, level, pertemuan_no: pertemuanNo, gender },
+  });
+
+  revalidatePath('/hits/ketua');
+
+  if (!target?.whatsapp_number) {
+    return { ok: true, error: 'Pengajuan tersimpan, tapi nomor koordinator ketua kelas belum diset.' };
+  }
+  const msg = tplHapusPertemuanToKoorKK({
+    ketuaName: session.name,
+    kelasName: halaqah.name,
+    pertemuanNo,
+    tanggal,
+    levelLabel: HITS_LEVEL_SHORT[level],
+    alasan,
+    approveUrl: absUrl(`/hits/hapus-pertemuan/${token}`),
+  });
+  return { ok: true, waUrl: buildWaMeUrl(target.whatsapp_number, msg) };
+}
 
 const KONDISI: HitsKondisi[] = ['KBBS', 'KMT', 'JKG', 'KBLA', 'LIBUR'];
 const STATUS: HitsStatusLatihan[] = ['TAL', 'PTML', 'SML'];

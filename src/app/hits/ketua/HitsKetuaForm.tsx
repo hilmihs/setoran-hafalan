@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef, useTransition } from 'react';
-import { submitKeteranganHarian } from './actions';
+import { submitKeteranganHarian, ajukanHapusPertemuan } from './actions';
 import { HITS_KONDISI_LABEL, HITS_STATUS_LATIHAN_LABEL } from '@/types/db';
 import type { HitsKondisi, HitsStatusLatihan, HitsLevel } from '@/types/db';
 
@@ -43,6 +43,44 @@ export function HitsKetuaForm({ halaqahName, pengajarName, slots: initialSlots, 
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
+
+  // Pengajuan hapus pertemuan (kelebihan/salah) → koordinator KK.
+  const hapusDialogRef = useRef<HTMLDialogElement>(null);
+  const [hapusSlot, setHapusSlot] = useState<PertemuanSlot | null>(null);
+  const [hapusAlasan, setHapusAlasan] = useState('');
+  const [hapusWaUrl, setHapusWaUrl] = useState<string | null>(null);
+  const [hapusError, setHapusError] = useState<string | null>(null);
+  const [hapusPending, startHapus] = useTransition();
+
+  useEffect(() => {
+    const d = hapusDialogRef.current;
+    if (!d) return;
+    if (hapusSlot && !d.open) d.showModal();
+    if (!hapusSlot && d.open) d.close();
+  }, [hapusSlot]);
+
+  function openHapus(slot: PertemuanSlot) {
+    setHapusSlot(slot);
+    setHapusAlasan('');
+    setHapusWaUrl(null);
+    setHapusError(null);
+  }
+
+  function submitHapus() {
+    if (!hapusSlot) return;
+    setHapusError(null);
+    startHapus(async () => {
+      const fd = new FormData();
+      fd.set('pertemuan_no', String(hapusSlot.pertemuanNo));
+      fd.set('level', hapusSlot.level);
+      fd.set('tanggal', hapusSlot.tanggal);
+      fd.set('alasan', hapusAlasan);
+      const res = await ajukanHapusPertemuan(undefined, fd);
+      if (res?.error && !res.ok) { setHapusError(res.error); return; }
+      setHapusWaUrl(res?.waUrl ?? null);
+      if (res?.ok && !res.waUrl) setHapusError(res.error ?? 'Pengajuan tersimpan.');
+    });
+  }
 
   const editing = slots.find((s) => slotKey(s) === editingKey) ?? null;
 
@@ -250,6 +288,55 @@ export function HitsKetuaForm({ halaqahName, pengajarName, slots: initialSlots, 
         {formUI}
       </dialog>
 
+      <dialog
+        ref={hapusDialogRef}
+        style={{
+          border: 'none', borderRadius: 16, padding: 0, maxWidth: 440, width: '90vw',
+          background: 'var(--surface)', boxShadow: '0 8px 40px rgba(0,0,0,0.18)',
+          maxHeight: '90vh', overflow: 'auto',
+        }}
+        onClose={() => setHapusSlot(null)}
+      >
+        {hapusSlot && (
+          <div style={{ padding: '16px 20px' }}>
+            <h3 className="t-h2" style={{ marginBottom: 4 }}>Ajukan Hapus Pertemuan</h3>
+            <p className="t-small" style={{ color: 'var(--muted-2)', marginBottom: 14 }}>
+              Pertemuan {hapusSlot.pertemuanNo} · {hapusSlot.hari} {hapusSlot.tanggal}. Pengajuan dikirim
+              ke koordinator ketua kelas untuk disetujui/ditolak.
+            </p>
+
+            {hapusWaUrl ? (
+              <div style={{ textAlign: 'center' }}>
+                <p className="t-body" style={{ fontWeight: 600, color: 'var(--hijau-ink)', marginBottom: 12 }}>
+                  Pengajuan tersimpan.
+                </p>
+                <a href={hapusWaUrl} target="_blank" rel="noopener noreferrer" className="btn btn-primary" style={{ width: '100%', marginBottom: 8 }}>
+                  Kirim ke koordinator via WhatsApp
+                </a>
+                <button className="btn-ghost" onClick={() => setHapusSlot(null)} style={{ width: '100%' }}>Tutup</button>
+              </div>
+            ) : (
+              <>
+                <label className="field-label">Alasan</label>
+                <textarea
+                  className="textarea"
+                  value={hapusAlasan}
+                  onChange={(e) => setHapusAlasan(e.target.value)}
+                  placeholder="Mis. pertemuan ini kelebihan, kelas belum mulai pada tanggal tsb."
+                />
+                {hapusError && <p className="t-small" style={{ color: 'var(--danger)', margin: '8px 0' }}>{hapusError}</p>}
+                <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
+                  <button type="button" className="btn btn-primary" disabled={hapusPending} onClick={submitHapus} style={{ flex: 1 }}>
+                    {hapusPending ? 'Mengirim…' : 'Ajukan'}
+                  </button>
+                  <button type="button" className="btn-ghost" onClick={() => setHapusSlot(null)}>Batal</button>
+                </div>
+              </>
+            )}
+          </div>
+        )}
+      </dialog>
+
       <div className="card-flat" style={{ overflow: 'auto' }}>
         <table className="k-table" style={{ minWidth: 620 }}>
           <thead>
@@ -304,12 +391,22 @@ export function HitsKetuaForm({ halaqahName, pengajarName, slots: initialSlots, 
                     <td>{!k || k.kondisi === 'LIBUR' ? '—' : k.latihan_diberikan ? 'Ya' : 'Tidak'}</td>
                     <td>{k?.status_latihan ?? '—'}</td>
                     <td>
-                      <button
-                        onClick={(e) => { e.stopPropagation(); openEdit(s); }}
-                        className="act-btn"
-                      >
-                        {k ? 'Edit' : 'Isi'}
-                      </button>
+                      <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
+                        <button
+                          onClick={(e) => { e.stopPropagation(); openEdit(s); }}
+                          className="act-btn"
+                        >
+                          {k ? 'Edit' : 'Isi'}
+                        </button>
+                        <button
+                          onClick={(e) => { e.stopPropagation(); openHapus(s); }}
+                          className="act-btn"
+                          title="Ajukan hapus pertemuan ini (kelebihan/salah)"
+                          style={{ color: 'var(--danger)' }}
+                        >
+                          Hapus?
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 );
