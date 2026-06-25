@@ -177,12 +177,26 @@ export function AudioRecorder({
     audioRef.current?.pause();
     setPlaying(false);
     setPlayPos(0);
-    if (state.kind === 'recorded') URL.revokeObjectURL(state.url);
+    // Rekaman server (initialAudioUrl) bukan objectURL — jangan di-revoke.
+    if (state.kind === 'recorded' && state.blob) URL.revokeObjectURL(state.url);
     setState({ kind: 'idle' });
     setElapsed(0);
     elapsedRef.current = 0;
     onChange(null, null);
     if (uploadRef.current) uploadRef.current.value = '';
+  }
+
+  // Rekam ulang. Untuk rekaman yang sudah terkirim, konfirmasi dulu karena
+  // rekaman lama di server akan tergantikan saat rekaman baru dikirim.
+  function reRecord() {
+    if (
+      submitted &&
+      typeof window !== 'undefined' &&
+      !window.confirm('Rekaman ini sudah terkirim. Rekam ulang akan menggantikan rekaman sebelumnya. Lanjutkan?')
+    ) {
+      return;
+    }
+    reset();
   }
 
   function togglePlay() {
@@ -370,11 +384,16 @@ export function AudioRecorder({
             >
               ↓ unduh
             </a>
-            {!submitted && (
-              <button type="button" className="redo" onClick={reset} disabled={disabled}>
-                {Icon.redo()} rekam ulang
-              </button>
-            )}
+            <button
+              type="button"
+              className="redo"
+              onClick={reRecord}
+              // Saat sudah terkirim, tombol tetap aktif (disabled di-set true oleh
+              // parent justru karena status 'terkirim') agar bisa rekam ulang.
+              disabled={!submitted && disabled}
+            >
+              {Icon.redo()} rekam ulang
+            </button>
           </div>
           {!submitted && (
             <p
