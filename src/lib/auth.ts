@@ -16,7 +16,9 @@ export async function login(
   formData: FormData
 ): Promise<{ error?: string } | undefined> {
   const wa = normalizeWhatsApp(String(formData.get('whatsapp_number') ?? ''));
-  const password = String(formData.get('password') ?? '');
+  // Trim + buang tanda bintang WA-bold yang tak sengaja ikut ter-copy
+  // (template lama menampilkan password awal sebagai *123456*).
+  const password = String(formData.get('password') ?? '').trim().replace(/^\*+|\*+$/g, '');
   if (!wa || !password) {
     return { error: 'Nomor WA dan password wajib diisi.' };
   }

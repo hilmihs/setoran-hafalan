@@ -17,6 +17,9 @@ export type HitsRekapRow = {
   pengajarNama: string | null;
   pengajarLinked: boolean; // pengajar_id ter-resolve (masuk matrix)
   ketuaNama: string | null;
+  ketuaKelasId: string | null;
+  ketuaWa: string | null;
+  ketuaLoggedIn: boolean; // ketua sudah pernah login (last_login_at terisi)
   pesertaCount: number;
   terisi: number; // pertemuan yang sudah diisi bulan ini
   expected: number; // pertemuan yang diharapkan s/d hari ini (dari kaldik)
@@ -85,11 +88,12 @@ export async function getHitsRekap(
         .in('halaqah_id', halaqahIds)
         .gte('tanggal', start)
         .lt('tanggal', nextMonth),
+      // Sumber tunggal ketua = tabel ketua_kelas (dipakai login/auth). Mencakup
+      // ketua jalur manual yang tak ter-flag di hits_halaqah_peserta.
       supabaseAdmin
-        .from('hits_halaqah_peserta')
-        .select('halaqah_id, nama')
-        .in('halaqah_id', halaqahIds)
-        .eq('is_ketua', true)
+        .from('ketua_kelas')
+        .select('id, name, whatsapp_number, hits_halaqah_id, last_login_at')
+        .in('hits_halaqah_id', halaqahIds)
         .eq('active', true),
       supabaseAdmin
         .from('hits_kaldik_pertemuan')
@@ -108,7 +112,24 @@ export async function getHitsRekap(
   }
 
   const batchName = new Map((batchList ?? []).map((b) => [b.id, b.name]));
-  const ketuaByHalaqah = new Map((ketuaList ?? []).map((k) => [k.halaqah_id, k.nama]));
+  // Bila satu halaqah punya >1 ketua aktif, prioritaskan yang sudah login.
+  const ketuaByHalaqah = new Map<
+    string,
+    { id: string; nama: string; wa: string | null; loggedIn: boolean }
+  >();
+  for (const k of ketuaList ?? []) {
+    if (!k.hits_halaqah_id) continue;
+    const cur = ketuaByHalaqah.get(k.hits_halaqah_id);
+    const loggedIn = !!k.last_login_at;
+    if (!cur || (loggedIn && !cur.loggedIn)) {
+      ketuaByHalaqah.set(k.hits_halaqah_id, {
+        id: k.id,
+        nama: k.name,
+        wa: k.whatsapp_number,
+        loggedIn,
+      });
+    }
+  }
 
   const overridesByHL = new Map<string, PertemuanOverride[]>();
   for (const o of overrideList ?? []) {
@@ -172,7 +193,10 @@ export async function getHitsRekap(
       jadwalRaw: h.jadwal_raw,
       pengajarNama: h.pengajar_nama_sheet,
       pengajarLinked: !!h.pengajar_id,
-      ketuaNama: ketuaByHalaqah.get(h.id) ?? null,
+      ketuaNama: ketuaByHalaqah.get(h.id)?.nama ?? null,
+      ketuaKelasId: ketuaByHalaqah.get(h.id)?.id ?? null,
+      ketuaWa: ketuaByHalaqah.get(h.id)?.wa ?? null,
+      ketuaLoggedIn: ketuaByHalaqah.get(h.id)?.loggedIn ?? false,
       pesertaCount: pesertaCountByHalaqah.get(h.id) ?? 0,
       terisi,
       expected,

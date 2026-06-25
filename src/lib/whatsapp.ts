@@ -508,8 +508,8 @@ export function tplKetuaKelasTerpilih(args: {
     lines.push(`*Cara masuk:*`);
     lines.push(args.loginUrl);
     lines.push(`Nomor WA: ${args.loginWa ?? '(nomor ini)'}`);
-    lines.push(`Password awal: *${args.initialPassword}*`);
-    lines.push(`(mohon ganti password setelah login)`);
+    lines.push(`Password awal: ${args.initialPassword}`);
+    lines.push(`(ketik ${args.initialPassword.length} angka itu saja — tanpa spasi/tanda bintang; mohon ganti setelah login)`);
     lines.push(``);
     lines.push(`Atau langsung lewat link khusus berikut:`);
     lines.push(args.magicUrl);

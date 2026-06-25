@@ -38,6 +38,7 @@ export default async function HitsKoordinatorPage({
   const totalPeserta = rows.reduce((s, r) => s + r.pesertaCount, 0);
   const linked = rows.filter((r) => r.pengajarLinked).length;
   const ketua = rows.filter((r) => r.ketuaNama).length;
+  const ketuaBelumLogin = rows.filter((r) => r.ketuaNama && !r.ketuaLoggedIn).length;
   const belumDiisi = rows.reduce((s, r) => s + r.belumDiisi, 0);
   const untagged = rows.filter((r) => !r.level).length;
   const ikhwan = rows.filter((r) => r.gender === 'ikhwan').length;
@@ -135,6 +136,7 @@ export default async function HitsKoordinatorPage({
                   label="Ketua tertunjuk"
                   valueColor={ketua < totalHalaqah ? 'var(--kuning-ink)' : 'var(--hijau-ink)'}
                   dotColor={ketua < totalHalaqah ? 'var(--kuning)' : 'var(--hijau)'}
+                  sub={ketuaBelumLogin > 0 ? `${ketuaBelumLogin} belum login` : undefined}
                 />
                 <StatCard
                   value={belumDiisi}

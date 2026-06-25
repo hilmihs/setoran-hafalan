@@ -1,9 +1,56 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useTransition } from 'react';
 import { HITS_LEVEL_LABEL } from '@/types/db';
 import { MiniDistribution } from '@/components/ui/MiniDistribution';
+import { resendKetuaLogin } from '@/app/hits/koordinator/actions';
 import type { HitsRekapRow } from '@/lib/hits-rekap';
+
+/** Sel kolom Ketua: nama + status login + tombol kirim-ulang pesan login. */
+function KetuaCell({ row }: { row: HitsRekapRow }) {
+  const [pending, start] = useTransition();
+  const [waUrl, setWaUrl] = useState<string | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+
+  if (!row.ketuaNama) {
+    return <span style={{ color: 'var(--kuning-ink)' }}>belum ada</span>;
+  }
+
+  function resend() {
+    setErr(null);
+    start(async () => {
+      const fd = new FormData();
+      fd.set('ketua_kelas_id', row.ketuaKelasId ?? '');
+      const res = await resendKetuaLogin(undefined, fd);
+      if (res?.waUrl) setWaUrl(res.waUrl);
+      else setErr(res?.error ?? 'Gagal.');
+    });
+  }
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 3, alignItems: 'flex-start' }}>
+      <span style={{ fontWeight: 600 }}>{row.ketuaNama}</span>
+      {row.ketuaLoggedIn ? (
+        <span className="badge badge-hijau">aktif</span>
+      ) : (
+        <>
+          <span className="badge badge-kuning">belum login</span>
+          {row.ketuaKelasId && !waUrl && (
+            <button type="button" className="btn btn-sm" onClick={resend} disabled={pending} style={{ height: 24, fontSize: 11, padding: '0 8px' }}>
+              {pending ? '…' : 'Kirim-ulang login'}
+            </button>
+          )}
+          {waUrl && (
+            <a href={waUrl} target="_blank" rel="noopener noreferrer" className="badge badge-hijau" style={{ textDecoration: 'none' }}>
+              Buka WA →
+            </a>
+          )}
+          {err && <span className="t-tiny" style={{ color: 'var(--merah-ink)' }}>{err}</span>}
+        </>
+      )}
+    </div>
+  );
+}
 
 type SortKey = 'halaqah' | 'pengajar' | 'peserta' | 'pctKbbs' | 'pctLatihan' | 'belumDiisi';
 
@@ -206,9 +253,7 @@ export function HitsKoordinatorTable({ rows }: { rows: HitsRekapRow[] }) {
                     )}
                   </td>
                   <td className="t-tiny" data-label="Ketua">
-                    {r.ketuaNama ?? (
-                      <span style={{ color: 'var(--kuning-ink)' }}>belum ada</span>
-                    )}
+                    <KetuaCell row={r} />
                   </td>
                   <td style={{ textAlign: 'right' }} className="t-mono" data-label="Peserta">{r.pesertaCount}</td>
                   <td data-label="Belum diisi">
