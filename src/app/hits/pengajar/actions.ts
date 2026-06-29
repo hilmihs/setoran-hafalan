@@ -5,13 +5,14 @@ import { revalidatePath } from 'next/cache';
 import { supabaseAdmin } from '@/lib/supabase-admin';
 import { requirePengajar } from '@/lib/session';
 import { getSessionWa } from '@/lib/program-kelas';
-import { buildWaMeUrl, normalizeWhatsApp, tplKetuaKelasTerpilih, tplPindahHalaqahToTarget } from '@/lib/whatsapp';
+import { buildWaMeUrl, normalizeWhatsApp, tplKetuaKelasTerpilih, tplPindahHalaqahToTarget, tplKetuaDualRoleApproval } from '@/lib/whatsapp';
 import { absUrl } from '@/lib/url';
 import { logAudit } from '@/lib/audit';
+import type { PengajarSession } from '@/types/db';
 
 const BCRYPT_COST = 12;
 
-type Res = { error?: string; ok?: boolean; waUrl?: string };
+type Res = { error?: string; ok?: boolean; waUrl?: string; pendingApproval?: boolean; info?: string };
 
 /** Pengajar mengirim alasan/klarifikasi atas tabayyun (kondisi kelas non-KBBS). */
 export async function submitAlasanTabayyun(_prev: Res | undefined, fd: FormData): Promise<Res> {
@@ -99,20 +100,27 @@ export async function electKetua(_prev: Res | undefined, fd: FormData): Promise<
   }
   const gender = halaqah.gender ?? session.gender;
 
-  // Cegah satu nomor dipakai >1 ketua di halaqah berbeda (akar masalah nomor
-  // tertukar). Nomor ketua HARUS pribadi & unik — login + reset password
-  // bergantung padanya.
-  const { data: clash } = await supabaseAdmin
+  // Peran ganda: WA ini SUDAH jadi ketua aktif di halaqah LAIN. Tidak langsung
+  // diaktifkan — buat pengajuan yang harus disetujui (pengajar existing /
+  // koordinator KK) supaya peran ganda di-acc dulu sebelum auth diinfokan.
+  const { data: existingKetua } = await supabaseAdmin
     .from('ketua_kelas')
-    .select('name, hits_halaqah_id')
+    .select('id, name, hits_halaqah_id')
     .eq('whatsapp_number', normWa)
     .eq('active', true)
-    .neq('hits_halaqah_id', halaqahId)
-    .limit(1);
-  if (clash && clash.length > 0) {
-    return {
-      error: `Nomor WA ${normWa} sudah dipakai ketua lain (${clash[0].name}) di halaqah berbeda. Tiap ketua wajib nomor pribadi sendiri.`,
-    };
+    .neq('hits_halaqah_id', halaqahId);
+  if (existingKetua && existingKetua.length > 0) {
+    return requestKetuaDualRole({
+      session,
+      halaqahId,
+      halaqahName: halaqah.name,
+      gender,
+      ketuaNama,
+      normWa,
+      pesertaId,
+      existingHalaqahIds: existingKetua.map((r) => r.hits_halaqah_id).filter((x): x is string => !!x),
+      requesterWa: wa,
+    });
   }
 
   // Reset ketua lama di halaqah, set yang baru (hanya bila pilih dari daftar peserta).
@@ -176,6 +184,130 @@ export async function electKetua(_prev: Res | undefined, fd: FormData): Promise<
     initialPassword,
   });
   return { ok: true, waUrl: buildWaMeUrl(normWa, msg) };
+}
+
+/**
+ * Buat pengajuan peran ganda ketua kelas. Approver = pengajar halaqah existing
+ * (bila tepat 1 & ber-WA) atau koordinator ketua kelas (bila >1 / tanpa WA).
+ * Mengembalikan wa.me ke approver berisi magic approval link.
+ */
+async function requestKetuaDualRole(args: {
+  session: PengajarSession;
+  halaqahId: string;
+  halaqahName: string;
+  gender: 'ikhwan' | 'akhwat';
+  ketuaNama: string;
+  normWa: string;
+  pesertaId: string;
+  existingHalaqahIds: string[];
+  requesterWa: string | null;
+}): Promise<Res> {
+  const { session, halaqahId, halaqahName, gender, ketuaNama, normWa, pesertaId, existingHalaqahIds, requesterWa } = args;
+
+  // Idempotent: sudah ada pengajuan pending utk (ketua, halaqah baru)? kirim ulang.
+  const { data: existingReq } = await supabaseAdmin
+    .from('ketua_dualrole_request')
+    .select('token, target_wa, target_name, approver_kind')
+    .eq('ketua_wa', normWa)
+    .eq('new_halaqah_id', halaqahId)
+    .eq('status', 'pending')
+    .limit(1)
+    .maybeSingle();
+
+  let approverKind: 'pengajar' | 'koordinator_kk' = 'koordinator_kk';
+  let targetPengajarId: string | null = null;
+  let targetWa: string | null = existingReq?.target_wa ?? null;
+  let targetName: string | null = existingReq?.target_name ?? null;
+  let approverGender: 'ikhwan' | 'akhwat' = gender;
+
+  if (existingReq) {
+    approverKind = existingReq.approver_kind as 'pengajar' | 'koordinator_kk';
+  } else {
+    const distinctOther = Array.from(new Set(existingHalaqahIds));
+    if (distinctOther.length === 1) {
+      const { data: hq } = await supabaseAdmin
+        .from('hits_halaqah')
+        .select('pengajar_id, pengajar_wa, pengajar_nama_sheet, gender')
+        .eq('id', distinctOther[0])
+        .maybeSingle();
+      if (hq?.pengajar_wa) {
+        approverKind = 'pengajar';
+        targetPengajarId = hq.pengajar_id ?? null;
+        targetWa = hq.pengajar_wa;
+        targetName = hq.pengajar_nama_sheet ?? 'Pengajar';
+        approverGender = (hq.gender as 'ikhwan' | 'akhwat') ?? gender;
+      }
+    }
+    if (approverKind === 'koordinator_kk') {
+      const { data: koorList } = await supabaseAdmin
+        .from('koordinator_ketua_kelas')
+        .select('id, name, gender, whatsapp_number')
+        .eq('active', true);
+      const pick =
+        (koorList ?? []).find((k) => k.gender === gender && k.whatsapp_number) ??
+        (koorList ?? []).find((k) => k.whatsapp_number);
+      if (!pick) {
+        return { error: 'Tidak ada koordinator ketua kelas ber-WA untuk menyetujui peran ganda. Hubungi admin.' };
+      }
+      targetWa = pick.whatsapp_number;
+      targetName = pick.name;
+      approverGender = (pick.gender as 'ikhwan' | 'akhwat') ?? gender;
+    }
+  }
+
+  let token = existingReq?.token;
+  if (!token) {
+    token = crypto.randomUUID();
+    const { error: insErr } = await supabaseAdmin.from('ketua_dualrole_request').insert({
+      ketua_wa: normWa,
+      ketua_name: ketuaNama,
+      gender,
+      new_halaqah_id: halaqahId,
+      new_peserta_id: pesertaId || null,
+      requested_by_pengajar_id: session.pengajar_id,
+      requested_by_name: session.name,
+      requested_by_wa: requesterWa,
+      approver_kind: approverKind,
+      target_pengajar_id: targetPengajarId,
+      target_wa: targetWa,
+      target_name: targetName,
+      token,
+    });
+    if (insErr) return { error: `Gagal membuat pengajuan: ${insErr.message}` };
+
+    await logAudit({
+      actor: session,
+      action: 'hits.ketua.dualrole.request',
+      targetTable: 'ketua_dualrole_request',
+      targetId: null,
+      detail: { new_halaqah_id: halaqahId, ketua_wa: normWa, approver_kind: approverKind },
+    });
+  }
+
+  if (!targetWa) {
+    return { error: 'Approver tidak punya nomor WA. Hubungi admin.' };
+  }
+
+  const approveUrl = absUrl(`/hits/ketua-dual/${token}`);
+  const msg = tplKetuaDualRoleApproval({
+    approverName: targetName ?? 'Ustadz/ah',
+    approverGender,
+    ketuaName: ketuaNama,
+    newHalaqahName: halaqahName,
+    requesterName: session.name,
+    approveUrl,
+    loginUrl: absUrl('/'),
+  });
+
+  return {
+    ok: true,
+    pendingApproval: true,
+    info:
+      approverKind === 'pengajar'
+        ? 'Ketua ini sudah memimpin halaqah lain. Kirim WA ke pengajar halaqah tsb untuk menyetujui peran ganda.'
+        : 'Ketua ini sudah memimpin halaqah lain. Kirim WA ke koordinator ketua kelas untuk menyetujui peran ganda.',
+    waUrl: buildWaMeUrl(targetWa, msg),
+  };
 }
 
 // ============================================================

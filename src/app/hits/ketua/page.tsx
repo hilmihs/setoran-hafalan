@@ -13,11 +13,48 @@ import type { HitsKeteranganHarian, HitsLevel } from '@/types/db';
 
 export const dynamic = 'force-dynamic';
 
-export default async function HitsKetuaPage() {
+export default async function HitsKetuaPage({
+  searchParams,
+}: {
+  searchParams: { h?: string };
+}) {
   const session = await requireKetuaKelas();
   if (!session.hits_halaqah_id) redirect('/');
 
-  const loaded = await loadHalaqahPertemuan(session.hits_halaqah_id);
+  // Peran ganda: cari semua halaqah di mana WA ketua ini aktif sebagai ketua.
+  const { data: selfRow } = await supabaseAdmin
+    .from('ketua_kelas')
+    .select('whatsapp_number')
+    .eq('id', session.ketua_kelas_id)
+    .maybeSingle();
+  const ketuaWa = selfRow?.whatsapp_number ?? null;
+
+  const myHalaqah: { hits_halaqah_id: string; name: string }[] = [];
+  if (ketuaWa) {
+    const { data: rows } = await supabaseAdmin
+      .from('ketua_kelas')
+      .select('hits_halaqah_id, hits_halaqah:hits_halaqah_id(name)')
+      .eq('whatsapp_number', ketuaWa)
+      .eq('active', true)
+      .not('hits_halaqah_id', 'is', null);
+    const seen = new Set<string>();
+    for (const r of rows ?? []) {
+      const hid = r.hits_halaqah_id as string | null;
+      if (!hid || seen.has(hid)) continue;
+      seen.add(hid);
+      const hq = r.hits_halaqah as unknown as { name: string } | null;
+      myHalaqah.push({ hits_halaqah_id: hid, name: hq?.name ?? '(halaqah)' });
+    }
+    myHalaqah.sort((a, b) => a.name.localeCompare(b.name));
+  }
+
+  // Halaqah aktif yang dipilih (switcher), default = halaqah sesi.
+  const selectedHalaqahId =
+    searchParams.h && myHalaqah.some((h) => h.hits_halaqah_id === searchParams.h)
+      ? searchParams.h
+      : session.hits_halaqah_id;
+
+  const loaded = await loadHalaqahPertemuan(selectedHalaqahId);
   if (!loaded) {
     return (
       <main style={{ minHeight: '100vh' }}>
@@ -83,6 +120,29 @@ export default async function HitsKetuaPage() {
           </div>
 
           <FeatureNav current="/hits/ketua" />
+
+          {myHalaqah.length > 1 && (
+            <div style={{ marginBottom: 12 }}>
+              <p className="t-tiny" style={{ color: 'var(--muted-2)', marginBottom: 6 }}>
+                Anda ketua di {myHalaqah.length} halaqah — pilih untuk berpindah:
+              </p>
+              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                {myHalaqah.map((h) => {
+                  const active = h.hits_halaqah_id === selectedHalaqahId;
+                  return (
+                    <a
+                      key={h.hits_halaqah_id}
+                      href={`/hits/ketua?h=${h.hits_halaqah_id}`}
+                      className={`btn btn-sm ${active ? 'btn-primary' : 'btn-ghost'}`}
+                      style={{ textDecoration: 'none', fontSize: 12 }}
+                    >
+                      {h.name}
+                    </a>
+                  );
+                })}
+              </div>
+            </div>
+          )}
 
           <h1 className="t-h1" style={{ marginBottom: 4 }}>{halaqah.name}</h1>
           <p className="t-body" style={{ marginBottom: 4 }}>

@@ -25,7 +25,8 @@ export async function loadAccessesForWa(wa: string): Promise<RoleAccess[]> {
     supabaseAdmin.from('koordinator').select('id, name, gender, active').eq('whatsapp_number', wa).maybeSingle(),
     supabaseAdmin.from('syaikh').select('id, name, gender, active').eq('whatsapp_number', wa).maybeSingle(),
     supabaseAdmin.from('pengajar').select('id, name, gender, kelompok_id, is_ketua, active').eq('whatsapp_number', wa).maybeSingle(),
-    supabaseAdmin.from('ketua_kelas').select('id, name, gender, kelas_hits_id, hits_halaqah_id, active').eq('whatsapp_number', wa).maybeSingle(),
+    // ketua_kelas: WA tak unik (peran ganda) → ambil 1 baris aktif untuk identitas sesi.
+    supabaseAdmin.from('ketua_kelas').select('id, name, gender, kelas_hits_id, hits_halaqah_id, active').eq('whatsapp_number', wa).eq('active', true).order('created_at', { ascending: true }).limit(1).maybeSingle(),
     supabaseAdmin.from('koordinator_ketua_kelas').select('id, name, gender, active').eq('whatsapp_number', wa).maybeSingle(),
   ]);
 

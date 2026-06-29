@@ -12,12 +12,14 @@ export type HalaqahForAssign = {
   peserta: { id: string; nama: string }[];
 };
 
+type ElectDone = { waUrl?: string; pendingApproval?: boolean; info?: string };
+
 function AssignForm({
   halaqah,
   onDone,
 }: {
   halaqah: HalaqahForAssign;
-  onDone: (waUrl?: string) => void;
+  onDone: (res: ElectDone) => void;
 }) {
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
@@ -32,7 +34,7 @@ function AssignForm({
         setError(res.error);
         return;
       }
-      if (res?.ok) onDone(res.waUrl);
+      if (res?.ok) onDone({ waUrl: res.waUrl, pendingApproval: res.pendingApproval, info: res.info });
     });
   }
 
@@ -115,6 +117,8 @@ export function AssignKetuaPanel({ halaqahList }: { halaqahList: HalaqahForAssig
   const dialogRef = useRef<HTMLDialogElement>(null);
   const [modalHalaqah, setModalHalaqah] = useState<HalaqahForAssign | null>(null);
   const [waUrl, setWaUrl] = useState<string | null>(null);
+  const [pendingApproval, setPendingApproval] = useState(false);
+  const [doneInfo, setDoneInfo] = useState<string | null>(null);
   const [doneIds, setDoneIds] = useState<Set<string>>(new Set());
 
   // Auto-popup halaqah pertama yang butuh penunjukan saat halaman dibuka.
@@ -135,12 +139,17 @@ export function AssignKetuaPanel({ halaqahList }: { halaqahList: HalaqahForAssig
 
   function openAssign(h: HalaqahForAssign) {
     setWaUrl(null);
+    setPendingApproval(false);
+    setDoneInfo(null);
     setModalHalaqah(h);
   }
 
-  function handleDone(url?: string, halaqahId?: string) {
-    setWaUrl(url ?? null);
-    if (halaqahId) setDoneIds((prev) => new Set(prev).add(halaqahId));
+  function handleDone(res: ElectDone, halaqahId?: string) {
+    setWaUrl(res.waUrl ?? null);
+    setPendingApproval(!!res.pendingApproval);
+    setDoneInfo(res.info ?? null);
+    // Hanya tandai "selesai" bila ketua benar-benar aktif (bukan menunggu approval).
+    if (halaqahId && !res.pendingApproval) setDoneIds((prev) => new Set(prev).add(halaqahId));
   }
 
   return (
@@ -171,18 +180,21 @@ export function AssignKetuaPanel({ halaqahList }: { halaqahList: HalaqahForAssig
 
             {waUrl ? (
               <div style={{ textAlign: 'center' }}>
-                <p className="t-body" style={{ fontWeight: 600, color: 'var(--hijau-ink)', marginBottom: 12 }}>
-                  Ketua kelas berhasil ditunjuk.
+                <p className="t-body" style={{ fontWeight: 600, color: pendingApproval ? 'var(--kuning-ink)' : 'var(--hijau-ink)', marginBottom: 8 }}>
+                  {pendingApproval ? 'Perlu persetujuan peran ganda' : 'Ketua kelas berhasil ditunjuk.'}
                 </p>
+                {doneInfo && (
+                  <p className="t-small" style={{ color: 'var(--muted-2)', marginBottom: 12 }}>{doneInfo}</p>
+                )}
                 <a href={waUrl} target="_blank" rel="noopener noreferrer" className="btn btn-primary" style={{ width: '100%', marginBottom: 8 }}>
-                  Kirim info login via WhatsApp
+                  {pendingApproval ? 'Kirim WA persetujuan' : 'Kirim info login via WhatsApp'}
                 </a>
                 <button className="btn-ghost" onClick={() => setModalHalaqah(null)} style={{ width: '100%' }}>
                   Tutup
                 </button>
               </div>
             ) : (
-              <AssignForm halaqah={modalHalaqah} onDone={(url) => handleDone(url, modalHalaqah.id)} />
+              <AssignForm halaqah={modalHalaqah} onDone={(res) => handleDone(res, modalHalaqah.id)} />
             )}
           </div>
         )}

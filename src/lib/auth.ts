@@ -57,10 +57,15 @@ export async function login(
       .select('id, name, gender, password_hash, active, kelompok_id, is_ketua')
       .eq('whatsapp_number', wa)
       .maybeSingle(),
+    // ketua_kelas: whatsapp_number TIDAK unik (1 orang bisa ketua di >1 halaqah).
+    // Ambil 1 baris aktif saja untuk gate login; password disinkron per-WA di Step 3.
     supabaseAdmin
       .from('ketua_kelas')
       .select('id, name, gender, password_hash, active, kelas_hits_id, hits_halaqah_id')
       .eq('whatsapp_number', wa)
+      .eq('active', true)
+      .order('created_at', { ascending: true })
+      .limit(1)
       .maybeSingle(),
     supabaseAdmin
       .from('koordinator_ketua_kelas')

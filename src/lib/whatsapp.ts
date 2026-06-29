@@ -575,3 +575,50 @@ export function tplKetuaKelasTerpilih(args: {
   lines.push(`Jazakumullahu khairan.`);
   return lines.join('\n');
 }
+
+/** Ke approver (pengajar existing / koordinator KK): minta persetujuan peran ganda ketua. */
+export function tplKetuaDualRoleApproval(args: {
+  approverName: string;
+  approverGender: Gender;
+  ketuaName: string;
+  newHalaqahName: string;
+  requesterName: string;
+  approveUrl: string;
+  loginUrl: string;
+}): string {
+  const sapaan = salutation(args.approverGender);
+  return [
+    `Assalamu'alaikum ${sapaan} ${args.approverName},`,
+    ``,
+    `*${args.ketuaName}* sudah menjadi ketua kelas di halaqah lain.`,
+    `${args.requesterName} ingin menjadikannya ketua juga di halaqah *${args.newHalaqahName}* (peran ganda).`,
+    ``,
+    `Mohon konfirmasi apakah ${args.ketuaName} memang bersedia & sesuai memegang peran ganda ini.`,
+    ``,
+    `*Cara memutuskan:*`,
+    `1. Login dulu (nomor WA + password) di:`,
+    args.loginUrl,
+    `2. Lalu buka tautan persetujuan & pilih *Setujui* / *Tolak*:`,
+    args.approveUrl,
+    ``,
+    `Jazakumullahu khairan.`,
+  ].join('\n');
+}
+
+/** Ke ketua yang SUDAH punya akun & pernah login: info tambahan halaqah (tanpa password). */
+export function tplKetuaDualRoleInfo(args: {
+  ketuaName: string;
+  newHalaqahName: string;
+  loginUrl: string;
+}): string {
+  return [
+    `Assalamu'alaikum ${args.ketuaName},`,
+    ``,
+    `Anda kini juga menjadi *Ketua Kelas ${args.newHalaqahName}* (tambahan dari halaqah yang sudah Anda pegang).`,
+    ``,
+    `Gunakan akun & password yang SAMA seperti biasa. Setelah login, pilih halaqah lewat menu di dashboard ketua:`,
+    args.loginUrl,
+    ``,
+    `Jazakumullahu khairan.`,
+  ].join('\n');
+}
