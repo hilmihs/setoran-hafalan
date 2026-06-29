@@ -20,6 +20,9 @@ type ProgramKelas = {
   hari: string[];
   mulai: string;
   selesai: string;
+  // 'harian' (default): tiap hari jadwal wajib presensi.
+  // 'mingguan': cukup hadir 1x per pekan (Senin–Jum'at), mis. Alumni/Talaqqi.
+  sifat?: 'harian' | 'mingguan';
   anggota: Member[];
 };
 
@@ -221,6 +224,42 @@ const DATA: ProgramKelas[] = [
       { name: 'Rahmah Nadiyah', wa: '85721348894' },
     ],
   },
+  {
+    name: 'Maahir Intensif Siang Akhwat',
+    gender: 'akhwat',
+    hari: ['Selasa', 'Kamis'],
+    mulai: '13:00', selesai: '15:30',
+    anggota: [
+      { name: 'Rosi Gusmulia', wa: '6285697570249' },
+      { name: 'Fathia Ramadhita', wa: '6281959442869' },
+      { name: 'Azzahra Karimah', wa: '6285265538861' },
+      { name: 'Azzah Tsabita Maharani Piliang', wa: '085813445370' },
+      { name: 'Nurul Nabilah Azhar', wa: '6282123757239' },
+      { name: 'Istiqomah Islamiyah', wa: '6281382819973' },
+      { name: 'Arisatul Lailin Nikmah', wa: '6281266991539' },
+      { name: 'Anisah Dzakirah', wa: '6281370792041' },
+      { name: 'Humaira Sari', wa: '6289531610183' },
+      { name: 'Khasyi Hania Nataprawira', wa: '6281310696660', ketua: true },
+      { name: 'Sora Arya Pitaloka', wa: '6281347254263' },
+    ],
+  },
+  {
+    name: 'Maahir Intensif Sore Akhwat',
+    gender: 'akhwat',
+    hari: ['Selasa', 'Kamis'],
+    mulai: '15:30', selesai: '17:30',
+    anggota: [
+      { name: 'Khaulah', wa: '6281296738785', ketua: true },
+      { name: 'Aufa Brafinella Irfadillah', wa: '6282137714682' },
+      { name: 'Ahilla Hamra Zahratul Islam', wa: '6287879528389' },
+      { name: 'Nidya Haafizhah Shafa', wa: '6281315059004' },
+      { name: 'Nurul Atika', wa: '6288708060033' },
+      { name: 'Silmi Muthmainnah', wa: '6283865782178' },
+      { name: 'Tsalatsa Maghfira Al Biruni', wa: '6285746661970' },
+      { name: 'Hanifah Adiani', wa: '6283161052795' },
+      { name: 'Nidaul Khusna', wa: '083817300090' },
+    ],
+  },
 
   // ============ IKHWAN ============
   {
@@ -274,10 +313,11 @@ const DATA: ProgramKelas[] = [
   {
     name: 'Maahir Alumni/Talaqqi',
     gender: 'ikhwan',
-    // Alumni talaqqi 1x/pekan, hari tidak fixed → tanpa jadwal harian.
-    // Ketua input pertemuan manual saat talaqqi jalan (bukan wajib hadir tiap Senin–Jum'at).
+    // Alumni talaqqi: cukup hadir 1x per pekan (Senin–Jum'at), hari tidak fixed.
+    // presensi_sifat 'mingguan' → 1 slot presensi per pekan, bukan tiap hari.
     hari: [],
     mulai: '09:00', selesai: '21:00',
+    sifat: 'mingguan',
     anggota: [
       { name: 'Faizil El Islami', wa: '081298205428' },
       { name: 'Lalu Fauzul Azhim', wa: '085947384638' },
@@ -357,6 +397,7 @@ async function main() {
           jadwal_hari: pk.hari,
           waktu_mulai: pk.mulai,
           waktu_selesai: pk.selesai,
+          presensi_sifat: pk.sifat ?? 'harian',
           ketua_wa: ketua ? normalizeWhatsApp(ketua.wa) : null,
           wakil_wa: wakil ? normalizeWhatsApp(wakil.wa) : null,
         },

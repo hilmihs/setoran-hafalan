@@ -5,9 +5,11 @@ import { supabaseAdmin } from '@/lib/supabase-admin';
 import {
   PROGRAM_LABEL,
   expectedDaysInRange,
+  filledKeyOf,
   todayJakarta,
   type MaahirProgram,
 } from '@/lib/maahir-presensi';
+import { getLiburDatesForKelas } from '@/lib/maahir-libur';
 import type { ProgramKelasRow } from '@/lib/program-kelas';
 
 export type StatusCode = 'H' | 'I' | 'S' | 'A' | 'T' | '-';
@@ -75,7 +77,7 @@ export async function getMaahirRekap(
   // 1. Kelas
   let q = supabaseAdmin
     .from('program_kelas')
-    .select('id, name, gender, jadwal_hari, waktu_mulai, waktu_selesai, ketua_wa, wakil_wa')
+    .select('id, name, gender, jadwal_hari, waktu_mulai, waktu_selesai, ketua_wa, wakil_wa, self_attendance, presensi_sifat')
     .order('gender')
     .order('name');
   if (opts?.kelasIds && opts.kelasIds.length > 0) q = q.in('id', opts.kelasIds);
@@ -85,6 +87,9 @@ export async function getMaahirRekap(
   if (kelasList.length === 0) return [];
 
   const kelasIds = kelasList.map((k) => k.id);
+
+  // Libur per kelas dalam rentang bulan (dikecualikan dari hari diharapkan).
+  const liburByKelas = await getLiburDatesForKelas(kelasIds, start, end);
 
   // 2. Pertemuan dalam rentang bulan
   const { data: pertemuanRows } = await supabaseAdmin
@@ -176,14 +181,15 @@ export async function getMaahirRekap(
     });
 
     // belumDiisi: hari diharapkan (anchor bulan s/d min(akhir bulan, today)) − pertemuan terisi.
-    const expected = expectedDaysInRange(k, start, end);
+    // matchKey: harian per (program,tanggal); mingguan per pekan.
+    const expected = expectedDaysInRange(k, start, end, liburByKelas.get(k.id));
     const filledKeys = new Set(
       (pertemuanRows ?? [])
         .filter((p) => p.program_kelas_id === k.id && filledPertemuan.has(p.id))
-        .map((p) => `${p.program}|${p.tanggal}`)
+        .map((p) => filledKeyOf(k, p.program, p.tanggal))
     );
     const belumDiisi = expected.filter(
-      (e) => !filledKeys.has(`${e.program}|${e.tanggal}`)
+      (e) => !filledKeys.has(filledKeyOf(k, e.program, e.tanggal))
     ).length;
 
     result.push({

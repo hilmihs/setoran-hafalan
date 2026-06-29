@@ -5,8 +5,8 @@ import { currentCycleStart, formatCycleRange } from '@/lib/week';
 import { formatCycleRangeShort } from '@/lib/week';
 import { ROLE_LANDING } from '@/lib/roles';
 import { featureLinksFor } from '@/lib/feature-links';
-import { getSessionWa, findKetuaProgramKelas } from '@/lib/program-kelas';
-import { getUnfilledMaahirDays } from '@/lib/maahir-presensi';
+import { getSessionWa, findKetuaProgramKelas, findSelfAttendanceMembership } from '@/lib/program-kelas';
+import { getUnfilledMaahirDays, getUnfilledDaysForAnggota } from '@/lib/maahir-presensi';
 
 export const dynamic = 'force-dynamic';
 
@@ -28,10 +28,17 @@ export default async function HomePage({ searchParams }: { searchParams: { next?
       if (unfilled.length > 0) redirect('/2in1/ketua-kelas/presensi');
     }
 
+    // Presensi mandiri (kelas self_attendance, mis. Maahir Takhassus Ikhwan):
+    // peserta isi sendiri lewat akunnya.
+    const selfMembership = wa ? await findSelfAttendanceMembership(wa) : null;
+    const selfUnfilled = selfMembership
+      ? (await getUnfilledDaysForAnggota(selfMembership.kelas, selfMembership.anggotaId)).length
+      : 0;
+
     const available = featureLinksFor(accesses);
 
-    // Ketua Maahir tak punya entri di FEATURE_LINKS (berbasis role); tambah kartu sintetis.
-    if (available.length === 1 && !isKetuaMaahir) {
+    // Ketua Maahir / peserta mandiri tak punya entri di FEATURE_LINKS; tambah kartu sintetis.
+    if (available.length === 1 && !isKetuaMaahir && !selfMembership) {
       redirect(available[0].href);
     }
 
@@ -69,6 +76,20 @@ export default async function HomePage({ searchParams }: { searchParams: { next?
                   <div style={{ fontWeight: 600, marginBottom: 4 }}>Presensi Kelas Maahir</div>
                   <div className="t-small" style={{ color: 'var(--muted-2)' }}>
                     Isi kehadiran anggota kelas — Kelas Maahir, At-Tibyan
+                  </div>
+                </a>
+              )}
+              {selfMembership && (
+                <a
+                  href="/2in1/maahir-mandiri"
+                  className="card-flat"
+                  style={{ display: 'block', padding: '16px 20px', textDecoration: 'none', color: 'inherit', borderRadius: 12 }}
+                >
+                  <div style={{ fontWeight: 600, marginBottom: 4 }}>
+                    Presensi Mandiri{selfUnfilled > 0 ? ` · ${selfUnfilled} belum diisi` : ''}
+                  </div>
+                  <div className="t-small" style={{ color: 'var(--muted-2)' }}>
+                    Tandai kehadiran Anda sendiri — {selfMembership.kelas.name}
                   </div>
                 </a>
               )}

@@ -5,7 +5,7 @@ import { revalidatePath } from 'next/cache';
 import { supabaseAdmin } from '@/lib/supabase-admin';
 import { requirePengajar } from '@/lib/session';
 import { getSessionWa } from '@/lib/program-kelas';
-import { buildWaMeUrl, normalizeWhatsApp, tplKetuaKelasTerpilih } from '@/lib/whatsapp';
+import { buildWaMeUrl, normalizeWhatsApp, tplKetuaKelasTerpilih, tplPindahHalaqahToTarget } from '@/lib/whatsapp';
 import { absUrl } from '@/lib/url';
 import { logAudit } from '@/lib/audit';
 
@@ -94,7 +94,26 @@ export async function electKetua(_prev: Res | undefined, fd: FormData): Promise<
   if (!ketuaNama) return { error: 'Nama ketua kelas wajib diisi.' };
 
   const normWa = normalizeWhatsApp(ketuaWa);
+  if (normWa.length < 11) {
+    return { error: 'Nomor WA ketua tidak valid. Pakai nomor pribadi ketua yang benar.' };
+  }
   const gender = halaqah.gender ?? session.gender;
+
+  // Cegah satu nomor dipakai >1 ketua di halaqah berbeda (akar masalah nomor
+  // tertukar). Nomor ketua HARUS pribadi & unik — login + reset password
+  // bergantung padanya.
+  const { data: clash } = await supabaseAdmin
+    .from('ketua_kelas')
+    .select('name, hits_halaqah_id')
+    .eq('whatsapp_number', normWa)
+    .eq('active', true)
+    .neq('hits_halaqah_id', halaqahId)
+    .limit(1);
+  if (clash && clash.length > 0) {
+    return {
+      error: `Nomor WA ${normWa} sudah dipakai ketua lain (${clash[0].name}) di halaqah berbeda. Tiap ketua wajib nomor pribadi sendiri.`,
+    };
+  }
 
   // Reset ketua lama di halaqah, set yang baru (hanya bila pilih dari daftar peserta).
   if (pesertaId) {
@@ -157,4 +176,148 @@ export async function electKetua(_prev: Res | undefined, fd: FormData): Promise<
     initialPassword,
   });
   return { ok: true, waUrl: buildWaMeUrl(normWa, msg) };
+}
+
+// ============================================================
+// Pemindahan halaqah (transfer pengajar) — wizard + pengajuan
+// ============================================================
+
+export type PindahResult = { ok?: boolean; error?: string; waUrl?: string };
+
+/** Daftar halaqah dalam satu batch + nama pengajar saat ini (untuk wizard). */
+export async function listHalaqahForBatch(batchId: string): Promise<{
+  halaqah: { id: string; name: string; gender: 'ikhwan' | 'akhwat' | null; pengajarNama: string | null; pengajarLinked: boolean }[];
+}> {
+  await requirePengajar();
+  if (!batchId) return { halaqah: [] };
+  const { data } = await supabaseAdmin
+    .from('hits_halaqah')
+    .select('id, name, gender, pengajar_id, pengajar_nama_sheet')
+    .eq('batch_id', batchId)
+    .eq('active', true)
+    .order('name');
+  return {
+    halaqah: (data ?? []).map((h) => ({
+      id: h.id,
+      name: h.name,
+      gender: h.gender,
+      pengajarNama: h.pengajar_nama_sheet,
+      pengajarLinked: !!h.pengajar_id,
+    })),
+  };
+}
+
+/** Peserta aktif sebuah halaqah (preview sebelum konfirmasi pindah). */
+export async function listPesertaForHalaqah(halaqahId: string): Promise<{
+  peserta: { id: string; nama: string; status_peserta: string | null; is_ketua: boolean }[];
+}> {
+  await requirePengajar();
+  if (!halaqahId) return { peserta: [] };
+  const { data } = await supabaseAdmin
+    .from('hits_halaqah_peserta')
+    .select('id, nama, status_peserta, is_ketua')
+    .eq('halaqah_id', halaqahId)
+    .eq('active', true)
+    .order('nama');
+  return { peserta: data ?? [] };
+}
+
+/** Daftar pengajar aktif (opsi tujuan), opsional filter gender. */
+export async function listPengajarOptions(gender?: 'ikhwan' | 'akhwat'): Promise<{
+  pengajar: { id: string; name: string; whatsapp_number: string | null }[];
+}> {
+  await requirePengajar();
+  let q = supabaseAdmin
+    .from('pengajar')
+    .select('id, name, whatsapp_number, gender')
+    .eq('active', true)
+    .order('name');
+  if (gender) q = q.eq('gender', gender);
+  const { data } = await q;
+  return {
+    pengajar: (data ?? []).map((p) => ({ id: p.id, name: p.name, whatsapp_number: p.whatsapp_number })),
+  };
+}
+
+/** Pengaju (pengajar mana pun) mengajukan pemindahan halaqah ke pengajar tujuan. */
+export async function ajukanPindahHalaqah(_prev: PindahResult | undefined, fd: FormData): Promise<PindahResult> {
+  const session = await requirePengajar();
+  const wa = await getSessionWa();
+
+  const halaqahId = String(fd.get('halaqah_id') ?? '');
+  const batchId = String(fd.get('batch_id') ?? '') || null;
+  const targetPengajarId = String(fd.get('target_pengajar_id') ?? '').trim();
+  const targetNamaManual = String(fd.get('target_name') ?? '').trim();
+  const targetWaRaw = String(fd.get('target_wa') ?? '').trim();
+  if (!halaqahId) return { error: 'Halaqah wajib dipilih.' };
+  if (!targetPengajarId && (!targetNamaManual || !targetWaRaw)) {
+    return { error: 'Pilih pengajar tujuan dari daftar, atau isi nama + nomor WA secara manual.' };
+  }
+
+  const { data: halaqah } = await supabaseAdmin
+    .from('hits_halaqah')
+    .select('id, name, gender, batch_id')
+    .eq('id', halaqahId)
+    .maybeSingle();
+  if (!halaqah) return { error: 'Halaqah tidak ditemukan.' };
+
+  // Resolve target: dari daftar pengajar (kanonik) atau ketikan manual.
+  let targetName = targetNamaManual;
+  let targetWa: string | null = targetWaRaw ? normalizeWhatsApp(targetWaRaw) : null;
+  let resolvedTargetId: string | null = null;
+  if (targetPengajarId) {
+    const { data: tp } = await supabaseAdmin
+      .from('pengajar')
+      .select('id, name, whatsapp_number')
+      .eq('id', targetPengajarId)
+      .maybeSingle();
+    if (!tp) return { error: 'Pengajar tujuan tidak ditemukan.' };
+    resolvedTargetId = tp.id;
+    targetName = tp.name;
+    targetWa = tp.whatsapp_number ? normalizeWhatsApp(tp.whatsapp_number) : null;
+  }
+  if (!targetName) return { error: 'Nama pengajar tujuan wajib diisi.' };
+
+  const token = crypto.randomUUID();
+  const { error: insErr } = await supabaseAdmin
+    .from('hits_halaqah_pindah_request')
+    .insert({
+      halaqah_id: halaqahId,
+      batch_id: batchId ?? halaqah.batch_id,
+      requested_by_pengajar_id: session.pengajar_id,
+      requested_by_name: session.name,
+      requested_by_wa: wa,
+      target_pengajar_id: resolvedTargetId,
+      target_name: targetName,
+      target_wa: targetWa,
+      token,
+      status: 'pending',
+    });
+  if (insErr) {
+    if (insErr.code === '23505') return { error: 'Halaqah ini sudah ada pengajuan pemindahan yang menunggu keputusan.' };
+    return { error: `Gagal mengajukan: ${insErr.message}` };
+  }
+
+  await logAudit({
+    actor: session,
+    action: 'hits.halaqah.pindah.ajukan',
+    targetTable: 'hits_halaqah_pindah_request',
+    targetId: null,
+    detail: { halaqah_id: halaqahId, target_pengajar_id: resolvedTargetId, manual: !resolvedTargetId },
+  });
+
+  revalidatePath('/hits/pengajar');
+
+  if (!targetWa) {
+    return { ok: true, error: 'Pengajuan tersimpan, tapi nomor WA pengajar tujuan belum ada — kirim link manual.' };
+  }
+  const msg = tplPindahHalaqahToTarget({
+    targetName,
+    targetGender: (halaqah.gender ?? session.gender) as 'ikhwan' | 'akhwat',
+    requesterName: session.name,
+    halaqahName: halaqah.name,
+    approveUrl: absUrl(`/hits/pindah-halaqah/${token}`),
+    loginUrl: absUrl('/'),
+  });
+  return { ok: true, waUrl: buildWaMeUrl(targetWa, msg) };
 }

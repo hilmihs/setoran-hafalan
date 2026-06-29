@@ -7,7 +7,9 @@ import { FeatureNav } from '@/components/FeatureNav';
 import { deriveHalaqahPertemuanWithOverrides, type PertemuanOverride } from '@/lib/hits-pertemuan';
 import { todayJakarta } from '@/lib/maahir-presensi';
 import { AssignKetuaPanel, type HalaqahForAssign } from './AssignKetuaStep';
+import { PindahHalaqahPanel } from './PindahHalaqahPanel';
 import { TabayyunAlasanPanel, type TabayyunForPengajar } from './TabayyunAlasanForm';
+import { getHitsBatches } from '@/lib/hits-rekap';
 import type { HitsKondisi } from '@/types/db';
 
 export const dynamic = 'force-dynamic';
@@ -16,6 +18,7 @@ export default async function HitsPengajarPage() {
   const session = await requirePengajar();
   const wa = await getSessionWa();
   const today = todayJakarta();
+  const batches = await getHitsBatches();
 
   // Halaqah milik pengajar ini (via pengajar_id atau pengajar_wa).
   const orFilter = wa
@@ -145,6 +148,15 @@ export default async function HitsPengajarPage() {
           ) : (
             <AssignKetuaPanel halaqahList={panelData} />
           )}
+
+          <div style={{ marginTop: 24, paddingTop: 16, borderTop: '1px solid var(--line)' }}>
+            <h2 className="t-h2" style={{ marginBottom: 4 }}>Pemindahan Halaqah</h2>
+            <p className="t-small" style={{ color: 'var(--muted-2)', marginBottom: 8 }}>
+              Ajukan pemindahan halaqah ke pengajar lain. Pengajar tujuan menyetujui via tautan (perlu login),
+              lalu halaqah otomatis pindah.
+            </p>
+            <PindahHalaqahPanel batches={batches} />
+          </div>
 
           <p className="t-small" style={{ color: 'var(--muted-2)', marginTop: 20 }}>
             <Link href="/kehadiran/pengajar">← Kembali ke Kehadiran Program</Link>

@@ -3,6 +3,7 @@ import { redirect } from 'next/navigation';
 import { getSession } from './session';
 import { supabaseAdmin } from './supabase-admin';
 import { ADMIN_WA } from './constants';
+import { loadAccessesForWa } from './access';
 import type { RoleAccess } from '@/types/db';
 
 const ROLE_TABLE_MAP: Record<RoleAccess['role'], { table: string; idField: keyof RoleAccess | string }> = {
@@ -42,4 +43,15 @@ export async function requireAdmin(): Promise<{ wa: string }> {
   }
 
   redirect('/');
+}
+
+/**
+ * RoleAccess milik admin (dari ADMIN_WA) untuk atribusi audit yang benar —
+ * dipakai saat mutasi admin / impersonate agar audit teratribusi ke admin asli,
+ * bukan ke target yang sedang di-impersonate. Tidak melakukan guard sendiri;
+ * panggil requireAdmin() lebih dulu di action.
+ */
+export async function getAdminActor(): Promise<RoleAccess | null> {
+  const accesses = await loadAccessesForWa(ADMIN_WA);
+  return accesses[0] ?? null;
 }

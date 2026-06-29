@@ -29,13 +29,29 @@ export const sessionOptions: SessionOptions = {
   },
 };
 
+export interface ImpersonationState {
+  adminWa: string;
+  adminAccesses: RoleAccess[];
+  targetWa: string;
+  targetName: string;
+  startedAt: string;
+}
+
 interface IronSessionData {
   session?: RoleAccess;
   accesses?: RoleAccess[];
+  // Diisi saat admin "login sebagai" user lain; simpan snapshot akses admin
+  // agar bisa kembali tanpa login ulang.
+  impersonator?: ImpersonationState;
 }
 
 export async function getSession() {
   return getIronSession<IronSessionData>(cookies(), sessionOptions);
+}
+
+export async function getImpersonation(): Promise<ImpersonationState | null> {
+  const s = await getSession();
+  return s.impersonator ?? null;
 }
 
 /**

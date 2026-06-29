@@ -3,6 +3,7 @@ import { Plus_Jakarta_Sans, IBM_Plex_Mono } from 'next/font/google';
 import './globals.css';
 import { getActiveSession } from '@/lib/session';
 import { ReportErrorButton } from '@/components/ReportErrorButton';
+import { ImpersonationBanner } from '@/components/ImpersonationBanner';
 import { supabaseAdmin } from '@/lib/supabase-admin';
 import type { RoleAccess } from '@/types/db';
 
@@ -101,6 +102,7 @@ export default async function RootLayout({
         style={{ fontFamily: 'var(--font-sans), system-ui, sans-serif', margin: 0 }}
       >
         {children}
+        <ImpersonationBanner />
         <ReportErrorButton user={user} />
       </body>
     </html>

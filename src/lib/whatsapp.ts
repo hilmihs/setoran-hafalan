@@ -485,6 +485,52 @@ export function tplMagicLinkKetuaKelas(args: {
   ].join('\n');
 }
 
+export function tplPindahHalaqahToTarget(args: {
+  targetName: string;
+  targetGender: Gender;
+  requesterName: string;
+  halaqahName: string;
+  approveUrl: string;
+  loginUrl: string;
+}): string {
+  const sapaan = salutation(args.targetGender);
+  return [
+    `Assalamu'alaikum ${sapaan} ${args.targetName},`,
+    ``,
+    `${args.requesterName} mengajukan pemindahan halaqah *${args.halaqahName}* kepada antum sebagai pengajar.`,
+    ``,
+    `*Cara menyetujui:*`,
+    `1. Login dulu (nomor WA + password) di:`,
+    args.loginUrl,
+    `2. Lalu buka tautan persetujuan berikut & pilih *Setujui* / *Tolak*:`,
+    args.approveUrl,
+    ``,
+    `(Hanya antum sebagai pengajar tujuan yang bisa menyetujui.)`,
+    ``,
+    `Jazakumullahu khairan.`,
+  ].join('\n');
+}
+
+export function tplPindahDisetujuiToRequester(args: {
+  requesterName: string;
+  requesterGender: Gender;
+  targetName: string;
+  halaqahName: string;
+  pengajarUrl: string;
+}): string {
+  const sapaan = salutation(args.requesterGender);
+  return [
+    `Assalamu'alaikum ${sapaan} ${args.requesterName},`,
+    ``,
+    `Pemindahan halaqah *${args.halaqahName}* telah *disetujui* oleh ${args.targetName}.`,
+    ``,
+    `Mohon cek kembali daftar halaqah untuk memastikan sudah benar, lalu tunjuk ketua kelas:`,
+    args.pengajarUrl,
+    ``,
+    `Jazakumullahu khairan.`,
+  ].join('\n');
+}
+
 export function tplKetuaKelasTerpilih(args: {
   ketuaKelasName: string;
   ketuaKelasGender: Gender;

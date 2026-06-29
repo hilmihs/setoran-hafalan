@@ -4,7 +4,8 @@
 // (Muallim Najih dihapus dari penilaian.)
 
 import { supabaseAdmin } from '@/lib/supabase-admin';
-import { findKetuaProgramKelas, type ProgramKelasRow } from '@/lib/program-kelas';
+import { findKetuaProgramKelas, getSelfAttendanceKelas, type ProgramKelasRow } from '@/lib/program-kelas';
+import { getLiburDates, getLiburDatesForKelas } from '@/lib/maahir-libur';
 
 export const PRESENSI_ANCHOR = '2026-06-01'; // strict mulai Juni 2026
 export const TIBYAN_HARI = 'Sabtu'; // at_tibyan 08:30–10:00
@@ -47,11 +48,41 @@ const DAY_NAME: Record<number, string> = {
   6: 'Sabtu',
 };
 
+/** Index hari (0 Ahad .. 6 Sabtu) untuk tanggal 'YYYY-MM-DD'. */
+export function dayIndexOf(dateStr: string): number {
+  const [y, m, d] = dateStr.split('-').map(Number);
+  return new Date(Date.UTC(y, m - 1, d)).getUTCDay();
+}
+
 /** Nama hari (format seed) untuk tanggal kalender 'YYYY-MM-DD'. */
 export function dayNameOf(dateStr: string): string {
+  return DAY_NAME[dayIndexOf(dateStr)];
+}
+
+/** Tanggal Senin pada pekan yang memuat dateStr (kanonik pekan). 'YYYY-MM-DD'. */
+export function mondayOf(dateStr: string): string {
   const [y, m, d] = dateStr.split('-').map(Number);
-  const idx = new Date(Date.UTC(y, m - 1, d)).getUTCDay();
-  return DAY_NAME[idx];
+  const dt = new Date(Date.UTC(y, m - 1, d));
+  const dow = dt.getUTCDay(); // 0 Ahad .. 6 Sabtu
+  const diff = dow === 0 ? -6 : 1 - dow; // mundur ke Senin
+  dt.setUTCDate(dt.getUTCDate() + diff);
+  return `${dt.getUTCFullYear()}-${String(dt.getUTCMonth() + 1).padStart(2, '0')}-${String(
+    dt.getUTCDate()
+  ).padStart(2, '0')}`;
+}
+
+/**
+ * Kunci pencocokan "terisi" untuk (kelas, program, tanggal).
+ * - harian  : per (program, tanggal) persis.
+ * - mingguan: per pekan (Senin–Jum'at), apa pun harinya → hadir sekali = lengkap.
+ */
+export function filledKeyOf(
+  k: ProgramKelasRow,
+  program: string,
+  tanggal: string
+): string {
+  if (k.presensi_sifat === 'mingguan') return `W|${mondayOf(tanggal)}`;
+  return `${program}|${tanggal}`;
 }
 
 /** Hari ini (Asia/Jakarta) sebagai 'YYYY-MM-DD'. */
@@ -81,20 +112,60 @@ export function datesInRange(start: string, end: string): string[] {
 
 export type ExpectedDay = Omit<UnfilledDay, 'totalRemaining'>;
 
-/** Hari program yang diharapkan untuk satu kelas dalam rentang [start, end]. */
+/**
+ * Hari program yang diharapkan untuk satu kelas dalam rentang [start, end].
+ * @param libur set tanggal libur (YYYY-MM-DD) yang dikecualikan.
+ */
 export function expectedDaysInRange(
   k: ProgramKelasRow,
   start: string,
-  end: string
+  end: string,
+  libur?: Set<string>
 ): ExpectedDay[] {
-  return expectedDaysForKelas(k, datesInRange(start, end));
+  return expectedDaysForKelas(k, datesInRange(start, end), libur);
 }
 
 /** Hari program yang diharapkan untuk satu kelas, untuk daftar tanggal yang diberikan. */
-function expectedDaysForKelas(k: ProgramKelasRow, dates: string[]): ExpectedDay[] {
+function expectedDaysForKelas(
+  k: ProgramKelasRow,
+  dates: string[],
+  libur?: Set<string>
+): ExpectedDay[] {
   const out: ExpectedDay[] = [];
+
+  // Mingguan: 1 slot kelas_maahir per pekan (Senin–Jum'at), tanpa At-Tibyan.
+  // Slot dikanonikkan ke tanggal Senin pekan tsb. Pekan dilewati bila semua
+  // hari kerjanya (dalam rentang) libur.
+  if (k.presensi_sifat === 'mingguan') {
+    const weekdaysByMonday = new Map<string, string[]>();
+    for (const tanggal of dates) {
+      const idx = dayIndexOf(tanggal);
+      if (idx < 1 || idx > 5) continue; // hanya Senin..Jum'at
+      const mon = mondayOf(tanggal);
+      const arr = weekdaysByMonday.get(mon) ?? [];
+      arr.push(tanggal);
+      weekdaysByMonday.set(mon, arr);
+    }
+    for (const [mon, days] of weekdaysByMonday) {
+      if (libur && days.every((d) => libur.has(d))) continue;
+      out.push({
+        program_kelas_id: k.id,
+        kelasName: k.name,
+        gender: k.gender,
+        program: 'kelas_maahir',
+        tanggal: mon,
+        waktu_mulai: k.waktu_mulai,
+        waktu_selesai: k.waktu_selesai,
+        namaKegiatan: PROGRAM_LABEL.kelas_maahir,
+      });
+    }
+    return out;
+  }
+
+  // Harian: tiap hari jadwal + At-Tibyan tiap Sabtu, kecuali tanggal libur.
   const jadwal = new Set(k.jadwal_hari ?? []);
   for (const tanggal of dates) {
+    if (libur?.has(tanggal)) continue;
     const hari = dayNameOf(tanggal);
 
     if (jadwal.has(hari)) {
@@ -135,13 +206,19 @@ export async function getUnfilledMaahirDays(wa: string): Promise<UnfilledDay[]> 
   if (myKelas.length === 0) return [];
 
   const today = todayJakarta();
+  const kelasIds = myKelas.map((k) => k.id);
+  const kelasById = new Map(myKelas.map((k) => [k.id, k]));
+
+  // Tanggal libur per kelas (dikecualikan dari presensi yang diharapkan).
+  const liburByKelas = await getLiburDatesForKelas(kelasIds, PRESENSI_ANCHOR, today);
 
   // Hari yang diharapkan untuk semua kelas yang dipimpin (anchor s/d hari ini).
+  // Kelas self_attendance tak masuk (findKetuaProgramKelas sudah mengecualikan).
   const expected: ExpectedDay[] = [];
-  for (const k of myKelas) expected.push(...expectedDaysInRange(k, PRESENSI_ANCHOR, today));
+  for (const k of myKelas) {
+    expected.push(...expectedDaysInRange(k, PRESENSI_ANCHOR, today, liburByKelas.get(k.id)));
+  }
   if (expected.length === 0) return [];
-
-  const kelasIds = myKelas.map((k) => k.id);
 
   // Pertemuan sejak anchor untuk kelas-kelas ini.
   const { data: pertemuanList } = await supabaseAdmin
@@ -163,17 +240,20 @@ export async function getUnfilledMaahirDays(wa: string): Promise<UnfilledDay[]> 
     for (const k of kehadiran ?? []) filledPertemuanIds.add(k.pertemuan_id);
   }
 
-  // Key (kelas|program|tanggal) → terisi?
+  // Key (kelas|matchKey) → terisi? matchKey harian per tanggal, mingguan per pekan.
   const filledKeys = new Set<string>();
   for (const p of pertemuanList ?? []) {
-    if (filledPertemuanIds.has(p.id)) {
-      filledKeys.add(`${p.program_kelas_id}|${p.program}|${p.tanggal}`);
-    }
+    if (!filledPertemuanIds.has(p.id)) continue;
+    const k = kelasById.get(p.program_kelas_id);
+    if (!k) continue;
+    filledKeys.add(`${p.program_kelas_id}|${filledKeyOf(k, p.program, p.tanggal)}`);
   }
 
-  const unfilled = expected.filter(
-    (e) => !filledKeys.has(`${e.program_kelas_id}|${e.program}|${e.tanggal}`)
-  );
+  const unfilled = expected.filter((e) => {
+    const k = kelasById.get(e.program_kelas_id);
+    if (!k) return true;
+    return !filledKeys.has(`${e.program_kelas_id}|${filledKeyOf(k, e.program, e.tanggal)}`);
+  });
 
   unfilled.sort((a, b) => {
     if (a.tanggal !== b.tanggal) return a.tanggal < b.tanggal ? -1 : 1;
@@ -182,3 +262,57 @@ export async function getUnfilledMaahirDays(wa: string): Promise<UnfilledDay[]> 
 
   return unfilled.map((u) => ({ ...u, totalRemaining: unfilled.length }));
 }
+
+// ============================================================
+// Presensi MANDIRI (per peserta) — kelas self_attendance
+// ============================================================
+
+/**
+ * Hari presensi yang belum diisi oleh SATU anggota (peserta) pada kelas
+ * presensi-mandiri. "Terisi" = ada kehadiran_peserta utk (pertemuan, anggota_id)
+ * dengan diisi_at not null. Urut paling lama dulu.
+ */
+export async function getUnfilledDaysForAnggota(
+  kelas: ProgramKelasRow,
+  anggotaId: string
+): Promise<UnfilledDay[]> {
+  const today = todayJakarta();
+  const libur = await getLiburDates(kelas.id, PRESENSI_ANCHOR, today);
+  // Peserta mengisi SELURUH presensinya: kelas_maahir & At-Tibyan.
+  const expected = expectedDaysInRange(kelas, PRESENSI_ANCHOR, today, libur);
+  if (expected.length === 0) return [];
+
+  const { data: pertemuanList } = await supabaseAdmin
+    .from('pertemuan_program')
+    .select('id, program_kelas_id, program, tanggal')
+    .eq('program_kelas_id', kelas.id)
+    .gte('tanggal', PRESENSI_ANCHOR);
+
+  const pertemuanIds = (pertemuanList ?? []).map((p) => p.id);
+  const filledPertemuanIds = new Set<string>();
+  if (pertemuanIds.length > 0) {
+    const { data: kehadiran } = await supabaseAdmin
+      .from('kehadiran_peserta')
+      .select('pertemuan_id, diisi_at')
+      .in('pertemuan_id', pertemuanIds)
+      .eq('anggota_id', anggotaId)
+      .not('diisi_at', 'is', null);
+    for (const k of kehadiran ?? []) filledPertemuanIds.add(k.pertemuan_id);
+  }
+
+  const filledKeys = new Set<string>();
+  for (const p of pertemuanList ?? []) {
+    if (filledPertemuanIds.has(p.id)) filledKeys.add(filledKeyOf(kelas, p.program, p.tanggal));
+  }
+
+  const unfilled = expected.filter(
+    (e) => !filledKeys.has(filledKeyOf(kelas, e.program, e.tanggal))
+  );
+  unfilled.sort((a, b) => {
+    if (a.tanggal !== b.tanggal) return a.tanggal < b.tanggal ? -1 : 1;
+    return PROGRAM_ORDER[a.program] - PROGRAM_ORDER[b.program];
+  });
+  return unfilled.map((u) => ({ ...u, totalRemaining: unfilled.length }));
+}
+
+export { getSelfAttendanceKelas };

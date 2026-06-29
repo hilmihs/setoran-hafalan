@@ -27,15 +27,19 @@ export async function requestPasswordReset(
   }
 
   // Cari nama pemohon di salah satu tabel role (active).
+  // CATATAN: whatsapp_number TIDAK unik — satu nomor bisa punya beberapa baris
+  // (duplikat atau dipakai >1 orang). Jangan pakai .maybeSingle() karena akan
+  // error saat >1 baris dan salah lapor "tidak terdaftar". Ambil baris aktif pertama.
   let requesterName: string | null = null;
   for (const t of ROLE_TABLES) {
     const { data } = await supabaseAdmin
       .from(t)
-      .select('name, active')
+      .select('name')
       .eq('whatsapp_number', wa)
-      .maybeSingle();
-    if (data && data.active) {
-      requesterName = data.name;
+      .eq('active', true)
+      .limit(1);
+    if (data && data.length > 0) {
+      requesterName = data[0].name;
       break;
     }
   }

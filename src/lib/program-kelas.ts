@@ -41,13 +41,48 @@ export type ProgramKelasRow = {
   waktu_selesai: string | null;
   ketua_wa: string | null;
   wakil_wa: string | null;
+  self_attendance: boolean;
+  presensi_sifat: 'harian' | 'mingguan';
 };
 
-/** Kelas program di mana WA ini jadi ketua atau wakil. */
+const PK_COLS = 'id, name, gender, jadwal_hari, waktu_mulai, waktu_selesai, ketua_wa, wakil_wa, self_attendance, presensi_sifat';
+
+/**
+ * Kelas program di mana WA ini jadi ketua atau wakil.
+ * Kelas self_attendance DIKECUALIKAN — seluruh presensinya (kelas_maahir &
+ * At-Tibyan) diisi tiap peserta sendiri, jadi ketua tak mengisi apa pun.
+ */
 export async function findKetuaProgramKelas(wa: string): Promise<ProgramKelasRow[]> {
   const { data } = await supabaseAdmin
     .from('program_kelas')
-    .select('id, name, gender, jadwal_hari, waktu_mulai, waktu_selesai, ketua_wa, wakil_wa')
+    .select(PK_COLS)
+    .eq('self_attendance', false)
     .or(`ketua_wa.eq.${wa},wakil_wa.eq.${wa}`);
   return (data ?? []) as ProgramKelasRow[];
+}
+
+/** Ambil satu kelas presensi-mandiri by id. null bila bukan self_attendance. */
+export async function getSelfAttendanceKelas(id: string): Promise<ProgramKelasRow | null> {
+  const { data } = await supabaseAdmin
+    .from('program_kelas')
+    .select(PK_COLS)
+    .eq('id', id)
+    .eq('self_attendance', true)
+    .maybeSingle();
+  return (data as ProgramKelasRow | null) ?? null;
+}
+
+/** Keanggotaan kelas presensi-mandiri untuk WA ini (akses lewat akun sendiri). */
+export async function findSelfAttendanceMembership(
+  wa: string
+): Promise<{ kelas: ProgramKelasRow; anggotaId: string; anggotaName: string } | null> {
+  const { data } = await supabaseAdmin
+    .from('program_kelas_anggota')
+    .select(`id, name, program_kelas:program_kelas_id(${PK_COLS})`)
+    .eq('whatsapp_number', wa);
+  for (const a of data ?? []) {
+    const k = a.program_kelas as unknown as ProgramKelasRow | null;
+    if (k?.self_attendance) return { kelas: k, anggotaId: a.id as string, anggotaName: a.name as string };
+  }
+  return null;
 }

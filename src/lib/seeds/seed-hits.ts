@@ -289,7 +289,6 @@ const KOORDINATOR_KK = [
 
 const PROGRAMS = [
   { name: 'Kajian At-Tibyan', hari: ['sabtu'], waktu_mulai: '08:45', waktu_selesai: '10:00' },
-  { name: 'Program Muallim Najih', hari: ['jumat'], waktu_mulai: '19:30', waktu_selesai: '20:30' },
 ];
 
 const NIL = '00000000-0000-0000-0000-000000000000';
@@ -417,15 +416,12 @@ export async function runSeedHits(log: (s: string) => void) {
     .limit(4);
 
   const tibyanId = progs!.find((p) => p.name === 'Kajian At-Tibyan')?.id;
-  const muallimId = progs!.find((p) => p.name === 'Program Muallim Najih')?.id;
 
-  if (somePengajar && somePengajar.length >= 3 && tibyanId && muallimId) {
+  if (somePengajar && somePengajar.length >= 3 && tibyanId) {
     const checkins = [
       { pengajar_id: somePengajar[0].id, program_id: tibyanId, tanggal: yesterday, status: 'hadir', is_terlambat: false },
       { pengajar_id: somePengajar[1].id, program_id: tibyanId, tanggal: yesterday, status: 'hadir', is_terlambat: true },
       { pengajar_id: somePengajar[2].id, program_id: tibyanId, tanggal: yesterday, status: 'izin', is_terlambat: false },
-      { pengajar_id: somePengajar[0].id, program_id: muallimId, tanggal: yesterday, status: 'hadir', is_terlambat: false },
-      { pengajar_id: somePengajar[1].id, program_id: muallimId, tanggal: yesterday, status: 'sakit', is_terlambat: false },
     ];
     const { error: ciErr } = await supabaseAdmin.from('checkin_pengajar').insert(checkins);
     if (ciErr) log(`⚠ Checkin error: ${ciErr.message}`);
