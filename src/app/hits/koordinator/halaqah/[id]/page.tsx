@@ -18,16 +18,16 @@ function kondisiStyle(k: HitsKondisi) {
 }
 
 export default async function HalaqahDetailPage({ params }: { params: { id: string } }) {
-  const session = await requireKoordinatorKetuaKelas();
+  await requireKoordinatorKetuaKelas();
 
-  // Gender scope + metadata halaqah.
+  // Detail read-only: koordinator KK boleh lihat halaqah gender mana pun
+  // (rincian pertemuan + observasi). Gating gender hanya untuk aksi tulis.
   const { data: h } = await supabaseAdmin
     .from('hits_halaqah')
     .select('id, name, gender, level, pengajar_id, pengajar_nama_sheet, jadwal_raw')
     .eq('id', params.id)
     .maybeSingle();
   if (!h) redirect('/hits/koordinator');
-  if (h.gender && h.gender !== session.gender) redirect('/hits/koordinator');
 
   const loaded = await loadHalaqahPertemuan(params.id);
   const derived = loaded?.derived ?? [];

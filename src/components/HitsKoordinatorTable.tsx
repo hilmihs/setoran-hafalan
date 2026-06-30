@@ -110,7 +110,6 @@ export function HitsKoordinatorTable({ rows }: { rows: HitsRekapRow[] }) {
   const [q, setQ] = useState('');
   const [batch, setBatch] = useState('');
   const [level, setLevel] = useState('');
-  const [gender, setGender] = useState('');
   const [sortKey, setSortKey] = useState<SortKey>('halaqah');
   const [asc, setAsc] = useState(true);
 
@@ -127,7 +126,6 @@ export function HitsKoordinatorTable({ rows }: { rows: HitsRekapRow[] }) {
     const out = rows.filter((r) => {
       if (batch && r.batchId !== batch) return false;
       if (level && r.level !== level) return false;
-      if (gender && r.gender !== gender) return false;
       if (needle) {
         const hay = `${r.halaqahName} ${r.pengajarNama ?? ''} ${r.ketuaNama ?? ''} ${r.batchName}`.toLowerCase();
         if (!hay.includes(needle)) return false;
@@ -142,7 +140,7 @@ export function HitsKoordinatorTable({ rows }: { rows: HitsRekapRow[] }) {
       return ((va as number) - (vb as number)) * dir;
     });
     return out;
-  }, [rows, q, batch, level, gender, sortKey, asc]);
+  }, [rows, q, batch, level, sortKey, asc]);
 
   function toggleSort(k: SortKey) {
     if (k === sortKey) setAsc(!asc);
@@ -169,17 +167,6 @@ export function HitsKoordinatorTable({ rows }: { rows: HitsRekapRow[] }) {
           onChange={(e) => setQ(e.target.value)}
           style={{ flex: '1 1 220px', height: 38 }}
         />
-        {(rows.some((r) => r.gender === 'ikhwan') && rows.some((r) => r.gender === 'akhwat')) && (
-          <Segmented
-            value={gender}
-            onChange={setGender}
-            options={[
-              { value: '', label: 'Semua' },
-              { value: 'ikhwan', label: 'Ikhwan' },
-              { value: 'akhwat', label: 'Akhwat' },
-            ]}
-          />
-        )}
         <Segmented
           value={level}
           onChange={setLevel}

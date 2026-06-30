@@ -5,7 +5,9 @@ import { getHitsRekap, getHitsBatches } from '@/lib/hits-rekap';
 import { HitsKoordinatorTable } from '@/components/HitsKoordinatorTable';
 import { MonthNavSelect } from '@/components/MonthNavSelect';
 import { BatchNavSelect } from '@/components/BatchNavSelect';
+import { GenderNavSelect } from '@/components/GenderNavSelect';
 import { StatCard } from '@/components/ui/StatCard';
+import type { Gender } from '@/types/db';
 import { monthOptionsSince } from '@/lib/month';
 import { Icon } from '@/components/icons';
 
@@ -16,7 +18,7 @@ const ANCHOR_MONTH = '2026-01'; // batch HITS paling awal mulai Jan 2026
 export default async function HitsKoordinatorPage({
   searchParams,
 }: {
-  searchParams: { month?: string; batch?: string };
+  searchParams: { month?: string; batch?: string; gender?: string };
 }) {
   try {
     await requireKoordinatorKetuaKelas();
@@ -39,7 +41,12 @@ export default async function HitsKoordinatorPage({
     (searchParams.batch && batches.find((b) => b.id === searchParams.batch)) || batches[0];
   const batchId = selectedBatch?.id;
 
-  const rows = batchId ? await getHitsRekap(month, { batchId }) : [];
+  const genderFilter: Gender | undefined =
+    searchParams.gender === 'ikhwan' || searchParams.gender === 'akhwat'
+      ? searchParams.gender
+      : undefined;
+
+  const rows = batchId ? await getHitsRekap(month, { batchId, gender: genderFilter }) : [];
 
   // ── Ringkasan ──
   const totalHalaqah = rows.length;
@@ -107,6 +114,7 @@ export default async function HitsKoordinatorPage({
                 {batches.length > 1 && batchId && (
                   <BatchNavSelect options={batches} value={batchId} />
                 )}
+                <GenderNavSelect value={genderFilter ?? ''} />
                 <MonthNavSelect options={monthOptionsSince(ANCHOR_MONTH)} value={month} />
               </div>
             </div>
