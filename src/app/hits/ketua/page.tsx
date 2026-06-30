@@ -144,6 +144,16 @@ export default async function HitsKetuaPage({
             </div>
           )}
 
+          <div style={{ marginBottom: 12 }}>
+            <a
+              href={`/hits/ketua/koreksi?h=${selectedHalaqahId}`}
+              className="btn btn-sm btn-ghost"
+              style={{ textDecoration: 'none', fontSize: 12 }}
+            >
+              Ajukan koreksi pertemuan
+            </a>
+          </div>
+
           <h1 className="t-h1" style={{ marginBottom: 4 }}>{halaqah.name}</h1>
           <p className="t-body" style={{ marginBottom: 4 }}>
             Pengajar: {halaqah.pengajar_nama_sheet ?? '—'}
