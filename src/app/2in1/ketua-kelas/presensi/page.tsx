@@ -1,7 +1,7 @@
 import { redirect } from 'next/navigation';
 import { supabaseAdmin } from '@/lib/supabase-admin';
 import { getSessionWa } from '@/lib/program-kelas';
-import { getUnfilledMaahirDays, PROGRAM_LABEL } from '@/lib/maahir-presensi';
+import { getUnfilledMaahirDays, PROGRAM_LABEL, weekRangeLabel } from '@/lib/maahir-presensi';
 import { PresensiWizardForm } from './PresensiWizardForm';
 import { LogoutButton } from '@/components/LogoutButton';
 
@@ -70,15 +70,20 @@ export default async function PresensiWizardPage() {
     catatan: existingMap.get(a.id)?.catatan ?? '',
   }));
 
-  const tanggalLabel = new Date(day.tanggal + 'T00:00:00').toLocaleDateString('id-ID', {
-    weekday: 'long',
-    day: 'numeric',
-    month: 'long',
-    year: 'numeric',
-  });
-  const timeRange = day.waktu_mulai
-    ? `${day.waktu_mulai.slice(0, 5)}${day.waktu_selesai ? ' – ' + day.waktu_selesai.slice(0, 5) : ''}`
-    : null;
+  // Mingguan (mis. Alumni/Talaqqi): tampil sebagai rentang pekan, bukan hari Senin spesifik.
+  const tanggalLabel = day.mingguan
+    ? weekRangeLabel(day.tanggal)
+    : new Date(day.tanggal + 'T00:00:00').toLocaleDateString('id-ID', {
+        weekday: 'long',
+        day: 'numeric',
+        month: 'long',
+        year: 'numeric',
+      });
+  // Slot mingguan bukan sesi jam tertentu → sembunyikan rentang jam.
+  const timeRange =
+    !day.mingguan && day.waktu_mulai
+      ? `${day.waktu_mulai.slice(0, 5)}${day.waktu_selesai ? ' – ' + day.waktu_selesai.slice(0, 5) : ''}`
+      : null;
 
   return (
     <main style={{ minHeight: '100vh' }}>
@@ -118,8 +123,9 @@ export default async function PresensiWizardPage() {
           </div>
 
           <p className="t-small" style={{ color: 'var(--muted-2)', marginBottom: 12 }}>
-            Isi kehadiran anggota untuk hari ini. Setelah disimpan, lanjut otomatis ke hari
-            berikutnya yang belum terisi.
+            {day.mingguan
+              ? 'Cukup 1× per pekan — isi kehadiran anggota untuk pekan ini (hadir di hari mana pun Senin–Jum’at dihitung). Setelah disimpan, lanjut ke pekan berikutnya yang belum terisi.'
+              : 'Isi kehadiran anggota untuk hari ini. Setelah disimpan, lanjut otomatis ke hari berikutnya yang belum terisi.'}
           </p>
 
           <PresensiWizardForm

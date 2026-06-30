@@ -30,10 +30,11 @@ export type UnfilledDay = {
   kelasName: string;
   gender: 'ikhwan' | 'akhwat';
   program: MaahirProgram;
-  tanggal: string; // YYYY-MM-DD
+  tanggal: string; // YYYY-MM-DD (mingguan: tanggal Senin kanonik pekan)
   waktu_mulai: string | null;
   waktu_selesai: string | null;
   namaKegiatan: string;
+  mingguan: boolean; // true = slot mewakili 1 pekan (Senin–Jum'at), bukan hari spesifik
   totalRemaining: number;
 };
 
@@ -69,6 +70,22 @@ export function mondayOf(dateStr: string): string {
   return `${dt.getUTCFullYear()}-${String(dt.getUTCMonth() + 1).padStart(2, '0')}-${String(
     dt.getUTCDate()
   ).padStart(2, '0')}`;
+}
+
+/** Label rentang pekan (Senin–Jum'at) dari tanggal Senin kanonik. */
+export function weekRangeLabel(mondayStr: string): string {
+  const [y, m, d] = mondayStr.split('-').map(Number);
+  const mon = new Date(Date.UTC(y, m - 1, d));
+  const fri = new Date(mon);
+  fri.setUTCDate(fri.getUTCDate() + 4);
+  const fmt = (dt: Date, withYear: boolean) =>
+    dt.toLocaleDateString('id-ID', {
+      day: 'numeric',
+      month: 'short',
+      ...(withYear ? { year: 'numeric' } : {}),
+      timeZone: 'UTC',
+    });
+  return `Pekan ${fmt(mon, false)} – ${fmt(fri, true)}`;
 }
 
 /**
@@ -157,6 +174,7 @@ function expectedDaysForKelas(
         waktu_mulai: k.waktu_mulai,
         waktu_selesai: k.waktu_selesai,
         namaKegiatan: PROGRAM_LABEL.kelas_maahir,
+        mingguan: true,
       });
     }
     return out;
@@ -178,6 +196,7 @@ function expectedDaysForKelas(
         waktu_mulai: k.waktu_mulai,
         waktu_selesai: k.waktu_selesai,
         namaKegiatan: PROGRAM_LABEL.kelas_maahir,
+        mingguan: false,
       });
     }
     if (hari === TIBYAN_HARI) {
@@ -190,6 +209,7 @@ function expectedDaysForKelas(
         waktu_mulai: TIBYAN_WAKTU.mulai,
         waktu_selesai: TIBYAN_WAKTU.selesai,
         namaKegiatan: PROGRAM_LABEL.at_tibyan,
+        mingguan: false,
       });
     }
   }
