@@ -2,7 +2,7 @@ import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { getSession } from '@/lib/session';
 import { getMaahirRekap } from '@/lib/maahir-rekap';
-import { PRESENSI_ANCHOR } from '@/lib/maahir-presensi';
+import { PRESENSI_ANCHOR, weekRangeLabel } from '@/lib/maahir-presensi';
 import { MaahirRekapTable } from '@/components/MaahirRekapTable';
 import { MonthNavSelect } from '@/components/MonthNavSelect';
 import { monthOptionsSince } from '@/lib/month';
@@ -120,8 +120,38 @@ export default async function KoordinatorKehadiranPage({
               />
               <div className="t-tiny" style={{ color: 'var(--muted-2)', marginBottom: 8 }}>
                 {k.gender === 'ikhwan' ? 'Ikhwan' : 'Akhwat'} · {k.jadwalHari.join(', ')} ·{' '}
-                {k.anggota.length} anggota · {k.pertemuan.length} pertemuan
+                {k.anggota.length} anggota · {k.pertemuan.length}/{k.sessions.length} pertemuan terisi
               </div>
+
+              {k.sessions.length > 0 && (
+                <details style={{ marginBottom: 10 }}>
+                  <summary className="t-small" style={{ cursor: 'pointer', color: 'var(--muted-2)', userSelect: 'none' }}>
+                    Rincian {k.sessions.length} pertemuan — {k.sessions.filter((x) => !x.filled).length} belum diisi
+                  </summary>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 8 }}>
+                    {k.sessions.map((sn, i) => {
+                      const label = sn.mingguan
+                        ? weekRangeLabel(sn.tanggal)
+                        : new Date(sn.tanggal + 'T00:00:00').toLocaleDateString('id-ID', {
+                            weekday: 'short', day: 'numeric', month: 'short',
+                          });
+                      const isTibyan = sn.program === 'at_tibyan';
+                      return (
+                        <span
+                          key={`${sn.program}-${sn.tanggal}-${i}`}
+                          className={`badge ${sn.filled ? 'badge-hijau' : 'badge-merah'}`}
+                          style={{ fontSize: 11 }}
+                          title={sn.filled ? 'Sudah diisi' : 'Belum diisi'}
+                        >
+                          <span className="dot" />
+                          {label}{isTibyan ? ' · Tibyan' : ''} {sn.filled ? '✓' : '✗'}
+                        </span>
+                      );
+                    })}
+                  </div>
+                </details>
+              )}
+
               <MaahirRekapTable kelas={k} />
             </div>
           ))}

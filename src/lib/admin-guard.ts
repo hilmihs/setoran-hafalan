@@ -2,7 +2,7 @@ import 'server-only';
 import { redirect } from 'next/navigation';
 import { getSession } from './session';
 import { supabaseAdmin } from './supabase-admin';
-import { ADMIN_WA } from './constants';
+import { ADMIN_WA, SUPERADMIN_WAS } from './constants';
 import { loadAccessesForWa } from './access';
 import type { RoleAccess } from '@/types/db';
 
@@ -35,11 +35,11 @@ export async function requireAdmin(): Promise<{ wa: string }> {
   const s = await getSession();
   if (!s.session) redirect('/');
 
-  // Cek semua role yang dimiliki — kalau salah satu WA-nya match ADMIN_WA, allow.
+  // Cek semua role yang dimiliki — kalau salah satu WA-nya termasuk superadmin, allow.
   const candidates: RoleAccess[] = s.accesses && s.accesses.length > 0 ? s.accesses : [s.session];
   for (const acc of candidates) {
     const wa = await getSessionWaNumber(acc);
-    if (wa === ADMIN_WA) return { wa };
+    if (wa && SUPERADMIN_WAS.includes(wa)) return { wa };
   }
 
   redirect('/');
@@ -52,6 +52,17 @@ export async function requireAdmin(): Promise<{ wa: string }> {
  * panggil requireAdmin() lebih dulu di action.
  */
 export async function getAdminActor(): Promise<RoleAccess | null> {
-  const accesses = await loadAccessesForWa(ADMIN_WA);
-  return accesses[0] ?? null;
+  // Atribusikan ke superadmin yang sedang login (bukan selalu ADMIN_WA) agar
+  // audit benar saat ada >1 superadmin.
+  const s = await getSession();
+  const candidates: RoleAccess[] = s.accesses && s.accesses.length > 0 ? s.accesses : s.session ? [s.session] : [];
+  for (const acc of candidates) {
+    const wa = await getSessionWaNumber(acc);
+    if (wa && SUPERADMIN_WAS.includes(wa)) {
+      const accesses = await loadAccessesForWa(wa);
+      if (accesses[0]) return accesses[0];
+    }
+  }
+  const fallback = await loadAccessesForWa(ADMIN_WA);
+  return fallback[0] ?? null;
 }

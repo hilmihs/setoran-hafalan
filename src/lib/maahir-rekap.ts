@@ -39,6 +39,14 @@ export type RekapAnggota = {
   persenHadir: number | null; // (H+T)/jumlah pertemuan terisi; null jika belum ada pertemuan
 };
 
+export type RekapSession = {
+  tanggal: string; // YYYY-MM-DD (mingguan: Senin kanonik)
+  program: MaahirProgram;
+  programLabel: string;
+  mingguan: boolean;
+  filled: boolean; // sudah ada kehadiran tersubmit?
+};
+
 export type RekapKelas = {
   kelasId: string;
   kelasName: string;
@@ -46,6 +54,7 @@ export type RekapKelas = {
   jadwalHari: string[];
   pertemuan: RekapPertemuan[];
   anggota: RekapAnggota[];
+  sessions: RekapSession[]; // SEMUA pertemuan diharapkan (terisi & belum) + tanggal
   belumDiisi: number; // hari program diharapkan (s/d hari ini) yang belum terisi
 };
 
@@ -192,6 +201,16 @@ export async function getMaahirRekap(
       (e) => !filledKeys.has(filledKeyOf(k, e.program, e.tanggal))
     ).length;
 
+    const sessions: RekapSession[] = expected
+      .map((e) => ({
+        tanggal: e.tanggal,
+        program: e.program,
+        programLabel: PROGRAM_LABEL[e.program] ?? e.program,
+        mingguan: e.mingguan,
+        filled: filledKeys.has(filledKeyOf(k, e.program, e.tanggal)),
+      }))
+      .sort((a, b) => (a.tanggal < b.tanggal ? -1 : a.tanggal > b.tanggal ? 1 : 0));
+
     result.push({
       kelasId: k.id,
       kelasName: k.name,
@@ -199,6 +218,7 @@ export async function getMaahirRekap(
       jadwalHari: k.jadwal_hari ?? [],
       pertemuan,
       anggota,
+      sessions,
       belumDiisi,
     });
   }
