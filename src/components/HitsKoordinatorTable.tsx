@@ -52,7 +52,7 @@ function KetuaCell({ row }: { row: HitsRekapRow }) {
   );
 }
 
-type SortKey = 'halaqah' | 'pengajar' | 'peserta' | 'pctKbbs' | 'pctLatihan' | 'belumDiisi';
+type SortKey = 'halaqah' | 'pengajar' | 'pctKbbs' | 'pctLatihan' | 'belumDiisi';
 
 function pctBadge(pct: number | null): string {
   if (pct == null) return 'badge';
@@ -214,7 +214,6 @@ export function HitsKoordinatorTable({ rows }: { rows: HitsRekapRow[] }) {
               <th>Batch / Level</th>
               <th onClick={() => toggleSort('pengajar')} style={{ cursor: 'pointer' }}>Pengajar{arrow('pengajar')}</th>
               <th>Ketua</th>
-              <th onClick={() => toggleSort('peserta')} style={{ cursor: 'pointer', textAlign: 'right' }}>Peserta{arrow('peserta')}</th>
               <th onClick={() => toggleSort('belumDiisi')} style={{ cursor: 'pointer' }}>Belum diisi{arrow('belumDiisi')}</th>
               <th onClick={() => toggleSort('pctKbbs')} style={{ cursor: 'pointer' }}>%KBBS{arrow('pctKbbs')}</th>
               <th onClick={() => toggleSort('pctLatihan')} style={{ cursor: 'pointer' }}>%Latihan{arrow('pctLatihan')}</th>
@@ -255,7 +254,6 @@ export function HitsKoordinatorTable({ rows }: { rows: HitsRekapRow[] }) {
                   <td className="t-tiny" data-label="Ketua">
                     <KetuaCell row={r} />
                   </td>
-                  <td style={{ textAlign: 'right' }} className="t-mono" data-label="Peserta">{r.pesertaCount}</td>
                   <td data-label="Belum diisi">
                     {r.belumDiisi > 0 ? (
                       <span className="badge badge-merah">{r.belumDiisi}</span>
@@ -297,7 +295,6 @@ function sortVal(r: HitsRekapRow, k: SortKey): string | number {
   switch (k) {
     case 'halaqah': return r.halaqahName;
     case 'pengajar': return r.pengajarNama ?? '';
-    case 'peserta': return r.pesertaCount;
     case 'pctKbbs': return r.pctKbbs ?? -1;
     case 'pctLatihan': return r.pctLatihan ?? -1;
     case 'belumDiisi': return r.belumDiisi;

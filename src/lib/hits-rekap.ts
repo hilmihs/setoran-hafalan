@@ -20,7 +20,6 @@ export type HitsRekapRow = {
   ketuaKelasId: string | null;
   ketuaWa: string | null;
   ketuaLoggedIn: boolean; // ketua sudah pernah login (last_login_at terisi)
-  pesertaCount: number;
   terisi: number; // pertemuan yang sudah diisi bulan ini
   expected: number; // pertemuan yang diharapkan s/d hari ini (dari kaldik)
   belumDiisi: number;
@@ -96,7 +95,7 @@ export async function getHitsRekap(
 
   // Query anak ber-.in(halaqahIds) DICHUNK — daftar ratusan id bisa bikin URL
   // gateway 414 (→ data null → ketua/keterangan kosong semua) atau kena cap 1000 baris.
-  const [{ data: batchList }, { data: kaldikList }, ketList, ketuaList, overrideList, pesertaCountList] =
+  const [{ data: batchList }, { data: kaldikList }, ketList, ketuaList, overrideList] =
     await Promise.all([
       supabaseAdmin.from('hits_batch').select('id, name').in('id', batchIds),
       supabaseAdmin
@@ -126,19 +125,7 @@ export async function getHitsRekap(
           .select('halaqah_id, level, pertemuan_no, tanggal, pekan, is_skipped')
           .in('halaqah_id', ids)
       ),
-      fetchInChunks(halaqahIds, (ids) =>
-        supabaseAdmin
-          .from('hits_halaqah_peserta')
-          .select('halaqah_id')
-          .in('halaqah_id', ids)
-          .eq('active', true)
-      ),
     ]);
-
-  const pesertaCountByHalaqah = new Map<string, number>();
-  for (const p of pesertaCountList ?? []) {
-    pesertaCountByHalaqah.set(p.halaqah_id, (pesertaCountByHalaqah.get(p.halaqah_id) ?? 0) + 1);
-  }
 
   const batchName = new Map((batchList ?? []).map((b) => [b.id, b.name]));
   // Bila satu halaqah punya >1 ketua aktif, prioritaskan yang sudah login.
@@ -226,7 +213,6 @@ export async function getHitsRekap(
       ketuaKelasId: ketuaByHalaqah.get(h.id)?.id ?? null,
       ketuaWa: ketuaByHalaqah.get(h.id)?.wa ?? null,
       ketuaLoggedIn: ketuaByHalaqah.get(h.id)?.loggedIn ?? false,
-      pesertaCount: pesertaCountByHalaqah.get(h.id) ?? 0,
       terisi,
       expected,
       belumDiisi: Math.max(0, expected - terisi),
