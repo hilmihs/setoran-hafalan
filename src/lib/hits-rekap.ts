@@ -35,6 +35,25 @@ export type HitsRekapRow = {
 
 export type HitsBatchOption = { id: string; name: string };
 
+/**
+ * Jalankan query ber-`.in(col, ids)` dalam potongan kecil lalu gabung hasilnya.
+ * Hindari (a) URL "414 Too Long" saat ids banyak (mis. 434 halaqah → ~16KB URL
+ * gagal di gateway → data null → dashboard kosong) dan (b) cap default 1000 baris
+ * PostgREST (potongan kecil → baris per-request jauh di bawah 1000).
+ */
+async function fetchInChunks<T>(
+  ids: string[],
+  run: (chunk: string[]) => PromiseLike<{ data: T[] | null }>,
+  size = 80
+): Promise<T[]> {
+  const out: T[] = [];
+  for (let i = 0; i < ids.length; i += size) {
+    const { data } = await run(ids.slice(i, i + size));
+    if (data) out.push(...data);
+  }
+  return out;
+}
+
 function monthBounds(month: string): { start: string; nextMonth: string } {
   const [y, m] = month.split('-').map(Number);
   const start = `${month}-01`;
@@ -75,35 +94,45 @@ export async function getHitsRekap(
   const halaqahIds = halaqah.map((h) => h.id);
   const batchIds = [...new Set(halaqah.map((h) => h.batch_id))];
 
-  const [{ data: batchList }, { data: kaldikList }, { data: ketList }, { data: ketuaList }, { data: overrideList }, { data: pesertaCountList }] =
+  // Query anak ber-.in(halaqahIds) DICHUNK — daftar ratusan id bisa bikin URL
+  // gateway 414 (→ data null → ketua/keterangan kosong semua) atau kena cap 1000 baris.
+  const [{ data: batchList }, { data: kaldikList }, ketList, ketuaList, overrideList, pesertaCountList] =
     await Promise.all([
       supabaseAdmin.from('hits_batch').select('id, name').in('id', batchIds),
       supabaseAdmin
         .from('hits_kaldik_hari')
         .select('batch_id, level, tanggal, pekan, is_libur')
         .in('batch_id', batchIds),
-      supabaseAdmin
-        .from('hits_keterangan_harian')
-        .select('halaqah_id, pertemuan_no, tanggal, kondisi, terlambat, latihan_diberikan, semua_selesai, status_latihan')
-        .in('halaqah_id', halaqahIds)
-        .gte('tanggal', start)
-        .lt('tanggal', nextMonth),
+      fetchInChunks(halaqahIds, (ids) =>
+        supabaseAdmin
+          .from('hits_keterangan_harian')
+          .select('halaqah_id, pertemuan_no, tanggal, kondisi, terlambat, latihan_diberikan, semua_selesai, status_latihan')
+          .in('halaqah_id', ids)
+          .gte('tanggal', start)
+          .lt('tanggal', nextMonth)
+      ),
       // Sumber tunggal ketua = tabel ketua_kelas (dipakai login/auth). Mencakup
       // ketua jalur manual yang tak ter-flag di hits_halaqah_peserta.
-      supabaseAdmin
-        .from('ketua_kelas')
-        .select('id, name, whatsapp_number, hits_halaqah_id, last_login_at')
-        .in('hits_halaqah_id', halaqahIds)
-        .eq('active', true),
-      supabaseAdmin
-        .from('hits_kaldik_pertemuan')
-        .select('halaqah_id, level, pertemuan_no, tanggal, pekan, is_skipped')
-        .in('halaqah_id', halaqahIds),
-      supabaseAdmin
-        .from('hits_halaqah_peserta')
-        .select('halaqah_id')
-        .in('halaqah_id', halaqahIds)
-        .eq('active', true),
+      fetchInChunks(halaqahIds, (ids) =>
+        supabaseAdmin
+          .from('ketua_kelas')
+          .select('id, name, whatsapp_number, hits_halaqah_id, last_login_at')
+          .in('hits_halaqah_id', ids)
+          .eq('active', true)
+      ),
+      fetchInChunks(halaqahIds, (ids) =>
+        supabaseAdmin
+          .from('hits_kaldik_pertemuan')
+          .select('halaqah_id, level, pertemuan_no, tanggal, pekan, is_skipped')
+          .in('halaqah_id', ids)
+      ),
+      fetchInChunks(halaqahIds, (ids) =>
+        supabaseAdmin
+          .from('hits_halaqah_peserta')
+          .select('halaqah_id')
+          .in('halaqah_id', ids)
+          .eq('active', true)
+      ),
     ]);
 
   const pesertaCountByHalaqah = new Map<string, number>();
