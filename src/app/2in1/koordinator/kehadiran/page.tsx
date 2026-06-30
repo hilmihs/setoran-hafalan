@@ -27,7 +27,10 @@ export default async function KoordinatorKehadiranPage({
   searchParams: SP;
 }) {
   const s = await getSession();
-  if (!s.session || s.session.role !== 'koordinator') {
+  // Terima koordinator dari accesses (bukan hanya role aktif) supaya user
+  // multi-role bisa buka dari beranda tanpa ke-redirect ke login.
+  const accesses = s.accesses ?? (s.session ? [s.session] : []);
+  if (!accesses.some((a) => a.role === 'koordinator')) {
     redirect('/2in1/koordinator/login');
   }
 
