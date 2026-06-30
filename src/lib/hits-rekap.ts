@@ -80,7 +80,7 @@ export async function getHitsRekap(
   let hq = supabaseAdmin
     .from('hits_halaqah')
     .select(
-      'id, batch_id, level, program, name, gender, jadwal_raw, jadwal_hari, pengajar_nama_sheet, pengajar_id'
+      'id, batch_id, level, program, name, gender, jadwal_raw, jadwal_hari, pengajar_nama_sheet, pengajar_id, start_date'
     )
     .eq('active', true);
   if (opts?.halaqahId) hq = hq.eq('id', opts.halaqahId);
@@ -195,7 +195,7 @@ export async function getHitsRekap(
     for (const lv of programKaldikLevels(h.program)) kaldikByLevel.set(lv, kaldikByBL.get(`${h.batch_id}|${lv}`) ?? []);
     const ovByLevel = new Map<HitsLevel, PertemuanOverride[]>();
     for (const lv of PROGRAM_STAGES[h.program] ?? PROGRAM_STAGES.dasar) ovByLevel.set(lv, overridesByHL.get(`${h.id}|${lv}`) ?? []);
-    const derived = deriveHalaqahProgram(h.program, h.jadwal_hari ?? [], kaldikByLevel, ovByLevel);
+    const derived = deriveHalaqahProgram(h.program, h.jadwal_hari ?? [], kaldikByLevel, ovByLevel, h.start_date);
     const expected = derived.filter((d) => d.tanggal >= start && d.tanggal < nextMonth && d.tanggal <= today).length;
     const terisi = kets.length;
 

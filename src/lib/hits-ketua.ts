@@ -20,6 +20,7 @@ export type HalaqahLite = {
   jadwal_raw: string | null;
   jadwal_hari: string[];
   pengajar_nama_sheet: string | null;
+  start_date: string | null;
 };
 
 export type HalaqahPertemuan = {
@@ -33,7 +34,7 @@ export async function loadHalaqahPertemuan(
 ): Promise<HalaqahPertemuan | null> {
   const { data: halaqah } = await supabaseAdmin
     .from('hits_halaqah')
-    .select('id, batch_id, level, program, name, jadwal_raw, jadwal_hari, pengajar_nama_sheet')
+    .select('id, batch_id, level, program, name, jadwal_raw, jadwal_hari, pengajar_nama_sheet, start_date')
     .eq('id', halaqahId)
     .maybeSingle();
   if (!halaqah) return null;
@@ -70,7 +71,8 @@ export async function loadHalaqahPertemuan(
     halaqah.program,
     halaqah.jadwal_hari ?? [],
     kaldikByLevel,
-    overridesByLevel
+    overridesByLevel,
+    halaqah.start_date
   );
 
   return { halaqah: halaqah as HalaqahLite, derived };

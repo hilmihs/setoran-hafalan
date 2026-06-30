@@ -161,12 +161,12 @@ export function pertemuanLabel(d: DerivedPertemuan): string {
 export function deriveHalaqahProgram(
   program: string,
   jadwalHari: string[],
-  kaldikByLevel: Map<HitsLevel, KaldikHariLite[]>, // keyed by KALDIK level
-  overridesByLevel: Map<HitsLevel, PertemuanOverride[]> // keyed by KETERANGAN level
+  kaldikByLevel: Map<HitsLevel, KaldikHariLite[]>,
+  overridesByLevel: Map<HitsLevel, PertemuanOverride[]>,
+  startDate?: string | null
 ): DerivedPertemuan[] {
   const defs = PROGRAM_STAGE_DEFS[program] ?? PROGRAM_STAGE_DEFS.dasar;
   const out: DerivedPertemuan[] = [];
-  // Tahap sekuensial: tahap-N hanya tanggal setelah tahap sebelumnya berakhir.
   let prevLast: string | null = null;
   for (const def of defs) {
     const kaldik = kaldikByLevel.get(def.kaldikLevel) ?? [];
@@ -177,5 +177,6 @@ export function deriveHalaqahProgram(
     for (const d of derived) out.push({ ...d, level: def.level });
     prevLast = derived.reduce((mx, d) => (d.tanggal > mx ? d.tanggal : mx), prevLast ?? '');
   }
-  return out.sort((a, b) => (a.tanggal < b.tanggal ? -1 : a.tanggal > b.tanggal ? 1 : 0));
+  const sorted = out.sort((a, b) => (a.tanggal < b.tanggal ? -1 : a.tanggal > b.tanggal ? 1 : 0));
+  return startDate ? sorted.filter((d) => d.tanggal >= startDate) : sorted;
 }
