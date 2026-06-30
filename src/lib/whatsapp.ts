@@ -622,3 +622,47 @@ export function tplKetuaDualRoleInfo(args: {
     `Jazakumullahu khairan.`,
   ].join('\n');
 }
+
+/** Ke koordinator KK: minta keputusan koreksi pertemuan. */
+export function tplKoreksiPertemuanApproval(args: {
+  approverName: string;
+  approverGender: Gender;
+  ketuaName: string;
+  halaqahName: string;
+  jumlahItem: number;
+  approveUrl: string;
+  loginUrl: string;
+}): string {
+  const sapaan = salutation(args.approverGender);
+  return [
+    `Assalamu'alaikum ${sapaan} ${args.approverName},`,
+    ``,
+    `${args.ketuaName} (ketua *${args.halaqahName}*) mengajukan *${args.jumlahItem} koreksi pertemuan*.`,
+    ``,
+    `*Cara memutuskan:*`,
+    `1. Login dulu di:`,
+    args.loginUrl,
+    `2. Buka tautan & setujui/tolak per item:`,
+    args.approveUrl,
+    ``,
+    `Jazakumullahu khairan.`,
+  ].join('\n');
+}
+
+/** Ke ketua: hasil keputusan koreksi. */
+export function tplKoreksiPertemuanInfo(args: {
+  ketuaName: string;
+  halaqahName: string;
+  disetujui: number;
+  ditolak: number;
+}): string {
+  return [
+    `Assalamu'alaikum ${args.ketuaName},`,
+    ``,
+    `Koreksi pertemuan *${args.halaqahName}* telah diputuskan: *${args.disetujui} disetujui*, ${args.ditolak} ditolak.`,
+    ``,
+    `Silakan cek kembali daftar pertemuan di dashboard ketua.`,
+    ``,
+    `Jazakumullahu khairan.`,
+  ].join('\n');
+}
