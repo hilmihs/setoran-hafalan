@@ -1,7 +1,6 @@
 'use server';
 import { supabaseAdmin } from '@/lib/supabase-admin';
-import { getSessionWa } from '@/lib/program-kelas';
-import { getSession } from '@/lib/session';
+import { requireKetuaKelas } from '@/lib/session';
 import { absUrl } from '@/lib/url';
 import { buildWaMeUrl, tplKoreksiPertemuanApproval } from '@/lib/whatsapp';
 import { determineKoreksiApprover, type KoreksiItemInput } from '@/lib/hits-koreksi';
@@ -10,9 +9,18 @@ import { logAudit } from '@/lib/audit';
 export type SubmitKoreksiResult = { ok?: boolean; error?: string; waUrl?: string };
 
 export async function submitKoreksi(halaqahId: string, items: KoreksiItemInput[]): Promise<SubmitKoreksiResult> {
-  const wa = await getSessionWa();
-  if (!wa) return { error: 'Login diperlukan.' };
+  // Sesi ketua kelas (role 'ketua_kelas' tak ada di getSessionWa). Ambil WA dari
+  // baris ketua_kelas sesi, lalu verifikasi kepemilikan halaqah (dukung peran ganda).
+  const session = await requireKetuaKelas();
   if (!halaqahId || items.length === 0) return { error: 'Tidak ada item koreksi.' };
+
+  const { data: self } = await supabaseAdmin
+    .from('ketua_kelas')
+    .select('whatsapp_number')
+    .eq('id', session.ketua_kelas_id)
+    .maybeSingle();
+  const wa = self?.whatsapp_number ?? null;
+  if (!wa) return { error: 'Akun ketua tidak punya nomor WA.' };
 
   const { data: kk } = await supabaseAdmin
     .from('ketua_kelas')
@@ -31,6 +39,7 @@ export async function submitKoreksi(halaqahId: string, items: KoreksiItemInput[]
   const { data: header, error: hErr } = await supabaseAdmin.from('hits_pertemuan_koreksi').insert({
     halaqah_id: halaqahId, requested_by_ketua_id: kk.id, requested_by_name: kk.name, requested_by_wa: wa, token,
   }).select('id').single();
+  if (hErr?.code === '23505') return { error: 'Halaqah ini sudah punya pengajuan koreksi yang menunggu keputusan koordinator.' };
   if (hErr || !header) return { error: `Gagal membuat pengajuan: ${hErr?.message ?? 'unknown'}` };
 
   const rows = items.map((it) => ({
@@ -40,8 +49,7 @@ export async function submitKoreksi(halaqahId: string, items: KoreksiItemInput[]
   const { error: iErr } = await supabaseAdmin.from('hits_pertemuan_koreksi_item').insert(rows);
   if (iErr) return { error: `Gagal menyimpan item: ${iErr.message}` };
 
-  const s = await getSession();
-  if (s.session) await logAudit({ actor: s.session, action: 'hits.koreksi.request', targetTable: 'hits_pertemuan_koreksi', targetId: header.id, detail: { halaqah_id: halaqahId, items: items.length } });
+  await logAudit({ actor: session, action: 'hits.koreksi.request', targetTable: 'hits_pertemuan_koreksi', targetId: header.id, detail: { halaqah_id: halaqahId, items: items.length } });
 
   const msg = tplKoreksiPertemuanApproval({
     approverName: approver.name, approverGender: (h.gender as 'ikhwan' | 'akhwat') ?? 'ikhwan',
