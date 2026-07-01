@@ -9,15 +9,37 @@ import { PenilaianMasyaikhForm } from '@/components/PenilaianMasyaikhForm';
 
 export const dynamic = 'force-dynamic';
 
-export default async function PenilaianPage() {
+function ymLabel(ym: string): string {
+  const [y, m] = ym.split('-').map(Number);
+  return new Date(y, m - 1, 15).toLocaleDateString('id-ID', { month: 'long', year: 'numeric' });
+}
+
+export default async function PenilaianPage({
+  searchParams,
+}: {
+  searchParams: { bulan?: string };
+}) {
   const s = await getSession();
   const session = s.session;
   if (!session || (session.role !== 'koordinator' && session.role !== 'syaikh')) {
     redirect('/');
   }
 
-  const { year, month, label: monthLabel } = currentYearMonth();
-  const yearMonth = `${year}-${String(month).padStart(2, '0')}`;
+  const cur = currentYearMonth();
+  const curYm = `${cur.year}-${String(cur.month).padStart(2, '0')}`;
+  // Bulan lampau tetap bisa diinput (mis. Juli isi penilaian Juni & sebelumnya).
+  const rawBulan = typeof searchParams?.bulan === 'string' ? searchParams.bulan : '';
+  const yearMonth = /^\d{4}-\d{2}$/.test(rawBulan) ? rawBulan : curYm;
+  const monthLabel = ymLabel(yearMonth);
+
+  // Opsi bulan: 12 bulan terakhir (termasuk bulan berjalan) + bulan terpilih.
+  const monthOptions: string[] = [];
+  for (let i = 0, y = cur.year, m = cur.month; i < 12; i++) {
+    monthOptions.push(`${y}-${String(m).padStart(2, '0')}`);
+    m -= 1;
+    if (m === 0) { m = 12; y -= 1; }
+  }
+  if (!monthOptions.includes(yearMonth)) monthOptions.unshift(yearMonth);
 
   const { data: allKelompok } = await supabaseAdmin
     .from('kelompok_pengajar')
@@ -108,6 +130,25 @@ export default async function PenilaianPage() {
             baris fokus). Lihat “Panduan Standar Skala” untuk kriteria tiap nilai. Tersimpan otomatis.
           </p>
         </div>
+
+        <form method="get" style={{ display: 'flex', alignItems: 'flex-end', gap: 8 }}>
+          <div>
+            <label className="t-tiny" htmlFor="penilaian_bulan" style={{ display: 'block', marginBottom: 4 }}>
+              Bulan penilaian
+            </label>
+            <select id="penilaian_bulan" name="bulan" defaultValue={yearMonth} className="select" style={{ height: 38 }}>
+              {monthOptions.map((ym) => (
+                <option key={ym} value={ym}>{ymLabel(ym)}{ym === curYm ? ' (berjalan)' : ''}</option>
+              ))}
+            </select>
+          </div>
+          <button type="submit" className="btn btn-sm" style={{ height: 38 }}>Tampilkan</button>
+        </form>
+        {yearMonth !== curYm && (
+          <p className="t-tiny" style={{ color: 'var(--ink-2)' }}>
+            Mengisi penilaian bulan lampau ({monthLabel}). Perubahan memengaruhi Matrix bulan itu.
+          </p>
+        )}
 
         {ikhwanList.length === 0 && akhwatList.length === 0 && (
           <p className="t-body">Belum ada pengajar aktif.</p>
