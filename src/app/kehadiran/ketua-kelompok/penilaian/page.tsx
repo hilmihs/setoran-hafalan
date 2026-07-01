@@ -8,7 +8,6 @@ import { monthOptionsSince } from '@/lib/month';
 
 export const dynamic = 'force-dynamic';
 
-const PEDAGOGIS_START = '2026-06';
 const PED_FIELDS = [
   'skor_metode_pengajaran',
   'skor_kepatuhan_silabus',
@@ -23,14 +22,19 @@ function monthLabelOf(ym: string): string {
   const [y, m] = ym.split('-').map(Number);
   return new Date(Date.UTC(y, m - 1, 1)).toLocaleDateString('id-ID', { month: 'long', year: 'numeric', timeZone: 'UTC' });
 }
+// Geser `ym` mundur n bulan (YYYY-MM).
+function ymMinus(ym: string, n: number): string {
+  const [y, m] = ym.split('-').map(Number);
+  const d = new Date(Date.UTC(y, m - 1 - n, 1));
+  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`;
+}
 // N bulan terakhir s/d `endYm` (inklusif), urut lama→baru.
 function lastMonths(endYm: string, n: number): string[] {
   const [ey, em] = endYm.split('-').map(Number);
   const out: string[] = [];
   for (let i = n - 1; i >= 0; i--) {
     const d = new Date(Date.UTC(ey, em - 1 - i, 1));
-    const ym = `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`;
-    if (ym >= PEDAGOGIS_START) out.push(ym);
+    out.push(`${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`);
   }
   return out;
 }
@@ -49,7 +53,8 @@ export default async function PenilaianPedagogisPage({
 
   const cur = currentYearMonth();
   const ym = searchParams.month && /^\d{4}-\d{2}$/.test(searchParams.month) ? searchParams.month : cur;
-  const monthOptions = monthOptionsSince(PEDAGOGIS_START);
+  // Bulan lampau tetap bisa diisi (parity dgn penilaian bacaan): 12 bulan terakhir.
+  const monthOptions = monthOptionsSince(ymMinus(cur, 11));
   const overviewMonths = lastMonths(cur, 6);
 
   const { data: members } = await supabaseAdmin
