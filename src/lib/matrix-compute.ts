@@ -409,11 +409,20 @@ export async function computeMatrixForMonth(yearMonth: string): Promise<MatrixRo
     };
   });
 
-  // 10. Ranking (per keseluruhan desc, null di bawah)
+  // 10. Ranking: utamakan kelengkapan aspek (Hard/Pedagogis/Soft terisi) lalu
+  //     rata-rata keseluruhan. Pengajar yang dinilai penuh 3 aspek di atas yang
+  //     baru terisi 1-2 aspek, walau rata-ratanya lebih rendah.
+  const aspekLengkap = (r: MatrixRow): number =>
+    (r.rata_rata_hard_skill !== null ? 1 : 0) +
+    (r.rata_rata_pedagogis !== null ? 1 : 0) +
+    (r.rata_rata_soft_skill !== null ? 1 : 0);
   const ranked = [...rows].sort((a, b) => {
     if (a.rata_rata_keseluruhan === null && b.rata_rata_keseluruhan === null) return 0;
     if (a.rata_rata_keseluruhan === null) return 1;
     if (b.rata_rata_keseluruhan === null) return -1;
+    const da = aspekLengkap(a);
+    const db = aspekLengkap(b);
+    if (da !== db) return db - da; // lebih lengkap dulu
     return b.rata_rata_keseluruhan - a.rata_rata_keseluruhan;
   });
   let rank = 0;
