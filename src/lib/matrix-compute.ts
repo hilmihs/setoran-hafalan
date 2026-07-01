@@ -433,7 +433,16 @@ export async function computeMatrixForMonth(yearMonth: string): Promise<MatrixRo
     }
   }
 
-  // 11. Upsert ke matrix_rekap
+  // 11. Kosongkan ranking basi milik pengajar non-aktif di bulan ini. Compute
+  //     hanya iterasi pengajar aktif, jadi baris pengajar yang kini non-aktif
+  //     menyimpan ranking lama dan bisa bentrok (rank duplikat) dgn ranking baru.
+  await supabaseAdmin
+    .from('matrix_rekap')
+    .update({ ranking: null })
+    .eq('year_month', yearMonth)
+    .not('ranking', 'is', null);
+
+  // 12. Upsert ke matrix_rekap (ranking pengajar aktif ditulis ulang di sini)
   const { error } = await supabaseAdmin
     .from('matrix_rekap')
     .upsert(
