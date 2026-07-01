@@ -8,9 +8,11 @@
 //   Pedagogis  : penilaian_pedagogis (4 aspek, oleh ketua kelompok)
 //   Soft skill : hits_keterangan_harian via hits_halaqah (kedisiplinan = %KBBS,
 //                tanggung jawab = %latihan beres), penilaian_pedagogis.skor_kepatuhan_sop (SOP).
-//                komitmen_jadwal: tak ada sumber (checkin dihapus dari scope).
+//                komitmen_jadwal = rata-rata(Stabilitas Jadwal [jumlah JKG],
+//                Anti-Mangkir [JKG di-tabayyun & bukan udzur syar'i = teguran]).
 
 import { supabaseAdmin } from '@/lib/supabase-admin';
+import { fetchInChunks } from '@/lib/hits-rekap';
 import { cyclesOfMonth } from '@/lib/week';
 import { JENIS_REKAMAN } from '@/types/db';
 
@@ -54,6 +56,25 @@ function pctTo4(pct: number): number {
   if (pct >= 0.75) return 3;
   if (pct >= 0.5) return 2;
   if (pct >= 0.25) return 1;
+  return 0;
+}
+
+// Komitmen — Stabilitas Jadwal: skor turun makin banyak pergantian jadwal (JKG).
+function jkgTo4(n: number): number {
+  if (n <= 4) return 4;
+  if (n <= 6) return 3;
+  if (n <= 8) return 2;
+  if (n <= 10) return 1;
+  return 0;
+}
+
+// Komitmen — Anti-Mangkir: skor turun per pelanggaran (JKG di-tabayyun & BUKAN
+// udzur syar'i, dihitung sebagai teguran). 0 pelanggaran = standar (4).
+function tegTo4(n: number): number {
+  if (n <= 0) return 4;
+  if (n === 1) return 3;
+  if (n === 2) return 2;
+  if (n === 3) return 1;
   return 0;
 }
 
@@ -155,20 +176,24 @@ export async function computeMatrixForMonth(yearMonth: string): Promise<MatrixRo
 
   // 4. Tajwid: rata-rata nilai rekaman setoran checked di 2 cycle bulan ini
   const [h1, h2] = cyclesOfMonth(year, month);
-  const { data: setoranList } = await supabaseAdmin
-    .from('setoran')
-    .select('id, peserta_id')
-    .eq('status', 'checked')
-    .in('week_start', [h1, h2])
-    .in('peserta_id', linkedPesertaIds.length ? linkedPesertaIds : ['00000000-0000-0000-0000-000000000000']);
-  const setoranIds = (setoranList ?? []).map((s) => s.id);
-  const setoranPeserta = new Map((setoranList ?? []).map((s) => [s.id, s.peserta_id]));
-  const { data: rekamanList } = setoranIds.length
-    ? await supabaseAdmin
-        .from('rekaman')
-        .select('setoran_id, jenis, nilai')
-        .in('setoran_id', setoranIds)
-    : { data: [] };
+  const setoranList = linkedPesertaIds.length
+    ? await fetchInChunks(linkedPesertaIds, (chunk) =>
+        supabaseAdmin
+          .from('setoran')
+          .select('id, peserta_id')
+          .eq('status', 'checked')
+          .in('week_start', [h1, h2])
+          .in('peserta_id', chunk)
+      )
+    : [];
+  const setoranIds = setoranList.map((s) => s.id as string);
+  const setoranPeserta = new Map(setoranList.map((s) => [s.id, s.peserta_id]));
+  const rekamanList = await fetchInChunks(setoranIds, (chunk) =>
+    supabaseAdmin
+      .from('rekaman')
+      .select('setoran_id, jenis, nilai')
+      .in('setoran_id', chunk)
+  );
   // nilai per (setoran, jenis); jenis yang hilang/ungraded di setoran checked
   // dihitung 0 (penalty) — peserta yang setor <3 rekaman menurunkan rata-rata.
   const nilaiBySetoranJenis = new Map<string, string | null>();
@@ -204,14 +229,14 @@ export async function computeMatrixForMonth(yearMonth: string): Promise<MatrixRo
     .gte('tanggal', monthStart)
     .lt('tanggal', nextMonth);
   const programOfPertemuan = new Map((pertemuanList ?? []).map((p) => [p.id, p.program]));
-  const pertemuanIds = (pertemuanList ?? []).map((p) => p.id);
-  const { data: kehadiranList } = pertemuanIds.length
-    ? await supabaseAdmin
-        .from('kehadiran_peserta')
-        .select('pertemuan_id, anggota_id, status')
-        .in('pertemuan_id', pertemuanIds)
-        .not('anggota_id', 'is', null)
-    : { data: [] };
+  const pertemuanIds = (pertemuanList ?? []).map((p) => p.id as string);
+  const kehadiranList = await fetchInChunks(pertemuanIds, (chunk) =>
+    supabaseAdmin
+      .from('kehadiran_peserta')
+      .select('pertemuan_id, anggota_id, status')
+      .in('pertemuan_id', chunk)
+      .not('anggota_id', 'is', null)
+  );
   // anggota_id → program → {hadir, total}
   const kehadiranByAnggota = new Map<string, Map<string, { hadir: number; total: number }>>();
   for (const k of kehadiranList ?? []) {
@@ -242,18 +267,21 @@ export async function computeMatrixForMonth(yearMonth: string): Promise<MatrixRo
   const pengajarOfHalaqah = new Map(
     (halaqahList ?? []).map((h) => [h.id as string, h.pengajar_id as string])
   );
-  const halaqahIds = (halaqahList ?? []).map((h) => h.id);
-  const { data: keteranganList } = halaqahIds.length
-    ? await supabaseAdmin
-        .from('hits_keterangan_harian')
-        .select('halaqah_id, kondisi, latihan_diberikan, semua_selesai, status_latihan')
-        .gte('tanggal', monthStart)
-        .lt('tanggal', nextMonth)
-        .in('halaqah_id', halaqahIds)
-        .neq('kondisi', 'LIBUR')
-    : { data: [] };
+  const halaqahIds = (halaqahList ?? []).map((h) => h.id as string);
+  // Chunked: 421 halaqah dalam satu .in() → URL ~16KB → gagal gateway (414) →
+  // data null → soft skill kosong. Lihat fetchInChunks (hits-rekap.ts).
+  const keteranganList = await fetchInChunks(halaqahIds, (chunk) =>
+    supabaseAdmin
+      .from('hits_keterangan_harian')
+      .select('halaqah_id, kondisi, latihan_diberikan, semua_selesai, status_latihan')
+      .gte('tanggal', monthStart)
+      .lt('tanggal', nextMonth)
+      .in('halaqah_id', chunk)
+      .neq('kondisi', 'LIBUR')
+  );
   const disiplinByPengajar = new Map<string, { baik: number; total: number }>();
   const latihanByPengajar = new Map<string, { done: number; total: number }>();
+  const jkgByPengajar = new Map<string, number>(); // pengajar_id → jumlah pertemuan JKG
   for (const k of keteranganList ?? []) {
     const pgId = pengajarOfHalaqah.get(k.halaqah_id);
     if (!pgId) continue;
@@ -266,6 +294,28 @@ export async function computeMatrixForMonth(yearMonth: string): Promise<MatrixRo
     l.total += 1;
     if (k.latihan_diberikan && (k.semua_selesai || k.status_latihan === 'SML')) l.done += 1;
     latihanByPengajar.set(pgId, l);
+
+    // Stabilitas Jadwal: hitung semua JKG (pergantian jadwal), abaikan udzur.
+    if (k.kondisi === 'JKG') jkgByPengajar.set(pgId, (jkgByPengajar.get(pgId) ?? 0) + 1);
+  }
+
+  // 8. Komitmen — Anti-Mangkir: JKG yang di-tabayyun & diputus BUKAN udzur syar'i
+  //    oleh koordinator ketua kelas = pelanggaran (dihitung seperti teguran).
+  const tabayyunList = await fetchInChunks(pengajarIds, (chunk) =>
+    supabaseAdmin
+      .from('hits_tabayyun')
+      .select('pengajar_id')
+      .eq('status', 'decided')
+      .eq('is_udzur_syari', false)
+      .gte('decided_at', monthStart)
+      .lt('decided_at', nextMonth)
+      .in('pengajar_id', chunk)
+  );
+  const mangkirByPengajar = new Map<string, number>();
+  for (const t of tabayyunList) {
+    const pgId = t.pengajar_id as string | null;
+    if (!pgId) continue;
+    mangkirByPengajar.set(pgId, (mangkirByPengajar.get(pgId) ?? 0) + 1);
   }
 
   // 9. Compose rows
@@ -305,6 +355,13 @@ export async function computeMatrixForMonth(yearMonth: string): Promise<MatrixRo
     const lat = latihanByPengajar.get(pg.id);
     const skorTanggungJawab = lat && lat.total > 0 ? pctTo4(lat.done / lat.total) : null;
 
+    // Komitmen Jadwal = rata-rata(Stabilitas Jadwal, Anti-Mangkir). Hanya dinilai
+    // bila pengajar punya data HITS (≥1 keterangan non-libur), selain itu null.
+    const skorKomitmen =
+      disp && disp.total > 0
+        ? avg([jkgTo4(jkgByPengajar.get(pg.id) ?? 0), tegTo4(mangkirByPengajar.get(pg.id) ?? 0)])
+        : null;
+
     const hard = {
       skor_bacaan: masyaikh?.skor_bacaan ?? null,
       skor_hafalan: masyaikh?.skor_hafalan ?? null,
@@ -320,7 +377,7 @@ export async function computeMatrixForMonth(yearMonth: string): Promise<MatrixRo
     };
     const soft = {
       skor_kedisiplinan_waktu: skorKedisiplinan,
-      skor_komitmen_jadwal: null as number | null, // checkin di luar scope HITS soft-skill
+      skor_komitmen_jadwal: skorKomitmen,
       skor_tanggung_jawab: skorTanggungJawab,
       skor_kepatuhan_sop: ped?.skor_kepatuhan_sop ?? null,
     };

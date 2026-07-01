@@ -172,8 +172,8 @@ export const INDIKATOR: Indikator[] = [
     short: 'Komitmen',
     kategori: 'soft',
     standar: 4,
-    deskripsi: 'Laporan observasi ketua kelas menunjukkan pengajar menjalani kelas sesuai waktunya.',
-    sumber: 'Laporan Ketua Kelas',
+    deskripsi: 'Rata-rata stabilitas jadwal (sedikit pergantian JKG) & anti-mangkir (JKG bukan udzur syar\'i setelah tabayyun).',
+    sumber: 'HITS Keterangan Harian & Tabayyun',
   },
   {
     key: 'skor_tanggung_jawab',

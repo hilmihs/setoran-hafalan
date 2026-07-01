@@ -20,6 +20,7 @@
     "seed-hits": "tsx --env-file=.env.local scripts/seed-hits-demo.ts",
     "seed-hits-presensi": "tsx --env-file=.env.local scripts/seed-hits-presensi.ts",
     "seed-matrix-mei": "tsx --env-file=.env.local scripts/seed-matrix-mei2026.ts",
+    "recompute-matrix": "tsx --env-file=.env.local scripts/recompute-matrix.ts",
     "import-hits-docs": "tsx --env-file=.env.local scripts/import-hits-docs.ts",
     "link-hits-pengajar-wa": "tsx --env-file=.env.local scripts/link-hits-pengajar-wa.ts",
     "cleanup-legacy-observasi": "tsx --env-file=.env.local scripts/cleanup-legacy-observasi.ts",

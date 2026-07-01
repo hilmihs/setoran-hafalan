@@ -40,7 +40,7 @@ export type HitsBatchOption = { id: string; name: string };
  * gagal di gateway → data null → dashboard kosong) dan (b) cap default 1000 baris
  * PostgREST (potongan kecil → baris per-request jauh di bawah 1000).
  */
-async function fetchInChunks<T>(
+export async function fetchInChunks<T>(
   ids: string[],
   run: (chunk: string[]) => PromiseLike<{ data: T[] | null }>,
   size = 80
