@@ -49,7 +49,15 @@ const EMPTY: PenilaianData = {
   skor_kepatuhan_sop: null, keterangan_sop: null,
 };
 
-export function PenilaianPedagogisForm({ members, yearMonth }: { members: Member[]; yearMonth: string }) {
+export function PenilaianPedagogisForm({
+  members,
+  yearMonth,
+  readOnly = false,
+}: {
+  members: Member[];
+  yearMonth: string;
+  readOnly?: boolean;
+}) {
   const initialRows = (): Record<string, RowState> => {
     const out: Record<string, RowState> = {};
     for (const m of members) out[m.id] = { ...(m.penilaian ?? EMPTY), status: m.penilaian ? 'saved' : 'idle' };
@@ -92,6 +100,7 @@ export function PenilaianPedagogisForm({ members, yearMonth }: { members: Member
   }, [yearMonth]);
 
   function updateRow(pengajarId: string, patch: Partial<PenilaianData>) {
+    if (readOnly) return;
     setRows((prev) => {
       const next: RowState = { ...prev[pengajarId], ...patch, status: 'idle' };
       if (debounceRefs.current[pengajarId]) clearTimeout(debounceRefs.current[pengajarId]);
@@ -156,26 +165,32 @@ export function PenilaianPedagogisForm({ members, yearMonth }: { members: Member
       <div key={a.skorField} style={{ borderTop: '1px solid var(--line)', paddingTop: 10 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6, gap: 8 }}>
           <span style={{ fontSize: 13, fontWeight: 600 }}>{a.label}</span>
-          <button
-            type="button"
-            className={`note-btn${ket ? ' filled' : ''}`}
-            onClick={() => setOpenNote((p) => ({ ...p, [noteKey]: !p[noteKey] }))}
-            aria-label="Catatan"
-            title="Catatan"
-          >
-            ✎{ket && <span className="ndot" />}
-          </button>
+          {(!readOnly || ket) && (
+            <button
+              type="button"
+              className={`note-btn${ket ? ' filled' : ''}`}
+              onClick={() => setOpenNote((p) => ({ ...p, [noteKey]: !p[noteKey] }))}
+              aria-label="Catatan"
+              title="Catatan"
+            >
+              ✎{ket && <span className="ndot" />}
+            </button>
+          )}
         </div>
-        <ScoreSelector label={`${a.label} — ${m.name}`} value={skor} titles={PEDAGOGIS_TITLES[a.skorField]} onChange={(v) => updateRow(m.id, { [a.skorField]: v } as Partial<PenilaianData>)} />
+        <ScoreSelector label={`${a.label} — ${m.name}`} value={skor} titles={PEDAGOGIS_TITLES[a.skorField]} readOnly={readOnly} onChange={(v) => updateRow(m.id, { [a.skorField]: v } as Partial<PenilaianData>)} />
         {noteOpen && (
-          <input
-            type="text"
-            className="note-field"
-            style={{ marginTop: 6 }}
-            placeholder="Catatan (opsional)…"
-            value={ket}
-            onChange={(e) => updateRow(m.id, { [a.ketField]: e.target.value || null } as Partial<PenilaianData>)}
-          />
+          readOnly ? (
+            ket ? <p className="t-small" style={{ marginTop: 6, color: 'var(--ink-2)' }}>{ket}</p> : null
+          ) : (
+            <input
+              type="text"
+              className="note-field"
+              style={{ marginTop: 6 }}
+              placeholder="Catatan (opsional)…"
+              value={ket}
+              onChange={(e) => updateRow(m.id, { [a.ketField]: e.target.value || null } as Partial<PenilaianData>)}
+            />
+          )
         )}
       </div>
     );
@@ -198,9 +213,9 @@ export function PenilaianPedagogisForm({ members, yearMonth }: { members: Member
               <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
                 <span className={`prog-pill${filledCount(row) === ALL.length ? ' done' : ''}`}>{filledCount(row)}/{ALL.length}</span>
                 <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--hijau-ink)' }}>{pedagogisAvg(row)}</span>
-                {row.status === 'saving' && <span className="spin" style={{ fontSize: 12, color: 'var(--muted-2)', display: 'inline-block' }}>⟳</span>}
-                {row.status === 'saved' && <span style={{ fontSize: 12, color: 'var(--hijau-ink)' }}>✓</span>}
-                {row.status === 'error' && <span title={row.error} style={{ fontSize: 12, color: 'var(--merah-ink)' }}>✗</span>}
+                {!readOnly && row.status === 'saving' && <span className="spin" style={{ fontSize: 12, color: 'var(--muted-2)', display: 'inline-block' }}>⟳</span>}
+                {!readOnly && row.status === 'saved' && <span style={{ fontSize: 12, color: 'var(--hijau-ink)' }}>✓</span>}
+                {!readOnly && row.status === 'error' && <span title={row.error} style={{ fontSize: 12, color: 'var(--merah-ink)' }}>✗</span>}
                 <span style={{ fontSize: 12, color: 'var(--muted-2)' }}>{isOpen ? '▲' : '▼'}</span>
               </div>
             </button>

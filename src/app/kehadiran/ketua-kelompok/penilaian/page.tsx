@@ -1,9 +1,11 @@
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
-import { requireKetuaKelompok } from '@/lib/session';
+import { getSession } from '@/lib/session';
+import type { PengajarSession } from '@/types/db';
 import { supabaseAdmin } from '@/lib/supabase-admin';
 import { PenilaianPedagogisForm } from './PenilaianPedagogisForm';
 import { MonthNavSelect } from '@/components/MonthNavSelect';
+import { KelompokNavSelect } from '@/components/KelompokNavSelect';
 import { monthOptionsSince } from '@/lib/month';
 
 export const dynamic = 'force-dynamic';
@@ -42,14 +44,16 @@ function lastMonths(endYm: string, n: number): string[] {
 export default async function PenilaianPedagogisPage({
   searchParams,
 }: {
-  searchParams: { month?: string };
+  searchParams: { month?: string; kelompok?: string };
 }) {
-  let session;
-  try {
-    session = await requireKetuaKelompok();
-  } catch {
-    redirect('/');
-  }
+  const s = await getSession();
+  const accesses = s.accesses ?? (s.session ? [s.session] : []);
+  const ketua = accesses.find((a) => a.role === 'pengajar' && a.is_ketua) as PengajarSession | undefined;
+  const isKoordinator = accesses.some((a) => a.role === 'koordinator');
+  // Ketua kelompok = editor (kelompoknya sendiri). Koordinator = spectator
+  // (baca-saja, bisa pilih kelompok mana pun).
+  if (!ketua && !isKoordinator) redirect('/');
+  const spectator = !ketua;
 
   const cur = currentYearMonth();
   const ym = searchParams.month && /^\d{4}-\d{2}$/.test(searchParams.month) ? searchParams.month : cur;
@@ -57,12 +61,29 @@ export default async function PenilaianPedagogisPage({
   const monthOptions = monthOptionsSince(ymMinus(cur, 11));
   const overviewMonths = lastMonths(cur, 6);
 
-  const { data: members } = await supabaseAdmin
-    .from('pengajar')
-    .select('id, name, is_ketua')
-    .eq('kelompok_id', session.kelompok_id)
-    .eq('active', true)
-    .order('name');
+  // Pilih kelompok: editor terkunci ke kelompoknya; spectator pilih dari semua.
+  let kelompokId: string | null = ketua?.kelompok_id ?? null;
+  let kelompokOptions: Array<{ value: string; label: string }> = [];
+  if (spectator) {
+    const { data: allKelompok } = await supabaseAdmin
+      .from('kelompok_pengajar')
+      .select('id, name')
+      .order('name');
+    kelompokOptions = (allKelompok ?? []).map((k) => ({ value: k.id, label: k.name }));
+    const wanted = searchParams.kelompok;
+    kelompokId = wanted && kelompokOptions.some((k) => k.value === wanted)
+      ? wanted
+      : (kelompokOptions[0]?.value ?? null);
+  }
+
+  const { data: members } = kelompokId
+    ? await supabaseAdmin
+        .from('pengajar')
+        .select('id, name, is_ketua')
+        .eq('kelompok_id', kelompokId)
+        .eq('active', true)
+        .order('name')
+    : { data: [] };
 
   const anggota = (members ?? []).filter((m) => !m.is_ketua);
   const memberIds = anggota.map((m) => m.id);
@@ -100,11 +121,16 @@ export default async function PenilaianPedagogisPage({
       <div style={{ maxWidth: 640, margin: '0 auto' }}>
         <div className="page" style={{ paddingTop: 20 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14, flexWrap: 'wrap' }}>
-            <Link href="/kehadiran/ketua-kelompok" className="btn btn-sm btn-ghost" style={{ textDecoration: 'none' }}>←</Link>
+            <Link href={spectator ? '/' : '/kehadiran/ketua-kelompok'} className="btn btn-sm btn-ghost" style={{ textDecoration: 'none' }}>←</Link>
             <div style={{ flex: 1 }}>
               <h1 className="t-h1" style={{ margin: 0 }}>Penilaian Pedagogis</h1>
-              <p className="t-small" style={{ margin: 0, color: 'var(--muted-2)' }}>Skala 0–4 · auto-simpan · anggota kelompok Anda</p>
+              <p className="t-small" style={{ margin: 0, color: 'var(--muted-2)' }}>
+                {spectator ? 'Skala 0–4 · mode pantau (baca-saja) · pilih kelompok' : 'Skala 0–4 · auto-simpan · anggota kelompok Anda'}
+              </p>
             </div>
+            {spectator && kelompokOptions.length > 0 && (
+              <KelompokNavSelect options={kelompokOptions} value={kelompokId ?? ''} />
+            )}
             <MonthNavSelect options={monthOptions} value={ym} />
           </div>
 
@@ -112,8 +138,8 @@ export default async function PenilaianPedagogisPage({
             <p className="t-small" style={{ color: 'var(--muted-2)' }}>Tidak ada anggota kelompok.</p>
           ) : (
             <>
-              <div className="t-tiny" style={{ marginBottom: 8 }}>EDIT {monthLabelOf(ym).toUpperCase()}</div>
-              <PenilaianPedagogisForm members={membersWithPenilaian} yearMonth={ym} />
+              <div className="t-tiny" style={{ marginBottom: 8 }}>{spectator ? 'LIHAT' : 'EDIT'} {monthLabelOf(ym).toUpperCase()}</div>
+              <PenilaianPedagogisForm members={membersWithPenilaian} yearMonth={ym} readOnly={spectator} />
 
               {/* Riwayat bulan-ke-bulan */}
               <div style={{ marginTop: 28 }}>

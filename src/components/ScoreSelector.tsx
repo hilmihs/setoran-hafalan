@@ -12,14 +12,18 @@ export function ScoreSelector({
   onChange,
   label,
   titles,
+  readOnly = false,
 }: {
   value: number | null;
   onChange: (v: number | null) => void;
   label: string;
   /** Tooltip per skala (index 0–4), mis. panduan standar. */
   titles?: string[];
+  /** Mode baca-saja (spectator): tampil skor tapi tak bisa diubah. */
+  readOnly?: boolean;
 }) {
   function handleKey(e: React.KeyboardEvent<HTMLDivElement>) {
+    if (readOnly) return;
     const k = e.key;
     if (k >= '0' && k <= '4') {
       e.preventDefault();
@@ -38,7 +42,13 @@ export function ScoreSelector({
     }
   }
   return (
-    <div className="score-seg" role="radiogroup" aria-label={label} tabIndex={0} onKeyDown={handleKey}>
+    <div
+      className={`score-seg${readOnly ? ' is-readonly' : ''}`}
+      role="radiogroup"
+      aria-label={label}
+      tabIndex={readOnly ? -1 : 0}
+      onKeyDown={handleKey}
+    >
       {SCORES.map((s) => (
         <button
           key={s}
@@ -47,9 +57,10 @@ export function ScoreSelector({
           aria-checked={value === s}
           tabIndex={-1}
           data-v={s}
+          disabled={readOnly}
           title={titles?.[s]}
           className={`score-pill${value === s ? ' on' : ''}`}
-          onClick={() => onChange(value === s ? null : s)}
+          onClick={readOnly ? undefined : () => onChange(value === s ? null : s)}
         >
           {s}
         </button>

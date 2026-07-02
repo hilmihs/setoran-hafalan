@@ -74,6 +74,13 @@ export const FEATURE_LINKS: FeatureLink[] = [
     match: (a) => a.role === 'koordinator',
   },
   {
+    href: '/kehadiran/ketua-kelompok/penilaian',
+    title: 'Penilaian Pedagogis (Kelompok)',
+    navLabel: 'Penilaian Pedagogis Kelompok',
+    description: 'Lihat detail rubrik pedagogis per anggota tiap kelompok (baca-saja)',
+    match: (a) => a.role === 'koordinator',
+  },
+  {
     href: '/observasi/koordinator',
     title: 'Koordinator Ketua Kelas',
     navLabel: 'Koord. Ketua Kelas',
