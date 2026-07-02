@@ -45,6 +45,17 @@ export async function requireAdmin(): Promise<{ wa: string }> {
   redirect('/');
 }
 
+/** Boolean non-redirect: apakah user yang login superadmin (WA ∈ SUPERADMIN_WAS). */
+export async function isSuperadmin(): Promise<boolean> {
+  const s = await getSession();
+  const candidates: RoleAccess[] = s.accesses && s.accesses.length > 0 ? s.accesses : s.session ? [s.session] : [];
+  for (const acc of candidates) {
+    const wa = await getSessionWaNumber(acc);
+    if (wa && SUPERADMIN_WAS.includes(wa)) return true;
+  }
+  return false;
+}
+
 /**
  * RoleAccess milik admin (dari ADMIN_WA) untuk atribusi audit yang benar —
  * dipakai saat mutasi admin / impersonate agar audit teratribusi ke admin asli,

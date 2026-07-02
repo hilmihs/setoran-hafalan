@@ -1,4 +1,5 @@
 import { requireKoordinatorKetuaKelas } from '@/lib/session';
+import { isSuperadmin } from '@/lib/admin-guard';
 import { supabaseAdmin } from '@/lib/supabase-admin';
 import { getHitsHarian } from '@/lib/hits-harian';
 import { LogoutButton } from '@/components/LogoutButton';
@@ -24,7 +25,7 @@ function jam(t: string): string {
   return t.slice(0, 5);
 }
 
-type SP = { q?: string; hari?: string; statusObs?: string; statusTab?: string };
+type SP = { q?: string; hari?: string; statusObs?: string; statusTab?: string; gender?: string };
 
 export default async function KoordinatorKetuaKelasPage({
   searchParams,
@@ -34,11 +35,18 @@ export default async function KoordinatorKetuaKelasPage({
   const session = await requireKoordinatorKetuaKelas();
   const today = jakartaToday();
 
+  // Superadmin boleh lintas-gender via ?gender=; koordinator biasa terkunci ke gender-nya.
+  const superadmin = await isSuperadmin();
+  const viewGender =
+    superadmin && (searchParams.gender === 'ikhwan' || searchParams.gender === 'akhwat')
+      ? searchParams.gender
+      : session.gender;
+
   const q = (searchParams.q ?? '').trim().toLowerCase();
   const statusObs = searchParams.statusObs ?? null;
   const statusTab = searchParams.statusTab ?? null;
 
-  const { rows: harianRows, kaldikMissing } = await getHitsHarian(today, session.gender);
+  const { rows: harianRows, kaldikMissing } = await getHitsHarian(today, viewGender);
 
   const matchesSearch = (kelasName: string, pengajarName: string | null) =>
     !q || kelasName.toLowerCase().includes(q) || (pengajarName ?? '').toLowerCase().includes(q);
@@ -84,7 +92,7 @@ export default async function KoordinatorKetuaKelasPage({
     keterangan: { tanggal: string } | null;
   };
   const tabayyunItems = ((tabRaw ?? []) as unknown as TabRow[])
-    .filter((t) => t.halaqah?.gender === session.gender)
+    .filter((t) => t.halaqah?.gender === viewGender)
     .map((t) => ({
       id: t.id,
       pengajar_id: t.pengajar_id ?? '',
@@ -113,7 +121,7 @@ export default async function KoordinatorKetuaKelasPage({
     halaqah: { gender: string } | null;
     koordinator_kk_id: string | null;
   };
-  const tabAnalytics = ((monthlyRaw ?? []) as unknown as MonthRow[]).filter((t) => t.halaqah?.gender === session.gender);
+  const tabAnalytics = ((monthlyRaw ?? []) as unknown as MonthRow[]).filter((t) => t.halaqah?.gender === viewGender);
   const tabTotalBulan = tabAnalytics.length;
   const tabDecidedBulan = tabAnalytics.filter((t) => t.status === 'decided');
   const tabUdzurDiterima = tabDecidedBulan.filter((t) => t.is_udzur_syari === true).length;
@@ -132,7 +140,7 @@ export default async function KoordinatorKetuaKelasPage({
   const { data: rekanKK } = await supabaseAdmin
     .from('koordinator_ketua_kelas')
     .select('id, name, last_login_at')
-    .eq('gender', session.gender)
+    .eq('gender', viewGender)
     .eq('active', true)
     .order('name');
   const tabDecisionsByRekan = new Map<string, number>();
@@ -159,9 +167,15 @@ export default async function KoordinatorKetuaKelasPage({
           <h1 className="t-h1" style={{ marginBottom: 4 }}>
             Monitoring Observasi HITS
           </h1>
-          <p className="t-small" style={{ color: 'var(--muted-2)', marginBottom: 14 }}>
-            {session.name} — {session.gender === 'ikhwan' ? 'Ikhwan' : 'Akhwat'} — {today}
+          <p className="t-small" style={{ color: 'var(--muted-2)', marginBottom: superadmin ? 8 : 14 }}>
+            {session.name} — {viewGender === 'ikhwan' ? 'Ikhwan' : 'Akhwat'} — {today}
           </p>
+          {superadmin && (
+            <div style={{ display: 'flex', gap: 8, marginBottom: 14 }}>
+              <a href="?gender=ikhwan" className={`btn btn-sm ${viewGender === 'ikhwan' ? '' : 'btn-ghost'}`} style={{ textDecoration: 'none' }}>Ikhwan</a>
+              <a href="?gender=akhwat" className={`btn btn-sm ${viewGender === 'akhwat' ? '' : 'btn-ghost'}`} style={{ textDecoration: 'none' }}>Akhwat</a>
+            </div>
+          )}
 
           {/* ── Hero: Status Hari Ini ── */}
           {(() => {

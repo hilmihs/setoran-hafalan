@@ -5,6 +5,7 @@ import { currentCycleStart, formatCycleRange } from '@/lib/week';
 import { formatCycleRangeShort } from '@/lib/week';
 import { ROLE_LANDING } from '@/lib/roles';
 import { featureLinksFor } from '@/lib/feature-links';
+import { isSuperadmin } from '@/lib/admin-guard';
 import { getSessionWa, findKetuaProgramKelas, findSelfAttendanceMembership } from '@/lib/program-kelas';
 import { getUnfilledMaahirDays, getUnfilledDaysForAnggota } from '@/lib/maahir-presensi';
 
@@ -36,9 +37,10 @@ export default async function HomePage({ searchParams }: { searchParams: { next?
       : 0;
 
     const available = featureLinksFor(accesses);
+    const superadmin = await isSuperadmin();
 
     // Ketua Maahir / peserta mandiri tak punya entri di FEATURE_LINKS; tambah kartu sintetis.
-    if (available.length === 1 && !isKetuaMaahir && !selfMembership) {
+    if (available.length === 1 && !isKetuaMaahir && !selfMembership && !superadmin) {
       redirect(available[0].href);
     }
 
@@ -92,6 +94,18 @@ export default async function HomePage({ searchParams }: { searchParams: { next?
                     Tandai kehadiran Anda sendiri — {selfMembership.kelas.name}
                   </div>
                 </a>
+              )}
+              {superadmin && (
+                <>
+                  <a href="/admin/audit" className="card-flat" style={{ display: 'block', padding: '16px 20px', textDecoration: 'none', color: 'inherit', borderRadius: 12 }}>
+                    <div style={{ fontWeight: 600, marginBottom: 4 }}>Log Aktivitas</div>
+                    <div className="t-small" style={{ color: 'var(--muted-2)' }}>Riwayat audit semua aksi pengguna (superadmin)</div>
+                  </a>
+                  <a href="/admin/users" className="card-flat" style={{ display: 'block', padding: '16px 20px', textDecoration: 'none', color: 'inherit', borderRadius: 12 }}>
+                    <div style={{ fontWeight: 600, marginBottom: 4 }}>Manajemen User</div>
+                    <div className="t-small" style={{ color: 'var(--muted-2)' }}>Kelola akun, reset password, impersonate (superadmin)</div>
+                  </a>
+                </>
               )}
               {available.map((card) => (
                 <a
