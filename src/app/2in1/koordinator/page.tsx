@@ -1,6 +1,5 @@
-import { redirect } from 'next/navigation';
 import Link from 'next/link';
-import { getSession } from '@/lib/session';
+import { requireKoordinator } from '@/lib/session';
 import { supabaseAdmin } from '@/lib/supabase-admin';
 import { LogoutButton } from '@/components/LogoutButton';
 import { Icon, Initials } from '@/components/icons';
@@ -36,11 +35,8 @@ export default async function KoordinatorDashboard({
 }: {
   searchParams: SP;
 }) {
-  const s = await getSession();
-  if (!s.session || s.session.role !== 'koordinator') {
-    redirect('/2in1/koordinator/login');
-  }
-  const koordinatorGender = s.session.gender;
+  const koor = await requireKoordinator();
+  const koordinatorGender = koor.gender;
 
   const week = searchParams.week ?? currentCycleStart();
   const { year: curYear, month: curMonth } = currentYearMonth();
@@ -469,9 +465,9 @@ export default async function KoordinatorDashboard({
                 color: 'var(--accent-2)',
               }}
             >
-              <Initials name={s.session.name} />
+              <Initials name={koor.name} />
             </div>
-            <span style={{ fontSize: 13, fontWeight: 600 }}>{s.session.name}</span>
+            <span style={{ fontSize: 13, fontWeight: 600 }}>{koor.name}</span>
           </div>
           <Link
             href="/2in1/koordinator/kehadiran"

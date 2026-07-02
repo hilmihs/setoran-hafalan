@@ -3,6 +3,7 @@
 import bcrypt from 'bcryptjs';
 import { getSession } from '@/lib/session';
 import { supabaseAdmin } from '@/lib/supabase-admin';
+import type { KoordinatorSession } from '@/types/db';
 import { runSeedItsnain } from '@/lib/seeds/seed-itsnain';
 import { runSeedMaahir } from '@/lib/seeds/seed-maahir';
 import { runSeedSyaikh } from '@/lib/seeds/seed-syaikh';
@@ -74,7 +75,9 @@ export async function runSeed(
 ): Promise<SeedResult> {
   try {
     const s = await getSession();
-    if (!s.session || s.session.role !== 'koordinator') {
+    const accesses = s.accesses ?? (s.session ? [s.session] : []);
+    const koor = accesses.find((a) => a.role === 'koordinator') as KoordinatorSession | undefined;
+    if (!koor) {
       return { error: 'Akses ditolak.' };
     }
     const seedKey = String(formData.get('seed') ?? '') as SeedKey;
@@ -87,7 +90,7 @@ export async function runSeed(
     const { data: row } = await supabaseAdmin
       .from('koordinator')
       .select('password_hash')
-      .eq('id', s.session.koordinator_id)
+      .eq('id', koor.koordinator_id)
       .maybeSingle();
     if (!row?.password_hash) return { error: 'Akun koordinator tidak ditemukan.' };
     const okPass = await bcrypt.compare(password, row.password_hash);
@@ -98,7 +101,7 @@ export async function runSeed(
       log.push(line);
       console.log(`[seed:${seedKey}] ${line}`);
     };
-    push(`[${new Date().toISOString()}] ${s.session.name} menjalankan: ${def.label}`);
+    push(`[${new Date().toISOString()}] ${koor.name} menjalankan: ${def.label}`);
     try {
       await def.fn(push);
       push('✓ Selesai.');

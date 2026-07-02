@@ -1,6 +1,5 @@
 import Link from 'next/link';
-import { redirect } from 'next/navigation';
-import { getSession } from '@/lib/session';
+import { requireKoordinator } from '@/lib/session';
 import { supabaseAdmin } from '@/lib/supabase-admin';
 import { Icon, Initials } from '@/components/icons';
 import { LogoutButton } from '@/components/LogoutButton';
@@ -38,8 +37,7 @@ function monthOptions(): Array<{ value: string; label: string }> {
 type PengajarRow = { id: string; name: string; gender: Gender; kelompok_id: string; is_ketua: boolean; whatsapp_number: string };
 
 export default async function KoordinatorPedagogisPage({ searchParams }: { searchParams: { month?: string } }) {
-  const s = await getSession();
-  if (!s.session || s.session.role !== 'koordinator') redirect('/2in1/koordinator/login');
+  await requireKoordinator();
 
   const cur = currentYearMonth();
   const ym = searchParams.month && /^\d{4}-\d{2}$/.test(searchParams.month) ? searchParams.month : cur;

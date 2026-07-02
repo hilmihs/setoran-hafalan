@@ -3,11 +3,14 @@
 import { revalidatePath } from 'next/cache';
 import { getSession } from '@/lib/session';
 import { supabaseAdmin } from '@/lib/supabase-admin';
+import type { KoordinatorSession } from '@/types/db';
 
-async function requireKoord() {
+// Accesses-aware: satu WA bisa punya banyak role, active session belum tentu
+// koordinator. Ambil akses koordinator dari daftar accesses.
+async function requireKoord(): Promise<KoordinatorSession | null> {
   const s = await getSession();
-  if (!s.session || s.session.role !== 'koordinator') return null;
-  return s.session;
+  const accesses = s.accesses ?? (s.session ? [s.session] : []);
+  return (accesses.find((a) => a.role === 'koordinator') as KoordinatorSession | undefined) ?? null;
 }
 
 /** Tambah libur kelas Maahir. program_kelas_id 'all' → berlaku semua kelas (NULL). */

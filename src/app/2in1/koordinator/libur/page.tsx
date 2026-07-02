@@ -1,6 +1,5 @@
 import Link from 'next/link';
-import { redirect } from 'next/navigation';
-import { getSession } from '@/lib/session';
+import { requireKoordinator } from '@/lib/session';
 import { supabaseAdmin } from '@/lib/supabase-admin';
 import { Icon } from '@/components/icons';
 import { createLibur, deleteLibur } from './actions';
@@ -22,10 +21,7 @@ function fmt(d: string): string {
 }
 
 export default async function KoordinatorLiburPage() {
-  const s = await getSession();
-  if (!s.session || s.session.role !== 'koordinator') {
-    redirect('/2in1/koordinator/login');
-  }
+  await requireKoordinator();
 
   const { data: kelasRows } = await supabaseAdmin
     .from('program_kelas')

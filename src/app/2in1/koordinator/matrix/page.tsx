@@ -1,6 +1,5 @@
 import Link from 'next/link';
-import { redirect } from 'next/navigation';
-import { getSession } from '@/lib/session';
+import { requireOneOfRoles } from '@/lib/session';
 import { supabaseAdmin } from '@/lib/supabase-admin';
 import { syncMatrixIfStale, type MatrixRow } from '@/lib/matrix-compute';
 import { MatrixDashboard, type MatrixListItem } from '@/components/matrix/MatrixDashboard';
@@ -23,11 +22,7 @@ export default async function Matrix2in1Page({
 }: {
   searchParams: { bulan?: string };
 }) {
-  const s = await getSession();
-  const session = s.session;
-  if (!session || (session.role !== 'koordinator' && session.role !== 'syaikh')) {
-    redirect('/');
-  }
+  const session = await requireOneOfRoles(['koordinator', 'syaikh']);
 
   const ym = searchParams.bulan && /^\d{4}-\d{2}$/.test(searchParams.bulan)
     ? searchParams.bulan

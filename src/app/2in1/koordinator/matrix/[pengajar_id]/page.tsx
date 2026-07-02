@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
-import { getSession } from '@/lib/session';
+import { requireOneOfRoles } from '@/lib/session';
 import { supabaseAdmin } from '@/lib/supabase-admin';
 import { Initials } from '@/components/icons';
 import { MatrixTrendChart } from '@/components/charts/MatrixTrendChart';
@@ -85,11 +85,7 @@ export default async function MatrixDetailPage({
   params: { pengajar_id: string };
   searchParams: { bulan?: string };
 }) {
-  const s = await getSession();
-  const session = s.session;
-  if (!session || (session.role !== 'koordinator' && session.role !== 'syaikh')) {
-    redirect('/');
-  }
+  const session = await requireOneOfRoles(['koordinator', 'syaikh']);
 
   const ym = searchParams.bulan && /^\d{4}-\d{2}$/.test(searchParams.bulan)
     ? searchParams.bulan

@@ -1,6 +1,5 @@
 import Link from 'next/link';
-import { redirect } from 'next/navigation';
-import { getSession } from '@/lib/session';
+import { requireKoordinator } from '@/lib/session';
 import { LogoutButton } from '@/components/LogoutButton';
 import { Icon } from '@/components/icons';
 import { SeedCard } from '@/components/SeedCard';
@@ -9,10 +8,7 @@ export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
 
 export default async function KoordinatorAdminPage() {
-  const s = await getSession();
-  if (!s.session || s.session.role !== 'koordinator') {
-    redirect('/2in1/koordinator/login');
-  }
+  await requireKoordinator();
 
   return (
     <main style={{ minHeight: '100vh' }}>
