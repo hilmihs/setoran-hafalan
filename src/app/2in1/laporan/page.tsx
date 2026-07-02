@@ -1,6 +1,5 @@
 import Link from 'next/link';
-import { redirect } from 'next/navigation';
-import { getSession } from '@/lib/session';
+import { requireOneOfRoles } from '@/lib/session';
 import { LogoutButton } from '@/components/LogoutButton';
 import { Icon } from '@/components/icons';
 import { LaporanFilterBar } from '@/components/LaporanFilterBar';
@@ -18,19 +17,13 @@ export default async function LaporanPage({
 }: {
   searchParams: { bulan?: string; gender?: string };
 }) {
-  const s = await getSession();
-  if (
-    !s.session ||
-    (s.session.role !== 'koordinator' && s.session.role !== 'syaikh')
-  ) {
-    redirect('/');
-  }
+  const session = await requireOneOfRoles(['koordinator', 'syaikh']);
   const genderParam =
     searchParams.gender === 'ikhwan' || searchParams.gender === 'akhwat'
       ? (searchParams.gender as Gender)
-      : s.session.gender;
+      : session.gender;
   const gender: Gender = genderParam;
-  const dashboardHref = s.session.role === 'syaikh' ? '/2in1/syaikh' : '/2in1/koordinator';
+  const dashboardHref = session.role === 'syaikh' ? '/2in1/syaikh' : '/2in1/koordinator';
 
   // Daftar opsi bulan: 12 bulan ke belakang dari sekarang
   const now = new Date();

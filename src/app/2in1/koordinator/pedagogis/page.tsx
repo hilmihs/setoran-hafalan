@@ -93,6 +93,82 @@ export default async function KoordinatorPedagogisPage({ searchParams }: { searc
   const totalAnggotaAll = groups.reduce((a, g) => a + g.totalAnggota, 0);
   const totalDinilai = groups.reduce((a, g) => a + g.dinilaiCount, 0);
 
+  const ikhwanGroups = groups.filter((g) => g.kel.gender === 'ikhwan');
+  const akhwatGroups = groups.filter((g) => g.kel.gender === 'akhwat');
+
+  const renderGroupCard = (g: (typeof groups)[number]) => {
+    const lengkap = g.totalAnggota > 0 && g.belum === 0;
+    return (
+      <div key={g.kel.id} className="card-flat" style={{ padding: 14 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: 14, fontWeight: 700 }}>{g.kel.name}</div>
+            <div className="t-small" style={{ color: 'var(--muted)' }}>
+              Ketua: {g.ketua?.name ?? '— belum ada ketua'}
+            </div>
+          </div>
+          <span className={`badge ${lengkap ? 'badge-hijau' : 'badge-merah'}`} style={{ fontSize: 11 }}>
+            <span className="dot" />{g.dinilaiCount}/{g.totalAnggota} dinilai
+          </span>
+          {g.reminderUrl && (
+            <a href={g.reminderUrl} target="_blank" rel="noopener" className="act-btn wa" style={{ textDecoration: 'none' }}>
+              {Icon.wa(11)} Ingatkan ketua
+            </a>
+          )}
+        </div>
+
+        {/* anggota — tabel rinci per aspek */}
+        {g.totalAnggota === 0 ? (
+          <div className="t-small" style={{ color: 'var(--muted-2)', marginTop: 10 }}>Tidak ada anggota.</div>
+        ) : (
+          <div className="table-scroll" style={{ marginTop: 10 }}>
+            <table className="k-table tbl-cards">
+              <thead>
+                <tr>
+                  <th style={{ minWidth: 130 }}>Pengajar</th>
+                  <th style={{ textAlign: 'center' }}>Metode</th>
+                  <th style={{ textAlign: 'center' }}>Silabus</th>
+                  <th style={{ textAlign: 'center' }}>Halaqah</th>
+                  <th style={{ textAlign: 'center' }}>Evaluasi</th>
+                  <th style={{ textAlign: 'center', color: 'var(--muted-2)' }}>SOP</th>
+                  <th style={{ textAlign: 'center' }}>Rata²</th>
+                </tr>
+              </thead>
+              <tbody>
+                {g.anggota.filter((p) => !p.is_ketua).map((p) => {
+                  const sc = scoresByPengajar.get(p.id);
+                  const avg = avgByPengajar.get(p.id);
+                  return (
+                    <tr key={p.id}>
+                      <td className="tbl-cardhead">
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                          <div className="avatar" style={{ width: 24, height: 24, fontSize: 10 }}><Initials name={p.name} /></div>
+                          <span style={{ fontSize: 13, fontWeight: 600 }}>{p.name}</span>
+                        </div>
+                      </td>
+                      <ScoreCell v={sc?.skor_metode_pengajaran ?? null} label="Metode" />
+                      <ScoreCell v={sc?.skor_kepatuhan_silabus ?? null} label="Silabus" />
+                      <ScoreCell v={sc?.skor_manajemen_halaqah ?? null} label="Halaqah" />
+                      <ScoreCell v={sc?.skor_evaluasi_penguasaan ?? null} label="Evaluasi" />
+                      <ScoreCell v={sc?.skor_kepatuhan_sop ?? null} muted label="SOP" />
+                      <td data-label="Rata²" style={{ textAlign: 'center' }}>
+                        {avg != null ? (
+                          <span style={{ fontSize: 14, fontWeight: 800, color: avg >= 3 ? 'var(--hijau-ink)' : avg >= 2 ? 'var(--kuning-ink)' : 'var(--merah-ink)' }}>{avg.toFixed(1)}</span>
+                        ) : (
+                          <span className="badge badge-merah" style={{ fontSize: 10 }}><span className="dot" />belum</span>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    );
+  };
+
   return (
     <main style={{ minHeight: '100vh' }}>
       <div className="dash-header">
@@ -116,85 +192,26 @@ export default async function KoordinatorPedagogisPage({ searchParams }: { searc
           <MonthNavSelect options={monthOptions()} value={ym} />
         </div>
 
-        {/* Per kelompok */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-          {groups.length === 0 && <p className="t-small">Belum ada kelompok pengajar.</p>}
-          {groups.map((g) => {
-            const lengkap = g.totalAnggota > 0 && g.belum === 0;
-            return (
-              <div key={g.kel.id} className="card-flat" style={{ padding: 14 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontSize: 14, fontWeight: 700 }}>
-                      {g.kel.name}
-                      <span className="t-small" style={{ color: 'var(--muted-2)', marginLeft: 8 }}>{g.kel.gender === 'ikhwan' ? 'Ikhwan' : 'Akhwat'}</span>
-                    </div>
-                    <div className="t-small" style={{ color: 'var(--muted)' }}>
-                      Ketua: {g.ketua?.name ?? '— belum ada ketua'}
-                    </div>
-                  </div>
-                  <span className={`badge ${lengkap ? 'badge-hijau' : 'badge-merah'}`} style={{ fontSize: 11 }}>
-                    <span className="dot" />{g.dinilaiCount}/{g.totalAnggota} dinilai
-                  </span>
-                  {g.reminderUrl && (
-                    <a href={g.reminderUrl} target="_blank" rel="noopener" className="act-btn wa" style={{ textDecoration: 'none' }}>
-                      {Icon.wa(11)} Ingatkan ketua
-                    </a>
-                  )}
-                </div>
+        {/* Per kelompok — dipisah Ikhwan / Akhwat */}
+        {groups.length === 0 && <p className="t-small">Belum ada kelompok pengajar.</p>}
 
-                {/* anggota — tabel rinci per aspek */}
-                {g.totalAnggota === 0 ? (
-                  <div className="t-small" style={{ color: 'var(--muted-2)', marginTop: 10 }}>Tidak ada anggota.</div>
-                ) : (
-                  <div className="table-scroll" style={{ marginTop: 10 }}>
-                    <table className="k-table tbl-cards">
-                      <thead>
-                        <tr>
-                          <th style={{ minWidth: 130 }}>Pengajar</th>
-                          <th style={{ textAlign: 'center' }}>Metode</th>
-                          <th style={{ textAlign: 'center' }}>Silabus</th>
-                          <th style={{ textAlign: 'center' }}>Halaqah</th>
-                          <th style={{ textAlign: 'center' }}>Evaluasi</th>
-                          <th style={{ textAlign: 'center', color: 'var(--muted-2)' }}>SOP</th>
-                          <th style={{ textAlign: 'center' }}>Rata²</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {g.anggota.filter((p) => !p.is_ketua).map((p) => {
-                          const sc = scoresByPengajar.get(p.id);
-                          const avg = avgByPengajar.get(p.id);
-                          return (
-                            <tr key={p.id}>
-                              <td className="tbl-cardhead">
-                                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                                  <div className="avatar" style={{ width: 24, height: 24, fontSize: 10 }}><Initials name={p.name} /></div>
-                                  <span style={{ fontSize: 13, fontWeight: 600 }}>{p.name}</span>
-                                </div>
-                              </td>
-                              <ScoreCell v={sc?.skor_metode_pengajaran ?? null} label="Metode" />
-                              <ScoreCell v={sc?.skor_kepatuhan_silabus ?? null} label="Silabus" />
-                              <ScoreCell v={sc?.skor_manajemen_halaqah ?? null} label="Halaqah" />
-                              <ScoreCell v={sc?.skor_evaluasi_penguasaan ?? null} label="Evaluasi" />
-                              <ScoreCell v={sc?.skor_kepatuhan_sop ?? null} muted label="SOP" />
-                              <td data-label="Rata²" style={{ textAlign: 'center' }}>
-                                {avg != null ? (
-                                  <span style={{ fontSize: 14, fontWeight: 800, color: avg >= 3 ? 'var(--hijau-ink)' : avg >= 2 ? 'var(--kuning-ink)' : 'var(--merah-ink)' }}>{avg.toFixed(1)}</span>
-                                ) : (
-                                  <span className="badge badge-merah" style={{ fontSize: 10 }}><span className="dot" />belum</span>
-                                )}
-                              </td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
-              </div>
-            );
-          })}
-        </div>
+        {ikhwanGroups.length > 0 && (
+          <section style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            <div className="t-tiny" style={{ color: 'var(--emas-ink)', marginTop: 4 }}>
+              IKHWAN · {ikhwanGroups.reduce((a, g) => a + g.dinilaiCount, 0)}/{ikhwanGroups.reduce((a, g) => a + g.totalAnggota, 0)} dinilai
+            </div>
+            {ikhwanGroups.map(renderGroupCard)}
+          </section>
+        )}
+
+        {akhwatGroups.length > 0 && (
+          <section style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 16 }}>
+            <div className="t-tiny" style={{ color: 'var(--emas-ink)', marginTop: 4 }}>
+              AKHWAT · {akhwatGroups.reduce((a, g) => a + g.dinilaiCount, 0)}/{akhwatGroups.reduce((a, g) => a + g.totalAnggota, 0)} dinilai
+            </div>
+            {akhwatGroups.map(renderGroupCard)}
+          </section>
+        )}
       </div>
     </main>
   );
