@@ -34,6 +34,26 @@ export default async function HitsPengajarPage() {
   let panelData: HalaqahForAssign[] = [];
   let tabayyunItems: TabayyunForPengajar[] = [];
 
+  // Pengajuan pindah (transfer_out) yang masih pending untuk halaqah miliknya.
+  const pendingByHalaqah = new Map<string, { target_name: string; target_wa: string | null }>();
+  if (halaqah.length) {
+    const { data: pendingReq } = await supabaseAdmin
+      .from('hits_halaqah_pindah_request')
+      .select('halaqah_id, target_name, target_wa')
+      .in('halaqah_id', halaqah.map((h) => h.id))
+      .eq('status', 'pending')
+      .eq('request_type', 'transfer_out');
+    for (const r of pendingReq ?? []) {
+      pendingByHalaqah.set(r.halaqah_id as string, { target_name: r.target_name as string, target_wa: (r.target_wa as string) ?? null });
+    }
+  }
+  const myHalaqah = halaqah.map((h) => ({
+    id: h.id as string,
+    name: h.name as string,
+    gender: (h.gender as 'ikhwan' | 'akhwat' | null) ?? null,
+    pending: pendingByHalaqah.get(h.id as string) ?? null,
+  }));
+
   if (halaqah.length) {
     const halaqahIds = halaqah.map((h) => h.id);
     const batchIds = [...new Set(halaqah.map((h) => h.batch_id))];
@@ -155,7 +175,7 @@ export default async function HitsPengajarPage() {
               Ajukan pemindahan halaqah ke pengajar lain. Pengajar tujuan menyetujui via tautan (perlu login),
               lalu halaqah otomatis pindah.
             </p>
-            <PindahHalaqahPanel batches={batches} />
+            <PindahHalaqahPanel batches={batches} myHalaqah={myHalaqah} />
           </div>
 
           <p className="t-small" style={{ color: 'var(--muted-2)', marginTop: 20 }}>

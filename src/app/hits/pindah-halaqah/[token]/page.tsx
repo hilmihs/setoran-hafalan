@@ -30,9 +30,13 @@ export default async function PindahHalaqahPage({ params }: { params: { token: s
 
   const halaqah = req.halaqah as unknown as { name: string; pengajar_nama_sheet: string | null } | null;
 
-  const isTarget =
-    (!!req.target_pengajar_id && req.target_pengajar_id === session.pengajar_id) ||
-    (!!req.target_wa && !!wa && wa === req.target_wa);
+  const isClaim = req.request_type === 'claim_in';
+  // Yang berhak memutuskan: transfer_out → target; claim_in → approver.
+  const isTarget = isClaim
+    ? (!!req.approver_pengajar_id && req.approver_pengajar_id === session.pengajar_id) ||
+      (!!req.approver_wa && !!wa && wa === req.approver_wa)
+    : (!!req.target_pengajar_id && req.target_pengajar_id === session.pengajar_id) ||
+      (!!req.target_wa && !!wa && wa === req.target_wa);
 
   // Peserta preview.
   const { data: peserta } = await supabaseAdmin
@@ -45,16 +49,22 @@ export default async function PindahHalaqahPage({ params }: { params: { token: s
   return (
     <main style={{ minHeight: '100vh' }}>
       <div style={{ maxWidth: 480, margin: '0 auto', paddingTop: 24 }} className="page">
-        <h1 className="t-h1" style={{ marginBottom: 4 }}>Pemindahan Halaqah</h1>
+        <h1 className="t-h1" style={{ marginBottom: 4 }}>{isClaim ? 'Pengambilan Halaqah' : 'Pemindahan Halaqah'}</h1>
         <p className="t-small" style={{ color: 'var(--muted-2)', marginBottom: 16 }}>
-          Persetujuan pengajar tujuan
+          {isClaim ? 'Persetujuan pemilik halaqah / koordinator' : 'Persetujuan pengajar tujuan'}
         </p>
 
         <div className="card-flat" style={{ padding: '14px 16px', marginBottom: 16, display: 'flex', flexDirection: 'column', gap: 6 }}>
           <Row label="Halaqah" value={halaqah?.name ?? '—'} />
           <Row label="Pengajar saat ini" value={halaqah?.pengajar_nama_sheet ?? '—'} />
-          <Row label="Diajukan oleh" value={req.requested_by_name} />
-          <Row label="Tujuan" value={req.target_name} />
+          {isClaim ? (
+            <Row label="Ingin mengambil" value={req.requested_by_name} />
+          ) : (
+            <>
+              <Row label="Diajukan oleh" value={req.requested_by_name} />
+              <Row label="Tujuan" value={req.target_name} />
+            </>
+          )}
         </div>
 
         <div className="card-flat" style={{ padding: '14px 16px', marginBottom: 16 }}>
@@ -82,10 +92,12 @@ export default async function PindahHalaqahPage({ params }: { params: { token: s
         ) : (
           <div className="card-flat" style={{ padding: '16px', textAlign: 'center' }}>
             <p className="t-body" style={{ fontWeight: 600, color: 'var(--danger)' }}>
-              Akun yang login bukan pengajar tujuan.
+              {isClaim ? 'Akun yang login bukan pihak yang berhak memutuskan.' : 'Akun yang login bukan pengajar tujuan.'}
             </p>
             <p className="t-small" style={{ color: 'var(--muted-2)', marginTop: 6 }}>
-              Link ini hanya untuk <strong>{req.target_name}</strong>. Silakan login dengan akun pengajar tujuan.
+              {isClaim
+                ? 'Hanya pemilik halaqah / koordinator ketua kelas yang bisa menyetujui pengambilan ini.'
+                : <>Link ini hanya untuk <strong>{req.target_name}</strong>. Silakan login dengan akun pengajar tujuan.</>}
             </p>
           </div>
         )}
