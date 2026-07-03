@@ -12,6 +12,7 @@ export const dynamic = 'force-dynamic';
 const PROGRAM_LABEL: Record<string, string> = {
   kelas_maahir: 'Kelas Maahir',
   at_tibyan: 'At-Tibyan',
+  muallim_najih: "Mu'allim Najih",
 };
 
 export default async function KetuaKelasPage() {

@@ -15,6 +15,7 @@ const ANCHOR_MONTH = PRESENSI_ANCHOR.slice(0, 7); // '2026-06'
 const PROGRAM_LABEL: Record<string, string> = {
   kelas_maahir: 'Kelas Maahir',
   at_tibyan: 'At-Tibyan',
+  muallim_najih: "Mu'allim Najih",
 };
 
 export default async function RiwayatPertemuanPage({

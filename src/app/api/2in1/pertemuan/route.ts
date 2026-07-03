@@ -22,7 +22,7 @@ export async function POST(req: NextRequest) {
       keterangan?: string | null;
     };
 
-    const valid = ['kelas_maahir', 'at_tibyan'];
+    const valid = ['kelas_maahir', 'at_tibyan', 'muallim_najih'];
     if (!valid.includes(program)) {
       return NextResponse.json({ error: 'Program tidak valid.' }, { status: 400 });
     }
