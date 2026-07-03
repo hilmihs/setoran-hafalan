@@ -1,7 +1,8 @@
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { requireKoordinatorKetuaKelas } from '@/lib/session';
-import { getHitsRekap, getHitsBatches } from '@/lib/hits-rekap';
+import { getHitsRekap, getHitsBatches, fetchInChunks } from '@/lib/hits-rekap';
+import { supabaseAdmin } from '@/lib/supabase-admin';
 import { HitsKoordinatorTable } from '@/components/HitsKoordinatorTable';
 import { MonthNavSelect } from '@/components/MonthNavSelect';
 import { BatchNavSelect } from '@/components/BatchNavSelect';
@@ -63,6 +64,38 @@ export default async function HitsKoordinatorPage({
   const akhwat = rows.filter((r) => r.gender === 'akhwat').length;
   const genderLabel =
     ikhwan && akhwat ? 'Ikhwan & Akhwat' : ikhwan ? 'Ikhwan' : akhwat ? 'Akhwat' : '—';
+
+  // ── Pola mangkir per-pengajar (bulan ini, lintas batch, gender terpilih) ──
+  const [my, mm] = month.split('-').map(Number);
+  const mStart = `${month}-01`;
+  const mEnd = mm === 12 ? `${my + 1}-01-01` : `${my}-${String(mm + 1).padStart(2, '0')}-01`;
+  const { data: mangkirKet } = await supabaseAdmin
+    .from('hits_keterangan_harian')
+    .select('halaqah_id, kondisi')
+    .gte('tanggal', mStart)
+    .lt('tanggal', mEnd)
+    .in('kondisi', ['KMT', 'JKG']);
+  const mkIds = [...new Set((mangkirKet ?? []).map((r) => r.halaqah_id as string))];
+  const mkHalaqah = mkIds.length
+    ? await fetchInChunks(mkIds, (chunk) =>
+        supabaseAdmin.from('hits_halaqah').select('id, pengajar_id, pengajar_nama_sheet, gender').in('id', chunk)
+      )
+    : [];
+  const mkInfo = new Map(mkHalaqah.map((h) => [h.id as string, h]));
+  const mangkirByPengajar = new Map<string, { name: string; kmt: number; jkg: number }>();
+  for (const r of mangkirKet ?? []) {
+    const h = mkInfo.get(r.halaqah_id as string);
+    if (!h || !h.pengajar_id) continue;
+    if (genderFilter && h.gender !== genderFilter) continue;
+    const key = h.pengajar_id as string;
+    const acc = mangkirByPengajar.get(key) ?? { name: (h.pengajar_nama_sheet as string) ?? '—', kmt: 0, jkg: 0 };
+    if (r.kondisi === 'KMT') acc.kmt += 1;
+    else if (r.kondisi === 'JKG') acc.jkg += 1;
+    mangkirByPengajar.set(key, acc);
+  }
+  const mangkirList = [...mangkirByPengajar.values()]
+    .map((m) => ({ ...m, total: m.kmt + m.jkg }))
+    .sort((a, b) => b.total - a.total);
 
   return (
     <main style={{ minHeight: '100vh' }}>
@@ -208,6 +241,41 @@ export default async function HitsKoordinatorPage({
                       </div>
                     </div>
                   )}
+                </div>
+              )}
+
+              {mangkirList.length > 0 && (
+                <div style={{ marginTop: 18 }}>
+                  <div className="t-tiny" style={{ color: 'var(--merah-ink)', marginBottom: 6, fontWeight: 600 }}>
+                    POLA MANGKIR PENGAJAR — {month} (KMT = mulai telat, JKG = ganti jadwal)
+                  </div>
+                  <div className="card-flat" style={{ padding: 0, overflow: 'hidden' }}>
+                    <div style={{ overflowX: 'auto' }}>
+                      <table className="k-table">
+                        <thead>
+                          <tr>
+                            <th>Pengajar</th>
+                            <th style={{ textAlign: 'right' }}>KMT</th>
+                            <th style={{ textAlign: 'right' }}>JKG</th>
+                            <th style={{ textAlign: 'right' }}>Total</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {mangkirList.slice(0, 15).map((m, i) => (
+                            <tr key={i}>
+                              <td className="nm" style={{ fontWeight: 500 }}>{m.name}</td>
+                              <td className="t-mono" style={{ textAlign: 'right' }}>{m.kmt || '—'}</td>
+                              <td className="t-mono" style={{ textAlign: 'right' }}>{m.jkg || '—'}</td>
+                              <td className="t-mono" style={{ textAlign: 'right', fontWeight: 700, color: m.total >= 5 ? 'var(--merah-ink)' : 'var(--ink)' }}>{m.total}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                  <p className="t-tiny" style={{ color: 'var(--muted-2)', marginTop: 6 }}>
+                    Kontribusi ke skor Komitmen &amp; Disiplin (Matrix). JKG diputihkan bila tabayyun disetujui udzur syar&apos;i.
+                  </p>
                 </div>
               )}
 

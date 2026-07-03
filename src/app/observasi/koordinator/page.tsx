@@ -2,6 +2,7 @@ import { requireKoordinatorKetuaKelas } from '@/lib/session';
 import { isSuperadmin } from '@/lib/admin-guard';
 import { supabaseAdmin } from '@/lib/supabase-admin';
 import { getHitsHarian } from '@/lib/hits-harian';
+import { fetchInChunks } from '@/lib/hits-rekap';
 import { LogoutButton } from '@/components/LogoutButton';
 import { FeatureNav } from '@/components/FeatureNav';
 import { StatCard } from '@/components/ui/StatCard';
@@ -161,6 +162,38 @@ export default async function KoordinatorKetuaKelasPage({
   for (const t of tabDecidedBulan) {
     if (t.koordinator_kk_id) tabDecisionsByRekan.set(t.koordinator_kk_id, (tabDecisionsByRekan.get(t.koordinator_kk_id) ?? 0) + 1);
   }
+
+  // ── Halaqah perlu perhatian (kumulatif, bukan cuma hari ini) ──
+  // Kronis kosong (0 keterangan 14 hari), tanpa pengajar, atau tanpa ketua.
+  const { data: allHalaqah } = await supabaseAdmin
+    .from('hits_halaqah')
+    .select('id, name, pengajar_id, pengajar_nama_sheet')
+    .eq('gender', viewGender)
+    .eq('active', true);
+  const halaqahAll = allHalaqah ?? [];
+  const allIds = halaqahAll.map((h) => h.id as string);
+  const since14 = new Date(nowMs - 14 * 24 * 3600_000).toISOString().slice(0, 10);
+  const [ketuaRows, ketRows] = await Promise.all([
+    fetchInChunks(allIds, (chunk) =>
+      supabaseAdmin.from('hits_halaqah_peserta').select('halaqah_id').eq('is_ketua', true).eq('active', true).in('halaqah_id', chunk)
+    ),
+    fetchInChunks(allIds, (chunk) =>
+      supabaseAdmin.from('hits_keterangan_harian').select('halaqah_id').gte('tanggal', since14).in('halaqah_id', chunk)
+    ),
+  ]);
+  const hasKetua = new Set((ketuaRows ?? []).map((r) => r.halaqah_id as string));
+  const fillCount = new Map<string, number>();
+  for (const r of ketRows ?? []) fillCount.set(r.halaqah_id as string, (fillCount.get(r.halaqah_id as string) ?? 0) + 1);
+  const problemHalaqah = halaqahAll
+    .map((h) => {
+      const reasons: string[] = [];
+      if (!h.pengajar_id) reasons.push('Tanpa pengajar');
+      if (!hasKetua.has(h.id as string)) reasons.push('Tanpa ketua');
+      if ((fillCount.get(h.id as string) ?? 0) === 0) reasons.push('Kosong 14 hari');
+      return { id: h.id as string, name: h.name as string, reasons };
+    })
+    .filter((h) => h.reasons.length > 0)
+    .sort((a, b) => b.reasons.length - a.reasons.length);
 
   const showFilled = !statusObs || statusObs === 'sudah';
   const showUnfilled = !statusObs || statusObs === 'belum';
@@ -340,6 +373,29 @@ export default async function KoordinatorKetuaKelasPage({
               {tabayyunItems.map((t) => (
                 <TabayyunCard key={t.id} tabayyun={t} />
               ))}
+            </div>
+          )}
+
+          {/* Halaqah perlu perhatian (kumulatif) */}
+          {problemHalaqah.length > 0 && (
+            <div style={{ marginBottom: 24 }}>
+              <h2 className="t-h2" style={{ marginBottom: 4 }}>Halaqah Perlu Perhatian ({problemHalaqah.length})</h2>
+              <p className="t-small" style={{ color: 'var(--muted-2)', marginBottom: 12 }}>
+                Tanpa pengajar / tanpa ketua / tak ada keterangan 14 hari terakhir — tak terpantau.
+              </p>
+              {problemHalaqah.slice(0, 40).map((h) => (
+                <div key={h.id} className="card-flat" style={{ padding: '10px 14px', marginBottom: 6, borderLeft: '3px solid var(--merah)' }}>
+                  <div style={{ fontWeight: 600, fontSize: 14 }}>{h.name}</div>
+                  <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 4 }}>
+                    {h.reasons.map((r) => (
+                      <span key={r} className="badge badge-merah" style={{ fontSize: 10 }}><span className="dot" />{r}</span>
+                    ))}
+                  </div>
+                </div>
+              ))}
+              {problemHalaqah.length > 40 && (
+                <p className="t-tiny" style={{ color: 'var(--muted-2)' }}>…dan {problemHalaqah.length - 40} halaqah lain.</p>
+              )}
             </div>
           )}
 
