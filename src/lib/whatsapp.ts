@@ -511,6 +511,36 @@ export function tplPindahHalaqahToTarget(args: {
   ].join('\n');
 }
 
+/** Ke approver (owner halaqah / koordinator KK): minta persetujuan pengambilan halaqah. */
+export function tplKlaimHalaqahApproval(args: {
+  approverName: string;
+  approverGender: Gender;
+  requesterName: string;
+  halaqahName: string;
+  approveUrl: string;
+  loginUrl: string;
+  ownerKind: 'pengajar' | 'koordinator_kk';
+}): string {
+  const sapaan = salutation(args.approverGender);
+  const konteks =
+    args.ownerKind === 'pengajar'
+      ? `${args.requesterName} ingin mengambil alih halaqah *${args.halaqahName}* yang saat ini antum pegang.`
+      : `${args.requesterName} ingin menjadi pengajar halaqah *${args.halaqahName}* (belum ada pengajarnya).`;
+  return [
+    `Assalamu'alaikum ${sapaan} ${args.approverName},`,
+    ``,
+    konteks,
+    ``,
+    `*Cara memutuskan:*`,
+    `1. Login dulu (nomor WA + password) di:`,
+    args.loginUrl,
+    `2. Lalu buka tautan persetujuan & pilih *Setujui* / *Tolak*:`,
+    args.approveUrl,
+    ``,
+    `Jazakumullahu khairan.`,
+  ].join('\n');
+}
+
 export function tplPindahDisetujuiToRequester(args: {
   requesterName: string;
   requesterGender: Gender;

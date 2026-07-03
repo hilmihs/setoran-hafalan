@@ -35,6 +35,13 @@ export async function decideTabayyun(
 
   if (!tabayyunId) return { error: 'ID tabayyun tidak ditemukan.' };
 
+  // Konteks utk auto-teguran (kondisi, pengajar, tanggal).
+  const { data: tab } = await supabaseAdmin
+    .from('hits_tabayyun')
+    .select('id, kondisi, pengajar_id, halaqah:halaqah_id(pengajar_id), keterangan:keterangan_id(tanggal)')
+    .eq('id', tabayyunId)
+    .maybeSingle();
+
   const { error } = await supabaseAdmin
     .from('hits_tabayyun')
     .update({
@@ -47,6 +54,45 @@ export async function decideTabayyun(
     .eq('id', tabayyunId);
 
   if (error) return { error: `Gagal simpan: ${error.message}` };
+
+  // Bukan udzur syar'i → terbitkan teguran (feed kolom Teguran matrix + risk).
+  // KMT → kedisiplinan_waktu, JKG → komitmen_jadwal, lainnya → tanggung_jawab.
+  if (!isUdzur && tab) {
+    const hal = tab.halaqah as unknown as { pengajar_id: string | null } | null;
+    const ket = tab.keterangan as unknown as { tanggal: string } | null;
+    const pengajarId = tab.pengajar_id ?? hal?.pengajar_id ?? null;
+    if (pengajarId) {
+      const ym = (ket?.tanggal ?? jakartaToday()).slice(0, 7);
+      const category =
+        tab.kondisi === 'KMT' ? 'kedisiplinan_waktu' : tab.kondisi === 'JKG' ? 'komitmen_jadwal' : 'tanggung_jawab';
+      // Idempotent: jangan gandakan teguran utk tabayyun yang sama.
+      const { data: existing } = await supabaseAdmin
+        .from('hits_teguran')
+        .select('id')
+        .eq('source_ref_type', 'hits_tabayyun')
+        .eq('source_ref_id', tabayyunId)
+        .maybeSingle();
+      if (!existing) {
+        const { count } = await supabaseAdmin
+          .from('hits_teguran')
+          .select('id', { count: 'exact', head: true })
+          .eq('pengajar_id', pengajarId)
+          .eq('year_month', ym)
+          .eq('category', category);
+        await supabaseAdmin.from('hits_teguran').insert({
+          pengajar_id: pengajarId,
+          year_month: ym,
+          category,
+          nomor_teguran: (count ?? 0) + 1,
+          source_ref_type: 'hits_tabayyun',
+          source_ref_id: tabayyunId,
+          keterangan: catatan || `Tabayyun ${tab.kondisi} tidak diterima sebagai udzur syar'i`,
+          issued_by_role: 'koordinator_ketua_kelas',
+          issued_by_id: session.koordinator_kk_id,
+        });
+      }
+    }
+  }
 
   await logAudit({
     actor: session,

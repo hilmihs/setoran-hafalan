@@ -106,6 +106,20 @@ export default async function KoordinatorKetuaKelasPage({
     }))
     .filter((t) => !q || t.pengajar_name.toLowerCase().includes(q) || t.kelas_name.toLowerCase().includes(q));
 
+  // Aging: yang belum diputus di atas, urut deadline TERLAMA dulu (paling mendesak).
+  const nowMs = Date.now();
+  const isOverdue = (t: { status: string; deadline_at: string | null }) =>
+    t.status !== 'decided' && !!t.deadline_at && new Date(t.deadline_at).getTime() < nowMs;
+  tabayyunItems.sort((a, b) => {
+    const ad = a.status === 'decided' ? 1 : 0;
+    const bd = b.status === 'decided' ? 1 : 0;
+    if (ad !== bd) return ad - bd;
+    const at = a.deadline_at ? new Date(a.deadline_at).getTime() : Infinity;
+    const bt = b.deadline_at ? new Date(b.deadline_at).getTime() : Infinity;
+    return at - bt;
+  });
+  const overdueCount = tabayyunItems.filter(isOverdue).length;
+
   // ── Analitik tabayyun bulan ini ──
   const ymStart = today.slice(0, 7) + '-01';
   const { data: monthlyRaw } = await supabaseAdmin
@@ -223,6 +237,12 @@ export default async function KoordinatorKetuaKelasPage({
                       <div style={{ fontSize: 18, fontWeight: 700, color: pendingTab > 0 ? 'var(--merah-ink)' : 'var(--ink)' }}>{pendingTab}</div>
                       <div className="t-tiny" style={{ color: 'var(--muted)' }}>Tabayyun pending</div>
                     </div>
+                    {overdueCount > 0 && (
+                      <div>
+                        <div style={{ fontSize: 18, fontWeight: 700, color: 'var(--merah-ink)' }}>⚠ {overdueCount}</div>
+                        <div className="t-tiny" style={{ color: 'var(--muted)' }}>Lewat deadline</div>
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>

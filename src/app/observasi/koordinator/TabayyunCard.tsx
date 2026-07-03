@@ -96,9 +96,15 @@ export function TabayyunCard({ tabayyun: t }: Props) {
             Pengajar belum memberikan alasan.
           </div>
         )}
-        <div className="t-small" style={{ color: 'var(--muted-2)', marginTop: 4 }}>
-          Deadline: {new Date(t.deadline_at).toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' })}
-        </div>
+        {(() => {
+          const overdue = t.status !== 'decided' && new Date(t.deadline_at).getTime() < Date.now();
+          return (
+            <div className="t-small" style={{ color: overdue ? 'var(--merah-ink)' : 'var(--muted-2)', marginTop: 4, fontWeight: overdue ? 700 : 400 }}>
+              {overdue ? '⚠ Lewat deadline: ' : 'Deadline: '}
+              {new Date(t.deadline_at).toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' })}
+            </div>
+          );
+        })()}
       </div>
 
       <form action={handleDecide}>
