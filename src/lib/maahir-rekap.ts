@@ -154,6 +154,8 @@ export async function getMaahirRekap(
   const pertemuanByKelas = new Map<string, RekapPertemuan[]>();
   for (const p of pertemuanRows ?? []) {
     if (!filledPertemuan.has(p.id)) continue;
+    // Anulir: pertemuan pada tanggal libur tak dihitung (kolom & denominator %).
+    if (liburByKelas.get(p.program_kelas_id)?.has(p.tanggal)) continue;
     const list = pertemuanByKelas.get(p.program_kelas_id) ?? [];
     list.push({
       id: p.id,

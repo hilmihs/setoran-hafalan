@@ -6,6 +6,7 @@
 
 import { supabaseAdmin } from '@/lib/supabase-admin';
 import { fetchAllRows } from '@/lib/supabase-page';
+import { getLiburDatesForKelas } from '@/lib/maahir-libur';
 import { todayJakarta } from '@/lib/maahir-presensi';
 
 export const TAKHASSUS_IKHWAN = 'Maahir Takhassus Ikhwan';
@@ -141,9 +142,16 @@ export async function getLaporanMaahir(month: string): Promise<LaporanMaahir> {
     .gte('tanggal', start)
     .lte('tanggal', end);
   const pertemuanById = new Map(
-    (pertemuanRows ?? []).map((p) => [p.id, { kelasId: p.program_kelas_id as string, program: p.program as string }])
+    (pertemuanRows ?? []).map((p) => [
+      p.id,
+      { kelasId: p.program_kelas_id as string, program: p.program as string, tanggal: p.tanggal as string },
+    ])
   );
   const pertemuanIds = (pertemuanRows ?? []).map((p) => p.id);
+
+  // Tanggal libur per kelas (dianulir dari perhitungan % — pertemuan yang
+  // sudah terisi pun tak dihitung bila tanggalnya diliburkan).
+  const liburByKelas = await getLiburDatesForKelas(kelasIds, start, end);
 
   // 3. Anggota
   const { data: anggotaRows } = await supabaseAdmin
@@ -180,6 +188,8 @@ export async function getLaporanMaahir(month: string): Promise<LaporanMaahir> {
       if (!k.anggota_id) continue;
       const p = pertemuanById.get(k.pertemuan_id);
       if (!p) continue;
+      // Anulir: lewati pertemuan yang tanggalnya diliburkan (kelas ini).
+      if (liburByKelas.get(p.kelasId)?.has(p.tanggal)) continue;
       const program = p.program; // 'kelas_maahir' | 'at_tibyan' | 'muallim_najih'
 
       // pertemuan terisi per kelas+scope (denominator persen)
