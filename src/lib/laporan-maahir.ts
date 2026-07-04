@@ -32,6 +32,8 @@ export type StudentAtt = {
   kelasName: string;
   gender: Gender;
   counts: PctCounts;
+  filled: number; // jumlah pertemuan terisi (denominator) di scope
+  tidakHadir: number; // filled - (H+T): sesi tak hadir termasuk yg tak tercatat
   persen: number | null; // (H+T)/pertemuan terisi * 100; null bila belum ada pertemuan
   keterangan: string; // catatan tergabung (bila ada)
 };
@@ -211,12 +213,18 @@ export async function getLaporanMaahir(month: string): Promise<LaporanMaahir> {
         : { H: 0, I: 0, S: 0, A: 0, T: 0 };
       const filled = filledByKelasScope.get(`${kelas.id}|${scope}`)?.size ?? 0;
       const persen = filled > 0 ? Math.round(((counts.H + counts.T) / filled) * 100) : null;
+      // Tidak hadir = pertemuan terisi − (hadir+terlambat). Termasuk sesi yang
+      // peserta tak punya catatan sama sekali (bukan hanya izin/sakit/alpa),
+      // supaya tak muncul "0x" padahal di bawah target.
+      const tidakHadir = Math.max(0, filled - (counts.H + counts.T));
       out.push({
         anggotaId: a.id,
         name: a.name,
         kelasName: kelas.name,
         gender: kelas.gender,
         counts,
+        filled,
+        tidakHadir,
         persen,
         keterangan: st ? Array.from(st.catatan).join('; ') : '',
       });

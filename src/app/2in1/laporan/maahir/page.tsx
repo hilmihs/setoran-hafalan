@@ -306,7 +306,7 @@ function AtTibyanBlock({ lap }: { lap: Awaited<ReturnType<typeof getLaporanMaahi
               {a.dibawahTarget.list.map((s) => (
                 <tr key={s.anggotaId}>
                   <td>{s.name}</td>
-                  <td style={{ textAlign: 'center' }}>{s.counts.I + s.counts.S + s.counts.A}x</td>
+                  <td style={{ textAlign: 'center' }}>{s.tidakHadir}x</td>
                   <td className="t-tiny">{s.kelasName}</td>
                   <td className="t-tiny" style={{ color: 'var(--muted-2)' }}>{s.keterangan}</td>
                 </tr>

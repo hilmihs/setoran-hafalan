@@ -22,7 +22,10 @@ function pct(v: number | null): string {
 
 export async function GET(req: NextRequest) {
   const s = await getSession();
-  if (!s.session || (s.session.role !== 'koordinator' && s.session.role !== 'syaikh')) {
+  // Cek SEMUA akses (bukan hanya role aktif) — user multi-role bisa punya
+  // koordinator/syaikh di accesses walau session aktif role lain.
+  const accesses = s.accesses ?? (s.session ? [s.session] : []);
+  if (!accesses.some((a) => a.role === 'koordinator' || a.role === 'syaikh')) {
     return NextResponse.json({ error: 'Akses ditolak.' }, { status: 403 });
   }
 
@@ -140,7 +143,7 @@ export async function GET(req: NextRequest) {
 
   bold(ws.addRow(['Peserta < 100%', 'Tidak hadir', 'Kelas', 'Keterangan']));
   for (const st of a.dibawahTarget.list) {
-    ws.addRow([st.name, `${st.counts.I + st.counts.S + st.counts.A}x`, st.kelasName, st.keterangan]);
+    ws.addRow([st.name, `${st.tidakHadir}x`, st.kelasName, st.keterangan]);
   }
 
   const buffer = await wb.xlsx.writeBuffer();
