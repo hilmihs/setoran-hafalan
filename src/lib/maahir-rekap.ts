@@ -2,6 +2,7 @@
 // Dipakai dashboard ketua kelas & koordinator (read-only).
 
 import { supabaseAdmin } from '@/lib/supabase-admin';
+import { fetchAllRows } from '@/lib/supabase-page';
 import {
   PROGRAM_LABEL,
   expectedDaysInRange,
@@ -122,12 +123,22 @@ export async function getMaahirRekap(
   const kehadiranByPertemuan = new Map<string, Map<string, StatusCode>>();
   const filledPertemuan = new Set<string>();
   if (pertemuanIds.length > 0) {
-    const { data: kehadiranRows } = await supabaseAdmin
-      .from('kehadiran_peserta')
-      .select('pertemuan_id, anggota_id, status, diisi_at')
-      .in('pertemuan_id', pertemuanIds)
-      .not('diisi_at', 'is', null);
-    for (const k of kehadiranRows ?? []) {
+    // Paginasi: rekap semua-kelas sebulan bisa >1000 baris (limit PostgREST).
+    const kehadiranRows = await fetchAllRows<{
+      pertemuan_id: string;
+      anggota_id: string | null;
+      status: string;
+      diisi_at: string | null;
+    }>((from, to) =>
+      supabaseAdmin
+        .from('kehadiran_peserta')
+        .select('pertemuan_id, anggota_id, status, diisi_at')
+        .in('pertemuan_id', pertemuanIds)
+        .not('diisi_at', 'is', null)
+        .order('id')
+        .range(from, to)
+    );
+    for (const k of kehadiranRows) {
       if (!k.anggota_id) continue;
       filledPertemuan.add(k.pertemuan_id);
       let m = kehadiranByPertemuan.get(k.pertemuan_id);

@@ -5,6 +5,7 @@
 // At-Tibyan (sesi at_tibyan, lintas kelas) dilaporkan di bloknya sendiri. DPQ tidak ada.
 
 import { supabaseAdmin } from '@/lib/supabase-admin';
+import { fetchAllRows } from '@/lib/supabase-page';
 import { todayJakarta } from '@/lib/maahir-presensi';
 
 export const TAKHASSUS_IKHWAN = 'Maahir Takhassus Ikhwan';
@@ -156,13 +157,24 @@ export async function getLaporanMaahir(month: string): Promise<LaporanMaahir> {
   const filledByKelasScope = new Map<string, Set<string>>(); // key: kelasId|program → set pertemuanId
 
   if (pertemuanIds.length > 0) {
-    const { data: kehadiranRows } = await supabaseAdmin
-      .from('kehadiran_peserta')
-      .select('pertemuan_id, anggota_id, status, catatan, diisi_at')
-      .in('pertemuan_id', pertemuanIds)
-      .not('diisi_at', 'is', null);
+    // Paginasi: kehadiran sebulan lintas-kelas bisa >1000 baris (limit PostgREST).
+    const kehadiranRows = await fetchAllRows<{
+      pertemuan_id: string;
+      anggota_id: string | null;
+      status: string;
+      catatan: string | null;
+      diisi_at: string | null;
+    }>((from, to) =>
+      supabaseAdmin
+        .from('kehadiran_peserta')
+        .select('pertemuan_id, anggota_id, status, catatan, diisi_at')
+        .in('pertemuan_id', pertemuanIds)
+        .not('diisi_at', 'is', null)
+        .order('id')
+        .range(from, to)
+    );
 
-    for (const k of kehadiranRows ?? []) {
+    for (const k of kehadiranRows) {
       if (!k.anggota_id) continue;
       const p = pertemuanById.get(k.pertemuan_id);
       if (!p) continue;
