@@ -63,6 +63,14 @@ export default async function LaporanPage({
             berisi 2 sheet: <em>Rekap</em> dan <em>Matrix Skill Tajwid</em>.
           </p>
 
+          <Link
+            href="/2in1/laporan/maahir"
+            className="btn btn-block btn-ghost"
+            style={{ textDecoration: 'none', marginBottom: 18 }}
+          >
+            Laporan Bulanan Maahir (Takhassus, Maahir, At-Tibyan) →
+          </Link>
+
           <div className="matrix-stat-grid" style={{ gridTemplateColumns: '1fr 1fr', marginBottom: 18 }}>
             <div className="card-flat" style={{ padding: 14 }}>
               <div className="t-tiny" style={{ marginBottom: 4 }}>Sheet 1 — Rekap</div>
