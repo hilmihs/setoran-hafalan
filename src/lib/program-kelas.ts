@@ -61,6 +61,18 @@ export async function findKetuaProgramKelas(wa: string): Promise<ProgramKelasRow
   return (data ?? []) as ProgramKelasRow[];
 }
 
+/**
+ * Semua kelas di mana WA ini ketua atau wakil — TERMASUK kelas self_attendance
+ * (takhassus). Dipakai fitur pengajuan libur (ketua/wakil takhassus juga boleh).
+ */
+export async function findKetuaWakilKelas(wa: string): Promise<ProgramKelasRow[]> {
+  const { data } = await supabaseAdmin
+    .from('program_kelas')
+    .select(PK_COLS)
+    .or(`ketua_wa.eq.${wa},wakil_wa.eq.${wa}`);
+  return (data ?? []) as ProgramKelasRow[];
+}
+
 /** Ambil satu kelas presensi-mandiri by id. null bila bukan self_attendance. */
 export async function getSelfAttendanceKelas(id: string): Promise<ProgramKelasRow | null> {
   const { data } = await supabaseAdmin

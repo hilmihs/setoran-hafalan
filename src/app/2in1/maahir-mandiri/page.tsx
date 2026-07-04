@@ -38,6 +38,7 @@ export default async function MaahirMandiriPage() {
   }
 
   const { kelas, anggotaId, anggotaName } = membership;
+  const isLeader = kelas.ketua_wa === wa || kelas.wakil_wa === wa;
   const unfilled = await getUnfilledDaysForAnggota(kelas, anggotaId);
 
   if (unfilled.length === 0) {
@@ -49,6 +50,11 @@ export default async function MaahirMandiriPage() {
             <div className="desc">{kelas.name} — tidak ada hari yang perlu diisi.</div>
           </div>
         </div>
+        {isLeader && (
+          <Link href="/2in1/ketua-kelas/libur" className="btn btn-ghost btn-block" style={{ marginBottom: 8 }}>
+            Ajukan libur pertemuan
+          </Link>
+        )}
         <Link href="/" className="btn btn-ghost btn-block">← Beranda</Link>
       </Shell>
     );
@@ -87,6 +93,12 @@ export default async function MaahirMandiriPage() {
         program={day.program}
         remaining={day.totalRemaining}
       />
+
+      {isLeader && (
+        <Link href="/2in1/ketua-kelas/libur" className="btn btn-ghost btn-block" style={{ marginTop: 12 }}>
+          Ajukan libur pertemuan
+        </Link>
+      )}
     </Shell>
   );
 }

@@ -158,6 +158,29 @@ export default async function KetuaKelasPage() {
             <span style={{ color: 'var(--muted-2)' }}>→</span>
           </Link>
 
+          <Link
+            href="/2in1/ketua-kelas/libur"
+            className="card-flat"
+            style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              padding: '12px 14px',
+              marginBottom: 12,
+              textDecoration: 'none',
+              color: 'inherit',
+              borderRadius: 10,
+            }}
+          >
+            <div>
+              <div style={{ fontSize: 13, fontWeight: 600 }}>Ajukan Libur Pertemuan</div>
+              <div className="t-tiny" style={{ color: 'var(--muted-2)' }}>
+                Minta koordinator meliburkan tanggal — kehadiran teranulir
+              </div>
+            </div>
+            <span style={{ color: 'var(--muted-2)' }}>→</span>
+          </Link>
+
           {/* Jadwal info */}
           {myKelas.map((k) => (
             <div key={k.id} className="card" style={{ padding: '8px 12px', marginBottom: 8, background: 'var(--surface-2)' }}>

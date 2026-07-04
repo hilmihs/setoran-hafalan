@@ -413,6 +413,27 @@ export function tplHapusPertemuanToKoorKK(args: {
   ].join('\n');
 }
 
+export function tplLiburToKoordinator(args: {
+  requesterName: string;
+  kelasName: string;
+  tanggalLabel: string;
+  alasan: string;
+  approveUrl: string;
+}): string {
+  return [
+    `Assalamu'alaikum,`,
+    ``,
+    `Ketua/Wakil kelas *${args.requesterName}* mengajukan agar tanggal berikut diliburkan:`,
+    `• Kelas: ${args.kelasName}`,
+    `• Tanggal: ${args.tanggalLabel}`,
+    `• Alasan: ${args.alasan || '-'}`,
+    ``,
+    `Jika disetujui, pertemuan tanggal itu tidak dihitung dalam kehadiran.`,
+    `Setujui / tolak di sini:`,
+    args.approveUrl,
+  ].join('\n');
+}
+
 export function tplJadwalPindahToKetuaKelas(args: {
   ketuaKelasName: string;
   ketuaKelasGender: Gender;
