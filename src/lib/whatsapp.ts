@@ -434,6 +434,23 @@ export function tplLiburToKoordinator(args: {
   ].join('\n');
 }
 
+export function tplReminderLiburToKetua(args: {
+  ketuaName: string | null;
+  pesertaName: string;
+  kelasName: string;
+  tanggalLabel: string;
+}): string {
+  return [
+    `Assalamu'alaikum${args.ketuaName ? ` ${args.ketuaName}` : ''},`,
+    ``,
+    `${args.pesertaName} mengingatkan bahwa pertemuan berikut sepertinya libur:`,
+    `• Kelas: ${args.kelasName}`,
+    `• Tanggal: ${args.tanggalLabel}`,
+    ``,
+    `Mohon ajukan libur ke koordinator lewat menu "Ajukan Libur" di Presensi Mandiri, agar kehadiran tanggal ini tidak dihitung.`,
+  ].join('\n');
+}
+
 export function tplJadwalPindahToKetuaKelas(args: {
   ketuaKelasName: string;
   ketuaKelasGender: Gender;

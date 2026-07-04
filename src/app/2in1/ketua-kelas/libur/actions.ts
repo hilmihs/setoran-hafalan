@@ -10,7 +10,7 @@ export type AjukanLiburResult = { ok?: boolean; error?: string; waUrl?: string }
 // Koordinator tujuan per gender (sesuai arahan: ikhwan → Ahmad Abdus Syukur,
 // akhwat → Wildatun Uyun). Prefer nama tsb; fallback koordinator aktif segender.
 async function resolveKoordinator(gender: 'ikhwan' | 'akhwat') {
-  const preferName = gender === 'ikhwan' ? 'Ahmad Abdus Syukur' : 'Wildatun Uyun';
+  const preferName = gender === 'ikhwan' ? 'Ahmad Abdus Syukur' : 'Salma';
   const { data: preferred } = await supabaseAdmin
     .from('koordinator')
     .select('id, name, whatsapp_number')

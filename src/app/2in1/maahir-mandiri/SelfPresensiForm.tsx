@@ -20,18 +20,32 @@ export function SelfPresensiForm({
   tanggal,
   program,
   remaining,
+  askSetoran = false,
+  initialStatus = 'hadir',
+  initialCatatan = '',
+  initialSetoran = null,
+  submitLabel,
 }: {
   kelasId: string;
   anggotaId: string;
   tanggal: string;
   program: string;
   remaining: number;
+  askSetoran?: boolean;
+  initialStatus?: Status;
+  initialCatatan?: string;
+  initialSetoran?: number | null;
+  submitLabel?: string;
 }) {
   const router = useRouter();
-  const [status, setStatus] = useState<Status>('hadir');
-  const [catatan, setCatatan] = useState('');
+  const [status, setStatus] = useState<Status>(initialStatus);
+  const [catatan, setCatatan] = useState(initialCatatan);
+  const [setoran, setSetoran] = useState(initialSetoran === null ? '' : String(initialSetoran));
   const [pending, start] = useTransition();
   const [error, setError] = useState<string | null>(null);
+
+  // Setoran hafalan hanya untuk sesi Kelas Maahir & saat hadir/terlambat.
+  const showSetoran = askSetoran && program === 'kelas_maahir' && (status === 'hadir' || status === 'terlambat');
 
   function save() {
     setError(null);
@@ -43,6 +57,7 @@ export function SelfPresensiForm({
       fd.set('program', program);
       fd.set('status', status);
       fd.set('catatan', catatan);
+      if (showSetoran) fd.set('setoran_halaman', setoran);
       const res = await submitSelfPresensi(undefined, fd);
       if (res?.error) { setError(res.error); return; }
       router.refresh();
@@ -70,6 +85,22 @@ export function SelfPresensiForm({
         ))}
       </div>
 
+      {showSetoran && (
+        <div style={{ marginTop: 12 }}>
+          <label className="field-label">Setoran hafalan (halaman)</label>
+          <input
+            type="number"
+            min={0}
+            inputMode="numeric"
+            value={setoran}
+            onChange={(e) => setSetoran(e.target.value)}
+            placeholder="mis. 2"
+            className="input"
+            style={{ width: '100%' }}
+          />
+        </div>
+      )}
+
       {(status === 'izin' || status === 'sakit' || status === 'tidak_ada_keterangan') && (
         <input
           type="text"
@@ -85,7 +116,7 @@ export function SelfPresensiForm({
 
       <button type="button" onClick={save} disabled={pending}
         className={`btn btn-block ${pending ? 'btn-soft' : 'btn-primary'}`} style={{ marginTop: 16 }}>
-        {pending ? 'Menyimpan…' : remaining > 1 ? 'Simpan & Lanjut →' : 'Simpan & Selesai'}
+        {pending ? 'Menyimpan…' : submitLabel ?? (remaining > 1 ? 'Simpan & Lanjut →' : 'Simpan & Selesai')}
       </button>
     </div>
   );

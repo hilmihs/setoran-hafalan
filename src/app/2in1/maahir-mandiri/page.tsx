@@ -4,6 +4,8 @@ import { getSessionWa, findSelfAttendanceMembership } from '@/lib/program-kelas'
 import { getUnfilledDaysForAnggota, PROGRAM_LABEL } from '@/lib/maahir-presensi';
 import { LogoutButton } from '@/components/LogoutButton';
 import { SelfPresensiForm } from './SelfPresensiForm';
+import { RemindKetuaButton } from './RemindKetuaButton';
+import { LiburRequestForm } from '../ketua-kelas/libur/LiburRequestForm';
 
 export const dynamic = 'force-dynamic';
 
@@ -41,6 +43,27 @@ export default async function MaahirMandiriPage() {
   const isLeader = kelas.ketua_wa === wa || kelas.wakil_wa === wa;
   const unfilled = await getUnfilledDaysForAnggota(kelas, anggotaId);
 
+  // Blok "Ajukan libur" (untuk ketua/wakil) — tampil inline di presensi mandiri.
+  const liburBlock = isLeader ? (
+    <div style={{ marginTop: 20 }}>
+      <div className="t-tiny" style={{ color: 'var(--muted-2)', marginBottom: 8 }}>
+        Ajukan libur pertemuan (ketua/wakil)
+      </div>
+      <LiburRequestForm kelasOptions={[{ id: kelas.id, name: kelas.name }]} />
+    </div>
+  ) : null;
+
+  const riwayatLink = (
+    <Link href="/2in1/maahir-mandiri/riwayat" className="card-flat"
+      style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 14px', marginTop: 12, textDecoration: 'none', color: 'inherit', borderRadius: 10 }}>
+      <div>
+        <div style={{ fontSize: 13, fontWeight: 600 }}>Riwayat Kehadiran &amp; Setoran</div>
+        <div className="t-tiny" style={{ color: 'var(--muted-2)' }}>Lihat & edit presensi Anda</div>
+      </div>
+      <span style={{ color: 'var(--muted-2)' }}>→</span>
+    </Link>
+  );
+
   if (unfilled.length === 0) {
     return (
       <Shell>
@@ -50,17 +73,15 @@ export default async function MaahirMandiriPage() {
             <div className="desc">{kelas.name} — tidak ada hari yang perlu diisi.</div>
           </div>
         </div>
-        {isLeader && (
-          <Link href="/2in1/ketua-kelas/libur" className="btn btn-ghost btn-block" style={{ marginBottom: 8 }}>
-            Ajukan libur pertemuan
-          </Link>
-        )}
-        <Link href="/" className="btn btn-ghost btn-block">← Beranda</Link>
+        {riwayatLink}
+        {liburBlock}
+        <Link href="/" className="btn btn-ghost btn-block" style={{ marginTop: 16 }}>← Beranda</Link>
       </Shell>
     );
   }
 
   const day = unfilled[0];
+  const askSetoran = day.program === 'kelas_maahir';
   const tanggalLabel = new Date(day.tanggal + 'T00:00:00').toLocaleDateString('id-ID', {
     weekday: 'long', day: 'numeric', month: 'long', year: 'numeric',
   });
@@ -82,7 +103,8 @@ export default async function MaahirMandiriPage() {
       </div>
 
       <p className="t-small" style={{ color: 'var(--muted-2)', marginBottom: 12 }}>
-        Tandai kehadiran Anda sendiri. Setelah disimpan, lanjut otomatis ke hari berikutnya yang belum terisi.
+        Tandai kehadiran Anda sendiri{askSetoran ? ' dan isi jumlah halaman setoran' : ''}. Setelah disimpan,
+        lanjut otomatis ke hari berikutnya yang belum terisi.
       </p>
 
       <SelfPresensiForm
@@ -92,13 +114,14 @@ export default async function MaahirMandiriPage() {
         tanggal={day.tanggal}
         program={day.program}
         remaining={day.totalRemaining}
+        askSetoran={askSetoran}
       />
 
-      {isLeader && (
-        <Link href="/2in1/ketua-kelas/libur" className="btn btn-ghost btn-block" style={{ marginTop: 12 }}>
-          Ajukan libur pertemuan
-        </Link>
-      )}
+      {/* Reminder ke ketua bila hari ini sebetulnya libur (untuk non-ketua). */}
+      {!isLeader && <RemindKetuaButton kelasId={kelas.id} tanggal={day.tanggal} />}
+
+      {riwayatLink}
+      {liburBlock}
     </Shell>
   );
 }
