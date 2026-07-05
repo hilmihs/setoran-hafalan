@@ -205,6 +205,7 @@ export function HitsKoordinatorTable({ rows }: { rows: HitsRekapRow[] }) {
               <th onClick={() => toggleSort('pctKbbs')} style={{ cursor: 'pointer' }}>%KBBS{arrow('pctKbbs')}</th>
               <th onClick={() => toggleSort('pctLatihan')} style={{ cursor: 'pointer' }}>%Latihan{arrow('pctLatihan')}</th>
               <th>Telat</th>
+              <th>Hutang</th>
               <th style={{ minWidth: 120 }}>Rincian kondisi</th>
             </tr>
           </thead>
@@ -252,6 +253,7 @@ export function HitsKoordinatorTable({ rows }: { rows: HitsRekapRow[] }) {
                   <td data-label="%KBBS"><span className={pctBadge(r.pctKbbs)}>{r.pctKbbs == null ? '—' : `${r.pctKbbs}%`}</span></td>
                   <td data-label="%Latihan"><span className={pctBadge(r.pctLatihan)}>{r.pctLatihan == null ? '—' : `${r.pctLatihan}%`}</span></td>
                   <td data-label="Telat">{r.terlambat}</td>
+                  <td data-label="Hutang">{r.hutangSaldo > 0 ? r.hutangSaldo : '—'}</td>
                   <td data-label="Rincian">
                     {totalKondisi === 0 ? (
                       <span className="t-tiny" style={{ color: 'var(--muted-2)' }}>—</span>

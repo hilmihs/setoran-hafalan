@@ -77,9 +77,10 @@ interface Props {
   pengajarName: string;
   slots: PertemuanSlot[];
   todayUnfilled: boolean;
+  hutangSaldo: number;
 }
 
-export function HitsKetuaForm({ halaqahName, pengajarName, slots: initialSlots, todayUnfilled }: Props) {
+export function HitsKetuaForm({ halaqahName, pengajarName, slots: initialSlots, todayUnfilled, hutangSaldo }: Props) {
   const [slots, setSlots] = useState(initialSlots);
   const [editingKey, setEditingKey] = useState<string | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
@@ -135,6 +136,7 @@ export function HitsKetuaForm({ halaqahName, pengajarName, slots: initialSlots, 
   const [latihanDiberikan, setLatihanDiberikan] = useState(true);
   const [statusLatihan, setStatusLatihan] = useState<HitsStatusLatihan>('SML');
   const [catatan, setCatatan] = useState('');
+  const [bayarMenit, setBayarMenit] = useState('');
 
   useEffect(() => {
     const today = slots.find((s) => s.isToday);
@@ -160,6 +162,7 @@ export function HitsKetuaForm({ halaqahName, pengajarName, slots: initialSlots, 
     setLatihanDiberikan(k ? k.latihan_diberikan !== false : true);
     setStatusLatihan(k?.status_latihan ?? 'SML');
     setCatatan(k?.catatan ?? '');
+    setBayarMenit('');
     setEditingKey(slotKey(slot));
     setError(null);
     setSuccess(null);
@@ -225,6 +228,8 @@ export function HitsKetuaForm({ halaqahName, pengajarName, slots: initialSlots, 
       }
     }
     fd.set('pelanggaran', JSON.stringify(payload));
+    const bayar = Number(bayarMenit);
+    fd.set('bayar_menit', String(Number.isFinite(bayar) && bayar > 0 ? Math.trunc(bayar) : 0));
     return { ok: true, fd };
   }
 
@@ -470,6 +475,26 @@ export function HitsKetuaForm({ halaqahName, pengajarName, slots: initialSlots, 
             </p>
           )}
         </>
+      )}
+
+      {hutangSaldo > 0 && (
+        <div
+          className="card-flat"
+          style={{ padding: '12px 14px', marginBottom: 14, background: 'var(--kuning-tint)', borderColor: 'var(--kuning-line)' }}
+        >
+          <p className="t-small" style={{ fontWeight: 600, color: 'var(--kuning-ink)', marginBottom: 6 }}>
+            Sisa hutang menit pengajar: {hutangSaldo} menit
+          </p>
+          <label className="t-tiny" style={{ display: 'block', marginBottom: 4 }}>
+            Pengajar menambah berapa menit pada pertemuan ini? (opsional)
+          </label>
+          <input
+            type="number" min={0} max={hutangSaldo} className="input" style={{ maxWidth: 160 }}
+            value={bayarMenit}
+            onChange={(e) => setBayarMenit(e.target.value)}
+            placeholder="menit ditambah"
+          />
+        </div>
       )}
 
       <div style={{ marginBottom: 14 }}>
