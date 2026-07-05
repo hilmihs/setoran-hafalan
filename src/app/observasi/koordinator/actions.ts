@@ -7,6 +7,7 @@ import {
   tplReminderKetuaKelasObservasi,
   tplReminderPengajarTunjukKetua,
   tplTabayyunToPengajar,
+  tplTabayyunGhostingTeguran,
 } from '@/lib/whatsapp';
 import { absUrl } from '@/lib/url';
 import { logAudit } from '@/lib/audit';
@@ -264,6 +265,116 @@ export async function reminderTabayyunPengajar(
     recipientWa: pengajar.whatsapp_number,
     templateKind: 'tabayyun_notify',
     targetTable: 'hits_keterangan_harian',
+  });
+
+  return { waUrl };
+}
+
+/**
+ * Eskalasi ghosting: pengajar tak respons 72h sejak reminder → non-udzur otomatis
+ * + teguran + WA bertanggal. Guard: hanya bila state 'ghosting'.
+ */
+export async function escalateTabayyunGhosting(
+  tabayyunId: string
+): Promise<{ waUrl?: string; error?: string }> {
+  const session = await requireKoordinatorKetuaKelas();
+
+  const { data: tab } = await supabaseAdmin
+    .from('hits_tabayyun')
+    // prettier-ignore
+    .select('id, kondisi, keterangan_id, pengajar_id, halaqah_id, status, reminder_sent_at, deadline_at, halaqah:halaqah_id(name, pengajar_id), keterangan:keterangan_id(tanggal)')
+    .eq('id', tabayyunId)
+    .maybeSingle();
+  if (!tab) return { error: 'Tabayyun tidak ditemukan.' };
+
+  const nowIso = new Date().toISOString();
+  const state = tabayyunGhostingState(
+    { status: tab.status as string, reminder_sent_at: tab.reminder_sent_at as string | null, deadline_at: tab.deadline_at as string | null },
+    nowIso
+  );
+  if (state !== 'ghosting') {
+    return { error: 'Tabayyun ini belum memenuhi syarat ghosting (72 jam tanpa respons).' };
+  }
+
+  const hal = tab.halaqah as unknown as { name: string; pengajar_id: string | null } | null;
+  const ket = tab.keterangan as unknown as { tanggal: string } | null;
+
+  const fmtWib = (iso: string) =>
+    new Date(iso).toLocaleString('id-ID', { timeZone: 'Asia/Jakarta', dateStyle: 'medium', timeStyle: 'short' });
+  const catatan = `Ghosting: tak respons 72 jam sejak diingatkan ${fmtWib(tab.reminder_sent_at as string)}`;
+
+  // Putuskan non-udzur.
+  const { error: updErr } = await supabaseAdmin
+    .from('hits_tabayyun')
+    .update({
+      is_udzur_syari: false,
+      keputusan_catatan: catatan,
+      decided_at: nowIso,
+      status: 'decided',
+      koordinator_kk_id: session.koordinator_kk_id,
+    })
+    .eq('id', tab.id);
+  if (updErr) return { error: `Gagal simpan: ${updErr.message}` };
+
+  // Teguran (idempoten).
+  await issueTeguranForTabayyun(
+    { id: tab.id as string, kondisi: tab.kondisi as string, pengajar_id: tab.pengajar_id as string | null, halaqah: hal, keterangan: ket },
+    { catatan, actorId: session.koordinator_kk_id, actorRole: 'koordinator_ketua_kelas' }
+  );
+
+  // Nomor teguran untuk template WA (baca ulang teguran tabayyun ini).
+  const { data: teg } = await supabaseAdmin
+    .from('hits_teguran')
+    .select('nomor_teguran')
+    .eq('source_ref_type', 'hits_tabayyun')
+    .eq('source_ref_id', tab.id)
+    .maybeSingle();
+
+  // WA teguran ghosting.
+  let waUrl: string | undefined;
+  if (tab.pengajar_id) {
+    const { data: pengajar } = await supabaseAdmin
+      .from('pengajar')
+      .select('name, whatsapp_number, gender')
+      .eq('id', tab.pengajar_id)
+      .maybeSingle();
+    if (pengajar?.whatsapp_number) {
+      const { data: pelRows } = await supabaseAdmin
+        .from('hits_pelanggaran')
+        .select('jenis, menit, jkg_opsi, cicil_n, badal_nama, badal_mulai')
+        .eq('keterangan_id', tab.keterangan_id as string);
+      const pelanggaran = (pelRows ?? []).map(describePelanggaran);
+      const hutang = tab.halaqah_id
+        ? await computeHutangForHalaqah(tab.halaqah_id as string)
+        : { saldo: 0 };
+      const msg = tplTabayyunGhostingTeguran({
+        pengajarName: pengajar.name,
+        pengajarGender: pengajar.gender,
+        tanggalObservasi: ket?.tanggal ?? '',
+        diingatkanWib: fmtWib(tab.reminder_sent_at as string),
+        deadlineWib: fmtWib(tab.deadline_at as string),
+        nomorTeguran: teg?.nomor_teguran ?? 1,
+        pelanggaran,
+        hutangSaldo: hutang.saldo,
+      });
+      waUrl = buildWaMeUrl(pengajar.whatsapp_number, msg);
+      await logWaReminder({
+        sender: session,
+        recipientTable: 'pengajar',
+        recipientId: tab.pengajar_id as string,
+        recipientWa: pengajar.whatsapp_number,
+        templateKind: 'tabayyun_ghosting',
+        targetTable: 'hits_keterangan_harian',
+      });
+    }
+  }
+
+  await logAudit({
+    actor: session,
+    action: 'hits.tabayyun.ghosting',
+    targetTable: 'hits_tabayyun',
+    targetId: tab.id as string,
+    detail: { reminder_sent_at: tab.reminder_sent_at, deadline_at: tab.deadline_at },
   });
 
   return { waUrl };
