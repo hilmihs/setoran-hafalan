@@ -167,9 +167,23 @@ export async function submitKeteranganHarian(
     .single();
   if (error || !saved) return { error: `Gagal menyimpan: ${error?.message ?? 'tidak diketahui'}` };
 
-  // Lifecycle tabayyun: kondisi non-KBBS/LIBUR memicu klarifikasi pengajar.
-  // KBBS/LIBUR (atau edit kembali ke baik) menghapus tabayyun pending.
-  const perluTabayyun = kondisi === 'KMT' || kondisi === 'JKG' || kondisi === 'KBLA';
+  // Sync hits_pelanggaran (model multi baru) dari kondisi + latihan. Sumber
+  // kebenaran pelanggaran; kondisi tetap disimpan utk kompatibel & LIBUR.
+  await supabaseAdmin.from('hits_pelanggaran').delete().eq('keterangan_id', saved.id);
+  const pelRows: Array<{ keterangan_id: string; jenis: string }> = [];
+  if (kondisi === 'KMT' || kondisi === 'KBLA' || kondisi === 'JKG') {
+    pelRows.push({ keterangan_id: saved.id, jenis: kondisi });
+  }
+  if (!isLibur && latihanDiberikan === false) {
+    pelRows.push({ keterangan_id: saved.id, jenis: 'TIDAK_LATIHAN' });
+  }
+  if (pelRows.length > 0) await supabaseAdmin.from('hits_pelanggaran').insert(pelRows);
+
+  // Lifecycle tabayyun: pelanggaran waktu/jadwal (KMT/KBLA/JKG) memicu klarifikasi.
+  // TIDAK_LATIHAN memicu tabayyun juga (target F1), tapi butuh tabayyun rujuk
+  // pelanggaran (enum hits_kondisi belum punya nilainya) — ditunda ke tahap
+  // redesign tabayyun. Bersih (KBBS/LIBUR) → hapus pending.
+  const perluTabayyun = pelRows.some((p) => p.jenis === 'KMT' || p.jenis === 'KBLA' || p.jenis === 'JKG');
   if (perluTabayyun) {
     const { data: halaqah } = await supabaseAdmin
       .from('hits_halaqah')
