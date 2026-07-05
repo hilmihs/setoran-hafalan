@@ -88,6 +88,38 @@ export function AudioRecorder({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Selamatkan rekaman saat pengguna menutup/pindah tab (mis. keluar untuk sholat
+  // saat adzan). Di mobile, `beforeunload` sering tak jalan saat pindah aplikasi,
+  // jadi begitu tab tersembunyi kita finalisasi rekaman (stop → blob tersimpan &
+  // ter-cache/terkirim lewat onChange) agar tidak hilang total. `beforeunload`
+  // tetap dipasang untuk kasus tutup/refresh tab di desktop.
+  useEffect(() => {
+    function onVisibility() {
+      if (
+        document.visibilityState === 'hidden' &&
+        recorderRef.current &&
+        recorderRef.current.state !== 'inactive'
+      ) {
+        stop();
+      }
+    }
+    function onBeforeUnload(e: BeforeUnloadEvent) {
+      const recording = recorderRef.current && recorderRef.current.state !== 'inactive';
+      const unsent = state.kind === 'recorded' && state.blob !== null && !submitted;
+      if (recording || unsent) {
+        e.preventDefault();
+        e.returnValue = '';
+      }
+    }
+    document.addEventListener('visibilitychange', onVisibility);
+    window.addEventListener('beforeunload', onBeforeUnload);
+    return () => {
+      document.removeEventListener('visibilitychange', onVisibility);
+      window.removeEventListener('beforeunload', onBeforeUnload);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state.kind, submitted]);
+
   function stopStream() {
     streamRef.current?.getTracks().forEach((t) => t.stop());
     streamRef.current = null;

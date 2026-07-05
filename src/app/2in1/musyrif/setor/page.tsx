@@ -126,6 +126,7 @@ export default async function MusyrifSetorPage() {
               existing={existing}
               endpoint="/api/setoran-musyrif/submit"
               targetRoleLabel={`${titel} Anda`}
+              cacheKey={`m-${cycle}`}
             />
           ) : (
             <p className="t-body">
