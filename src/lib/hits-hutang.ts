@@ -13,15 +13,18 @@ export const JKG_MENIT = 90;
 // lama (termasuk 163 JKG hasil backfill F1 tanpa menit riil) TAK jadi hutang.
 export const HUTANG_ANCHOR = '2026-07-06';
 
-/** Debit menit satu pelanggaran. Murni. */
-export function hutangMenit(p: Pick<HitsPelanggaran, 'jenis' | 'menit'>): number {
+/**
+ * Debit menit satu pelanggaran. Murni. JKG hanya berhutang bila `jkg_opsi` terisi
+ * (tanda entri form F1 asli); JKG hasil backfill lama (jkg_opsi null) = 0.
+ */
+export function hutangMenit(p: Pick<HitsPelanggaran, 'jenis' | 'menit' | 'jkg_opsi'>): number {
   switch (p.jenis) {
     case 'KMT':
       return Math.max(0, (p.menit ?? 0) - TOLERANSI_KMT);
     case 'KBLA':
       return p.menit ?? 0;
     case 'JKG':
-      return JKG_MENIT;
+      return p.jkg_opsi ? JKG_MENIT : 0;
     default:
       return 0; // BADAL, TIDAK_LATIHAN
   }
@@ -71,7 +74,7 @@ export function allocateHutang(items: HutangItem[], totalBayar: number): HutangR
 const SEV_RANK: Record<string, number> = { JKG: 0, KBLA: 1, KMT: 2 };
 
 type KetLite = { id: string; tanggal: string };
-type PelLite = { keterangan_id: string; jenis: string; menit: number | null };
+type PelLite = { keterangan_id: string; jenis: string; menit: number | null; jkg_opsi: string | null };
 type BayarLite = { menit: number };
 
 /** Rakit hutang satu halaqah dari baris yang sudah diambil. Inti (dipakai single & bulk). */
@@ -89,7 +92,7 @@ export function buildHutang(
     const tgl = tanggalByKet.get(p.keterangan_id);
     // Anchor: hanya pertemuan pada/sesudah HUTANG_ANCHOR yang berhutang.
     if (!tgl || tgl < HUTANG_ANCHOR) continue;
-    const d = hutangMenit(p as Pick<HitsPelanggaran, 'jenis' | 'menit'>);
+    const d = hutangMenit(p as Pick<HitsPelanggaran, 'jenis' | 'menit' | 'jkg_opsi'>);
     if (d <= 0) continue;
     const sev = SEV_RANK[p.jenis] ?? 99;
     const cur = byKet.get(p.keterangan_id) ?? { debit: 0, jenis: p.jenis, sev };
@@ -137,7 +140,7 @@ export async function computeHutangForHalaqah(halaqahId: string): Promise<Hutang
   const ketIds = ketList.map((k) => k.id);
 
   const pels = ketIds.length
-    ? ((await supabaseAdmin.from('hits_pelanggaran').select('keterangan_id, jenis, menit').in('keterangan_id', ketIds)).data ?? [])
+    ? ((await supabaseAdmin.from('hits_pelanggaran').select('keterangan_id, jenis, menit, jkg_opsi').in('keterangan_id', ketIds)).data ?? [])
     : [];
   const { data: bayars } = await supabaseAdmin
     .from('hits_hutang_bayar').select('menit').eq('halaqah_id', halaqahId);
@@ -172,7 +175,7 @@ export async function computeHutangForHalaqahList(halaqahIds: string[]): Promise
 
   const ketIds = kets.map((k) => k.id);
   const pels = await chunked<PelLite>(ketIds, (ids) =>
-    supabaseAdmin.from('hits_pelanggaran').select('keterangan_id, jenis, menit').in('keterangan_id', ids));
+    supabaseAdmin.from('hits_pelanggaran').select('keterangan_id, jenis, menit, jkg_opsi').in('keterangan_id', ids));
   const pelByHal = new Map<string, PelLite[]>();
   for (const p of pels) {
     const hid = halByKet.get(p.keterangan_id);

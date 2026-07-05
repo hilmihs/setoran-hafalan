@@ -10,15 +10,16 @@ function eq(actual: unknown, expected: unknown, label: string) {
 }
 
 // --- hutangMenit ---
-const P = (jenis: string, menit: number | null = null) =>
-  ({ jenis, menit } as Parameters<typeof hutangMenit>[0]);
+const P = (jenis: string, menit: number | null = null, jkg_opsi: string | null = null) =>
+  ({ jenis, menit, jkg_opsi } as Parameters<typeof hutangMenit>[0]);
 eq(hutangMenit(P('KMT', 5)), 0, 'KMT 5 menit -> 0 (dalam toleransi)');
 eq(hutangMenit(P('KMT', 6)), 1, 'KMT 6 menit -> 1');
 eq(hutangMenit(P('KMT', 10)), 5, 'KMT 10 menit -> 5');
 eq(hutangMenit(P('KMT', null)), 0, 'KMT null -> 0');
 eq(hutangMenit(P('KBLA', 8)), 8, 'KBLA 8 menit -> 8');
 eq(hutangMenit(P('KBLA', 0)), 0, 'KBLA 0 -> 0');
-eq(hutangMenit(P('JKG')), 90, 'JKG -> 90');
+eq(hutangMenit(P('JKG', null, 'ganti_hari')), 90, 'JKG form (jkg_opsi set) -> 90');
+eq(hutangMenit(P('JKG', null, null)), 0, 'JKG backfill (jkg_opsi null) -> 0');
 eq(hutangMenit(P('BADAL')), 0, 'BADAL -> 0');
 eq(hutangMenit(P('TIDAK_LATIHAN')), 0, 'TIDAK_LATIHAN -> 0');
 
@@ -46,8 +47,8 @@ const anchorKets = [
   { id: 'baru', tanggal: HUTANG_ANCHOR },       // pada anchor -> hitung
 ];
 const anchorPels = [
-  { keterangan_id: 'lama', jenis: 'JKG', menit: null },   // backfill lama, harus diabaikan
-  { keterangan_id: 'baru', jenis: 'KMT', menit: 10 },     // -> debit 5
+  { keterangan_id: 'lama', jenis: 'JKG', menit: null, jkg_opsi: null },   // backfill lama, harus diabaikan
+  { keterangan_id: 'baru', jenis: 'KMT', menit: 10, jkg_opsi: null },     // -> debit 5
 ];
 const bh = buildHutang('h1', 'p1', anchorKets, anchorPels, []);
 eq([bh.total_debit, bh.saldo], [5, 5], 'anchor: JKG lama diabaikan, KMT baru 10->5');
