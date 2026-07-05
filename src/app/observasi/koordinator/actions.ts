@@ -216,12 +216,16 @@ export async function reminderTabayyunPengajar(
   if (state === 'ghosting') {
     return { error: 'Sudah lewat 72 jam tanpa respons — gunakan tombol "Teguran ghosting".' };
   }
+  if (state === 'has_reason' || state === 'decided') {
+    return { error: 'Tabayyun ini sudah direspons/diputuskan — reminder tidak berlaku.' };
+  }
   // Reminder pertama → mulai jam 72h. Reminder ulang dalam window → jam TAK di-reset.
   if (!tab.reminder_sent_at) {
-    await supabaseAdmin
+    const { error: clockErr } = await supabaseAdmin
       .from('hits_tabayyun')
       .update({ reminder_sent_at: nowIso, deadline_at: deadlineFromReminder(nowIso) })
       .eq('id', tab.id);
+    if (clockErr) return { error: `Gagal mulai jam tabayyun: ${clockErr.message}` };
   }
 
   const hal = tab.halaqah as unknown as { name: string } | null;
