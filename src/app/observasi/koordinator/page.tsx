@@ -73,7 +73,7 @@ export default async function KoordinatorKetuaKelasPage({
   const { data: tabRaw } = await supabaseAdmin
     .from('hits_tabayyun')
     .select(
-      `id, kondisi, status, alasan_pengajar, deadline_at, pengajar_id,
+      `id, kondisi, status, alasan_pengajar, deadline_at, reminder_sent_at, pengajar_id,
        pengajar:pengajar_id(name),
        halaqah:halaqah_id(name, gender),
        keterangan:keterangan_id(tanggal)`
@@ -87,6 +87,7 @@ export default async function KoordinatorKetuaKelasPage({
     status: string;
     alasan_pengajar: string | null;
     deadline_at: string;
+    reminder_sent_at: string | null;
     pengajar_id: string | null;
     pengajar: { name: string } | null;
     halaqah: { name: string; gender: string } | null;
@@ -104,6 +105,7 @@ export default async function KoordinatorKetuaKelasPage({
       alasan_pengajar: t.alasan_pengajar,
       status: t.status,
       deadline_at: t.deadline_at,
+      reminder_sent_at: t.reminder_sent_at,
     }))
     .filter((t) => !q || t.pengajar_name.toLowerCase().includes(q) || t.kelas_name.toLowerCase().includes(q));
 

@@ -1,8 +1,9 @@
 'use client';
 
 import { useState, useTransition } from 'react';
-import { decideTabayyun, reminderTabayyunPengajar } from './actions';
+import { decideTabayyun, reminderTabayyunPengajar, escalateTabayyunGhosting } from './actions';
 import { hitsHeadlineLabel } from '@/types/db';
+import { tabayyunGhostingState, tabayyunHoursLeft } from '@/lib/hits-tabayyun';
 
 interface Props {
   tabayyun: {
@@ -15,6 +16,7 @@ interface Props {
     alasan_pengajar: string | null;
     status: string;
     deadline_at: string;
+    reminder_sent_at: string | null;
   };
 }
 
@@ -37,24 +39,41 @@ export function TabayyunCard({ tabayyun: t }: Props) {
     );
   }
 
+  const nowIso = new Date().toISOString();
+  const state = tabayyunGhostingState(
+    { status: t.status, reminder_sent_at: t.reminder_sent_at, deadline_at: t.deadline_at },
+    nowIso
+  );
+  const hoursLeft = tabayyunHoursLeft(
+    { status: t.status, reminder_sent_at: t.reminder_sent_at, deadline_at: t.deadline_at },
+    nowIso
+  );
+
   function handleDecide(fd: FormData) {
     setError(null);
     startTransition(async () => {
       const result = await decideTabayyun(undefined, fd);
-      if (result?.error) {
-        setError(result.error);
-        return;
-      }
+      if (result?.error) { setError(result.error); return; }
       if (result?.ok) setDecided(true);
     });
   }
 
   function handleReminder() {
+    setError(null);
     startReminderTransition(async () => {
       const result = await reminderTabayyunPengajar(t.id);
-      if (result.waUrl) {
-        window.open(result.waUrl, '_blank');
-      }
+      if (result.error) { setError(result.error); return; }
+      if (result.waUrl) window.open(result.waUrl, '_blank');
+    });
+  }
+
+  function handleEscalate() {
+    setError(null);
+    startReminderTransition(async () => {
+      const result = await escalateTabayyunGhosting(t.id);
+      if (result.error) { setError(result.error); return; }
+      if (result.waUrl) window.open(result.waUrl, '_blank');
+      setDecided(true);
     });
   }
 
@@ -63,16 +82,25 @@ export function TabayyunCard({ tabayyun: t }: Props) {
       <div style={{ marginBottom: 8 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
           <div style={{ fontWeight: 600, marginBottom: 2 }}>{t.pengajar_name}</div>
-          {t.status === 'pending' && (
+          {state === 'ghosting' ? (
+            <button
+              onClick={handleEscalate}
+              disabled={reminderPending}
+              className="act-btn"
+              style={{ fontSize: 11, flexShrink: 0, background: 'var(--merah-ink)', color: '#fff' }}
+            >
+              {reminderPending ? '...' : 'Teguran Ghosting'}
+            </button>
+          ) : (state === 'not_reminded' || state === 'awaiting_within') ? (
             <button
               onClick={handleReminder}
               disabled={reminderPending}
               className="act-btn wa"
               style={{ fontSize: 11, flexShrink: 0 }}
             >
-              {reminderPending ? '...' : 'Reminder Tabayyun'}
+              {reminderPending ? '...' : state === 'not_reminded' ? 'Reminder Tabayyun' : 'Ingatkan Lagi'}
             </button>
-          )}
+          ) : null}
         </div>
         <div className="t-small" style={{ color: 'var(--muted-2)' }}>
           {t.kelas_name} &bull; {t.tanggal} &bull;{' '}
@@ -90,15 +118,21 @@ export function TabayyunCard({ tabayyun: t }: Props) {
             Pengajar belum memberikan alasan.
           </div>
         )}
-        {(() => {
-          const overdue = t.status !== 'decided' && new Date(t.deadline_at).getTime() < Date.now();
-          return (
-            <div className="t-small" style={{ color: overdue ? 'var(--merah-ink)' : 'var(--muted-2)', marginTop: 4, fontWeight: overdue ? 700 : 400 }}>
-              {overdue ? '⚠ Lewat deadline: ' : 'Deadline: '}
-              {new Date(t.deadline_at).toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' })}
-            </div>
-          );
-        })()}
+        {state === 'not_reminded' && (
+          <div className="t-small" style={{ marginTop: 4, color: 'var(--muted-2)' }}>
+            Jam 72 jam mulai setelah reminder dikirim.
+          </div>
+        )}
+        {state === 'awaiting_within' && hoursLeft != null && (
+          <div className="t-small" style={{ marginTop: 4, color: 'var(--muted-2)' }}>
+            Deadline: {new Date(t.deadline_at).toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' })} &bull; sisa ~{Math.max(0, Math.floor(hoursLeft))} jam
+          </div>
+        )}
+        {state === 'ghosting' && hoursLeft != null && (
+          <div className="t-small" style={{ marginTop: 4, color: 'var(--merah-ink)', fontWeight: 700 }}>
+            ⚠ GHOSTING — tenggat lewat ~{Math.abs(Math.floor(hoursLeft))} jam. Terbitkan teguran.
+          </div>
+        )}
       </div>
 
       <form action={handleDecide}>
