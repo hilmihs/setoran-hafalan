@@ -12,6 +12,7 @@ import { absUrl } from '@/lib/url';
 import { logAudit } from '@/lib/audit';
 import { logWaReminder } from '@/lib/wa-log';
 import { getHitsHarian, OBSERVASI_EFEKTIF } from '@/lib/hits-harian';
+import { computeHutangForHalaqah } from '@/lib/hits-hutang';
 import { HITS_PELANGGARAN_LABEL, HITS_JKG_OPSI_LABEL } from '@/types/db';
 import type { HitsPelanggaranJenis } from '@/types/db';
 
@@ -180,7 +181,7 @@ export async function reminderTabayyunPengajar(
 
   const { data: tab } = await supabaseAdmin
     .from('hits_tabayyun')
-    .select('id, keterangan_id, pengajar_id, halaqah:halaqah_id(name), keterangan:keterangan_id(tanggal)')
+    .select('id, keterangan_id, pengajar_id, halaqah_id, halaqah:halaqah_id(name), keterangan:keterangan_id(tanggal)')
     .eq('id', tabayyunId)
     .maybeSingle();
   if (!tab) return { error: 'Tabayyun tidak ditemukan.' };
@@ -203,6 +204,10 @@ export async function reminderTabayyunPengajar(
     .eq('keterangan_id', tab.keterangan_id);
   const pelanggaran = (pelRows ?? []).map(describePelanggaran);
 
+  const hutang = tab.halaqah_id
+    ? await computeHutangForHalaqah(tab.halaqah_id as string)
+    : { saldo: 0 };
+
   const msg = tplTabayyunToPengajar({
     pengajarName: pengajar.name,
     pengajarGender: pengajar.gender,
@@ -210,6 +215,7 @@ export async function reminderTabayyunPengajar(
     kelasName: hal?.name ?? '(kelas)',
     formUrl: absUrl('/hits/pengajar'),
     pelanggaran,
+    hutangSaldo: hutang.saldo,
   });
 
   const waUrl = buildWaMeUrl(pengajar.whatsapp_number, msg);

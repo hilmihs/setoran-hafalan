@@ -302,16 +302,22 @@ export function tplTabayyunToPengajar(args: {
   formUrl: string;
   /** Daftar pelanggaran pertemuan (sudah diformat), mis. "KMT — telat 10 menit". */
   pelanggaran: string[];
+  hutangSaldo?: number;
 }): string {
   const sapaan = salutation(args.pengajarGender);
   const daftar = args.pelanggaran.length
     ? args.pelanggaran.map((p) => `• ${p}`)
     : ['• (rincian tidak tersedia)'];
+  const hutangLines =
+    args.hutangSaldo && args.hutangSaldo > 0
+      ? ['', `Selain itu, tercatat *sisa hutang menit ${args.hutangSaldo} menit* yang perlu diganti.`]
+      : [];
   return [
     `Assalamu'alaikum ${sapaan} ${args.pengajarName},`,
     ``,
     `Berdasarkan laporan observasi kelas *${args.kelasName}* tanggal *${args.tanggal}*, tercatat hal berikut:`,
     ...daftar,
+    ...hutangLines,
     ``,
     `Mohon sampaikan alasan/klarifikasi melalui tautan berikut:`,
     args.formUrl,
