@@ -110,6 +110,18 @@ export async function electKetua(_prev: Res | undefined, fd: FormData): Promise<
     .eq('active', true)
     .neq('hits_halaqah_id', halaqahId);
   if (existingKetua && existingKetua.length > 0) {
+    // Peran ganda hanya valid untuk ORANG YANG SAMA (nama sama). Kalau nomor ini
+    // sudah dipakai ketua BERBEDA nama → hampir pasti salah ketik / nomor
+    // placeholder (mis. nomor pengassign). Tolak keras supaya tak dua orang
+    // berbagi 1 login (nomor & password awal jadi sama).
+    const normName = (s: string) => s.trim().toLowerCase().replace(/\s+/g, ' ');
+    const sameName = existingKetua.some((r) => normName(r.name) === normName(ketuaNama));
+    if (!sameName) {
+      const others = Array.from(new Set(existingKetua.map((r) => r.name))).join(', ');
+      return {
+        error: `Nomor WA ini sudah dipakai ketua kelas lain (${others}). Peran ganda hanya untuk orang yang sama — pastikan nomor pribadi ${ketuaNama} yang benar, jangan pakai nomor bersama.`,
+      };
+    }
     return requestKetuaDualRole({
       session,
       halaqahId,
