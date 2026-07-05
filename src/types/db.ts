@@ -417,6 +417,7 @@ export interface HitsTabayyun {
   decided_at: string | null;
   status: HitsStatusTabayyun;
   deadline_at: string;
+  reminder_sent_at: string | null;
   created_at: string;
 }
 
