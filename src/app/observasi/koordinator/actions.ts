@@ -48,6 +48,60 @@ function ketuaFillUrl(magicToken: string | null): string {
   return magicToken ? absUrl(`/api/auth/magic-link?token=${magicToken}`) : absUrl('/hits/ketua');
 }
 
+/** Shape minimal tabayyun untuk terbitkan teguran. */
+type TegTab = {
+  id: string;
+  kondisi: string;
+  pengajar_id: string | null;
+  halaqah?: { pengajar_id: string | null } | null;
+  keterangan?: { tanggal: string } | null;
+};
+
+/**
+ * Terbitkan teguran non-udzur untuk sebuah tabayyun (idempoten per tabayyun).
+ * Dipakai decideTabayyun (keputusan manual) & escalateTabayyunGhosting (auto 72h).
+ * Kategori: KMT→kedisiplinan_waktu, JKG/BADAL→komitmen_jadwal, lain→tanggung_jawab.
+ */
+async function issueTeguranForTabayyun(
+  tab: TegTab,
+  opts: { catatan: string | null; actorId: string; actorRole: string }
+): Promise<void> {
+  const pengajarId = tab.pengajar_id ?? tab.halaqah?.pengajar_id ?? null;
+  if (!pengajarId) return;
+  const ym = (tab.keterangan?.tanggal ?? jakartaToday()).slice(0, 7);
+  const category =
+    tab.kondisi === 'KMT'
+      ? 'kedisiplinan_waktu'
+      : tab.kondisi === 'JKG' || tab.kondisi === 'BADAL'
+        ? 'komitmen_jadwal'
+        : 'tanggung_jawab';
+  // Idempotent: jangan gandakan teguran utk tabayyun yang sama.
+  const { data: existing } = await supabaseAdmin
+    .from('hits_teguran')
+    .select('id')
+    .eq('source_ref_type', 'hits_tabayyun')
+    .eq('source_ref_id', tab.id)
+    .maybeSingle();
+  if (existing) return;
+  const { count } = await supabaseAdmin
+    .from('hits_teguran')
+    .select('id', { count: 'exact', head: true })
+    .eq('pengajar_id', pengajarId)
+    .eq('year_month', ym)
+    .eq('category', category);
+  await supabaseAdmin.from('hits_teguran').insert({
+    pengajar_id: pengajarId,
+    year_month: ym,
+    category,
+    nomor_teguran: (count ?? 0) + 1,
+    source_ref_type: 'hits_tabayyun',
+    source_ref_id: tab.id,
+    keterangan: opts.catatan || `Tabayyun ${tab.kondisi} tidak diterima sebagai udzur syar'i`,
+    issued_by_role: opts.actorRole,
+    issued_by_id: opts.actorId,
+  });
+}
+
 /** Koordinator KK memutuskan tabayyun HITS (udzur syar'i atau tidak). */
 export async function decideTabayyun(
   _prev: { error?: string; ok?: boolean } | undefined,
@@ -81,47 +135,13 @@ export async function decideTabayyun(
 
   if (error) return { error: `Gagal simpan: ${error.message}` };
 
-  // Bukan udzur syar'i → terbitkan teguran (feed kolom Teguran matrix + risk).
-  // KMT → kedisiplinan_waktu, JKG → komitmen_jadwal, lainnya → tanggung_jawab.
+  // Bukan udzur syar'i → terbitkan teguran (feed komitmen_jadwal matrix + risk).
   if (!isUdzur && tab) {
-    const hal = tab.halaqah as unknown as { pengajar_id: string | null } | null;
-    const ket = tab.keterangan as unknown as { tanggal: string } | null;
-    const pengajarId = tab.pengajar_id ?? hal?.pengajar_id ?? null;
-    if (pengajarId) {
-      const ym = (ket?.tanggal ?? jakartaToday()).slice(0, 7);
-      const category =
-        tab.kondisi === 'KMT'
-          ? 'kedisiplinan_waktu'
-          : tab.kondisi === 'JKG' || tab.kondisi === 'BADAL'
-            ? 'komitmen_jadwal'
-            : 'tanggung_jawab';
-      // Idempotent: jangan gandakan teguran utk tabayyun yang sama.
-      const { data: existing } = await supabaseAdmin
-        .from('hits_teguran')
-        .select('id')
-        .eq('source_ref_type', 'hits_tabayyun')
-        .eq('source_ref_id', tabayyunId)
-        .maybeSingle();
-      if (!existing) {
-        const { count } = await supabaseAdmin
-          .from('hits_teguran')
-          .select('id', { count: 'exact', head: true })
-          .eq('pengajar_id', pengajarId)
-          .eq('year_month', ym)
-          .eq('category', category);
-        await supabaseAdmin.from('hits_teguran').insert({
-          pengajar_id: pengajarId,
-          year_month: ym,
-          category,
-          nomor_teguran: (count ?? 0) + 1,
-          source_ref_type: 'hits_tabayyun',
-          source_ref_id: tabayyunId,
-          keterangan: catatan || `Tabayyun ${tab.kondisi} tidak diterima sebagai udzur syar'i`,
-          issued_by_role: 'koordinator_ketua_kelas',
-          issued_by_id: session.koordinator_kk_id,
-        });
-      }
-    }
+    await issueTeguranForTabayyun(tab as unknown as TegTab, {
+      catatan: catatan || null,
+      actorId: session.koordinator_kk_id,
+      actorRole: 'koordinator_ketua_kelas',
+    });
   }
 
   await logAudit({
