@@ -326,6 +326,44 @@ export function tplTabayyunToPengajar(args: {
   ].join('\n');
 }
 
+/**
+ * Teguran ghosting: pengajar tak merespons tabayyun dalam 72 jam sejak diingatkan
+ * → dianggap tanpa udzur syar'i. `diingatkanWib`/`deadlineWib` = string waktu WIB
+ * yang sudah diformat oleh pemanggil.
+ */
+export function tplTabayyunGhostingTeguran(args: {
+  pengajarName: string;
+  pengajarGender: Gender;
+  tanggalObservasi: string;
+  diingatkanWib: string;
+  deadlineWib: string;
+  nomorTeguran: number;
+  pelanggaran: string[];
+  hutangSaldo?: number;
+}): string {
+  const sapaan = salutation(args.pengajarGender);
+  const daftar = args.pelanggaran.length
+    ? args.pelanggaran.map((p) => `• ${p}`)
+    : ['• (rincian tidak tersedia)'];
+  const hutangLines =
+    args.hutangSaldo && args.hutangSaldo > 0
+      ? ['', `Tercatat pula *sisa hutang menit ${args.hutangSaldo} menit* yang perlu diganti.`]
+      : [];
+  return [
+    `Assalamu'alaikum ${sapaan} ${args.pengajarName},`,
+    ``,
+    `Terkait observasi kelas tanggal *${args.tanggalObservasi}*:`,
+    ...daftar,
+    ``,
+    `Permintaan klarifikasi telah dikirim pada *${args.diingatkanWib}* dengan tenggat *${args.deadlineWib}* (72 jam). Hingga tenggat terlewati belum ada respons.`,
+    ``,
+    `Karena itu dicatat sebagai *tanpa udzur syar'i* dan diterbitkan *teguran ke-${args.nomorTeguran}*.`,
+    ...hutangLines,
+    ``,
+    `Jazakumullahu khairan.`,
+  ].join('\n');
+}
+
 export function tplTeguranToPengajar(args: {
   pengajarName: string;
   pengajarGender: Gender;
