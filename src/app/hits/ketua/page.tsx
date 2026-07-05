@@ -6,6 +6,7 @@ import { FeatureNav } from '@/components/FeatureNav';
 import { StatCard } from '@/components/ui/StatCard';
 import { loadHalaqahPertemuan } from '@/lib/hits-ketua';
 import { getHitsRekapForHalaqah } from '@/lib/hits-rekap';
+import { computeHutangForHalaqah } from '@/lib/hits-hutang';
 import { todayJakarta, dayNameOf } from '@/lib/maahir-presensi';
 import { HITS_LEVEL_SHORT } from '@/lib/hits-pertemuan';
 import { HitsKetuaForm, type PertemuanSlot } from './HitsKetuaForm';
@@ -127,6 +128,7 @@ export default async function HitsKetuaPage({
 
   const todaySlot = slots.find((s) => s.isToday) ?? null;
   const rekap = await getHitsRekapForHalaqah(halaqah.id, month);
+  const hutang = await computeHutangForHalaqah(halaqah.id);
 
   return (
     <main style={{ minHeight: '100vh' }}>
@@ -212,6 +214,7 @@ export default async function HitsKetuaPage({
             pengajarName={halaqah.pengajar_nama_sheet ?? '—'}
             slots={slots}
             todayUnfilled={!!todaySlot && !todaySlot.keterangan}
+            hutangSaldo={hutang.saldo}
           />
         </div>
       </div>
