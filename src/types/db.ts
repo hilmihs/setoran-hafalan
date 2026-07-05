@@ -302,6 +302,18 @@ export interface HitsPelanggaran {
   created_at: string;
 }
 
+export interface HitsHutangBayar {
+  id: string;
+  halaqah_id: string;
+  pengajar_id: string | null;
+  keterangan_id: string | null;
+  menit: number;
+  tanggal: string;
+  dilaporkan_oleh: string | null;
+  catatan: string | null;
+  created_at: string;
+}
+
 export interface HitsBatch {
   id: string;
   name: string;
