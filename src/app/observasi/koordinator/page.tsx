@@ -14,7 +14,6 @@ import { ReminderButton } from './ReminderButton';
 import { ReminderMassalPanel } from './ReminderMassalPanel';
 import { ObservasiFilterBar } from './ObservasiFilterBar';
 import { OBSERVASI_EFEKTIF } from '@/lib/hits-harian';
-import type { HitsKondisi } from '@/types/db';
 
 export const dynamic = 'force-dynamic';
 
@@ -84,7 +83,7 @@ export default async function KoordinatorKetuaKelasPage({
 
   type TabRow = {
     id: string;
-    kondisi: HitsKondisi;
+    kondisi: string;
     status: string;
     alasan_pengajar: string | null;
     deadline_at: string;

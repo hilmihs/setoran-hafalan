@@ -12,9 +12,34 @@ import { absUrl } from '@/lib/url';
 import { logAudit } from '@/lib/audit';
 import { logWaReminder } from '@/lib/wa-log';
 import { getHitsHarian, OBSERVASI_EFEKTIF } from '@/lib/hits-harian';
+import { HITS_PELANGGARAN_LABEL, HITS_JKG_OPSI_LABEL } from '@/types/db';
+import type { HitsPelanggaranJenis } from '@/types/db';
 
 function jakartaToday(): string {
   return new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Jakarta' });
+}
+
+/** Format satu pelanggaran jadi baris ringkas utk WA tabayyun. */
+function describePelanggaran(p: {
+  jenis: string;
+  menit: number | null;
+  jkg_opsi: string | null;
+  cicil_n: number | null;
+  badal_nama: string | null;
+  badal_mulai: string | null;
+}): string {
+  const label = HITS_PELANGGARAN_LABEL[p.jenis as HitsPelanggaranJenis] ?? p.jenis;
+  let detail = '';
+  if (p.jenis === 'KMT' && p.menit != null) detail = ` — telat ${p.menit} menit`;
+  else if (p.jenis === 'KBLA' && p.menit != null) detail = ` — lebih awal ${p.menit} menit`;
+  else if (p.jenis === 'JKG' && p.jkg_opsi) {
+    detail = ` — ${HITS_JKG_OPSI_LABEL[p.jkg_opsi as 'ganti_hari' | 'cicil'] ?? p.jkg_opsi}`;
+    if (p.jkg_opsi === 'cicil' && p.cicil_n) detail += ` (${p.cicil_n}×)`;
+  } else if (p.jenis === 'BADAL') {
+    detail = p.badal_nama ? ` — oleh ${p.badal_nama}` : '';
+    if (p.badal_mulai) detail += p.badal_mulai === 'lebih_awal' ? ' (mulai lebih awal)' : ' (mulai sesuai jadwal)';
+  }
+  return `${p.jenis} (${label})${detail}`;
 }
 
 /** URL isi keterangan untuk ketua: magic-link (auto-login) bila ada token. */
@@ -64,7 +89,11 @@ export async function decideTabayyun(
     if (pengajarId) {
       const ym = (ket?.tanggal ?? jakartaToday()).slice(0, 7);
       const category =
-        tab.kondisi === 'KMT' ? 'kedisiplinan_waktu' : tab.kondisi === 'JKG' ? 'komitmen_jadwal' : 'tanggung_jawab';
+        tab.kondisi === 'KMT'
+          ? 'kedisiplinan_waktu'
+          : tab.kondisi === 'JKG' || tab.kondisi === 'BADAL'
+            ? 'komitmen_jadwal'
+            : 'tanggung_jawab';
       // Idempotent: jangan gandakan teguran utk tabayyun yang sama.
       const { data: existing } = await supabaseAdmin
         .from('hits_teguran')
@@ -140,30 +169,47 @@ export async function reminderKetuaKelas(
   return { waUrl };
 }
 
-/** Reminder WA ke pengajar agar mengirim alasan tabayyun (HITS). */
+/**
+ * Reminder WA ke pengajar agar mengirim alasan tabayyun (HITS). Satu tabayyun per
+ * pertemuan → template me-list SEMUA pelanggaran-nya (dibaca dari hits_pelanggaran).
+ */
 export async function reminderTabayyunPengajar(
-  pengajarId: string,
-  kondisi: string,
-  tanggal: string,
-  kelasName: string
+  tabayyunId: string
 ): Promise<{ waUrl?: string; error?: string }> {
   const session = await requireKoordinatorKetuaKelas();
 
-  const { data: pengajar } = await supabaseAdmin
-    .from('pengajar')
-    .select('name, whatsapp_number, gender')
-    .eq('id', pengajarId)
+  const { data: tab } = await supabaseAdmin
+    .from('hits_tabayyun')
+    .select('id, keterangan_id, pengajar_id, halaqah:halaqah_id(name), keterangan:keterangan_id(tanggal)')
+    .eq('id', tabayyunId)
     .maybeSingle();
+  if (!tab) return { error: 'Tabayyun tidak ditemukan.' };
 
+  const hal = tab.halaqah as unknown as { name: string } | null;
+  const ket = tab.keterangan as unknown as { tanggal: string } | null;
+
+  const { data: pengajar } = tab.pengajar_id
+    ? await supabaseAdmin
+        .from('pengajar')
+        .select('name, whatsapp_number, gender')
+        .eq('id', tab.pengajar_id)
+        .maybeSingle()
+    : { data: null };
   if (!pengajar) return { error: 'Pengajar tidak ditemukan.' };
+
+  const { data: pelRows } = await supabaseAdmin
+    .from('hits_pelanggaran')
+    .select('jenis, menit, jkg_opsi, cicil_n, badal_nama, badal_mulai')
+    .eq('keterangan_id', tab.keterangan_id);
+  const pelanggaran = (pelRows ?? []).map(describePelanggaran);
 
   const msg = tplTabayyunToPengajar({
     pengajarName: pengajar.name,
     pengajarGender: pengajar.gender,
-    kondisi,
-    tanggal,
-    kelasName,
+    tanggal: ket?.tanggal ?? '',
+    kelasName: hal?.name ?? '(kelas)',
     formUrl: absUrl('/hits/pengajar'),
+    pelanggaran,
   });
 
   const waUrl = buildWaMeUrl(pengajar.whatsapp_number, msg);
@@ -171,7 +217,7 @@ export async function reminderTabayyunPengajar(
   await logWaReminder({
     sender: session,
     recipientTable: 'pengajar',
-    recipientId: pengajarId,
+    recipientId: tab.pengajar_id!,
     recipientWa: pengajar.whatsapp_number,
     templateKind: 'tabayyun_notify',
     targetTable: 'hits_keterangan_harian',

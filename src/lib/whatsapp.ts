@@ -297,16 +297,21 @@ export function tplReminderKetuaKelompokTugas(args: {
 export function tplTabayyunToPengajar(args: {
   pengajarName: string;
   pengajarGender: Gender;
-  kondisi: string;
   tanggal: string;
   kelasName: string;
   formUrl: string;
+  /** Daftar pelanggaran pertemuan (sudah diformat), mis. "KMT — telat 10 menit". */
+  pelanggaran: string[];
 }): string {
   const sapaan = salutation(args.pengajarGender);
+  const daftar = args.pelanggaran.length
+    ? args.pelanggaran.map((p) => `• ${p}`)
+    : ['• (rincian tidak tersedia)'];
   return [
     `Assalamu'alaikum ${sapaan} ${args.pengajarName},`,
     ``,
-    `Berdasarkan laporan observasi kelas *${args.kelasName}* tanggal *${args.tanggal}*, tercatat kondisi: *${args.kondisi}*.`,
+    `Berdasarkan laporan observasi kelas *${args.kelasName}* tanggal *${args.tanggal}*, tercatat hal berikut:`,
+    ...daftar,
     ``,
     `Mohon sampaikan alasan/klarifikasi melalui tautan berikut:`,
     args.formUrl,

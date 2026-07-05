@@ -9,7 +9,7 @@ import { logAudit } from '@/lib/audit';
 import { absUrl } from '@/lib/url';
 import { buildWaMeUrl, tplHapusPertemuanToKoorKK } from '@/lib/whatsapp';
 import { HITS_LEVEL_SHORT } from '@/lib/hits-pertemuan';
-import type { HitsKondisi, HitsStatusLatihan, HitsLevel } from '@/types/db';
+import type { HitsKondisi, HitsStatusLatihan, HitsLevel, HitsPelanggaranJenis } from '@/types/db';
 
 export type KetuaHarianResult = { ok?: boolean; error?: string };
 export type AjukanHapusResult = { ok?: boolean; error?: string; waUrl?: string };
@@ -103,8 +103,46 @@ export async function ajukanHapusPertemuan(
   return { ok: true, waUrl: buildWaMeUrl(target.whatsapp_number, msg) };
 }
 
-const KONDISI: HitsKondisi[] = ['KBBS', 'KMT', 'JKG', 'KBLA', 'LIBUR'];
 const STATUS: HitsStatusLatihan[] = ['TAL', 'PTML', 'SML'];
+
+// Payload pelanggaran waktu/jadwal dari form (TIDAK_LATIHAN diturunkan server dari
+// latihan_diberikan, jadi tak ikut di sini).
+type PelIn = {
+  jenis: 'KMT' | 'KBLA' | 'JKG' | 'BADAL';
+  menit?: number | null;
+  jkg_opsi?: 'ganti_hari' | 'cicil' | null;
+  cicil_n?: 2 | 3 | null;
+  badal_nama?: string | null;
+  badal_mulai?: 'sesuai' | 'lebih_awal' | null;
+};
+
+type PelRow = {
+  keterangan_id: string;
+  jenis: HitsPelanggaranJenis;
+  menit: number | null;
+  jkg_opsi: 'ganti_hari' | 'cicil' | null;
+  cicil_n: 2 | 3 | null;
+  badal_nama: string | null;
+  badal_mulai: 'sesuai' | 'lebih_awal' | null;
+};
+
+// Headline pelanggaran (paling berat → tampil di tabayyun). Urutan severity:
+// JKG > BADAL > KBLA > KMT > TIDAK_LATIHAN.
+const SEVERITY: HitsPelanggaranJenis[] = ['JKG', 'BADAL', 'KBLA', 'KMT', 'TIDAK_LATIHAN'];
+function headline(jenisList: HitsPelanggaranJenis[]): HitsPelanggaranJenis | null {
+  for (const s of SEVERITY) if (jenisList.includes(s)) return s;
+  return null;
+}
+
+// keterangan.kondisi tetap enum hits_kondisi (KBBS/KMT/JKG/KBLA/LIBUR) untuk
+// kompatibilitas display lama. BADAL dipetakan JKG (guru asli dihitung JKG);
+// TIDAK_LATIHAN sendirian → KBBS (timing bersih, ditangkap latihan_diberikan).
+function primaryKondisi(jenisList: HitsPelanggaranJenis[]): HitsKondisi {
+  if (jenisList.includes('JKG') || jenisList.includes('BADAL')) return 'JKG';
+  if (jenisList.includes('KBLA')) return 'KBLA';
+  if (jenisList.includes('KMT')) return 'KMT';
+  return 'KBBS';
+}
 
 export async function submitKeteranganHarian(
   _prev: KetuaHarianResult | undefined,
@@ -116,17 +154,47 @@ export async function submitKeteranganHarian(
 
   const pertemuanNo = Number(fd.get('pertemuan_no'));
   const level = String(fd.get('level') ?? '') as HitsLevel;
-  const tanggal = String(fd.get('tanggal') ?? '');
-  const kondisi = String(fd.get('kondisi') ?? '') as HitsKondisi;
-  const terlambat = String(fd.get('terlambat') ?? 'false') === 'true';
+  const isLibur = String(fd.get('libur') ?? 'false') === 'true';
   const latihanDiberikanRaw = String(fd.get('latihan_diberikan') ?? '');
   const statusLatihan = String(fd.get('status_latihan') ?? '') as HitsStatusLatihan;
-  const semuaSelesaiRaw = String(fd.get('semua_selesai') ?? '');
   const catatan = String(fd.get('catatan') ?? '').trim() || null;
 
   if (!Number.isFinite(pertemuanNo) || pertemuanNo < 1) return { error: 'Pertemuan tidak valid.' };
-  if (!KONDISI.includes(kondisi)) return { error: 'Kondisi tidak valid.' };
   if (level !== 'qoidah_nuroniyyah' && level !== 'perbaikan_bacaan') return { error: 'Tahap tidak valid.' };
+
+  // Parse & validasi pelanggaran waktu/jadwal.
+  let pelIn: PelIn[] = [];
+  if (!isLibur) {
+    try {
+      const raw = String(fd.get('pelanggaran') ?? '[]');
+      const parsed = JSON.parse(raw);
+      if (!Array.isArray(parsed)) throw new Error('bukan array');
+      pelIn = parsed as PelIn[];
+    } catch {
+      return { error: 'Data pelanggaran tidak valid.' };
+    }
+  }
+  const allowedJenis = new Set(['KMT', 'KBLA', 'JKG', 'BADAL']);
+  for (const p of pelIn) {
+    if (!allowedJenis.has(p.jenis)) return { error: `Jenis pelanggaran tidak dikenal: ${p.jenis}` };
+    if ((p.jenis === 'KMT' || p.jenis === 'KBLA')) {
+      if (p.menit == null || !Number.isFinite(p.menit) || p.menit < 0) {
+        return { error: `${p.jenis} butuh jumlah menit (≥0).` };
+      }
+    }
+    if (p.jenis === 'JKG') {
+      if (p.jkg_opsi !== 'ganti_hari' && p.jkg_opsi !== 'cicil') return { error: 'JKG butuh opsi tindak lanjut.' };
+      if (p.jkg_opsi === 'cicil' && p.cicil_n !== 2 && p.cicil_n !== 3) return { error: 'Cicilan JKG harus 2× atau 3×.' };
+    }
+    if (p.jenis === 'BADAL') {
+      if (!p.badal_nama || !String(p.badal_nama).trim()) return { error: 'BADAL butuh nama pengganti.' };
+      if (p.badal_mulai !== 'sesuai' && p.badal_mulai !== 'lebih_awal') return { error: 'BADAL butuh waktu mulai.' };
+    }
+  }
+  // Cegah duplikat jenis (unique keterangan_id,jenis di DB).
+  if (new Set(pelIn.map((p) => p.jenis)).size !== pelIn.length) {
+    return { error: 'Jenis pelanggaran tidak boleh ganda.' };
+  }
 
   // Validasi server-side: (level, pertemuan_no, tanggal) harus pertemuan sah & tidak di masa depan.
   const loaded = await loadHalaqahPertemuan(halaqahId);
@@ -136,12 +204,14 @@ export async function submitKeteranganHarian(
   if (!match) return { error: 'Pertemuan tidak ada di kaldik halaqah ini.' };
   if (match.tanggal > today) return { error: 'Tidak bisa mengisi pertemuan yang belum berlangsung.' };
 
-  // Ketua kelas boleh mengedit seluruh pertemuan yang tampil (termasuk hasil
-  // migrasi yang sebelumnya terkunci). Tidak ada gating editable di sini.
-  const isLibur = kondisi === 'LIBUR';
   const latihanDiberikan = isLibur ? null : latihanDiberikanRaw === 'true';
   const finalStatus = !isLibur && latihanDiberikan && STATUS.includes(statusLatihan) ? statusLatihan : null;
-  const semuaSelesai = !isLibur && latihanDiberikan ? semuaSelesaiRaw === 'true' : null;
+  const semuaSelesai = !isLibur && latihanDiberikan ? statusLatihan === 'SML' : null;
+
+  // Susun daftar jenis final (timing/jadwal + TIDAK_LATIHAN turunan).
+  const jenisList: HitsPelanggaranJenis[] = isLibur ? [] : pelIn.map((p) => p.jenis);
+  if (!isLibur && latihanDiberikan === false) jenisList.push('TIDAK_LATIHAN');
+  const kondisi: HitsKondisi = isLibur ? 'LIBUR' : primaryKondisi(jenisList);
 
   const { data: saved, error } = await supabaseAdmin
     .from('hits_keterangan_harian')
@@ -152,7 +222,8 @@ export async function submitKeteranganHarian(
         pertemuan_no: pertemuanNo,
         tanggal: match.tanggal,
         kondisi,
-        terlambat: isLibur ? false : terlambat,
+        // KMT (kelas mulai terlambat) implikasikan terlambat=true utk kompat lama.
+        terlambat: jenisList.includes('KMT'),
         latihan_diberikan: latihanDiberikan,
         status_latihan: finalStatus,
         semua_selesai: semuaSelesai,
@@ -167,42 +238,58 @@ export async function submitKeteranganHarian(
     .single();
   if (error || !saved) return { error: `Gagal menyimpan: ${error?.message ?? 'tidak diketahui'}` };
 
-  // Sync hits_pelanggaran (model multi baru) dari kondisi + latihan. Sumber
-  // kebenaran pelanggaran; kondisi tetap disimpan utk kompatibel & LIBUR.
+  // Sync hits_pelanggaran (sumber kebenaran multi). Replace-all: hapus lalu insert.
   await supabaseAdmin.from('hits_pelanggaran').delete().eq('keterangan_id', saved.id);
-  const pelRows: Array<{ keterangan_id: string; jenis: string }> = [];
-  if (kondisi === 'KMT' || kondisi === 'KBLA' || kondisi === 'JKG') {
-    pelRows.push({ keterangan_id: saved.id, jenis: kondisi });
-  }
+  const pelRows: PelRow[] = pelIn.map((p) => ({
+    keterangan_id: saved.id,
+    jenis: p.jenis,
+    menit: p.jenis === 'KMT' || p.jenis === 'KBLA' ? Math.trunc(p.menit as number) : null,
+    jkg_opsi: p.jenis === 'JKG' ? (p.jkg_opsi ?? null) : null,
+    cicil_n: p.jenis === 'JKG' && p.jkg_opsi === 'cicil' ? (p.cicil_n ?? null) : null,
+    badal_nama: p.jenis === 'BADAL' ? String(p.badal_nama).trim() : null,
+    badal_mulai: p.jenis === 'BADAL' ? (p.badal_mulai ?? null) : null,
+  }));
   if (!isLibur && latihanDiberikan === false) {
-    pelRows.push({ keterangan_id: saved.id, jenis: 'TIDAK_LATIHAN' });
+    pelRows.push({
+      keterangan_id: saved.id, jenis: 'TIDAK_LATIHAN',
+      menit: null, jkg_opsi: null, cicil_n: null, badal_nama: null, badal_mulai: null,
+    });
   }
-  if (pelRows.length > 0) await supabaseAdmin.from('hits_pelanggaran').insert(pelRows);
+  if (pelRows.length > 0) {
+    const { error: pelErr } = await supabaseAdmin.from('hits_pelanggaran').insert(pelRows);
+    if (pelErr) return { error: `Gagal menyimpan pelanggaran: ${pelErr.message}` };
+  }
 
-  // Lifecycle tabayyun: pelanggaran waktu/jadwal (KMT/KBLA/JKG) memicu klarifikasi.
-  // TIDAK_LATIHAN memicu tabayyun juga (target F1), tapi butuh tabayyun rujuk
-  // pelanggaran (enum hits_kondisi belum punya nilainya) — ditunda ke tahap
-  // redesign tabayyun. Bersih (KBBS/LIBUR) → hapus pending.
-  const perluTabayyun = pelRows.some((p) => p.jenis === 'KMT' || p.jenis === 'KBLA' || p.jenis === 'JKG');
-  if (perluTabayyun) {
+  // Lifecycle tabayyun: SATU tabayyun per keterangan yang me-list semua
+  // pelanggaran (dibaca dari hits_pelanggaran saat kirim/tampil). Setiap
+  // pelanggaran — termasuk TIDAK_LATIHAN — memicu klarifikasi. Bersih
+  // (KBBS/LIBUR, tanpa baris pelanggaran) → hapus pending.
+  const head = headline(jenisList);
+  if (head) {
     const { data: halaqah } = await supabaseAdmin
       .from('hits_halaqah')
       .select('pengajar_id')
       .eq('id', halaqahId)
       .maybeSingle();
-    // Insert hanya bila belum ada (unique keterangan_id). Pakai upsert ignore.
-    await supabaseAdmin.from('hits_tabayyun').upsert(
-      {
+    // Upsert: bila sudah ada tabayyun utk keterangan ini, perbarui headline
+    // (kecuali sudah decided — jangan buka ulang keputusan).
+    const { data: existing } = await supabaseAdmin
+      .from('hits_tabayyun')
+      .select('id, status')
+      .eq('keterangan_id', saved.id)
+      .maybeSingle();
+    if (!existing) {
+      await supabaseAdmin.from('hits_tabayyun').insert({
         keterangan_id: saved.id,
         halaqah_id: halaqahId,
         pengajar_id: halaqah?.pengajar_id ?? null,
-        kondisi,
+        kondisi: head,
         status: 'pending',
-      },
-      { onConflict: 'keterangan_id', ignoreDuplicates: true }
-    );
+      });
+    } else if (existing.status !== 'decided') {
+      await supabaseAdmin.from('hits_tabayyun').update({ kondisi: head }).eq('id', existing.id);
+    }
   } else {
-    // kondisi KBBS / LIBUR → batalkan tabayyun yang masih pending utk keterangan ini.
     await supabaseAdmin
       .from('hits_tabayyun')
       .delete()
@@ -215,7 +302,7 @@ export async function submitKeteranganHarian(
     action: 'hits.keterangan.submit',
     targetTable: 'hits_keterangan_harian',
     targetId: null,
-    detail: { halaqah_id: halaqahId, pertemuan_no: pertemuanNo, kondisi },
+    detail: { halaqah_id: halaqahId, pertemuan_no: pertemuanNo, kondisi, jenis: jenisList },
   });
 
   revalidatePath('/hits/ketua');

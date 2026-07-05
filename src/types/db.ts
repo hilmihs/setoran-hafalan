@@ -265,6 +265,43 @@ export const HITS_STATUS_LATIHAN_LABEL: Record<HitsStatusLatihan, string> = {
   SML: 'Semua Mengerjakan Latihan',
 };
 
+// ---------- HITS pelanggaran (multi per pertemuan, tabel anak) ----------
+// Satu pertemuan bisa punya beberapa pelanggaran sekaligus. KBBS = tak ada
+// baris pelanggaran. BADAL = pengajar pengganti; guru asli dihitung JKG.
+export type HitsPelanggaranJenis = 'KMT' | 'KBLA' | 'JKG' | 'BADAL' | 'TIDAK_LATIHAN';
+
+export const HITS_PELANGGARAN_LABEL: Record<HitsPelanggaranJenis, string> = {
+  KMT: 'Kelas Mulai Terlambat (>5 menit)',
+  KBLA: 'Kelas Berakhir Lebih Awal',
+  JKG: 'Jadwal Kelas Ganti',
+  BADAL: 'Pengajar Digantikan (Badal)',
+  TIDAK_LATIHAN: 'Latihan Mandiri Tidak Diberikan',
+};
+
+export const HITS_JKG_OPSI_LABEL: Record<'ganti_hari' | 'cicil', string> = {
+  ganti_hari: 'Ganti hari (satu pertemuan penuh)',
+  cicil: 'Dicicil ke beberapa pertemuan',
+};
+
+/** Label ringkas untuk headline kondisi/pelanggaran (KBBS/LIBUR + 5 jenis). */
+export function hitsHeadlineLabel(x: string): string {
+  if (x === 'KBBS') return HITS_KONDISI_LABEL.KBBS;
+  if (x === 'LIBUR') return HITS_KONDISI_LABEL.LIBUR;
+  return HITS_PELANGGARAN_LABEL[x as HitsPelanggaranJenis] ?? x;
+}
+
+export interface HitsPelanggaran {
+  id: string;
+  keterangan_id: string;
+  jenis: HitsPelanggaranJenis;
+  menit: number | null;
+  jkg_opsi: 'ganti_hari' | 'cicil' | null;
+  cicil_n: 2 | 3 | null;
+  badal_nama: string | null;
+  badal_mulai: 'sesuai' | 'lebih_awal' | null;
+  created_at: string;
+}
+
 export interface HitsBatch {
   id: string;
   name: string;
@@ -360,7 +397,7 @@ export interface HitsTabayyun {
   halaqah_id: string;
   pengajar_id: string | null;
   koordinator_kk_id: string | null;
-  kondisi: HitsKondisi;
+  kondisi: string; // headline pelanggaran (KMT/KBLA/JKG/BADAL/TIDAK_LATIHAN), relaxed dari enum di 0036
   alasan_pengajar: string | null;
   alasan_submitted_at: string | null;
   is_udzur_syari: boolean | null;

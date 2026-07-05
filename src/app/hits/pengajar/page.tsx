@@ -10,7 +10,6 @@ import { AssignKetuaPanel, type HalaqahForAssign } from './AssignKetuaStep';
 import { PindahHalaqahPanel } from './PindahHalaqahPanel';
 import { TabayyunAlasanPanel, type TabayyunForPengajar } from './TabayyunAlasanForm';
 import { getHitsBatches } from '@/lib/hits-rekap';
-import type { HitsKondisi } from '@/types/db';
 
 export const dynamic = 'force-dynamic';
 
@@ -71,7 +70,7 @@ export default async function HitsPengajarPage() {
       return {
         id: t.id,
         halaqah_name: halaqahNameById.get(t.halaqah_id) ?? '?',
-        kondisi: t.kondisi as HitsKondisi,
+        kondisi: t.kondisi as string,
         tanggal: ket?.tanggal ?? '—',
         pertemuan_no: ket?.pertemuan_no ?? 0,
         status: t.status,

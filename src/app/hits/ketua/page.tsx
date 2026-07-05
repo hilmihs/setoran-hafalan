@@ -9,7 +9,7 @@ import { getHitsRekapForHalaqah } from '@/lib/hits-rekap';
 import { todayJakarta, dayNameOf } from '@/lib/maahir-presensi';
 import { HITS_LEVEL_SHORT } from '@/lib/hits-pertemuan';
 import { HitsKetuaForm, type PertemuanSlot } from './HitsKetuaForm';
-import type { HitsKeteranganHarian, HitsLevel } from '@/types/db';
+import type { HitsKeteranganHarian, HitsLevel, HitsPelanggaran } from '@/types/db';
 
 export const dynamic = 'force-dynamic';
 
@@ -77,6 +77,18 @@ export default async function HitsKetuaPage({
     (ketRows ?? []).map((r) => [`${r.level}-${r.pertemuan_no}`, r as HitsKeteranganHarian])
   );
 
+  // Pelanggaran multi per keterangan (sumber kebenaran) untuk prefill form.
+  const ketIds = (ketRows ?? []).map((r) => r.id as string);
+  const { data: pelRows } = ketIds.length
+    ? await supabaseAdmin.from('hits_pelanggaran').select('*').in('keterangan_id', ketIds)
+    : { data: [] as HitsPelanggaran[] };
+  const pelByKet = new Map<string, HitsPelanggaran[]>();
+  for (const p of (pelRows ?? []) as HitsPelanggaran[]) {
+    const arr = pelByKet.get(p.keterangan_id) ?? [];
+    arr.push(p);
+    pelByKet.set(p.keterangan_id, arr);
+  }
+
   // Slot pertemuan s/d hari ini (paling baru di atas).
   const slots: PertemuanSlot[] = derived
     .filter((d) => d.tanggal <= today)
@@ -100,6 +112,14 @@ export default async function HitsKetuaPage({
               semua_selesai: k.semua_selesai,
               catatan: k.catatan,
               editable: k.editable,
+              pelanggaran: (pelByKet.get(k.id) ?? []).map((p) => ({
+                jenis: p.jenis,
+                menit: p.menit,
+                jkg_opsi: p.jkg_opsi,
+                cicil_n: p.cicil_n,
+                badal_nama: p.badal_nama,
+                badal_mulai: p.badal_mulai,
+              })),
             }
           : null,
       };

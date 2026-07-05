@@ -2,8 +2,7 @@
 
 import { useState, useTransition } from 'react';
 import { decideTabayyun, reminderTabayyunPengajar } from './actions';
-import { HITS_KONDISI_LABEL } from '@/types/db';
-import type { HitsKondisi } from '@/types/db';
+import { hitsHeadlineLabel } from '@/types/db';
 
 interface Props {
   tabayyun: {
@@ -12,7 +11,7 @@ interface Props {
     pengajar_name: string;
     kelas_name: string;
     tanggal: string;
-    kondisi: HitsKondisi;
+    kondisi: string;
     alasan_pengajar: string | null;
     status: string;
     deadline_at: string;
@@ -52,12 +51,7 @@ export function TabayyunCard({ tabayyun: t }: Props) {
 
   function handleReminder() {
     startReminderTransition(async () => {
-      const result = await reminderTabayyunPengajar(
-        t.pengajar_id,
-        t.kondisi,
-        t.tanggal,
-        t.kelas_name
-      );
+      const result = await reminderTabayyunPengajar(t.id);
       if (result.waUrl) {
         window.open(result.waUrl, '_blank');
       }
@@ -83,7 +77,7 @@ export function TabayyunCard({ tabayyun: t }: Props) {
         <div className="t-small" style={{ color: 'var(--muted-2)' }}>
           {t.kelas_name} &bull; {t.tanggal} &bull;{' '}
           <span style={{ color: 'var(--kuning-ink)', fontWeight: 600 }}>
-            {t.kondisi} — {HITS_KONDISI_LABEL[t.kondisi]}
+            {t.kondisi} — {hitsHeadlineLabel(t.kondisi)}
           </span>
         </div>
         {t.alasan_pengajar && (

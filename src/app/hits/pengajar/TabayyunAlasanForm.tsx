@@ -2,12 +2,12 @@
 
 import { useState, useTransition } from 'react';
 import { submitAlasanTabayyun } from './actions';
-import { HITS_KONDISI_LABEL, type HitsKondisi } from '@/types/db';
+import { hitsHeadlineLabel } from '@/types/db';
 
 export type TabayyunForPengajar = {
   id: string;
   halaqah_name: string;
-  kondisi: HitsKondisi;
+  kondisi: string;
   tanggal: string;
   pertemuan_no: number;
   status: string;
@@ -37,7 +37,7 @@ function OneTabayyun({ t }: { t: TabayyunForPengajar }) {
         </span>
       </div>
       <div className="t-small" style={{ color: 'var(--muted-2)', marginBottom: 8 }}>
-        Pertemuan {t.pertemuan_no} · {t.tanggal} · {HITS_KONDISI_LABEL[t.kondisi]}
+        Pertemuan {t.pertemuan_no} · {t.tanggal} · {hitsHeadlineLabel(t.kondisi)}
       </div>
       {done ? (
         <div className="t-small" style={{ color: 'var(--hijau-ink)' }}>

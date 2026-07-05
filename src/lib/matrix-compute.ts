@@ -273,21 +273,45 @@ export async function computeMatrixForMonth(yearMonth: string): Promise<MatrixRo
   const keteranganList = await fetchInChunks(halaqahIds, (chunk) =>
     supabaseAdmin
       .from('hits_keterangan_harian')
-      .select('halaqah_id, kondisi, latihan_diberikan, semua_selesai, status_latihan')
+      .select('id, halaqah_id, kondisi, latihan_diberikan, semua_selesai, status_latihan')
       .gte('tanggal', monthStart)
       .lt('tanggal', nextMonth)
       .in('halaqah_id', chunk)
       .neq('kondisi', 'LIBUR')
   );
+
+  // Pelanggaran multi (sumber kebenaran F1): kedisiplinan & stabilitas jadwal
+  // dihitung dari hits_pelanggaran, bukan lagi kolom kondisi tunggal.
+  //   - disiplin (KBBS) = pertemuan TANPA KMT/KBLA/JKG/BADAL (TIDAK_LATIHAN tak
+  //     memengaruhi disiplin — masuk ke tanggung jawab via latihan_diberikan).
+  //   - Stabilitas Jadwal (JKG-count) = pertemuan dgn JKG atau BADAL (guru asli
+  //     dihitung JKG saat digantikan → nambah beban anti-mangkir).
+  const ketIds = (keteranganList ?? []).map((k) => k.id as string);
+  const pelList = await fetchInChunks(ketIds, (chunk) =>
+    supabaseAdmin
+      .from('hits_pelanggaran')
+      .select('keterangan_id, jenis')
+      .in('keterangan_id', chunk)
+  );
+  const jenisByKet = new Map<string, Set<string>>();
+  for (const p of pelList ?? []) {
+    const set = jenisByKet.get(p.keterangan_id) ?? new Set<string>();
+    set.add(p.jenis as string);
+    jenisByKet.set(p.keterangan_id, set);
+  }
+  const DISIPLIN_PEL = ['KMT', 'KBLA', 'JKG', 'BADAL'];
+
   const disiplinByPengajar = new Map<string, { baik: number; total: number }>();
   const latihanByPengajar = new Map<string, { done: number; total: number }>();
-  const jkgByPengajar = new Map<string, number>(); // pengajar_id → jumlah pertemuan JKG
+  const jkgByPengajar = new Map<string, number>(); // pengajar_id → jumlah pertemuan JKG/BADAL
   for (const k of keteranganList ?? []) {
     const pgId = pengajarOfHalaqah.get(k.halaqah_id);
     if (!pgId) continue;
+    const jenis = jenisByKet.get(k.id as string) ?? new Set<string>();
+
     const d = disiplinByPengajar.get(pgId) ?? { baik: 0, total: 0 };
     d.total += 1;
-    if (k.kondisi === 'KBBS') d.baik += 1;
+    if (!DISIPLIN_PEL.some((j) => jenis.has(j))) d.baik += 1;
     disiplinByPengajar.set(pgId, d);
 
     const l = latihanByPengajar.get(pgId) ?? { done: 0, total: 0 };
@@ -295,8 +319,8 @@ export async function computeMatrixForMonth(yearMonth: string): Promise<MatrixRo
     if (k.latihan_diberikan && (k.semua_selesai || k.status_latihan === 'SML')) l.done += 1;
     latihanByPengajar.set(pgId, l);
 
-    // Stabilitas Jadwal: hitung semua JKG (pergantian jadwal), abaikan udzur.
-    if (k.kondisi === 'JKG') jkgByPengajar.set(pgId, (jkgByPengajar.get(pgId) ?? 0) + 1);
+    // Stabilitas Jadwal: pertemuan dgn pergantian jadwal (JKG) atau badal.
+    if (jenis.has('JKG') || jenis.has('BADAL')) jkgByPengajar.set(pgId, (jkgByPengajar.get(pgId) ?? 0) + 1);
   }
 
   // 8. Komitmen — Anti-Mangkir: JKG yang di-tabayyun & diputus BUKAN udzur syar'i
