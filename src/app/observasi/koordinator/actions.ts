@@ -13,6 +13,7 @@ import { logAudit } from '@/lib/audit';
 import { logWaReminder } from '@/lib/wa-log';
 import { getHitsHarian, OBSERVASI_EFEKTIF } from '@/lib/hits-harian';
 import { computeHutangForHalaqah } from '@/lib/hits-hutang';
+import { tabayyunGhostingState, deadlineFromReminder } from '@/lib/hits-tabayyun';
 import { HITS_PELANGGARAN_LABEL, HITS_JKG_OPSI_LABEL } from '@/types/db';
 import type { HitsPelanggaranJenis } from '@/types/db';
 
@@ -201,10 +202,26 @@ export async function reminderTabayyunPengajar(
 
   const { data: tab } = await supabaseAdmin
     .from('hits_tabayyun')
-    .select('id, keterangan_id, pengajar_id, halaqah_id, halaqah:halaqah_id(name), keterangan:keterangan_id(tanggal)')
+    .select('id, keterangan_id, pengajar_id, halaqah_id, status, reminder_sent_at, deadline_at, halaqah:halaqah_id(name), keterangan:keterangan_id(tanggal)')
     .eq('id', tabayyunId)
     .maybeSingle();
   if (!tab) return { error: 'Tabayyun tidak ditemukan.' };
+
+  const nowIso = new Date().toISOString();
+  const state = tabayyunGhostingState(
+    { status: tab.status as string, reminder_sent_at: tab.reminder_sent_at as string | null, deadline_at: tab.deadline_at as string | null },
+    nowIso
+  );
+  if (state === 'ghosting') {
+    return { error: 'Sudah lewat 72 jam tanpa respons — gunakan tombol "Teguran ghosting".' };
+  }
+  // Reminder pertama → mulai jam 72h. Reminder ulang dalam window → jam TAK di-reset.
+  if (!tab.reminder_sent_at) {
+    await supabaseAdmin
+      .from('hits_tabayyun')
+      .update({ reminder_sent_at: nowIso, deadline_at: deadlineFromReminder(nowIso) })
+      .eq('id', tab.id);
+  }
 
   const hal = tab.halaqah as unknown as { name: string } | null;
   const ket = tab.keterangan as unknown as { tanggal: string } | null;
