@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache';
 import { supabaseAdmin } from '@/lib/supabase-admin';
 import { requireKetuaKelas } from '@/lib/session';
 import { loadHalaqahPertemuan } from '@/lib/hits-ketua';
+import { computeHutangForHalaqah } from '@/lib/hits-hutang';
 import { todayJakarta } from '@/lib/maahir-presensi';
 import { logAudit } from '@/lib/audit';
 import { absUrl } from '@/lib/url';
@@ -158,6 +159,8 @@ export async function submitKeteranganHarian(
   const latihanDiberikanRaw = String(fd.get('latihan_diberikan') ?? '');
   const statusLatihan = String(fd.get('status_latihan') ?? '') as HitsStatusLatihan;
   const catatan = String(fd.get('catatan') ?? '').trim() || null;
+  const bayarMenitRaw = Number(fd.get('bayar_menit') ?? 0);
+  const bayarMenit = Number.isFinite(bayarMenitRaw) && bayarMenitRaw > 0 ? Math.trunc(bayarMenitRaw) : 0;
 
   if (!Number.isFinite(pertemuanNo) || pertemuanNo < 1) return { error: 'Pertemuan tidak valid.' };
   if (level !== 'qoidah_nuroniyyah' && level !== 'perbaikan_bacaan') return { error: 'Tahap tidak valid.' };
@@ -260,6 +263,30 @@ export async function submitKeteranganHarian(
     if (pelErr) return { error: `Gagal menyimpan pelanggaran: ${pelErr.message}` };
   }
 
+  // Pembayaran hutang menit (F2): replace-all per keterangan (idempoten saat edit).
+  // Cap ke saldo terkini agar tak overpay (saldo dihitung setelah credit lama ket ini dihapus).
+  await supabaseAdmin.from('hits_hutang_bayar').delete().eq('keterangan_id', saved.id);
+  if (bayarMenit > 0) {
+    const { saldo } = await computeHutangForHalaqah(halaqahId);
+    const menit = Math.min(bayarMenit, saldo);
+    if (menit > 0) {
+      const { data: hq } = await supabaseAdmin
+        .from('hits_halaqah')
+        .select('pengajar_id')
+        .eq('id', halaqahId)
+        .maybeSingle();
+      const { error: bayarErr } = await supabaseAdmin.from('hits_hutang_bayar').insert({
+        halaqah_id: halaqahId,
+        pengajar_id: (hq?.pengajar_id as string | null) ?? null,
+        keterangan_id: saved.id,
+        menit,
+        tanggal: match.tanggal,
+        dilaporkan_oleh: session.ketua_kelas_id,
+      });
+      if (bayarErr) return { error: `Gagal menyimpan pembayaran: ${bayarErr.message}` };
+    }
+  }
+
   // Lifecycle tabayyun: SATU tabayyun per keterangan yang me-list semua
   // pelanggaran (dibaca dari hits_pelanggaran saat kirim/tampil). Setiap
   // pelanggaran — termasuk TIDAK_LATIHAN — memicu klarifikasi. Bersih
@@ -302,7 +329,7 @@ export async function submitKeteranganHarian(
     action: 'hits.keterangan.submit',
     targetTable: 'hits_keterangan_harian',
     targetId: null,
-    detail: { halaqah_id: halaqahId, pertemuan_no: pertemuanNo, kondisi, jenis: jenisList },
+    detail: { halaqah_id: halaqahId, pertemuan_no: pertemuanNo, kondisi, jenis: jenisList, bayar_menit: bayarMenit },
   });
 
   revalidatePath('/hits/ketua');
