@@ -2,6 +2,7 @@
 // per halaqah dalam satu bulan + ekspektasi pertemuan dari kaldik.
 
 import { supabaseAdmin } from '@/lib/supabase-admin';
+import { computeHutangForHalaqahList } from '@/lib/hits-hutang';
 import { deriveHalaqahProgram, PROGRAM_STAGES, programKaldikLevels, type KaldikHariLite, type PertemuanOverride } from '@/lib/hits-pertemuan';
 import { todayJakarta } from '@/lib/maahir-presensi';
 import type { Gender, HitsKondisi, HitsLevel } from '@/types/db';
@@ -30,6 +31,7 @@ export type HitsRekapRow = {
   pctLatihan: number | null; // tanggung jawab
   terlambat: number;
   kondisiCount: Record<HitsKondisi, number>;
+  hutangSaldo: number; // total menit hutang belum terbayar (F2)
 };
 
 export type HitsBatchOption = { id: string; name: string };
@@ -175,7 +177,7 @@ export async function getHitsRekap(
     KBBS: 0, KMT: 0, JKG: 0, KBLA: 0, LIBUR: 0,
   });
 
-  return halaqah.map((h) => {
+  const rows: HitsRekapRow[] = halaqah.map((h) => {
     const kets = ketByHalaqah.get(h.id) ?? [];
     const kondisiCount = emptyKondisi();
     let kbbs = 0;
@@ -223,8 +225,14 @@ export async function getHitsRekap(
       pctLatihan: nonLibur > 0 ? Math.round((latihanDone / nonLibur) * 100) : null,
       terlambat,
       kondisiCount,
+      hutangSaldo: 0,
     };
   });
+
+  // F2: saldo hutang menit kumulatif per halaqah (bulk, query dichunk).
+  const hutangMap = await computeHutangForHalaqahList(halaqahIds);
+  for (const r of rows) r.hutangSaldo = hutangMap.get(r.halaqahId)?.saldo ?? 0;
+  return rows;
 }
 
 /** Rekap satu halaqah (untuk dashboard ketua kelas). */
