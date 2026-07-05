@@ -1,5 +1,5 @@
 // Uji fungsi murni hutang menit. Jalankan: npm run test-hutang
-import { hutangMenit, allocateHutang } from '@/lib/hits-hutang';
+import { hutangMenit, allocateHutang, buildHutang, HUTANG_ANCHOR } from '@/lib/hits-hutang';
 
 let failed = 0;
 function eq(actual: unknown, expected: unknown, label: string) {
@@ -39,6 +39,21 @@ eq(allocateHutang(items, 10).map((r) => [r.status, r.terbayar, r.sisa]),
 // overpay 200 -> semua lunas, tak negatif
 eq(allocateHutang(items, 200).map((r) => [r.status, r.sisa]),
    [['lunas', 0], ['lunas', 0], ['lunas', 0]], 'overpay -> semua lunas, sisa 0');
+
+// --- buildHutang anchor: pertemuan sebelum HUTANG_ANCHOR tak berhutang ---
+const anchorKets = [
+  { id: 'lama', tanggal: '2026-06-30' },       // sebelum anchor -> abaikan
+  { id: 'baru', tanggal: HUTANG_ANCHOR },       // pada anchor -> hitung
+];
+const anchorPels = [
+  { keterangan_id: 'lama', jenis: 'JKG', menit: null },   // backfill lama, harus diabaikan
+  { keterangan_id: 'baru', jenis: 'KMT', menit: 10 },     // -> debit 5
+];
+const bh = buildHutang('h1', 'p1', anchorKets, anchorPels, []);
+eq([bh.total_debit, bh.saldo], [5, 5], 'anchor: JKG lama diabaikan, KMT baru 10->5');
+eq(bh.rincian.map((r) => r.keterangan_id), ['baru'], 'anchor: hanya pertemuan baru di rincian');
+// dengan pembayaran 5 -> lunas
+eq(buildHutang('h1', 'p1', anchorKets, anchorPels, [{ menit: 5 }]).saldo, 0, 'anchor: bayar 5 -> lunas');
 
 if (failed > 0) { console.error(`\n${failed} test GAGAL`); process.exit(1); }
 console.log('\nSemua test hutang lulus.');

@@ -9,6 +9,9 @@ import type { HitsPelanggaran } from '@/types/db';
 
 export const TOLERANSI_KMT = 5;
 export const JKG_MENIT = 90;
+// Hutang menit hanya dihitung untuk pertemuan pada/sesudah tanggal ini. Pelanggaran
+// lama (termasuk 163 JKG hasil backfill F1 tanpa menit riil) TAK jadi hutang.
+export const HUTANG_ANCHOR = '2026-07-06';
 
 /** Debit menit satu pelanggaran. Murni. */
 export function hutangMenit(p: Pick<HitsPelanggaran, 'jenis' | 'menit'>): number {
@@ -83,6 +86,9 @@ export function buildHutang(
   // Agregasi debit per keterangan (satu pertemuan bisa >1 pelanggaran).
   const byKet = new Map<string, { debit: number; jenis: string; sev: number }>();
   for (const p of pels) {
+    const tgl = tanggalByKet.get(p.keterangan_id);
+    // Anchor: hanya pertemuan pada/sesudah HUTANG_ANCHOR yang berhutang.
+    if (!tgl || tgl < HUTANG_ANCHOR) continue;
     const d = hutangMenit(p as Pick<HitsPelanggaran, 'jenis' | 'menit'>);
     if (d <= 0) continue;
     const sev = SEV_RANK[p.jenis] ?? 99;
@@ -125,7 +131,8 @@ export async function computeHutangForHalaqah(halaqahId: string): Promise<Hutang
   const pengajarId = (hal?.pengajar_id as string | null) ?? null;
 
   const { data: kets } = await supabaseAdmin
-    .from('hits_keterangan_harian').select('id, tanggal').eq('halaqah_id', halaqahId);
+    .from('hits_keterangan_harian').select('id, tanggal')
+    .eq('halaqah_id', halaqahId).gte('tanggal', HUTANG_ANCHOR);
   const ketList = (kets ?? []) as KetLite[];
   const ketIds = ketList.map((k) => k.id);
 
@@ -152,7 +159,8 @@ export async function computeHutangForHalaqahList(halaqahIds: string[]): Promise
   const pengajarByHal = new Map(halRows.map((h) => [h.id, h.pengajar_id ?? null]));
 
   const kets = await chunked<{ id: string; halaqah_id: string; tanggal: string }>(halaqahIds, (ids) =>
-    supabaseAdmin.from('hits_keterangan_harian').select('id, halaqah_id, tanggal').in('halaqah_id', ids));
+    supabaseAdmin.from('hits_keterangan_harian').select('id, halaqah_id, tanggal')
+      .in('halaqah_id', ids).gte('tanggal', HUTANG_ANCHOR));
   const ketByHal = new Map<string, KetLite[]>();
   const halByKet = new Map<string, string>();
   for (const k of kets) {
