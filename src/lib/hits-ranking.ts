@@ -80,14 +80,20 @@ export async function getDisiplinRanking(opts: {
     meta.set(pid, m);
   }
 
-  // keterangan harian di periode — chunked (anti-414 & cap-1000)
-  const ketList = await fetchInChunks(halaqahIds, (chunk) =>
-    supabaseAdmin
-      .from('hits_keterangan_harian')
-      .select('halaqah_id, kondisi')
-      .gte('tanggal', opts.start)
-      .lt('tanggal', opts.end)
-      .in('halaqah_id', chunk)
+  // keterangan harian di periode — chunked (anti-414 & cap-1000). Chunk 40
+  // (bukan default 80): mode bulanan bisa ~13 pertemuan/halaqah → 80×13≈1040
+  // > cap 1000 baris PostgREST → data terpotong (nonLibur/kbbs understated).
+  // 40×13≈520 aman.
+  const ketList = await fetchInChunks(
+    halaqahIds,
+    (chunk) =>
+      supabaseAdmin
+        .from('hits_keterangan_harian')
+        .select('halaqah_id, kondisi')
+        .gte('tanggal', opts.start)
+        .lt('tanggal', opts.end)
+        .in('halaqah_id', chunk),
+    40
   );
   const agg = new Map<string, { kbbs: number; nonLibur: number }>();
   for (const k of ketList) {
