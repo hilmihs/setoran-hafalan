@@ -151,7 +151,67 @@ Rata-rata kehadiran bulanan per program dikonversi:
 
 ---
 
-## Fitur 4: Penilaian Pedagogis (Kompetensi Pedagogis/Metodologi)
+## Fitur 4: Presensi Kajian Adab Ketua
+
+**Route**: `/hits/ketua` (landing), `/observasi/koordinator/kajian` (dashboard koordinator)
+**Status**: Sudah diimplementasi
+**Database**: `hits_kajian_presensi`, `hits_kajian_libur` (migration 0040)
+
+### Tujuan
+
+**Kajian Adab** adalah kegiatan rutin setiap **Ahad (Minggu) pukul 16:00 WIB**, wajib dihadiri oleh semua **ketua kelas**. Fitur F4 melacak kehadiran ketua kelas di kegiatan ini. 
+
+**Penting**: Rekap kehadiran Kajian Adab **TERPISAH** dari Matrix Skill Guru pengajar. Ketua kelas bukanlah pengajar dan tidak masuk dalam penilaian 14 indikator kompetensi pengajar.
+
+### Alur Check-in Ketua
+
+1. Ketua kelas buka landing `/hits/ketua` → sistem menampilkan kartu **"Kajian Adab"**
+2. Pada hari **Ahad non-libur**:
+   - Ketua memilih status: **Hadir** / **Izin** / **Sakit**
+   - Check-in **setelah 16:00** → otomatis ditandai **Terlambat**
+   - Check-in **pada/sebelum 16:00** → ditandai **Hadir**
+3. **Backfill** status: Jika belum check-in berhari-hari, sistem menanyakan status Ahad terakhir (maksimal hari-H saja, tidak bisa backfill mundur)
+
+### Alur Alpa (Lifecycle)
+
+| Kondisi | Status | Aksi |
+|---------|--------|------|
+| Ahad terlewat, **belum** check-in | **Belum** | Sistem catat "belum-isi" di dashboard koordinator |
+| Dashboard koordinator menunjukkan "belum-isi" | **Belum** → **Reminder Dikirim** | Koordinator KK kirim wa.me reminder ke ketua (countdown 3 hari) |
+| **3 hari berlalu** setelah reminder, ketua **tidak** merespons | **Alpa** | Sistem otomatis tercatat Alpa |
+| Ahad terlewat, **tidak ada reminder dikirim** | **Belum** | Tetap "belum-isi" (bukan Alpa otomatis) |
+
+### Dashboard Koordinator KK (`/observasi/koordinator/kajian`)
+
+**Rekap Kehadiran Bulanan**:
+- Tabel ketua kelas dengan kolom: Nama, Hadir (%), Terlambat, Izin, Sakit, Alpa, Belum
+- Filter per gender (ikhwan/akhwat) atau all
+
+**Panel "Perlu Ditindak"** (window 21 hari terakhir + reminder aktif):
+- List ketua dengan status "belum-isi" yang belum direminder
+- Tombol **Reminder** (generate wa.me link + catat tanggal kirim reminder)
+- Tombol **Tandai Alpa** (manual escalation)
+
+**CRUD Libur Kajian**:
+- Koordinator KK umumkan libur Kajian Adab pada tanggal tertentu
+- Hari libur tidak perlu check-in (tidak ada status otomatis Alpa)
+
+### Data & Historis
+
+**Status Implementasi**: Sudah diimplementasi.
+
+**Data Historis**:
+- Rekap Sep 2025 – Jun 2026 diimpor dari file "Observasi HITS Akhwat" via script `scripts/import-kajian-adab.ts`
+- Pencocokan berdasarkan **nama ketua** (case-insensitive, fuzzy match)
+- **Data ketua ikhwan tidak tersedia historis** → dimulai kosong (Ahad depan forward)
+
+**Tabel Database**:
+- `hits_kajian_presensi` (id, ketua_kelas_id, tanggal_ahad, status, created_at)
+- `hits_kajian_libur` (id, tanggal_ahad, deskripsi, created_by, created_at)
+
+---
+
+## Fitur 5: Penilaian Pedagogis (Kompetensi Pedagogis/Metodologi)
 
 **Route**: `/pedagogis`
 **Status**: Belum diimplementasi (schema DB sudah ada)
@@ -176,7 +236,7 @@ Diisi oleh **Ketua Kelompok Pengajar** untuk setiap anggota kelompoknya, setiap 
 
 ---
 
-## Fitur 5: Sistem Observasi & Tabayyun (Kompetensi Profesionalisme/Soft Skill)
+## Fitur 6: Sistem Observasi & Tabayyun (Kompetensi Profesionalisme/Soft Skill)
 
 **Route**: `/observasi/*`
 **Status**: Belum diimplementasi (schema DB sudah ada)
@@ -237,7 +297,7 @@ Ketika kondisi **bukan KBBS**:
 
 ---
 
-## Fitur 6: Matrix Skill Guru & Ranking
+## Fitur 7: Matrix Skill Guru & Ranking
 
 **Route**: `/matrix/*`
 **Status**: Belum diimplementasi (schema DB sudah ada)
@@ -303,6 +363,7 @@ Sistem menggunakan **wa.me link** dengan pesan pre-filled. User tetap harus tap 
 | `tplLiburProgram` | Koordinator → Pengajar | Libur program |
 | `tplReminderKetuaKelompokTugas` | Koordinator HITS → Ketua kelompok | Tugas pending |
 | `tplMagicLinkKetuaKelas` | Koordinator KK → Ketua kelas | Link observasi |
+| `tplReminderKajianAdab` | Koordinator KK → Ketua kelas | Reminder presensi Kajian Adab |
 
 ---
 
@@ -342,7 +403,7 @@ Script akan membuat:
 
 ### Sudah Diimplementasi
 
-- [x] Schema database (migration 0004 — 19 tabel baru)
+- [x] Schema database (migration 0004 — 19 tabel baru; migration 0040 — kajian adab)
 - [x] TypeScript types untuk semua tabel baru
 - [x] Auth multi-role (8 role, login paralel, feature selector)
 - [x] Route restructuring (setoran hafalan → `/2in1/`)
@@ -350,10 +411,12 @@ Script akan membuat:
 - [x] Halaman check-in pengajar (`/kehadiran/pengajar`)
 - [x] Dashboard ketua kelompok (`/kehadiran/ketua-kelompok`)
 - [x] Dashboard koordinator HITS kehadiran (`/kehadiran/koordinator`)
+- [x] Presensi Kajian Adab ketua (F4): check-in, alur alpa, dashboard koordinator KK
 - [x] Attendance library (derive status, backfill, scale calculation)
 - [x] Scale calculation library (15 fungsi konversi)
-- [x] 15 template WhatsApp baru
+- [x] 16 template WhatsApp baru (termasuk tplReminderKajianAdab)
 - [x] Seed script demo data
+- [x] Script import data historis Kajian Adab (`scripts/import-kajian-adab.ts`)
 - [x] Dokumentasi fitur
 
 ### Belum Diimplementasi

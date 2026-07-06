@@ -10,6 +10,7 @@
     "typecheck": "tsc --noEmit",
     "test-hutang": "tsx --env-file=.env.local scripts/test-hutang.ts",
     "test-tabayyun": "tsx --env-file=.env.local scripts/test-tabayyun.ts",
+    "test-kajian": "tsx --env-file=.env.local scripts/test-kajian.ts",
     "seed": "tsx --env-file=.env.local scripts/seed.ts",
     "seed-maahir": "tsx --env-file=.env.local scripts/seed-maahir.ts",
     "seed-itsnain": "tsx --env-file=.env.local scripts/seed-itsnain.ts",

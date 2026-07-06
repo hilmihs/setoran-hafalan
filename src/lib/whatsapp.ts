@@ -783,3 +783,19 @@ export function tplKoreksiPertemuanInfo(args: {
     `Jazakumullahu khairan.`,
   ].join('\n');
 }
+
+/** Ke ketua kelas: pengingat mengisi presensi Kajian Adab. Tanpa sapaan ustadz. */
+export function tplReminderKajianAdab(args: {
+  namaKetua: string | null;
+  tanggalWib: string; // mis. "Ahad, 4 Jan 2026"
+}): string {
+  return [
+    `Assalamu'alaikum${args.namaKetua ? ` ${args.namaKetua}` : ''},`,
+    ``,
+    `Kami mencatat antum/i belum mengisi presensi Kajian Adab pada ${args.tanggalWib}.`,
+    `Mohon segera isi presensi (Hadir/Izin/Sakit) melalui menu Kajian Adab di aplikasi.`,
+    ``,
+    `Bila tidak ada respons dalam 3 hari, akan tercatat sebagai Alpa.`,
+    `Jazakumullahu khairan.`,
+  ].join('\n');
+}
