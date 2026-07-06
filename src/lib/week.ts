@@ -215,3 +215,52 @@ export const weekStartOf = cycleStartOf;
 export const currentWeekStart = currentCycleStart;
 export const formatWeekRange = formatCycleRange;
 export const previousWeeks = previousCycles;
+
+// ── Minggu kalender 7-hari (Senin–Minggu) untuk report F5. Terpisah dari
+//    cycle 14-hari di atas. Anchor 2026-06-01 kebetulan Senin juga. ──
+const WEEK_ANCHOR = '2026-06-01'; // Senin
+const BULAN_SHORT = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
+
+/** Senin dari minggu yang memuat `d` (WIB), 'YYYY-MM-DD'. */
+export function weekStartMonday(d: Date = new Date()): string {
+  const { y, m, d: day } = jakartaYMD(d);
+  const dateUTC = new Date(Date.UTC(y, m - 1, day));
+  const [ay, am, ad] = WEEK_ANCHOR.split('-').map(Number);
+  const anchorUTC = new Date(Date.UTC(ay, am - 1, ad));
+  const diffDays = Math.floor((dateUTC.getTime() - anchorUTC.getTime()) / 86400000);
+  const offset = Math.floor(diffDays / 7) * 7;
+  const res = new Date(anchorUTC);
+  res.setUTCDate(res.getUTCDate() + offset);
+  return toJakartaDateString(res);
+}
+
+/** Batas minggu: {start: Senin, end: Senin+7 eksklusif}. */
+export function weekBounds(mondayISO: string): { start: string; end: string } {
+  const [y, m, d] = mondayISO.split('-').map(Number);
+  const end = new Date(Date.UTC(y, m - 1, d));
+  end.setUTCDate(end.getUTCDate() + 7);
+  return { start: mondayISO, end: toJakartaDateString(end) };
+}
+
+/** Label ringkas 'D Mmm–D Mmm' (Senin..Minggu). */
+export function formatWeekRangeShort(mondayISO: string): string {
+  const [sy, sm, sd] = mondayISO.split('-').map(Number);
+  const endDate = new Date(Date.UTC(sy, sm - 1, sd));
+  endDate.setUTCDate(endDate.getUTCDate() + 6);
+  const [, em, ed] = toJakartaDateString(endDate).split('-').map(Number);
+  return `${sd} ${BULAN_SHORT[sm - 1]}–${ed} ${BULAN_SHORT[em - 1]}`;
+}
+
+/** N Senin terakhir (terbaru dulu), termasuk minggu ini. */
+export function recentMondays(count: number): string[] {
+  const thisMon = weekStartMonday();
+  const [y, m, d] = thisMon.split('-').map(Number);
+  const base = new Date(Date.UTC(y, m - 1, d));
+  const out: string[] = [];
+  for (let i = 0; i < count; i++) {
+    const dt = new Date(base);
+    dt.setUTCDate(dt.getUTCDate() - i * 7);
+    out.push(toJakartaDateString(dt));
+  }
+  return out;
+}
