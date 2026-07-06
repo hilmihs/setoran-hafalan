@@ -448,6 +448,25 @@ export interface HitsSheetSource {
   created_at: string;
 }
 
+export type HitsKajianStatus = 'Hadir' | 'Terlambat' | 'Izin' | 'Sakit' | 'Alpa';
+
+export interface HitsKajianPresensi {
+  id: string;
+  ketua_wa: string;
+  tanggal: string;            // YYYY-MM-DD (Minggu)
+  status: HitsKajianStatus | null;
+  checkin_at: string | null;  // ISO
+  reminder_sent_at: string | null; // ISO
+  created_at: string;
+}
+
+export interface HitsKajianLibur {
+  id: string;
+  tanggal: string;            // YYYY-MM-DD
+  keterangan: string | null;
+  created_at: string;
+}
+
 export interface ProgramKehadiran {
   id: string;
   name: string;
