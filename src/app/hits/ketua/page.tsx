@@ -7,10 +7,14 @@ import { StatCard } from '@/components/ui/StatCard';
 import { loadHalaqahPertemuan } from '@/lib/hits-ketua';
 import { getHitsRekapForHalaqah } from '@/lib/hits-rekap';
 import { computeHutangForHalaqah } from '@/lib/hits-hutang';
-import { todayJakarta, dayNameOf } from '@/lib/maahir-presensi';
+import { todayJakarta, dayNameOf, dayIndexOf } from '@/lib/maahir-presensi';
 import { HITS_LEVEL_SHORT } from '@/lib/hits-pertemuan';
 import { HitsKetuaForm, type PertemuanSlot } from './HitsKetuaForm';
+import { KajianAdabCard } from './KajianAdabCard';
+import { loadKajianRowsForKetua } from '@/lib/hits-kajian-db';
+import { deriveKajianState } from '@/lib/hits-kajian';
 import type { HitsKeteranganHarian, HitsLevel, HitsPelanggaran } from '@/types/db';
+import type { ReactNode } from 'react';
 
 export const dynamic = 'force-dynamic';
 
@@ -130,6 +134,36 @@ export default async function HitsKetuaPage({
   const rekap = await getHitsRekapForHalaqah(halaqah.id, month);
   const hutang = await computeHutangForHalaqah(halaqah.id);
 
+  let kajianCard: ReactNode = null;
+  if (ketuaWa) {
+    const nowIso = new Date().toISOString();
+    const isMinggu = dayIndexOf(today) === 0;
+    const kajianRows = await loadKajianRowsForKetua(ketuaWa);
+
+    const { data: liburToday } = isMinggu
+      ? await supabaseAdmin.from('hits_kajian_libur').select('id').eq('tanggal', today).maybeSingle()
+      : { data: null };
+
+    const pendingRow = kajianRows.find((r) => r.status === null && r.reminder_sent_at);
+    const reminderAktif = Boolean(
+      pendingRow && deriveKajianState(pendingRow, pendingRow.tanggal, today, nowIso) === 'belum-isi'
+    );
+
+    const sesiTanggal = isMinggu ? today : (pendingRow?.tanggal ?? null);
+    const sesiRow = sesiTanggal ? (kajianRows.find((r) => r.tanggal === sesiTanggal) ?? null) : null;
+    const currentState = sesiTanggal ? deriveKajianState(sesiRow, sesiTanggal, today, nowIso) : 'akan-datang';
+    const canCheckin = (isMinggu && !liburToday) || reminderAktif;
+
+    kajianCard = (
+      <KajianAdabCard
+        canCheckin={canCheckin}
+        sesiLabel={sesiTanggal ?? 'Minggu berikutnya'}
+        currentState={currentState}
+        reminderAktif={reminderAktif}
+      />
+    );
+  }
+
   return (
     <main style={{ minHeight: '100vh' }}>
       <div style={{ maxWidth: 720, margin: '0 auto' }}>
@@ -208,6 +242,8 @@ export default async function HitsKetuaPage({
               label="Terisi bln ini"
             />
           </div>
+
+          {kajianCard && <div style={{ marginBottom: 16 }}>{kajianCard}</div>}
 
           <HitsKetuaForm
             halaqahName={halaqah.name}

@@ -5,7 +5,8 @@ import { supabaseAdmin } from '@/lib/supabase-admin';
 import { requireKetuaKelas } from '@/lib/session';
 import { loadHalaqahPertemuan } from '@/lib/hits-ketua';
 import { computeHutangForHalaqah } from '@/lib/hits-hutang';
-import { todayJakarta } from '@/lib/maahir-presensi';
+import { todayJakarta, dayIndexOf } from '@/lib/maahir-presensi';
+import { statusOnCheckin } from '@/lib/hits-kajian';
 import { logAudit } from '@/lib/audit';
 import { absUrl } from '@/lib/url';
 import { buildWaMeUrl, tplHapusPertemuanToKoorKK } from '@/lib/whatsapp';
@@ -334,4 +335,39 @@ export async function submitKeteranganHarian(
 
   revalidatePath('/hits/ketua');
   return { ok: true };
+}
+
+export async function submitKajianCheckin(pilih: 'Hadir' | 'Izin' | 'Sakit') {
+  const session = await requireKetuaKelas();
+  const { data: self } = await supabaseAdmin
+    .from('ketua_kelas').select('whatsapp_number').eq('id', session.ketua_kelas_id).maybeSingle();
+  const ketuaWa = self?.whatsapp_number;
+  if (!ketuaWa) return { ok: false, error: 'WA ketua tak ditemukan' };
+
+  const today = todayJakarta();
+  const nowIso = new Date().toISOString();
+
+  // Tentukan tanggal sesi: hari-H (hari ini Minggu) atau Minggu terakhir yang direminder (susulan).
+  let tanggal: string | null = dayIndexOf(today) === 0 ? today : null;
+  if (!tanggal) {
+    const { data: pend } = await supabaseAdmin
+      .from('hits_kajian_presensi')
+      .select('tanggal, reminder_sent_at')
+      .eq('ketua_wa', ketuaWa).is('status', null).not('reminder_sent_at', 'is', null)
+      .order('tanggal', { ascending: false }).limit(1);
+    tanggal = pend?.[0]?.tanggal ?? null;
+  }
+  if (!tanggal) return { ok: false, error: 'Belum waktunya presensi (bukan hari Minggu / tak ada reminder aktif).' };
+
+  const { data: libur } = await supabaseAdmin
+    .from('hits_kajian_libur').select('id').eq('tanggal', tanggal).maybeSingle();
+  if (libur) return { ok: false, error: 'Kajian Adab tanggal ini libur.' };
+
+  const status = statusOnCheckin(pilih, nowIso, tanggal);
+  const { error } = await supabaseAdmin
+    .from('hits_kajian_presensi')
+    .upsert({ ketua_wa: ketuaWa, tanggal, status, checkin_at: nowIso }, { onConflict: 'ketua_wa,tanggal' });
+  if (error) return { ok: false, error: error.message };
+  revalidatePath('/hits/ketua');
+  return { ok: true, status };
 }
