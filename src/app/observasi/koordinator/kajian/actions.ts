@@ -17,11 +17,14 @@ export async function remindKajianKetua(input: { ketuaWa: string; tanggal: strin
   if (existing?.status) return { ok: false, error: 'Sudah ada status; tak perlu reminder.' };
 
   if (!existing) {
-    await supabaseAdmin.from('hits_kajian_presensi')
+    const { error: insErr } = await supabaseAdmin.from('hits_kajian_presensi')
       .insert({ ketua_wa: input.ketuaWa, tanggal: input.tanggal, status: null, reminder_sent_at: nowIso });
+    // 23505 = unique violation (race: caller lain sudah set reminder) → aman lanjut
+    if (insErr && (insErr as { code?: string }).code !== '23505') return { ok: false, error: insErr.message };
   } else if (!existing.reminder_sent_at) {
-    await supabaseAdmin.from('hits_kajian_presensi')
+    const { error: updErr } = await supabaseAdmin.from('hits_kajian_presensi')
       .update({ reminder_sent_at: nowIso }).eq('id', existing.id);
+    if (updErr) return { ok: false, error: updErr.message };
   }
   // resend: reminder_sent_at sudah ada → biarkan (countdown tak reset)
 
