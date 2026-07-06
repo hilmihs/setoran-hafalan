@@ -16,6 +16,8 @@ export default async function KajianKoordinatorPage() {
   await requireKoordinatorKetuaKelas();
   const today = todayJakarta();
   const nowIso = new Date().toISOString();
+  const cutoffTindak = new Date(new Date(`${today}T00:00:00+07:00`).getTime() - 21 * 86_400_000)
+    .toLocaleDateString('sv-SE', { timeZone: 'Asia/Jakarta' });
 
   const ketua = await loadKetuaWaList();
   const waList = ketua.map((k) => k.ketua_wa);
@@ -39,7 +41,8 @@ export default async function KajianKoordinatorPage() {
     for (const tgl of sesi) {
       const row = byKey.get(`${wa}|${tgl}`) ?? null;
       const st = deriveKajianState(row, tgl, today, nowIso);
-      if (st === 'belum-isi' || st === 'alpa') {
+      const recentOrReminded = tgl >= cutoffTindak || Boolean(row?.reminder_sent_at);
+      if ((st === 'belum-isi' || st === 'alpa') && recentOrReminded) {
         let sisaHari: number | null = null;
         if (st === 'belum-isi' && row?.reminder_sent_at) {
           const deadline = new Date(row.reminder_sent_at).getTime() + KAJIAN_GHOSTING_DAYS * MS_PER_DAY;
