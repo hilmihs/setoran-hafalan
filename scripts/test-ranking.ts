@@ -1,5 +1,6 @@
 // Uji fungsi murni week helpers + ranking disiplin. Jalankan: npm run test-ranking
 import { weekStartMonday, weekBounds, formatWeekRangeShort, recentMondays } from '@/lib/week';
+import { rankFromAggregates, type DisiplinAgg } from '@/lib/hits-ranking';
 
 let failed = 0;
 function eq(actual: unknown, expected: unknown, label: string) {
@@ -28,6 +29,28 @@ eq(rm[0], weekStartMonday(), 'recentMondays[0] = minggu ini');
   const prev = base.toISOString().slice(0, 10);
   eq(rm[1], prev, 'recentMondays[1] = minggu lalu (−7 hari)');
 }
+
+// --- rankFromAggregates ---
+const A = (id: string, nama: string, kbbs: number, nonLibur: number, hutang: number): DisiplinAgg =>
+  ({ pengajarId: id, pengajarNama: nama, gender: null, halaqahCount: 1, kbbs, nonLibur, hutangSaldo: hutang });
+
+// A 100%, B 95% h0, C 95% h30 (seri KBBS, hutang > B -> di bawah B), D no-data
+const ranked = rankFromAggregates([
+  A('c', 'C', 19, 20, 30),
+  A('a', 'A', 10, 10, 0),
+  A('d', 'D', 0, 0, 0),
+  A('b', 'B', 19, 20, 0),
+]);
+eq(ranked.map((r) => [r.pengajarId, r.pctKbbs, r.rank]),
+   [['a', 100, 1], ['b', 95, 2], ['c', 95, 3], ['d', null, null]],
+   'rank: %KBBS desc, hutang tiebreak, no-data tanpa rank');
+
+// tiebreak nama: dua identik (%+hutang) -> alfabet
+const tie = rankFromAggregates([A('z', 'Zaid', 8, 10, 0), A('y', 'Amir', 8, 10, 0)]);
+eq(tie.map((r) => r.pengajarNama), ['Amir', 'Zaid'], 'seri penuh -> urut nama');
+
+// agregat: fungsi murni terima nilai sudah dijumlah (uji pembagian pct)
+eq(rankFromAggregates([A('x', 'X', 17, 20, 0)])[0].pctKbbs, 85, 'pctKbbs 17/20 -> 85 (dibulatkan)');
 
 if (failed) { console.error(`\n${failed} test GAGAL`); process.exit(1); }
 console.log('\nSemua test lolos');
