@@ -6,7 +6,7 @@ import { requireKetuaKelas } from '@/lib/session';
 import { loadHalaqahPertemuan } from '@/lib/hits-ketua';
 import { computeHutangForHalaqah } from '@/lib/hits-hutang';
 import { todayJakarta, dayIndexOf } from '@/lib/maahir-presensi';
-import { statusOnCheckin } from '@/lib/hits-kajian';
+import { statusOnCheckin, KAJIAN_GHOSTING_DAYS } from '@/lib/hits-kajian';
 import { logAudit } from '@/lib/audit';
 import { absUrl } from '@/lib/url';
 import { buildWaMeUrl, tplHapusPertemuanToKoorKK } from '@/lib/whatsapp';
@@ -355,7 +355,12 @@ export async function submitKajianCheckin(pilih: 'Hadir' | 'Izin' | 'Sakit') {
       .select('tanggal, reminder_sent_at')
       .eq('ketua_wa', ketuaWa).is('status', null).not('reminder_sent_at', 'is', null)
       .order('tanggal', { ascending: false }).limit(1);
-    tanggal = pend?.[0]?.tanggal ?? null;
+    const row = pend?.[0];
+    if (row?.reminder_sent_at) {
+      const deadline = new Date(row.reminder_sent_at).getTime() + KAJIAN_GHOSTING_DAYS * 86_400_000;
+      if (Date.now() < deadline) tanggal = row.tanggal;
+      // else: countdown habis → tak boleh susulan (biarkan tercatat Alpa)
+    }
   }
   if (!tanggal) return { ok: false, error: 'Belum waktunya presensi (bukan hari Minggu / tak ada reminder aktif).' };
 
