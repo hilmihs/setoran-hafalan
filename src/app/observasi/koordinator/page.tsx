@@ -312,6 +312,10 @@ export default async function KoordinatorKetuaKelasPage({
               <div style={{ fontWeight: 600, marginBottom: 2 }}>Audit Trail</div>
               <div className="t-small" style={{ color: 'var(--muted-2)' }}>Aktivitas rekan koordinator KK</div>
             </a>
+            <a href="/observasi/koordinator/kajian" className="card-flat" style={{ display: 'block', padding: '12px 16px', textDecoration: 'none', color: 'inherit', borderLeft: '3px solid var(--hijau)' }}>
+              <div style={{ fontWeight: 600, marginBottom: 2 }}>Kajian Adab</div>
+              <div className="t-small" style={{ color: 'var(--muted-2)' }}>Presensi & rekap kajian Ahad</div>
+            </a>
           </div>
 
           <ObservasiFilterBar current={{ q: searchParams.q ?? '', hari: searchParams.hari ?? null, statusObs, statusTab }} />
