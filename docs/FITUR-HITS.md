@@ -412,6 +412,7 @@ Script akan membuat:
 - [x] Dashboard ketua kelompok (`/kehadiran/ketua-kelompok`)
 - [x] Dashboard koordinator HITS kehadiran (`/kehadiran/koordinator`)
 - [x] Presensi Kajian Adab ketua (F4): check-in, alur alpa, dashboard koordinator KK
+- [x] Leaderboard disiplin pengajar F5 (`/hits/koordinator`): ranking %KBBS + hutang menit, toggle bulanan/mingguan (7-hari)
 - [x] Attendance library (derive status, backfill, scale calculation)
 - [x] Scale calculation library (15 fungsi konversi)
 - [x] 16 template WhatsApp baru (termasuk tplReminderKajianAdab)
