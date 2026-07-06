@@ -5,6 +5,7 @@ import { Icon } from '@/components/icons';
 import { FeatureNav } from '@/components/FeatureNav';
 import { StatCard } from '@/components/ui/StatCard';
 import { MatrixTable, type MatrixTableRow } from '@/components/MatrixTable';
+import { MatrixRekapAspek } from '@/components/matrix/MatrixRekapAspek';
 import Link from 'next/link';
 import { computeRiskPengajar, levelColor, levelLabel, type RiskResult } from '@/lib/risk';
 import { syncMatrixIfStale, isLiveMatrixMonth } from '@/lib/matrix-compute';
@@ -274,7 +275,10 @@ export default async function MatrixKoordinatorPage({
           )}
 
           {withMatrix.length > 0 && (
-            <MatrixTable rows={rows} month={selectedMonth} gender={gender} />
+            <>
+              <MatrixRekapAspek rows={withMatrix} />
+              <MatrixTable rows={rows} month={selectedMonth} gender={gender} />
+            </>
           )}
 
           <p className="t-small" style={{ color: 'var(--muted-2)', marginTop: 16 }}>
