@@ -26,6 +26,7 @@ eq(deriveTerlambat('2026-01-04T09:30:00.000Z', '2026-01-04'), true, '16:30 WIB -
 eq(statusOnCheckin('Hadir', '2026-01-04T08:00:00.000Z', '2026-01-04'), 'Hadir', 'hadir tepat -> Hadir');
 eq(statusOnCheckin('Hadir', '2026-01-04T10:00:00.000Z', '2026-01-04'), 'Terlambat', 'hadir telat -> Terlambat');
 eq(statusOnCheckin('Izin', '2026-01-04T10:00:00.000Z', '2026-01-04'), 'Izin', 'izin -> Izin (waktu diabaikan)');
+eq(statusOnCheckin('Sakit', '2026-01-04T10:00:00.000Z', '2026-01-04'), 'Sakit', 'sakit -> Sakit (waktu diabaikan)');
 
 // --- deriveKajianState ---
 const NOW = '2026-01-08T12:00:00.000Z';   // Kamis
@@ -41,6 +42,11 @@ eq(deriveKajianState(R({ reminder_sent_at: '2026-01-07T00:00:00.000Z' }), '2026-
    'belum-isi', 'direminder, countdown blm habis -> belum-isi');
 eq(deriveKajianState(R({ reminder_sent_at: '2026-01-04T00:00:00.000Z' }), '2026-01-04', '2026-01-08', NOW),
    'alpa', 'direminder >3 hari lalu, tak respons -> alpa');
+// Sakit state (gap: previously untested)
+eq(deriveKajianState(R({ status: 'Sakit' }), '2026-01-04', '2026-01-08', NOW), 'sakit', 'status Sakit -> sakit');
+// Boundary alpa: now == reminder + tepat 3 hari -> alpa (>= edge)
+eq(deriveKajianState(R({ reminder_sent_at: '2026-01-05T12:00:00.000Z' }), '2026-01-04', '2026-01-08', NOW),
+   'alpa', 'reminder + tepat 3 hari (now == deadline) -> alpa');
 
 // --- computeKajianRekap ---
 const libur = new Set(['2026-01-11']);
@@ -52,6 +58,16 @@ const rows: KajianRow[] = [
 const rek = computeKajianRekap(rows, libur, ['w'], '2026-01-04', '2026-01-25', '2026-01-26T00:00:00.000Z');
 eq(rek[0], { ketua_wa: 'w', hadir: 1, terlambat: 1, izin: 1, sakit: 0, alpa: 0, belumIsi: 0, totalSesi: 3, persen: 67 },
    'rekap: libur dikecualikan, persen=(1+1)/3=67');
+// Rekap dgn Sakit: sakit dihitung tapi TIDAK masuk numerator persen
+eq(
+  computeKajianRekap(
+    [R({ ketua_wa: 'x', tanggal: '2026-01-04', status: 'Hadir' }),
+     R({ ketua_wa: 'x', tanggal: '2026-01-11', status: 'Sakit' })],
+    new Set<string>(), ['x'], '2026-01-04', '2026-01-11', '2026-01-12T00:00:00.000Z'
+  )[0],
+  { ketua_wa: 'x', hadir: 1, terlambat: 0, izin: 0, sakit: 1, alpa: 0, belumIsi: 0, totalSesi: 2, persen: 50 },
+  'rekap: Sakit dihitung, persen=1/2=50 (sakit tak masuk numerator)'
+);
 
 eq(KAJIAN_GHOSTING_DAYS, 3, 'konstanta countdown 3 hari');
 
