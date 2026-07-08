@@ -133,6 +133,9 @@ export function HitsKetuaForm({ halaqahName, pengajarName, slots: initialSlots, 
   // ---- state form observasi (model multi-pelanggaran) ----
   const [libur, setLibur] = useState(false);
   const [pel, setPel] = useState<PelDraft>(emptyPel());
+  // KBBS eksplisit: ketua wajib menegaskan "kelas berjalan baik" (bukan sekadar
+  // form kosong) — hilangkan ambiguitas laporan halaqah.
+  const [kbbs, setKbbs] = useState(false);
   const [latihanDiberikan, setLatihanDiberikan] = useState(true);
   const [statusLatihan, setStatusLatihan] = useState<HitsStatusLatihan>('SML');
   const [catatan, setCatatan] = useState('');
@@ -156,10 +159,16 @@ export function HitsKetuaForm({ halaqahName, pengajarName, slots: initialSlots, 
 
   function loadInto(slot: PertemuanSlot) {
     const k = slot.keterangan;
+    const draft = pelFromSlot(k);
     setLibur(k?.kondisi === 'LIBUR');
-    setPel(pelFromSlot(k));
+    setPel(draft);
     // latihan_diberikan default true bila belum diisi; false bila TIDAK_LATIHAN.
-    setLatihanDiberikan(k ? k.latihan_diberikan !== false : true);
+    const latGiven = k ? k.latihan_diberikan !== false : true;
+    setLatihanDiberikan(latGiven);
+    // KBBS aktif hanya untuk record lama yang benar-benar KBBS (tanpa pelanggaran,
+    // latihan diberikan). Record baru → belum dipilih (paksa ketua menegaskan).
+    const noViol = !PEL_JENIS.some((j) => draft[j].on);
+    setKbbs(!!k && k.kondisi !== 'LIBUR' && noViol && latGiven);
     setStatusLatihan(k?.status_latihan ?? 'SML');
     setCatatan(k?.catatan ?? '');
     setBayarMenit('');
@@ -175,6 +184,19 @@ export function HitsKetuaForm({ halaqahName, pengajarName, slots: initialSlots, 
 
   function togglePel(j: 'KMT' | 'KBLA' | 'JKG' | 'BADAL') {
     setPel((prev) => ({ ...prev, [j]: { ...prev[j], on: !prev[j].on } }));
+    setKbbs(false); // pilih pelanggaran → bukan KBBS
+  }
+
+  // Pilih KBBS: bersihkan semua pelanggaran & pastikan latihan diberikan.
+  function toggleKbbs() {
+    setKbbs((prev) => {
+      const next = !prev;
+      if (next) {
+        setPel(emptyPel());
+        setLatihanDiberikan(true);
+      }
+      return next;
+    });
   }
 
   // Derive kondisi headline & pelanggaran list (utk update lokal setelah simpan).
@@ -194,6 +216,12 @@ export function HitsKetuaForm({ halaqahName, pengajarName, slots: initialSlots, 
 
   function buildPayload(): { ok: boolean; fd?: FormData; err?: string } {
     if (!editing) return { ok: false };
+    // Wajib tegas: KBBS, atau libur, atau minimal 1 pelanggaran. Cegah laporan
+    // ambigu (form kosong yang diam-diam jadi KBBS).
+    const anyPel = PEL_JENIS.some((j) => pel[j].on) || !latihanDiberikan;
+    if (!libur && !kbbs && !anyPel) {
+      return { ok: false, err: 'Pilih "KBBS" (kelas berjalan baik) atau centang minimal 1 pelanggaran.' };
+    }
     const fd = new FormData();
     fd.set('pertemuan_no', String(editing.pertemuanNo));
     fd.set('level', editing.level);
@@ -274,8 +302,6 @@ export function HitsKetuaForm({ halaqahName, pengajarName, slots: initialSlots, 
     });
   }
 
-  const anyPelChecked = PEL_JENIS.some((j) => pel[j].on) || !latihanDiberikan;
-
   const checkboxRow = (
     j: 'KMT' | 'KBLA' | 'JKG' | 'BADAL',
     children?: ReactNode
@@ -325,10 +351,26 @@ export function HitsKetuaForm({ halaqahName, pengajarName, slots: initialSlots, 
 
       {!libur && (
         <>
+          {/* KBBS eksplisit — mutually exclusive dengan pelanggaran. */}
+          <label
+            style={{
+              display: 'flex', alignItems: 'flex-start', gap: 10, padding: '10px 14px', marginBottom: 12,
+              border: `1px solid ${kbbs ? 'var(--hijau-ink)' : 'var(--line-2)'}`, borderRadius: 8,
+              background: kbbs ? 'var(--hijau-tint, var(--accent-tint))' : 'transparent', cursor: 'pointer',
+            }}
+          >
+            <input type="checkbox" checked={kbbs} onChange={toggleKbbs} style={{ marginTop: 3 }} />
+            <div>
+              <span style={{ fontWeight: 600, fontSize: 13 }}>KBBS — Kelas Berjalan Baik</span>
+              <span className="t-small" style={{ marginLeft: 8, color: 'var(--muted-2)' }}>Tidak ada pelanggaran, latihan diberikan</span>
+            </div>
+          </label>
+
+          {!kbbs && (
           <div style={{ marginBottom: 14 }}>
             <label className="field-label">Pelanggaran (centang bila ada)</label>
             <p className="t-tiny" style={{ color: 'var(--muted-2)', marginBottom: 8 }}>
-              Bisa lebih dari satu. Tanpa centang & latihan diberikan = KBBS (kelas berjalan baik).
+              Bisa lebih dari satu. Bila kelas normal, centang <strong>KBBS</strong> di atas.
             </p>
 
             {checkboxRow('KMT', (
@@ -420,6 +462,7 @@ export function HitsKetuaForm({ halaqahName, pengajarName, slots: initialSlots, 
               </div>
             ))}
           </div>
+          )}
 
           <div style={{ marginBottom: 14 }}>
             <label className="field-label">Latihan mandiri diberikan?</label>
@@ -427,7 +470,7 @@ export function HitsKetuaForm({ halaqahName, pengajarName, slots: initialSlots, 
               {[true, false].map((v) => (
                 <button
                   type="button" key={String(v)}
-                  onClick={() => setLatihanDiberikan(v)}
+                  onClick={() => { setLatihanDiberikan(v); if (!v) setKbbs(false); }}
                   style={{
                     flex: 1, padding: '10px', borderRadius: 8, cursor: 'pointer',
                     border: `1px solid ${latihanDiberikan === v ? 'var(--accent)' : 'var(--line-2)'}`,
@@ -469,9 +512,9 @@ export function HitsKetuaForm({ halaqahName, pengajarName, slots: initialSlots, 
             </div>
           )}
 
-          {!anyPelChecked && (
+          {kbbs && (
             <p className="t-small" style={{ color: 'var(--hijau-ink)', marginBottom: 8 }}>
-              ✓ Tidak ada pelanggaran → tercatat KBBS.
+              ✓ KBBS — kelas berjalan baik, tanpa pelanggaran.
             </p>
           )}
         </>
