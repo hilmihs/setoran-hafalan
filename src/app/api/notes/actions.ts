@@ -70,8 +70,10 @@ export async function addNote(
     detail: { target_type: targetType, target_id: targetId, visibility },
   });
 
-  if (targetType === 'pengajar') revalidatePath(`/matrix/koordinator/pengajar/${targetId}`);
-  else revalidatePath(`/peserta/${targetId}`);
+  if (targetType === 'pengajar') {
+    revalidatePath(`/matrix/koordinator/pengajar/${targetId}`);
+    revalidatePath('/hits/koordinator');
+  } else revalidatePath(`/peserta/${targetId}`);
   return { ok: true };
 }
 

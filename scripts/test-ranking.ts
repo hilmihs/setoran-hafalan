@@ -32,7 +32,8 @@ eq(rm[0], weekStartMonday(), 'recentMondays[0] = minggu ini');
 
 // --- rankFromAggregates ---
 const A = (id: string, nama: string, kbbs: number, nonLibur: number, hutang: number): DisiplinAgg =>
-  ({ pengajarId: id, pengajarNama: nama, gender: null, halaqahCount: 1, kbbs, nonLibur, hutangSaldo: hutang });
+  ({ pengajarId: id, pengajarNama: nama, gender: null, halaqahCount: 1, halaqahIds: [id],
+     kbbs, nonLibur, kmt: 0, kbla: 0, jkg: 0, tidakLatihan: 0, hutangSaldo: hutang });
 
 // A 100%, B 95% h0, C 95% h30 (seri KBBS, hutang > B -> di bawah B), D no-data
 const ranked = rankFromAggregates([

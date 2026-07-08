@@ -799,3 +799,39 @@ export function tplReminderKajianAdab(args: {
     `Jazakumullahu khairan.`,
   ].join('\n');
 }
+
+/** Ke ketua kelas: pengingat mengisi keterangan halaqah periode ini. Tanpa sapaan ustadz. */
+export function tplReminderIsiKeterangan(args: {
+  ketuaNama: string | null;
+  halaqahName: string;
+  periodeLabel: string;
+  isiUrl: string;
+}): string {
+  return [
+    `Assalamu'alaikum${args.ketuaNama ? ` ${args.ketuaNama}` : ''},`,
+    ``,
+    `Kami mencatat keterangan halaqah *${args.halaqahName}* pada periode *${args.periodeLabel}* belum terisi.`,
+    `Mohon segera lengkapi keterangan pengajar & latihan tiap pertemuan melalui:`,
+    args.isiUrl,
+    ``,
+    `Jazakumullahu khairan.`,
+  ].join('\n');
+}
+
+/** Ke pengajar: konfirmasi/ingatkan data periode belum masuk. */
+export function tplReminderPengajarIsiData(args: {
+  pengajarName: string;
+  pengajarGender: Gender;
+  periodeLabel: string;
+}): string {
+  const sapaan = salutation(args.pengajarGender);
+  return [
+    `Assalamu'alaikum ${sapaan} ${args.pengajarName},`,
+    ``,
+    `Kami belum menerima keterangan pertemuan halaqah antum/i pada periode *${args.periodeLabel}*.`,
+    `Mohon koordinasikan dengan ketua kelas agar keterangan pengajar & latihan segera terisi,`,
+    `atau kabari kami bila ada kendala.`,
+    ``,
+    `Jazakumullahu khairan.`,
+  ].join('\n');
+}

@@ -1,10 +1,13 @@
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { requireKoordinatorKetuaKelas } from '@/lib/session';
-import { getDisiplinRanking } from '@/lib/hits-ranking';
+import { getDisiplinRanking, getNoDataActionInfo } from '@/lib/hits-ranking';
 import { GenderNavSelect } from '@/components/GenderNavSelect';
 import { MonthNavSelect } from '@/components/MonthNavSelect';
 import { WeekNavSelect } from '@/components/WeekNavSelect';
+import { NoteQuickAdd } from '@/components/NoteQuickAdd';
+import { buildWaMeUrl, tplReminderIsiKeterangan, tplReminderPengajarIsiData } from '@/lib/whatsapp';
+import { absUrl } from '@/lib/url';
 import { monthOptionsSince } from '@/lib/month';
 import { weekStartMonday, weekBounds, formatWeekRangeShort, recentMondays } from '@/lib/week';
 import type { Gender } from '@/types/db';
@@ -58,6 +61,7 @@ export default async function HitsKoordinatorPage({
   const rows = await getDisiplinRanking({ start, end, gender: genderFilter });
   const ranked = rows.filter((r) => r.rank !== null);
   const noData = rows.filter((r) => r.rank === null);
+  const noDataAksi = await getNoDataActionInfo(noData);
 
   const genderLabel =
     genderFilter === 'ikhwan' ? 'Ikhwan' : genderFilter === 'akhwat' ? 'Akhwat' : 'Ikhwan & Akhwat';
@@ -65,6 +69,12 @@ export default async function HitsKoordinatorPage({
   const g = genderFilter ? `&gender=${genderFilter}` : '';
   const pctColor = (p: number) =>
     p >= 90 ? 'var(--hijau-ink)' : p >= 75 ? 'var(--kuning-ink)' : 'var(--merah-ink)';
+  const detailHref = (r: { pengajarId: string; gender: Gender | null }) =>
+    `/matrix/koordinator/pengajar/${r.pengajarId}${r.gender ? `?gender=${r.gender}` : ''}`;
+  const cnt = (n: number) => ({
+    text: n > 0 ? String(n) : '—',
+    color: n > 0 ? 'var(--merah-ink)' : 'var(--muted)',
+  });
 
   return (
     <main style={{ minHeight: '100vh' }}>
@@ -162,6 +172,10 @@ export default async function HitsKoordinatorPage({
                         <th style={{ width: 44, textAlign: 'right' }}>#</th>
                         <th>Pengajar</th>
                         <th style={{ textAlign: 'right' }}>%KBBS</th>
+                        <th style={{ textAlign: 'right' }} title="Kelas Mulai Terlambat">KMT</th>
+                        <th style={{ textAlign: 'right' }} title="Kelas Berakhir Lebih Awal">KBLA</th>
+                        <th style={{ textAlign: 'right' }} title="Jadwal Kelas Ganti">JKG</th>
+                        <th style={{ textAlign: 'right' }} title="Tidak memberikan latihan">TL</th>
                         <th style={{ textAlign: 'right' }}>Hutang (mnt)</th>
                         <th style={{ textAlign: 'right' }}>Halaqah</th>
                       </tr>
@@ -174,7 +188,7 @@ export default async function HitsKoordinatorPage({
                           </td>
                           <td className="nm" style={{ fontWeight: 500 }}>
                             <a
-                              href={`/matrix/koordinator/pengajar/${r.pengajarId}`}
+                              href={detailHref(r)}
                               style={{ color: 'inherit', textDecoration: 'none' }}
                             >
                               {r.pengajarNama}
@@ -185,6 +199,18 @@ export default async function HitsKoordinatorPage({
                             style={{ textAlign: 'right', fontWeight: 700, color: pctColor(r.pctKbbs!) }}
                           >
                             {r.pctKbbs}%
+                          </td>
+                          <td className="t-mono" style={{ textAlign: 'right', color: cnt(r.kmt).color }}>
+                            {cnt(r.kmt).text}
+                          </td>
+                          <td className="t-mono" style={{ textAlign: 'right', color: cnt(r.kbla).color }}>
+                            {cnt(r.kbla).text}
+                          </td>
+                          <td className="t-mono" style={{ textAlign: 'right', color: cnt(r.jkg).color }}>
+                            {cnt(r.jkg).text}
+                          </td>
+                          <td className="t-mono" style={{ textAlign: 'right', color: cnt(r.tidakLatihan).color }}>
+                            {cnt(r.tidakLatihan).text}
                           </td>
                           <td
                             className="t-mono"
@@ -208,24 +234,123 @@ export default async function HitsKoordinatorPage({
                     className="t-tiny"
                     style={{ color: 'var(--muted-2)', marginBottom: 6, fontWeight: 600 }}
                   >
-                    BELUM ADA DATA PERIODE INI ({noData.length})
+                    BELUM ADA DATA PERIODE INI ({noData.length}) · butuh tindak lanjut
                   </div>
-                  <div
-                    className="card-flat"
-                    style={{ padding: '12px 16px', display: 'flex', flexWrap: 'wrap', gap: '4px 14px' }}
-                  >
-                    {noData.map((r) => (
-                      <a
-                        key={r.pengajarId}
-                        href={`/matrix/koordinator/pengajar/${r.pengajarId}`}
-                        style={{ fontSize: 13, color: 'var(--ink-2)', textDecoration: 'none' }}
-                      >
-                        {r.pengajarNama}
-                        {r.hutangSaldo > 0 ? (
-                          <span style={{ color: 'var(--merah-ink)' }}> · {r.hutangSaldo}mnt</span>
-                        ) : null}
-                      </a>
-                    ))}
+                  <div className="card-flat" style={{ padding: 0, overflow: 'hidden' }}>
+                    <div style={{ overflowX: 'auto' }}>
+                      <table className="k-table">
+                        <thead>
+                          <tr>
+                            <th>Pengajar</th>
+                            <th>Halaqah &amp; Ketua</th>
+                            <th style={{ width: 260 }}>Aksi</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {noData.map((r) => {
+                            const aksi = noDataAksi.get(r.pengajarId);
+                            const waPengajar =
+                              aksi?.pengajarWa && aksi.pengajarGender
+                                ? buildWaMeUrl(
+                                    aksi.pengajarWa,
+                                    tplReminderPengajarIsiData({
+                                      pengajarName: r.pengajarNama,
+                                      pengajarGender: aksi.pengajarGender,
+                                      periodeLabel,
+                                    })
+                                  )
+                                : null;
+                            return (
+                              <tr key={r.pengajarId}>
+                                <td className="nm" style={{ fontWeight: 500, verticalAlign: 'top' }}>
+                                  <a href={detailHref(r)} style={{ color: 'inherit', textDecoration: 'none' }}>
+                                    {r.pengajarNama}
+                                  </a>
+                                  {r.hutangSaldo > 0 ? (
+                                    <div className="t-tiny" style={{ color: 'var(--merah-ink)' }}>
+                                      hutang {r.hutangSaldo} mnt
+                                    </div>
+                                  ) : null}
+                                </td>
+                                <td style={{ verticalAlign: 'top' }}>
+                                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                                    {(aksi?.halaqah ?? []).map((h) => {
+                                      const waKetua = h.ketuaWa
+                                        ? buildWaMeUrl(
+                                            h.ketuaWa,
+                                            tplReminderIsiKeterangan({
+                                              ketuaNama: h.ketuaNama,
+                                              halaqahName: h.halaqahName,
+                                              periodeLabel,
+                                              isiUrl: absUrl(`/hits/koordinator/halaqah/${h.halaqahId}`),
+                                            })
+                                          )
+                                        : null;
+                                      return (
+                                        <div key={h.halaqahId} className="t-small">
+                                          <div style={{ fontWeight: 500 }}>{h.halaqahName}</div>
+                                          <div className="t-tiny" style={{ color: 'var(--muted-2)' }}>
+                                            Ketua: {h.ketuaNama ?? '— belum ada'}
+                                            {h.ketuaNama && !h.ketuaLoggedIn ? ' (belum login)' : ''}
+                                          </div>
+                                          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 3 }}>
+                                            {waKetua ? (
+                                              <a
+                                                href={waKetua}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                className="t-tiny"
+                                                style={{ color: 'var(--hijau-ink)' }}
+                                              >
+                                                WA ketua
+                                              </a>
+                                            ) : (
+                                              <span className="t-tiny" style={{ color: 'var(--muted)' }}>
+                                                WA ketua —
+                                              </span>
+                                            )}
+                                            <a
+                                              href={`/hits/koordinator/halaqah/${h.halaqahId}`}
+                                              className="t-tiny"
+                                              style={{ color: 'var(--accent)' }}
+                                            >
+                                              Isi manual
+                                            </a>
+                                          </div>
+                                        </div>
+                                      );
+                                    })}
+                                    {(aksi?.halaqah ?? []).length === 0 ? (
+                                      <span className="t-tiny" style={{ color: 'var(--muted)' }}>—</span>
+                                    ) : null}
+                                  </div>
+                                </td>
+                                <td style={{ verticalAlign: 'top' }}>
+                                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6, alignItems: 'flex-start' }}>
+                                    {waPengajar ? (
+                                      <a
+                                        href={waPengajar}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="btn btn-sm btn-ghost"
+                                        style={{ height: 26, padding: '0 8px', fontSize: 11 }}
+                                      >
+                                        WA pengajar
+                                      </a>
+                                    ) : (
+                                      <span className="t-tiny" style={{ color: 'var(--muted)' }}>
+                                        WA pengajar —
+                                      </span>
+                                    )}
+                                    <NoteQuickAdd pengajarId={r.pengajarId} />
+                                  </div>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
                   </div>
                 </div>
               )}
