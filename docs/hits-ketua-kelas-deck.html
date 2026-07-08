@@ -1,0 +1,529 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>HITS Ketua Kelas — Panduan Alur untuk Koordinator</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Nunito+Sans:ital,opsz,wght@0,6..12,400..1000;1,6..12,400..800&display=swap" rel="stylesheet" />
+<style>
+  :root{
+    --krem:#F6F5EF; --hijau:#14503A; --hijau2:#1D6B4E;
+    --emas:#C2A14D; --emas-muda:#D8C48A; --emas-tint:#EFE6CC;
+    --ink:#23302A; --muted:#5C6B62; --merah:#9B2C2C;
+    --card:#ffffff; --shadow:0 18px 44px -22px rgba(20,80,58,.42);
+    --shadow-sm:0 8px 22px -14px rgba(20,80,58,.5);
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  body{background:#0c2c20;font-family:"Nunito Sans",system-ui,sans-serif;color:var(--ink);-webkit-font-smoothing:antialiased;overflow:hidden}
+
+  .deck{position:fixed;inset:0;display:grid;place-items:center;padding:2vmin}
+  .stage{position:relative;width:1920px;height:1080px;transform-origin:center;background:var(--krem);box-shadow:0 30px 80px -30px rgba(0,0,0,.6);overflow:hidden}
+  .slide{position:absolute;inset:0;display:none;flex-direction:column}
+  .slide.active{display:flex}
+  .slide.active .anim{opacity:0;animation:rise .5s cubic-bezier(.2,.8,.2,1) forwards}
+  .a1{animation-delay:.06s}.a2{animation-delay:.14s}.a3{animation-delay:.22s}.a4{animation-delay:.30s}.a5{animation-delay:.38s}.a6{animation-delay:.46s}
+  @keyframes rise{from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:none}}
+
+  .band{height:72px;background:var(--hijau);display:flex;align-items:center;justify-content:space-between;padding:0 64px;flex:0 0 auto}
+  .band .left{display:flex;align-items:center;gap:20px}
+  .pill{background:var(--emas);color:var(--hijau);font-weight:900;font-size:18px;letter-spacing:.06em;padding:6px 18px;border-radius:999px}
+  .band .lbl{color:var(--emas-muda);font-size:16px;font-weight:700;letter-spacing:.28em;text-transform:uppercase}
+  .band .pg{color:var(--emas-muda);font-size:18px;font-weight:800;letter-spacing:.12em}
+
+  .head{padding:40px 64px 0;display:flex;align-items:flex-start;gap:26px;flex:0 0 auto}
+  .badge{width:76px;height:76px;border-radius:16px;background:var(--hijau);display:grid;place-items:center;flex:0 0 auto;box-shadow:var(--shadow-sm)}
+  .badge svg{width:42px;height:42px}
+  .badge .num{color:var(--emas-muda);font-size:34px;font-weight:1000}
+  .head .txt{padding-top:2px}
+  .eyebrow{font-size:18px;font-weight:800;letter-spacing:.22em;text-transform:uppercase;color:var(--muted)}
+  .title{font-size:44px;font-weight:900;line-height:1.05;color:var(--hijau);margin-top:6px;letter-spacing:-.01em}
+  .uline{width:96px;height:6px;background:var(--emas);border-radius:6px;margin-top:14px}
+  .ring{position:absolute;right:-90px;bottom:-90px;width:340px;height:340px;border:2px solid var(--emas);border-radius:50%;opacity:.16;pointer-events:none}
+  .ring.in{right:-40px;bottom:-40px;width:210px;height:210px;opacity:.22}
+
+  .body{flex:1;padding:30px 64px 60px;display:flex;flex-direction:column;min-height:0}
+
+  .ic{fill:none;stroke:var(--emas);stroke-width:3.4;stroke-linecap:round;stroke-linejoin:round}
+  .ic-h{stroke:var(--hijau)}
+
+  .grid{display:grid;gap:24px;flex:1;grid-auto-rows:1fr}
+  .g2{grid-template-columns:1fr 1fr}.g3{grid-template-columns:repeat(3,1fr)}
+  .card{background:var(--card);border-top:4px solid var(--emas);border-radius:14px;box-shadow:var(--shadow);padding:28px 30px;display:flex;flex-direction:column;justify-content:center}
+  .card .cstrip{display:inline-flex;align-items:center;gap:12px;align-self:flex-start;background:var(--hijau);color:var(--emas-muda);font-weight:800;font-size:22px;padding:8px 18px;border-radius:10px;margin-bottom:16px}
+  .card .cstrip.gold{background:var(--emas);color:var(--hijau)}
+  .card .cstrip svg{width:26px;height:26px}
+  .card h3{font-size:26px;font-weight:800;color:var(--hijau);line-height:1.1}
+  .card p{font-size:21px;line-height:1.32;color:var(--ink);margin-top:8px}
+
+  ul.lead{list-style:none;display:flex;flex-direction:column;gap:14px}
+  ul.lead li{font-size:23px;line-height:1.3;color:var(--ink);padding-left:34px;position:relative}
+  ul.lead li::before{content:"";position:absolute;left:0;top:.5em;width:14px;height:14px;background:var(--emas);border-radius:3px;transform:rotate(45deg)}
+  ul.lead b{color:var(--hijau);font-weight:900}
+  ul.lead .r{color:var(--merah);font-weight:900}
+
+  .big{font-size:66px;font-weight:1000;color:var(--emas);line-height:.9;letter-spacing:-.02em}
+  .big small{display:block;font-size:18px;font-weight:800;color:var(--muted);letter-spacing:.04em;margin-top:10px;line-height:1.25}
+
+  .warn{background:rgba(155,44,44,.07);border-left:6px solid var(--merah);border-radius:0 12px 12px 0;padding:20px 24px}
+  .warn b{color:var(--merah);font-weight:900}
+  .warn p{font-size:21px;line-height:1.3;color:var(--ink)}
+  .note{background:var(--emas-tint);border-left:6px solid var(--emas);border-radius:0 12px 12px 0;padding:20px 24px}
+  .note b{color:#7a5f1e;font-weight:900}
+  .note p{font-size:21px;line-height:1.3;color:var(--ink)}
+
+  .keybanner{background:var(--hijau);border-radius:16px;padding:34px 40px;text-align:center;box-shadow:var(--shadow)}
+  .keybanner span{font-size:32px;font-weight:900;line-height:1.25;color:#fff}
+  .keybanner .g{color:var(--emas-muda)}
+
+  .road{display:flex;align-items:stretch;gap:0;margin-bottom:24px}
+  .seg{flex:1;padding:18px 26px 18px 40px;color:#fff;font-weight:800;position:relative;display:flex;flex-direction:column;justify-content:center}
+  .seg:first-child{border-radius:12px 0 0 12px;padding-left:26px}
+  .seg .sn{font-size:15px;letter-spacing:.14em;opacity:.85}
+  .seg .st{font-size:20px;margin-top:2px}
+  .seg::after{content:"";position:absolute;right:-22px;top:0;bottom:0;width:22px;background:inherit;clip-path:polygon(0 0,100% 50%,0 100%);z-index:2}
+  .seg:last-child::after{display:none}
+  .seg:last-child{border-radius:0 12px 12px 0}
+
+  .loop{display:flex;align-items:stretch;gap:0;flex:1}
+  .loop .node{flex:1;background:var(--card);border-top:4px solid var(--emas);border-radius:14px;box-shadow:var(--shadow);padding:30px 26px;display:flex;flex-direction:column;justify-content:center;text-align:center}
+  .loop .node .ni{width:72px;height:72px;border-radius:16px;background:var(--emas-tint);display:grid;place-items:center;margin:0 auto 16px}
+  .loop .node .ni svg{width:38px;height:38px}
+  .loop .node .rlbl{font-size:15px;font-weight:900;letter-spacing:.14em;text-transform:uppercase;color:var(--emas);margin-bottom:4px}
+  .loop .node h4{font-size:26px;font-weight:900;color:var(--hijau)}
+  .loop .node p{font-size:19px;color:var(--muted);margin-top:8px;line-height:1.3}
+  .loop .ar{align-self:center;color:var(--emas);font-size:48px;font-weight:900;padding:0 12px}
+
+  .agenda{display:flex;flex-direction:column;gap:16px;flex:1;justify-content:center}
+  .agenda .row{display:flex;align-items:center;gap:24px;background:var(--card);border-top:4px solid var(--emas);border-radius:14px;box-shadow:var(--shadow-sm);padding:20px 28px}
+  .agenda .rc{width:56px;height:56px;flex:0 0 auto;border-radius:50%;background:var(--hijau);color:var(--emas-muda);display:grid;place-items:center;font-size:28px;font-weight:1000}
+  .agenda .rt b{font-size:24px;font-weight:900;color:var(--hijau)}
+  .agenda .rt p{font-size:19px;color:var(--ink);margin-top:3px;line-height:1.28}
+  .route{font-weight:900;color:var(--hijau2)}
+  .route .host{color:var(--muted);font-weight:800}
+
+  .split{display:grid;gap:26px;flex:1;min-height:0;align-items:stretch}
+  .split-11{grid-template-columns:1fr 1fr}
+  .split-32{grid-template-columns:1.12fr 1fr}
+  .split-23{grid-template-columns:1fr 1.15fr}
+  .shot{display:flex;flex-direction:column;min-height:0;border-radius:16px;overflow:hidden;background:#fff;box-shadow:var(--shadow);border:1px solid var(--emas-tint)}
+  .shot .bar{height:40px;flex:0 0 auto;background:var(--hijau);display:flex;align-items:center;gap:9px;padding:0 18px}
+  .shot .bar i{width:11px;height:11px;border-radius:50%;background:var(--emas-muda);opacity:.55;flex:0 0 auto}
+  .shot .bar .url{margin-left:14px;background:rgba(255,255,255,.1);color:var(--emas-muda);font-size:15px;font-weight:800;letter-spacing:.02em;padding:5px 16px;border-radius:999px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .shot .bar .url b{color:#fff}
+  .shot .pic{flex:1;min-height:0;overflow:hidden;background:#EEEDE6}
+  .shot .pic img{width:100%;height:100%;object-fit:cover;object-position:top;display:block}
+  .shot .pic.contain img{object-fit:contain;object-position:center;background:#EEEDE6}
+  .shotcap{flex:0 0 auto;background:var(--emas-tint);color:#7a5f1e;font-size:15px;font-weight:800;letter-spacing:.02em;padding:9px 18px}
+  .snaprow{display:grid;grid-template-columns:1fr 1fr;gap:22px;flex:0 0 auto;height:320px;margin-top:6px}
+
+  .stat{font-size:15px;font-weight:900;letter-spacing:.08em;padding:5px 14px;border-radius:999px;text-transform:uppercase}
+  .stat.on{background:var(--hijau2);color:#fff}
+  .stat.off{background:var(--emas-tint);color:#7a5f1e}
+  .tagrow{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+  .chip{background:rgba(20,80,58,.08);color:var(--hijau);font-weight:800;font-size:17px;padding:6px 14px;border-radius:8px}
+
+  .gloss{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-top:24px}
+  .gloss div{background:rgba(20,80,58,.05);border-radius:12px;padding:16px 18px}
+  .gloss dt{font-weight:1000;color:var(--merah);font-size:20px}
+  .gloss dd{font-size:16px;color:var(--muted);margin-top:4px;line-height:1.25}
+
+  table.rtbl{width:100%;border-collapse:collapse;background:var(--card);border-radius:14px;overflow:hidden;box-shadow:var(--shadow)}
+  table.rtbl th{background:var(--hijau);color:var(--emas-muda);text-align:left;font-size:17px;letter-spacing:.06em;text-transform:uppercase;padding:14px 22px}
+  table.rtbl td{padding:14px 22px;font-size:21px;border-top:1px solid var(--emas-tint)}
+  table.rtbl td .r{font-weight:900;color:var(--hijau2)}
+  table.rtbl td .r .host{color:var(--muted);font-weight:800}
+  table.rtbl tr td:first-child{font-weight:800;color:var(--hijau)}
+  table.rtbl tr td:last-child{color:var(--muted);font-weight:700}
+
+  .cover{background:var(--hijau);color:#fff;justify-content:center;align-items:center;text-align:center;padding:70px}
+  .cover .frame{position:absolute;inset:34px;border:2px solid rgba(194,161,77,.5);border-radius:10px;pointer-events:none}
+  .cover .hero{width:150px;height:150px;border-radius:50%;border:3px solid var(--emas);display:grid;place-items:center;position:relative;margin-bottom:34px}
+  .cover .hero svg{width:74px;height:74px}
+  .cover .hero .spark{position:absolute;top:-8px;right:-6px;color:var(--emas);font-size:34px}
+  .cover .cpill{background:var(--emas);color:var(--hijau);font-weight:1000;font-size:20px;letter-spacing:.08em;padding:8px 22px;border-radius:999px}
+  .cover .ceye{color:var(--emas-muda);font-size:22px;font-weight:800;letter-spacing:.30em;text-transform:uppercase;margin-top:26px}
+  .cover h1{font-size:92px;font-weight:1000;line-height:.98;letter-spacing:-.02em;margin-top:14px}
+  .cover h1 .g{color:var(--emas)}
+  .cover .cline{width:150px;height:7px;background:var(--emas);border-radius:7px;margin:30px auto}
+  .cover .tag{font-size:30px;font-weight:600;color:#e8eee9;max-width:30ch;line-height:1.35}
+  .cover .cfoot{position:absolute;left:64px;right:64px;bottom:60px;display:flex;justify-content:space-between;align-items:center;color:var(--emas-muda);font-size:19px;font-weight:700;letter-spacing:.06em}
+  .cover .logo{width:52px;height:52px;border-radius:12px;border:2px solid var(--emas);display:grid;place-items:center;font-weight:1000;color:var(--emas)}
+
+  .foot{position:absolute;left:0;right:0;bottom:0;height:52px;background:transparent;display:flex;justify-content:space-between;align-items:center;padding:0 64px;font-size:15px;font-weight:800;letter-spacing:.14em;color:var(--muted);text-transform:uppercase}
+  .foot .dot{width:8px;height:8px;border-radius:50%;background:var(--emas);display:inline-block;margin-right:10px}
+  .progress{position:absolute;left:0;top:0;height:6px;background:linear-gradient(90deg,var(--emas),var(--emas-muda));z-index:9;transition:width .4s ease}
+
+  .nav{position:fixed;bottom:20px;right:22px;display:flex;gap:8px;z-index:50}
+  .nav button{width:44px;height:44px;border-radius:50%;border:1px solid rgba(216,196,138,.4);background:rgba(20,80,58,.75);color:var(--emas-muda);font-size:20px;cursor:pointer;backdrop-filter:blur(6px);transition:.2s}
+  .nav button:hover{background:var(--emas);color:var(--hijau)}
+  .counter{position:fixed;bottom:28px;left:22px;z-index:50;font-family:"Nunito Sans";font-weight:800;font-size:14px;color:rgba(216,196,138,.75);letter-spacing:.16em}
+  .hint{position:fixed;top:18px;right:24px;z-index:50;font-size:12px;font-weight:800;letter-spacing:.16em;color:rgba(216,196,138,.5);text-transform:uppercase}
+
+  @media print{
+    @page{size:1920px 1080px;margin:0}
+    html,body{overflow:visible;background:#fff;height:auto}
+    .deck{position:static;display:block;padding:0}
+    .stage{transform:none!important;box-shadow:none;width:1920px;height:auto;overflow:visible}
+    .slide{display:flex!important;position:relative;width:1920px;height:1080px;overflow:hidden;break-after:page;page-break-after:always}
+    .slide:last-child{break-after:auto;page-break-after:auto}
+    .slide .anim{opacity:1!important;animation:none!important}
+    .nav,.counter,.hint,.progress,.foot{display:none}
+  }
+</style>
+</head>
+<body>
+<div class="deck">
+  <div class="stage" id="stage">
+    <div class="progress" id="progress"></div>
+
+    <!-- ============ 1 · COVER ============ -->
+    <section class="slide cover active">
+      <div class="frame"></div>
+      <div class="hero anim a1"><span class="spark">✦</span>
+        <svg viewBox="0 0 48 48"><path class="ic" d="M24 7a6 6 0 100 12 6 6 0 000-12z"/><path class="ic" d="M10 40c1.5-8 6.5-12 14-12s12.5 4 14 12"/><path class="ic" d="M33 12l3 3 6-7"/></svg>
+      </div>
+      <span class="cpill anim a2">HITS</span>
+      <div class="ceye anim a3">Panduan Alur · Untuk Koordinator Ketua Kelas</div>
+      <h1 class="anim a3">Ketua <span class="g">Kelas</span></h1>
+      <div class="cline anim a4"></div>
+      <p class="tag anim a4">Dari pengajar menunjuk ketua, ketua mengisi observasi, sampai koordinator menindaklanjuti — satu alur utuh</p>
+      <div class="cfoot">
+        <span>KOORDINATOR KETUA KELAS HITS · MAJELIS PENDIDIKAN</span>
+        <span style="display:flex;align-items:center;gap:18px">7 JULI 2026 <span class="logo">ح</span></span>
+      </div>
+    </section>
+
+    <!-- ============ 2 · TIGA PERAN ============ -->
+    <section class="slide">
+      <div class="band"><div class="left"><span class="pill">HITS</span><span class="lbl">Koordinator Ketua Kelas · Majelis Pendidikan</span></div><span class="pg">02 / 10</span></div>
+      <div class="head anim a1">
+        <div class="badge"><svg viewBox="0 0 48 48"><circle class="ic" cx="24" cy="24" r="16"/><path class="ic" d="M24 12v12l8 5"/></svg></div>
+        <div class="txt"><div class="eyebrow">Peta Alur</div><div class="title">Tiga peran, satu rantai</div><div class="uline"></div></div>
+      </div>
+      <div class="body">
+        <div class="road anim a2">
+          <div class="seg" style="background:var(--hijau)"><span class="sn">LANGKAH 1</span><span class="st">Pengajar menunjuk ketua</span></div>
+          <div class="seg" style="background:var(--hijau2)"><span class="sn">LANGKAH 2</span><span class="st">Ketua mengisi observasi</span></div>
+          <div class="seg" style="background:#2f7d5c"><span class="sn">LANGKAH 3</span><span class="st">Sistem menghitung skor</span></div>
+          <div class="seg" style="background:var(--emas)"><span class="sn">LANGKAH 4</span><span class="st">Koordinator menindak</span></div>
+        </div>
+        <div class="loop anim a3">
+          <div class="node">
+            <div class="ni"><svg viewBox="0 0 40 40"><path class="ic ic-h" d="M20 6l12 5v7c0 8-5 13-12 16C13 31 8 26 8 18v-7z"/><path class="ic ic-h" d="M15 19l4 4 7-8"/></svg></div>
+            <div class="rlbl">Peran 1</div>
+            <h4>Pengajar</h4><p>Menunjuk satu peserta jadi <b>ketua kelas</b> tiap halaqah HITS.</p>
+          </div>
+          <div class="ar">→</div>
+          <div class="node">
+            <div class="ni"><svg viewBox="0 0 40 40"><rect class="ic ic-h" x="8" y="7" width="24" height="26" rx="3"/><path class="ic ic-h" d="M14 15h12M14 21h12M14 27h7"/></svg></div>
+            <div class="rlbl">Peran 2</div>
+            <h4>Ketua Kelas</h4><p>Mengisi <b>laporan observasi</b> kondisi pengajar tiap pertemuan.</p>
+          </div>
+          <div class="ar">→</div>
+          <div class="node">
+            <div class="ni"><svg viewBox="0 0 40 40"><path class="ic ic-h" d="M20 6l12 5v7c0 8-5 13-12 16C13 31 8 26 8 18v-7z"/><path class="ic ic-h" d="M20 15v6M20 25v.2"/></svg></div>
+            <div class="rlbl">Peran 3</div>
+            <h4>Koordinator KK</h4><p>Memvalidasi, memantau, dan <b>menindaklanjuti</b> hasil observasi.</p>
+          </div>
+        </div>
+      </div>
+      <div class="ring"></div><div class="ring in"></div>
+    </section>
+
+    <!-- ============ 3 · PENGAJAR — DAFTAR ============ -->
+    <section class="slide">
+      <div class="band"><div class="left"><span class="pill">HITS</span><span class="lbl">Peran 1 · Pengajar</span></div><span class="pg">03 / 10</span></div>
+      <div class="head anim a1">
+        <div class="badge"><span class="num">1</span></div>
+        <div class="txt"><div class="eyebrow">Peran 1 · Pengajar</div><div class="title">Pengajar menunjuk ketua kelas</div><div class="uline"></div></div>
+      </div>
+      <div class="body">
+        <div class="split split-32">
+          <div class="agenda anim a2">
+            <div class="row"><div class="rc">1</div><div class="rt"><b>Buka menu Tunjuk Ketua HITS</b><p>Login pengajar → halaman Penunjukan Ketua Kelas · <span class="route"><span class="host">maahir.muhajirproject.org</span>/hits/pengajar</span></p></div></div>
+            <div class="row"><div class="rc">2</div><div class="rt"><b>Lihat daftar halaqah miliknya</b><p>Tiap kartu tampilkan jumlah pertemuan berlalu &amp; nama ketua saat ini.</p></div></div>
+            <div class="row"><div class="rc">3</div><div class="rt"><b>Tekan “Tunjuk” atau “Ganti”</b><p>Halaqah yang belum berketua otomatis membuka jendela penunjukan.</p></div></div>
+          </div>
+          <figure class="shot anim a3">
+            <div class="bar"><i></i><i></i><i></i><span class="url"><b>maahir.muhajirproject.org</b>/hits/pengajar</span></div>
+            <div class="pic"><img src="kk-pengajar-list.png" alt="Daftar halaqah pengajar — penunjukan ketua kelas" /></div>
+            <figcaption class="shotcap">Tiap halaqah punya satu tombol Tunjuk / Ganti ketua</figcaption>
+          </figure>
+        </div>
+      </div>
+      <div class="ring in"></div>
+    </section>
+
+    <!-- ============ 4 · PENGAJAR — MODAL ============ -->
+    <section class="slide">
+      <div class="band"><div class="left"><span class="pill">HITS</span><span class="lbl">Peran 1 · Pengajar</span></div><span class="pg">04 / 10</span></div>
+      <div class="head anim a1">
+        <div class="badge"><span class="num">1</span></div>
+        <div class="txt"><div class="eyebrow">Peran 1 · Pengajar</div><div class="title">Pilih peserta &amp; kirim akses via WhatsApp</div><div class="uline"></div></div>
+      </div>
+      <div class="body">
+        <div class="split split-23">
+          <figure class="shot anim a2">
+            <div class="bar"><i></i><i></i><i></i><span class="url"><b>maahir.muhajirproject.org</b>/hits/pengajar</span></div>
+            <div class="pic contain"><img src="kk-pengajar-modal-crop.png" alt="Jendela Tunjuk Ketua Kelas — pilih peserta & nomor WA" /></div>
+            <figcaption class="shotcap">Jendela “Tunjuk Ketua Kelas”</figcaption>
+          </figure>
+          <div class="anim a3" style="display:flex;flex-direction:column;gap:20px;min-height:0;justify-content:center">
+            <div class="card" style="justify-content:center">
+              <div class="cstrip">Isi jendela penunjukan</div>
+              <ul class="lead">
+                <li><b>Pilih peserta</b> dari daftar halaqah — atau tulis manual bila nama belum terdaftar.</li>
+                <li><b>Nomor WhatsApp ketua</b> jadi akun login-nya.</li>
+                <li>Tekan <b>Tunjuk &amp; Kirim WhatsApp</b> → pesan akses terkirim.</li>
+              </ul>
+            </div>
+            <div class="note">
+              <p><b>Akses otomatis.</b> Password awal ketua = <b>6 digit terakhir nomor WA</b>. Bila nomor sudah dipakai peran lain, muncul konfirmasi <b>peran ganda</b> dulu.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="ring in"></div>
+    </section>
+
+    <!-- ============ 5 · KETUA — ISI OBSERVASI ============ -->
+    <section class="slide">
+      <div class="band"><div class="left"><span class="pill">HITS</span><span class="lbl">Peran 2 · Ketua Kelas</span></div><span class="pg">05 / 10</span></div>
+      <div class="head anim a1">
+        <div class="badge"><span class="num">2</span></div>
+        <div class="txt"><div class="eyebrow">Peran 2 · Ketua Kelas</div><div class="title">Ketua mengisi laporan observasi</div><div class="uline"></div></div>
+      </div>
+      <div class="body">
+        <div class="split split-32">
+          <div class="anim a2" style="display:flex;flex-direction:column;gap:18px;min-height:0">
+            <div class="card" style="justify-content:center">
+              <div class="cstrip">Langkah pengisian</div>
+              <ul class="lead">
+                <li><b>Buka pertemuan hari ini</b> · <span class="route" style="font-size:20px"><span class="host">…</span>/hits/ketua</span></li>
+                <li><b>LIBUR?</b> centang bila tak ada kelas.</li>
+                <li><b>Pelanggaran</b> — centang bila ada (boleh &gt; 1).</li>
+                <li><b>Latihan mandiri</b> — Ya / Tidak, lalu status latihan.</li>
+              </ul>
+            </div>
+            <div class="note" style="border-color:var(--hijau);background:rgba(20,80,58,.06)">
+              <p><b style="color:var(--hijau)">Nol pelanggaran + latihan diberikan = KBBS</b> — pertemuan tercatat bersih &amp; disiplin.</p>
+            </div>
+          </div>
+          <figure class="shot anim a3">
+            <div class="bar"><i></i><i></i><i></i><span class="url"><b>maahir.muhajirproject.org</b>/hits/ketua</span></div>
+            <div class="pic"><img src="app-f1.png" alt="Jendela Isi Keterangan — centang pelanggaran & latihan" /></div>
+            <figcaption class="shotcap">Jendela “Isi Keterangan”: centang KMT/KBLA/JKG/BADAL + latihan</figcaption>
+          </figure>
+        </div>
+      </div>
+      <div class="ring in"></div>
+    </section>
+
+    <!-- ============ 6 · KETUA — PELANGGARAN & MENIT ============ -->
+    <section class="slide">
+      <div class="band"><div class="left"><span class="pill">HITS</span><span class="lbl">Peran 2 · Ketua Kelas</span></div><span class="pg">06 / 10</span></div>
+      <div class="head anim a1">
+        <div class="badge"><span class="num">2</span></div>
+        <div class="txt"><div class="eyebrow">Peran 2 · Ketua Kelas</div><div class="title">Jenis pelanggaran &amp; menit yang dicatat</div><div class="uline"></div></div>
+      </div>
+      <div class="body">
+        <div class="split split-32">
+          <div class="anim a2" style="display:flex;flex-direction:column;gap:18px;min-height:0">
+            <div class="card" style="justify-content:center">
+              <div class="cstrip">Jenis pelanggaran</div>
+              <ul class="lead">
+                <li><b>KMT</b> — Kelas Mulai Terlambat (isi menit; toleransi 5 menit)</li>
+                <li><b>KBLA</b> — Kelas Berakhir Lebih Awal (isi menit)</li>
+                <li><b>JKG</b> — Jadwal Kelas Ganti</li>
+                <li><b>BADAL</b> — pengajar digantikan (tulis nama pengganti)</li>
+              </ul>
+            </div>
+            <div class="card" style="flex-direction:row;align-items:center;gap:24px;justify-content:flex-start">
+              <div class="big" style="flex:0 0 auto">− 5<small>MENIT<br/>TOLERANSI KMT</small></div>
+              <p style="font-size:19px;color:var(--muted);line-height:1.35">Menit KMT/KBLA jadi <b style="color:var(--hijau)">hutang menit</b> pengajar — bisa dicicil pertemuan berikutnya.</p>
+            </div>
+          </div>
+          <figure class="shot anim a3">
+            <div class="bar"><i></i><i></i><i></i><span class="url"><b>maahir.muhajirproject.org</b>/hits/ketua</span></div>
+            <div class="pic"><img src="app-f2.png" alt="Input menit keterlambatan pada form ketua" /></div>
+            <figcaption class="shotcap">KMT/KBLA → ketua isi menit mentah; sistem hitung hutang otomatis</figcaption>
+          </figure>
+        </div>
+      </div>
+      <div class="ring in"></div>
+    </section>
+
+    <!-- ============ 7 · KOORDINATOR — PUSAT KENDALI ============ -->
+    <section class="slide">
+      <div class="band"><div class="left"><span class="pill">HITS</span><span class="lbl">Peran 3 · Koordinator KK</span></div><span class="pg">07 / 10</span></div>
+      <div class="head anim a1">
+        <div class="badge"><span class="num">3</span></div>
+        <div class="txt"><div class="eyebrow">Peran 3 · Koordinator Ketua Kelas</div><div class="title">Pusat kendali: Monitoring Observasi</div><div class="uline"></div></div>
+      </div>
+      <div class="body">
+        <div class="split split-23">
+          <figure class="shot anim a2">
+            <div class="bar"><i></i><i></i><i></i><span class="url"><b>maahir.muhajirproject.org</b>/observasi/koordinator</span></div>
+            <div class="pic"><img src="kk-koord-observasi.png" alt="Dashboard Monitoring Observasi HITS koordinator" /></div>
+            <figcaption class="shotcap">Dashboard “Monitoring Observasi HITS” — status &amp; tabayyun harian</figcaption>
+          </figure>
+          <div class="anim a3" style="display:flex;flex-direction:column;gap:18px;min-height:0;justify-content:center">
+            <div class="card" style="justify-content:center">
+              <div class="cstrip">Yang bisa dilakukan di sini</div>
+              <ul class="lead">
+                <li><b>Status pengisian hari ini</b> — berapa halaqah sudah diisi ketua.</li>
+                <li><b>Tabayyun pending</b> — klarifikasi ke pengajar yang belum ditindak.</li>
+                <li><b>Reminder massal</b> — kirim link isi ke ketua yang belum mengisi.</li>
+                <li><b>Kajian Adab &amp; Audit Trail</b> — presensi ketua &amp; jejak aksi.</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="ring in"></div>
+    </section>
+
+    <!-- ============ 8 · KOORDINATOR — LEADERBOARD + VALIDASI ============ -->
+    <section class="slide">
+      <div class="band"><div class="left"><span class="pill">HITS</span><span class="lbl">Peran 3 · Koordinator KK</span></div><span class="pg">08 / 10</span></div>
+      <div class="head anim a1">
+        <div class="badge"><span class="num">3</span></div>
+        <div class="txt"><div class="eyebrow">Peran 3 · Koordinator Ketua Kelas</div><div class="title">Baca hasil &amp; jaga kebenaran data</div><div class="uline"></div></div>
+      </div>
+      <div class="body">
+        <div class="grid g2" style="flex:0 0 auto">
+          <div class="card anim a2" style="justify-content:center">
+            <div class="cstrip" style="justify-content:space-between;width:100%"><span>Leaderboard Disiplin</span><span class="stat off">Baca</span></div>
+            <ul class="lead">
+              <li><b>Ranking %KBBS</b> per pengajar, pemecah seri = hutang menit.</li>
+              <li>Filter <b>Bulanan / Mingguan</b> &amp; Ikhwan / Akhwat.</li>
+              <li>Klik nama → <b>profil matrix</b> pengajar.</li>
+            </ul>
+          </div>
+          <div class="card anim a3" style="justify-content:center">
+            <div class="cstrip gold" style="justify-content:space-between;width:100%"><span>Validasi &amp; Tag Level</span><span class="stat on">Kelola</span></div>
+            <ul class="lead">
+              <li><b>Set level</b> halaqah → jadwal pertemuan bisa dihitung.</li>
+              <li>Perbaiki <b>WA pengajar</b> &amp; sumber sheet.</li>
+              <li>Tandai / rapikan <b>peserta &amp; ketua</b>.</li>
+            </ul>
+          </div>
+        </div>
+        <div class="snaprow anim a4">
+          <figure class="shot">
+            <div class="bar"><i></i><i></i><i></i><span class="url"><b>maahir.muhajirproject.org</b>/hits/koordinator</span></div>
+            <div class="pic"><img src="kk-koord-leaderboard.png" alt="Ranking Disiplin Pengajar — %KBBS & hutang" /></div>
+          </figure>
+          <figure class="shot">
+            <div class="bar"><i></i><i></i><i></i><span class="url"><b>maahir.muhajirproject.org</b>/hits/koordinator/validasi</span></div>
+            <div class="pic"><img src="kk-koord-validasi.png" alt="Validasi & Sumber Data — set level halaqah" /></div>
+          </figure>
+        </div>
+      </div>
+      <div class="ring in"></div>
+    </section>
+
+    <!-- ============ 9 · KOORDINATOR — OVERRIDE + KOREKSI ============ -->
+    <section class="slide">
+      <div class="band"><div class="left"><span class="pill">HITS</span><span class="lbl">Peran 3 · Koordinator KK</span></div><span class="pg">09 / 10</span></div>
+      <div class="head anim a1">
+        <div class="badge"><span class="num">3</span></div>
+        <div class="txt"><div class="eyebrow">Peran 3 · Koordinator Ketua Kelas</div><div class="title">Perbaiki jadwal &amp; putuskan koreksi</div><div class="uline"></div></div>
+      </div>
+      <div class="body">
+        <div class="split split-32">
+          <div class="anim a2" style="display:flex;flex-direction:column;gap:18px;min-height:0">
+            <div class="card" style="justify-content:center">
+              <div class="cstrip">Override Pertemuan</div>
+              <ul class="lead">
+                <li>Geser <b>tanggal</b> atau <b>Skip</b> pertemuan bila ada anomali.</li>
+                <li>Libur dadakan, ganti hari, sesi tambahan.</li>
+                <li><span class="route" style="font-size:19px"><span class="host">…</span>/hits/koordinator/pertemuan</span></li>
+              </ul>
+            </div>
+            <div class="card" style="justify-content:center">
+              <div class="cstrip gold">Approve Koreksi</div>
+              <ul class="lead">
+                <li>Ketua ajukan <b>koreksi pertemuan</b> → koordinator memutuskan.</li>
+                <li>Terima / tolak via tautan keputusan.</li>
+                <li><span class="route" style="font-size:19px"><span class="host">…</span>/hits/koordinator/koreksi/[token]</span></li>
+              </ul>
+            </div>
+          </div>
+          <figure class="shot anim a3">
+            <div class="bar"><i></i><i></i><i></i><span class="url"><b>maahir.muhajirproject.org</b>/hits/koordinator/pertemuan</span></div>
+            <div class="pic"><img src="kk-koord-pertemuan.png" alt="Override Pertemuan — override tanggal & skip" /></div>
+            <figcaption class="shotcap">Override tanggal / Skip per pertemuan halaqah</figcaption>
+          </figure>
+        </div>
+      </div>
+      <div class="ring in"></div>
+    </section>
+
+    <!-- ============ 10 · PETA RUTE & PENUTUP ============ -->
+    <section class="slide">
+      <div class="band"><div class="left"><span class="pill">HITS</span><span class="lbl">Koordinator Ketua Kelas · Majelis Pendidikan</span></div><span class="pg">10 / 10</span></div>
+      <div class="head anim a1">
+        <div class="badge"><svg viewBox="0 0 48 48"><path class="ic" d="M12 24l9 9 15-18"/></svg></div>
+        <div class="txt"><div class="eyebrow">Rangkuman</div><div class="title">Peta tautan tiap peran</div><div class="uline"></div></div>
+      </div>
+      <div class="body">
+        <table class="rtbl anim a2">
+          <thead><tr><th style="width:26%">Peran</th><th>Halaman</th><th style="width:40%">Rute</th></tr></thead>
+          <tbody>
+            <tr><td>Pengajar</td><td>Tunjuk / ganti ketua kelas</td><td><span class="r"><span class="host">maahir.muhajirproject.org</span>/hits/pengajar</span></td></tr>
+            <tr><td>Ketua Kelas</td><td>Isi laporan observasi pertemuan</td><td><span class="r"><span class="host">maahir.muhajirproject.org</span>/hits/ketua</span></td></tr>
+            <tr><td>Koordinator KK</td><td>Monitoring observasi &amp; tabayyun</td><td><span class="r"><span class="host">maahir.muhajirproject.org</span>/observasi/koordinator</span></td></tr>
+            <tr><td>Koordinator KK</td><td>Leaderboard disiplin pengajar</td><td><span class="r"><span class="host">maahir.muhajirproject.org</span>/hits/koordinator</span></td></tr>
+            <tr><td>Koordinator KK</td><td>Validasi, tag level &amp; sumber data</td><td><span class="r"><span class="host">maahir.muhajirproject.org</span>/hits/koordinator/validasi</span></td></tr>
+            <tr><td>Koordinator KK</td><td>Override pertemuan</td><td><span class="r"><span class="host">maahir.muhajirproject.org</span>/hits/koordinator/pertemuan</span></td></tr>
+          </tbody>
+        </table>
+        <div class="keybanner anim a3" style="margin-top:22px;padding:26px 40px">
+          <span>Pengajar <span class="g">menunjuk</span> · Ketua <span class="g">mencatat</span> · Koordinator <span class="g">menindaklanjuti</span>.</span>
+        </div>
+      </div>
+      <div class="ring"></div><div class="ring in"></div>
+    </section>
+
+    <div class="foot"><span><span class="dot"></span>HITS KETUA KELAS</span><span id="foot-title">PANDUAN ALUR</span></div>
+  </div>
+</div>
+
+<div class="hint">← → / spasi · F fullscreen</div>
+<div class="counter"><span id="cur">01</span> / <span id="tot">10</span></div>
+<div class="nav"><button id="prev">‹</button><button id="next">›</button></div>
+
+<script>
+  const stage=document.getElementById('stage');
+  function fit(){const s=Math.min(innerWidth/1920,innerHeight/1080)*0.96;stage.style.transform='scale('+s+')';}
+  addEventListener('resize',fit);fit();
+
+  const slides=[...document.querySelectorAll('.slide')];
+  const titles=['SAMPUL','TIGA PERAN','PENGAJAR · DAFTAR','PENGAJAR · TUNJUK','KETUA · OBSERVASI','KETUA · PELANGGARAN','KOORDINATOR · MONITORING','KOORDINATOR · LEADERBOARD','KOORDINATOR · OVERRIDE','PETA RUTE'];
+  let i=0;const tot=slides.length;
+  const prog=document.getElementById('progress');
+  function show(n){
+    i=(n+tot)%tot;
+    slides.forEach((s,k)=>s.classList.toggle('active',k===i));
+    document.getElementById('cur').textContent=String(i+1).padStart(2,'0');
+    document.getElementById('foot-title').textContent=titles[i]||'';
+    prog.style.width=((i+1)/tot*100)+'%';
+  }
+  document.getElementById('next').onclick=()=>show(i+1);
+  document.getElementById('prev').onclick=()=>show(i-1);
+  addEventListener('keydown',e=>{
+    if(['ArrowRight',' ','PageDown'].includes(e.key)){e.preventDefault();show(i+1);}
+    else if(['ArrowLeft','PageUp'].includes(e.key)){e.preventDefault();show(i-1);}
+    else if(e.key==='Home')show(0);else if(e.key==='End')show(tot-1);
+    else if(e.key.toLowerCase()==='f'){document.fullscreenElement?document.exitFullscreen():document.documentElement.requestFullscreen&&document.documentElement.requestFullscreen();}
+  });
+  let sx=0;addEventListener('touchstart',e=>sx=e.touches[0].clientX,{passive:true});
+  addEventListener('touchend',e=>{const d=e.changedTouches[0].clientX-sx;if(Math.abs(d)>50)show(i+(d<0?1:-1));},{passive:true});
+  show(0);
+</script>
+</body>
+</html>

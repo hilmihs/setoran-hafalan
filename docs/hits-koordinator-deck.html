@@ -1,0 +1,454 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>HITS Observasi — Update Sistem untuk Koordinator</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Nunito+Sans:ital,opsz,wght@0,6..12,400..1000;1,6..12,400..800&display=swap" rel="stylesheet" />
+<style>
+  :root{
+    --krem:#F6F5EF; --hijau:#14503A; --hijau2:#1D6B4E;
+    --emas:#C2A14D; --emas-muda:#D8C48A; --emas-tint:#EFE6CC;
+    --ink:#23302A; --muted:#5C6B62; --merah:#9B2C2C;
+    --card:#ffffff; --shadow:0 18px 44px -22px rgba(20,80,58,.42);
+    --shadow-sm:0 8px 22px -14px rgba(20,80,58,.5);
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  body{background:#0c2c20;font-family:"Nunito Sans",system-ui,sans-serif;color:var(--ink);-webkit-font-smoothing:antialiased;overflow:hidden}
+
+  /* ---- deck shell: 1920x1080 scaled to viewport ---- */
+  .deck{position:fixed;inset:0;display:grid;place-items:center;padding:2vmin}
+  .stage{position:relative;width:1920px;height:1080px;transform-origin:center;background:var(--krem);box-shadow:0 30px 80px -30px rgba(0,0,0,.6);overflow:hidden}
+  .slide{position:absolute;inset:0;display:none;flex-direction:column}
+  .slide.active{display:flex}
+  .slide.active .anim{opacity:0;animation:rise .5s cubic-bezier(.2,.8,.2,1) forwards}
+  .slide.active .anim:nth-child(2){animation-delay:.05s}
+  .slide.active .anim:nth-child(3){animation-delay:.10s}
+  .slide.active .anim:nth-child(4){animation-delay:.15s}
+  .slide.active .anim:nth-child(5){animation-delay:.20s}
+  .a1{animation-delay:.06s}.a2{animation-delay:.14s}.a3{animation-delay:.22s}.a4{animation-delay:.30s}.a5{animation-delay:.38s}.a6{animation-delay:.46s}
+  @keyframes rise{from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:none}}
+
+  /* ---- header band ---- */
+  .band{height:72px;background:var(--hijau);display:flex;align-items:center;justify-content:space-between;padding:0 64px;flex:0 0 auto}
+  .band .left{display:flex;align-items:center;gap:20px}
+  .pill{background:var(--emas);color:var(--hijau);font-weight:900;font-size:18px;letter-spacing:.06em;padding:6px 18px;border-radius:999px}
+  .band .lbl{color:var(--emas-muda);font-size:16px;font-weight:700;letter-spacing:.28em;text-transform:uppercase}
+  .band .pg{color:var(--emas-muda);font-size:18px;font-weight:800;letter-spacing:.12em}
+
+  .head{padding:44px 64px 0;display:flex;align-items:flex-start;gap:26px;flex:0 0 auto}
+  .badge{width:76px;height:76px;border-radius:16px;background:var(--hijau);display:grid;place-items:center;flex:0 0 auto;box-shadow:var(--shadow-sm)}
+  .badge svg{width:42px;height:42px}
+  .head .txt{padding-top:2px}
+  .eyebrow{font-size:18px;font-weight:800;letter-spacing:.22em;text-transform:uppercase;color:var(--muted)}
+  .title{font-size:46px;font-weight:900;line-height:1.05;color:var(--hijau);margin-top:6px;letter-spacing:-.01em}
+  .uline{width:96px;height:6px;background:var(--emas);border-radius:6px;margin-top:16px}
+  .ring{position:absolute;right:-90px;bottom:-90px;width:340px;height:340px;border:2px solid var(--emas);border-radius:50%;opacity:.16;pointer-events:none}
+  .ring.in{right:-40px;bottom:-40px;width:210px;height:210px;opacity:.22}
+
+  .body{flex:1;padding:34px 64px 64px;display:flex;flex-direction:column;min-height:0}
+
+  /* ---- icon stroke ---- */
+  .ic{fill:none;stroke:var(--emas);stroke-width:3.4;stroke-linecap:round;stroke-linejoin:round}
+  .ic-h{stroke:var(--hijau)}
+
+  /* ---- cards ---- */
+  .grid{display:grid;gap:24px;flex:1;grid-auto-rows:1fr}
+  .g2{grid-template-columns:1fr 1fr}.g3{grid-template-columns:repeat(3,1fr)}
+  .card{background:var(--card);border-top:4px solid var(--emas);border-radius:14px;box-shadow:var(--shadow);padding:30px 32px;display:flex;flex-direction:column;justify-content:center}
+  .card .cstrip{display:inline-flex;align-items:center;gap:12px;align-self:flex-start;background:var(--hijau);color:var(--emas-muda);font-weight:800;font-size:22px;padding:8px 18px;border-radius:10px;margin-bottom:16px}
+  .card .cstrip.gold{background:var(--emas);color:var(--hijau)}
+  .card .cstrip svg{width:26px;height:26px}
+  .card h3{font-size:26px;font-weight:800;color:var(--hijau);line-height:1.1}
+  .card p{font-size:21px;line-height:1.32;color:var(--ink);margin-top:8px}
+
+  /* lead-in list */
+  ul.lead{list-style:none;display:flex;flex-direction:column;gap:16px}
+  ul.lead li{font-size:24px;line-height:1.3;color:var(--ink);padding-left:34px;position:relative}
+  ul.lead li::before{content:"";position:absolute;left:0;top:.5em;width:14px;height:14px;background:var(--emas);border-radius:3px;transform:rotate(45deg)}
+  ul.lead b{color:var(--hijau);font-weight:900}
+  ul.lead .r{color:var(--merah);font-weight:900}
+
+  /* big number */
+  .big{font-size:72px;font-weight:1000;color:var(--emas);line-height:.9;letter-spacing:-.02em}
+  .big small{display:block;font-size:19px;font-weight:800;color:var(--muted);letter-spacing:.04em;margin-top:10px;line-height:1.25}
+
+  /* warning panel */
+  .warn{background:rgba(155,44,44,.07);border-left:6px solid var(--merah);border-radius:0 12px 12px 0;padding:22px 26px;margin-top:22px}
+  .warn b{color:var(--merah);font-weight:900}
+  .warn p{font-size:22px;line-height:1.3;color:var(--ink)}
+
+  /* key banner */
+  .keybanner{background:var(--hijau);border-radius:16px;padding:34px 40px;text-align:center;box-shadow:var(--shadow)}
+  .keybanner span{font-size:34px;font-weight:900;line-height:1.25;color:#fff}
+  .keybanner .g{color:var(--emas-muda)}
+
+  /* roadmap chevrons */
+  .road{display:flex;align-items:stretch;gap:0;margin-bottom:26px}
+  .seg{flex:1;padding:20px 26px 20px 40px;color:#fff;font-weight:800;position:relative;display:flex;flex-direction:column;justify-content:center}
+  .seg:first-child{border-radius:12px 0 0 12px;padding-left:26px}
+  .seg .sn{font-size:16px;letter-spacing:.14em;opacity:.85}
+  .seg .st{font-size:21px;margin-top:2px}
+  .seg::after{content:"";position:absolute;right:-22px;top:0;bottom:0;width:22px;background:inherit;clip-path:polygon(0 0,100% 50%,0 100%);z-index:2}
+  .seg:last-child::after{display:none}
+  .seg:last-child{border-radius:0 12px 12px 0}
+
+  /* four-role loop */
+  .loop{display:flex;align-items:stretch;gap:0;flex:1}
+  .loop .node{flex:1;background:var(--card);border-top:4px solid var(--emas);border-radius:14px;box-shadow:var(--shadow);padding:26px;display:flex;flex-direction:column;justify-content:center;text-align:center}
+  .loop .node .ni{width:64px;height:64px;border-radius:14px;background:var(--emas-tint);display:grid;place-items:center;margin:0 auto 14px}
+  .loop .node .ni svg{width:34px;height:34px}
+  .loop .node h4{font-size:24px;font-weight:900;color:var(--hijau)}
+  .loop .node p{font-size:19px;color:var(--muted);margin-top:6px;line-height:1.28}
+  .loop .ar{align-self:center;color:var(--emas);font-size:44px;font-weight:900;padding:0 10px}
+
+  /* agenda numbered */
+  .agenda{display:flex;flex-direction:column;gap:20px;flex:1;justify-content:center}
+  .agenda .row{display:flex;align-items:center;gap:26px;background:var(--card);border-top:4px solid var(--emas);border-radius:14px;box-shadow:var(--shadow-sm);padding:24px 30px}
+  .agenda .rc{width:60px;height:60px;flex:0 0 auto;border-radius:50%;background:var(--hijau);color:var(--emas-muda);display:grid;place-items:center;font-size:30px;font-weight:1000}
+  .agenda .rt b{font-size:25px;font-weight:900;color:var(--hijau)}
+  .agenda .rt p{font-size:20px;color:var(--ink);margin-top:3px;line-height:1.28}
+  .route{font-weight:900;color:var(--hijau2)}
+  .route .host{color:var(--muted);font-weight:800}
+
+  /* ---- app snapshot frame (browser chrome) ---- */
+  .split{display:grid;gap:26px;flex:1;min-height:0;align-items:stretch}
+  .split-11{grid-template-columns:1fr 1fr}
+  .split-32{grid-template-columns:1.18fr 1fr}
+  .shot{display:flex;flex-direction:column;min-height:0;border-radius:16px;overflow:hidden;background:#fff;box-shadow:var(--shadow);border:1px solid var(--emas-tint)}
+  .shot .bar{height:40px;flex:0 0 auto;background:var(--hijau);display:flex;align-items:center;gap:9px;padding:0 18px}
+  .shot .bar i{width:11px;height:11px;border-radius:50%;background:var(--emas-muda);opacity:.55;flex:0 0 auto}
+  .shot .bar .url{margin-left:14px;background:rgba(255,255,255,.1);color:var(--emas-muda);font-size:15px;font-weight:800;letter-spacing:.02em;padding:5px 16px;border-radius:999px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .shot .bar .url b{color:#fff}
+  .shot .pic{flex:1;min-height:0;overflow:hidden;background:#EEEDE6}
+  .shot .pic img{width:100%;height:100%;object-fit:cover;object-position:top;display:block}
+  .shotcap{flex:0 0 auto;background:var(--emas-tint);color:#7a5f1e;font-size:15px;font-weight:800;letter-spacing:.02em;padding:9px 18px}
+  .snaprow{display:grid;grid-template-columns:1fr 1fr;gap:22px;flex:0 0 auto;height:300px;margin-top:6px}
+
+  /* status badges */
+  .stat{font-size:15px;font-weight:900;letter-spacing:.08em;padding:5px 14px;border-radius:999px;text-transform:uppercase}
+  .stat.on{background:var(--hijau2);color:#fff}
+  .stat.off{background:var(--emas-tint);color:#7a5f1e}
+
+  /* glossary strip */
+  .gloss{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-top:26px}
+  .gloss div{background:rgba(20,80,58,.05);border-radius:12px;padding:16px 18px}
+  .gloss dt{font-weight:1000;color:var(--merah);font-size:20px}
+  .gloss dd{font-size:16px;color:var(--muted);margin-top:4px;line-height:1.25}
+
+  /* ---- cover ---- */
+  .cover{background:var(--hijau);color:#fff;justify-content:center;align-items:center;text-align:center;padding:70px}
+  .cover .frame{position:absolute;inset:34px;border:2px solid rgba(194,161,77,.5);border-radius:10px;pointer-events:none}
+  .cover .hero{width:150px;height:150px;border-radius:50%;border:3px solid var(--emas);display:grid;place-items:center;position:relative;margin-bottom:34px}
+  .cover .hero svg{width:74px;height:74px}
+  .cover .hero .spark{position:absolute;top:-8px;right:-6px;color:var(--emas);font-size:34px}
+  .cover .cpill{background:var(--emas);color:var(--hijau);font-weight:1000;font-size:20px;letter-spacing:.08em;padding:8px 22px;border-radius:999px}
+  .cover .ceye{color:var(--emas-muda);font-size:22px;font-weight:800;letter-spacing:.34em;text-transform:uppercase;margin-top:26px}
+  .cover h1{font-size:104px;font-weight:1000;line-height:.98;letter-spacing:-.02em;margin-top:14px}
+  .cover h1 .g{color:var(--emas)}
+  .cover .cline{width:150px;height:7px;background:var(--emas);border-radius:7px;margin:30px auto}
+  .cover .tag{font-size:30px;font-weight:600;color:#e8eee9;max-width:26ch;line-height:1.35}
+  .cover .cfoot{position:absolute;left:64px;right:64px;bottom:60px;display:flex;justify-content:space-between;align-items:center;color:var(--emas-muda);font-size:19px;font-weight:700;letter-spacing:.06em}
+  .cover .logo{width:52px;height:52px;border-radius:12px;border:2px solid var(--emas);display:grid;place-items:center;font-weight:1000;color:var(--emas)}
+
+  /* ---- footer chrome ---- */
+  .foot{position:absolute;left:0;right:0;bottom:0;height:52px;background:transparent;display:flex;justify-content:space-between;align-items:center;padding:0 64px;font-size:15px;font-weight:800;letter-spacing:.14em;color:var(--muted);text-transform:uppercase}
+  .foot .dot{width:8px;height:8px;border-radius:50%;background:var(--emas);display:inline-block;margin-right:10px}
+  .progress{position:absolute;left:0;top:0;height:6px;background:linear-gradient(90deg,var(--emas),var(--emas-muda));z-index:9;transition:width .4s ease}
+
+  /* nav */
+  .nav{position:fixed;bottom:20px;right:22px;display:flex;gap:8px;z-index:50}
+  .nav button{width:44px;height:44px;border-radius:50%;border:1px solid rgba(216,196,138,.4);background:rgba(20,80,58,.75);color:var(--emas-muda);font-size:20px;cursor:pointer;backdrop-filter:blur(6px);transition:.2s}
+  .nav button:hover{background:var(--emas);color:var(--hijau)}
+  .counter{position:fixed;bottom:28px;left:22px;z-index:50;font-family:"Nunito Sans";font-weight:800;font-size:14px;color:rgba(216,196,138,.75);letter-spacing:.16em}
+  .hint{position:fixed;top:18px;right:24px;z-index:50;font-size:12px;font-weight:800;letter-spacing:.16em;color:rgba(216,196,138,.5);text-transform:uppercase}
+
+  @media print{
+    @page{size:1920px 1080px;margin:0}
+    html,body{overflow:visible;background:#fff;height:auto}
+    .deck{position:static;display:block;padding:0}
+    .stage{transform:none!important;box-shadow:none;width:1920px;height:auto;overflow:visible}
+    .slide{display:flex!important;position:relative;width:1920px;height:1080px;overflow:hidden;break-after:page;page-break-after:always}
+    .slide:last-child{break-after:auto;page-break-after:auto}
+    .slide .anim{opacity:1!important;animation:none!important}
+    .nav,.counter,.hint,.progress,.foot{display:none}
+  }
+</style>
+</head>
+<body>
+<div class="deck">
+  <div class="stage" id="stage">
+    <div class="progress" id="progress"></div>
+
+    <!-- ============ 1 · COVER ============ -->
+    <section class="slide cover active">
+      <div class="frame"></div>
+      <div class="hero anim a1"><span class="spark">✦</span>
+        <svg viewBox="0 0 48 48"><path class="ic" d="M24 6l14 6v10c0 9-6 16-14 20C16 38 10 31 10 22V12z"/><path class="ic" d="M17 24l5 5 10-11"/></svg>
+      </div>
+      <span class="cpill anim a2">HITS</span>
+      <div class="ceye anim a3">Program Observasi · Ringkasan untuk Koordinator</div>
+      <h1 class="anim a3">HITS <span class="g">Observasi</span></h1>
+      <div class="cline anim a4"></div>
+      <p class="tag anim a4">Enam fase yang mengubah cara kita menilai kedisiplinan pengajar</p>
+      <div class="cfoot">
+        <span>TIM KOORDINATOR HITS · MAJELIS PENDIDIKAN</span>
+        <span style="display:flex;align-items:center;gap:18px">6 JULI 2026 <span class="logo">ح</span></span>
+      </div>
+    </section>
+
+    <!-- ============ 2 · INTI + ROADMAP ============ -->
+    <section class="slide">
+      <div class="band"><div class="left"><span class="pill">HITS</span><span class="lbl">Tim Koordinator · Majelis Pendidikan</span></div><span class="pg">02 / 08</span></div>
+      <div class="head anim a1">
+        <div class="badge"><svg viewBox="0 0 48 48"><circle class="ic" cx="24" cy="24" r="16"/><path class="ic" d="M24 12v12l8 5"/></svg></div>
+        <div class="txt"><div class="eyebrow">Inti Sistem</div><div class="title">Satu lingkaran, empat peran</div><div class="uline"></div></div>
+      </div>
+      <div class="body">
+        <div class="road anim a2">
+          <div class="seg" style="background:var(--hijau)"><span class="sn">F0</span><span class="st">Perbaikan data</span></div>
+          <div class="seg" style="background:var(--hijau2)"><span class="sn">F1</span><span class="st">Mesin observasi</span></div>
+          <div class="seg" style="background:#2f7d5c"><span class="sn">F2</span><span class="st">Hutang menit</span></div>
+          <div class="seg" style="background:#8a7a3c"><span class="sn">F3</span><span class="st">Tabayyun 72 jam</span></div>
+          <div class="seg" style="background:var(--emas)"><span class="sn">F4</span><span class="st">Kajian adab</span></div>
+          <div class="seg" style="background:var(--emas-muda);color:var(--hijau)"><span class="sn">F5</span><span class="st">Leaderboard</span></div>
+        </div>
+        <div class="loop anim a3">
+          <div class="node"><div class="ni"><svg viewBox="0 0 40 40"><path class="ic ic-h" d="M20 21a7 7 0 100-14 7 7 0 000 14z"/><path class="ic ic-h" d="M7 34c1-6 6-9 13-9s12 3 13 9"/></svg></div><h4>Ketua Kelas</h4><p>Mencatat kondisi tiap pertemuan.</p></div>
+          <div class="ar">→</div>
+          <div class="node"><div class="ni"><svg viewBox="0 0 40 40"><rect class="ic ic-h" x="7" y="9" width="26" height="22" rx="3"/><path class="ic ic-h" d="M7 16h26M13 23h9"/></svg></div><h4>Sistem</h4><p>Hitung pelanggaran, hutang, timer.</p></div>
+          <div class="ar">→</div>
+          <div class="node"><div class="ni"><svg viewBox="0 0 40 40"><path class="ic ic-h" d="M20 6l12 5v8c0 8-5 13-12 16C13 32 8 27 8 19v-8z"/><path class="ic ic-h" d="M15 20l4 4 7-8"/></svg></div><h4>Koordinator</h4><p>Tindak, tegur, putuskan udzur.</p></div>
+          <div class="ar">→</div>
+          <div class="node"><div class="ni"><svg viewBox="0 0 40 40"><path class="ic ic-h" d="M8 30V18M18 30V10M28 30V22"/><path class="ic ic-h" d="M6 34h30"/></svg></div><h4>Nilai Matrix</h4><p>Skor disiplin terupdate otomatis.</p></div>
+        </div>
+      </div>
+      <div class="ring"></div><div class="ring in"></div>
+    </section>
+
+    <!-- ============ 3 · F1 ============ -->
+    <section class="slide">
+      <div class="band"><div class="left"><span class="pill">HITS</span><span class="lbl">Tim Koordinator · Majelis Pendidikan</span></div><span class="pg">03 / 08</span></div>
+      <div class="head anim a1">
+        <div class="badge"><svg viewBox="0 0 48 48"><path class="ic" d="M14 10h20a2 2 0 012 2v26a2 2 0 01-2 2H14a2 2 0 01-2-2V12a2 2 0 012-2z"/><path class="ic" d="M18 20l3 3 6-7M18 30h12"/></svg></div>
+        <div class="txt"><div class="eyebrow">F1 · Fondasi</div><div class="title">Mencatat pelanggaran, bukan sekadar "hadir"</div><div class="uline"></div></div>
+      </div>
+      <div class="body">
+        <div class="split split-32">
+          <div class="anim a2" style="display:flex;flex-direction:column;gap:22px;min-height:0">
+            <div class="card" style="justify-content:center">
+              <div class="cstrip">Jenis pelanggaran</div>
+              <ul class="lead">
+                <li><b>KMT</b> — Kelas Mulai Terlambat (toleransi 5 menit)</li>
+                <li><b>KBLA</b> — Kelas Berakhir Lebih Awal</li>
+                <li><b>JKG</b> — Jadwal Kelas Ganti</li>
+                <li><b>BADAL</b> — pengajar digantikan; guru asli dihitung mangkir</li>
+                <li><b>KBBS</b> — nol pelanggaran = pertemuan bersih</li>
+              </ul>
+            </div>
+            <div class="card" style="justify-content:center">
+              <div class="cstrip gold"><svg viewBox="0 0 26 26"><circle class="ic ic-h" cx="13" cy="13" r="10"/><path class="ic ic-h" d="M13 8v6M13 17.5v.2"/></svg>Untuk koordinator</div>
+              <p style="font-size:23px;line-height:1.35">Satu pertemuan bisa punya <b style="color:var(--hijau)">beberapa pelanggaran sekaligus</b> — ketua tinggal mencentang. Tak perlu menafsir catatan bebas.</p>
+            </div>
+          </div>
+          <figure class="shot anim a3">
+            <div class="bar"><i></i><i></i><i></i><span class="url"><b>maahir.muhajirproject.org</b>/hits/ketua</span></div>
+            <div class="pic"><img src="app-f1.png" alt="Form isi keterangan ketua — centang pelanggaran" /></div>
+            <figcaption class="shotcap">Ketua centang KMT/KBLA/JKG/BADAL — bisa lebih dari satu</figcaption>
+          </figure>
+        </div>
+      </div>
+      <div class="ring in"></div>
+    </section>
+
+    <!-- ============ 4 · F2 ============ -->
+    <section class="slide">
+      <div class="band"><div class="left"><span class="pill">HITS</span><span class="lbl">Tim Koordinator · Majelis Pendidikan</span></div><span class="pg">04 / 08</span></div>
+      <div class="head anim a1">
+        <div class="badge"><svg viewBox="0 0 48 48"><circle class="ic" cx="24" cy="24" r="16"/><path class="ic" d="M24 15v9l6 4"/></svg></div>
+        <div class="txt"><div class="eyebrow">F2 · Akuntabilitas Waktu</div><div class="title">Menit yang hilang jadi hutang yang tercatat</div><div class="uline"></div></div>
+      </div>
+      <div class="body">
+        <div class="split split-32">
+          <div class="anim a2" style="display:flex;flex-direction:column;gap:22px;min-height:0">
+            <div class="card" style="justify-content:center">
+              <div class="cstrip">Cara kerja</div>
+              <ul class="lead">
+                <li><b>Debit otomatis</b> — KMT = menit − 5 · KBLA = menit penuh · JKG = 1 pertemuan</li>
+                <li><b>Cicilan</b> — ketua catat "pengajar menambah __ menit" → saldo turun</li>
+                <li><b>Kumulatif</b> — saldo tak reset tiap minggu/bulan</li>
+                <li><b>Mulai bersih</b> sejak 6 Juli 2026 — data lama tak dihukum</li>
+              </ul>
+            </div>
+            <div class="card" style="flex-direction:row;align-items:center;gap:26px;justify-content:flex-start">
+              <div class="big" style="flex:0 0 auto">6 Juli<small>TITIK MULAI<br/>SALDO BERSIH</small></div>
+              <p style="font-size:19px;color:var(--muted);line-height:1.35">Saldo hutang muncul di dashboard & disisipkan ke pesan WA tabayyun.</p>
+            </div>
+          </div>
+          <figure class="shot anim a3">
+            <div class="bar"><i></i><i></i><i></i><span class="url"><b>maahir.muhajirproject.org</b>/hits/ketua</span></div>
+            <div class="pic"><img src="app-f2.png" alt="Input menit keterlambatan mentah — jadi debit hutang" /></div>
+            <figcaption class="shotcap">KMT → input menit mentah; sistem debit jadi hutang</figcaption>
+          </figure>
+        </div>
+      </div>
+      <div class="ring in"></div>
+    </section>
+
+    <!-- ============ 5 · F3 ============ -->
+    <section class="slide">
+      <div class="band"><div class="left"><span class="pill">HITS</span><span class="lbl">Tim Koordinator · Majelis Pendidikan</span></div><span class="pg">05 / 08</span></div>
+      <div class="head anim a1">
+        <div class="badge"><svg viewBox="0 0 48 48"><path class="ic" d="M12 34l4-4h18a3 3 0 003-3V13a3 3 0 00-3-3H14a3 3 0 00-3 3v21z"/><path class="ic" d="M24 16v6M24 26v.2"/></svg></div>
+        <div class="txt"><div class="eyebrow">F3 · Anti-Ghosting</div><div class="title">Klarifikasi yang tidak bisa didiamkan</div><div class="uline"></div></div>
+      </div>
+      <div class="body">
+        <div class="split split-32">
+          <div class="anim a2" style="display:flex;flex-direction:column;gap:20px;min-height:0">
+            <div class="card" style="justify-content:center">
+              <div class="cstrip" style="justify-content:space-between;width:100%"><span>Alur tabayyun</span><span class="stat" style="background:var(--emas);color:var(--hijau)">72 JAM</span></div>
+              <ul class="lead">
+                <li><b>Timer 72 jam</b> berjalan sejak pengingat pertama dikirim</li>
+                <li><b>Ada alasan</b> → jalur keputusan udzur / non-udzur manual</li>
+                <li class="r">Diam &gt; 72 jam = ghosting → otomatis non-udzur + teguran + WA</li>
+                <li><b>Tombol berubah</b>: Ingatkan → Ingatkan Lagi → Teguran Ghosting</li>
+              </ul>
+            </div>
+            <div class="warn" style="margin-top:0"><p><b>Koordinator = detak jantung.</b> Eskalasi dievaluasi saat Anda membuka & menekan tombol tabayyun. Tidak ada cron — sistem bergerak saat Anda bertindak.</p></div>
+          </div>
+          <figure class="shot anim a3">
+            <div class="bar"><i></i><i></i><i></i><span class="url"><b>maahir.muhajirproject.org</b>/observasi/koordinator</span></div>
+            <div class="pic"><img src="app-f3.png" alt="Monitoring observasi — tabayyun pending & lewat deadline" /></div>
+            <figcaption class="shotcap">Monitoring: tabayyun pending &amp; jumlah lewat deadline</figcaption>
+          </figure>
+        </div>
+      </div>
+      <div class="ring in"></div>
+    </section>
+
+    <!-- ============ 6 · F4 + F5 ============ -->
+    <section class="slide">
+      <div class="band"><div class="left"><span class="pill">HITS</span><span class="lbl">Tim Koordinator · Majelis Pendidikan</span></div><span class="pg">06 / 08</span></div>
+      <div class="head anim a1">
+        <div class="badge"><svg viewBox="0 0 48 48"><path class="ic" d="M10 34V22M24 34V10M38 34V26"/><path class="ic" d="M8 38h32"/></svg></div>
+        <div class="txt"><div class="eyebrow">F4 &amp; F5 · Pembinaan &amp; Report</div><div class="title">Kajian adab & leaderboard disiplin</div><div class="uline"></div></div>
+      </div>
+      <div class="body">
+        <div class="grid g2" style="flex:0 0 auto">
+          <div class="card anim a2" style="justify-content:center">
+            <div class="cstrip" style="justify-content:space-between;width:100%"><span>F4 · Kajian Adab</span><span class="stat on">Berjalan</span></div>
+            <ul class="lead">
+              <li><b>Presensi ketua</b> kelas di kajian adab kini di dalam HITS</li>
+              <li><b>Data historis</b> sudah dicocokkan (nama + tanggal)</li>
+              <li><b>Bahan pembinaan</b> peran ketua kelas</li>
+            </ul>
+          </div>
+          <div class="card anim a3" style="justify-content:center">
+            <div class="cstrip gold" style="justify-content:space-between;width:100%"><span>F5 · Leaderboard</span><span class="stat off">View-only</span></div>
+            <ul class="lead">
+              <li><b>Urutan</b> %KBBS terendah → hutang terbanyak → nama</li>
+              <li><b>Per-pengajar</b>, gabung semua halaqah, lintas-batch</li>
+              <li><b>Toggle</b> Bulanan / Mingguan (Senin–Minggu)</li>
+              <li><b>Klik nama</b> → profil pengajar di matrix</li>
+            </ul>
+          </div>
+        </div>
+        <div class="snaprow anim a4">
+          <figure class="shot">
+            <div class="bar"><i></i><i></i><i></i><span class="url"><b>maahir.muhajirproject.org</b>/observasi/koordinator/kajian</span></div>
+            <div class="pic"><img src="app-f4.png" alt="Rekap presensi kajian adab per ketua" /></div>
+          </figure>
+          <figure class="shot">
+            <div class="bar"><i></i><i></i><i></i><span class="url"><b>maahir.muhajirproject.org</b>/hits/koordinator</span></div>
+            <div class="pic"><img src="app-f5.png" alt="Leaderboard disiplin pengajar — %KBBS & hutang" /></div>
+          </figure>
+        </div>
+      </div>
+      <div class="ring in"></div>
+    </section>
+
+    <!-- ============ 7 · ALUR KERJA ============ -->
+    <section class="slide">
+      <div class="band"><div class="left"><span class="pill">HITS</span><span class="lbl">Tim Koordinator · Majelis Pendidikan</span></div><span class="pg">07 / 08</span></div>
+      <div class="head anim a1">
+        <div class="badge"><svg viewBox="0 0 48 48"><path class="ic" d="M16 12h18M16 24h18M16 36h18"/><path class="ic" d="M9 12v.2M9 24v.2M9 36v.2"/></svg></div>
+        <div class="txt"><div class="eyebrow">Rutinitas Harian</div><div class="title">Alur kerja koordinator dalam 4 langkah</div><div class="uline"></div></div>
+      </div>
+      <div class="body">
+        <div class="split split-32">
+          <div class="agenda anim a2">
+            <div class="row"><div class="rc">1</div><div class="rt"><b>Buka leaderboard disiplin</b><p>Lihat %KBBS terendah & hutang tertinggi · <span class="route"><span class="host">maahir.muhajirproject.org</span>/hits/koordinator</span></p></div></div>
+            <div class="row"><div class="rc">2</div><div class="rt"><b>Tindak lanjuti tabayyun tertunda</b><p>Ingatkan, atau tekan Teguran Ghosting bila &gt; 72 jam · <span class="route"><span class="host">maahir.muhajirproject.org</span>/observasi/koordinator</span></p></div></div>
+            <div class="row"><div class="rc">3</div><div class="rt"><b>Putuskan udzur / non-udzur</b><p>Nilai matrix pengajar mengikuti keputusan Anda · <span class="route"><span class="host">maahir.muhajirproject.org</span>/matrix/koordinator/pengajar/[id]</span></p></div></div>
+            <div class="row"><div class="rc">4</div><div class="rt"><b>Pantau hutang & kajian adab</b><p>Ingatkan cicilan menit; cek presensi ketua · <span class="route"><span class="host">maahir.muhajirproject.org</span>/observasi/koordinator/kajian</span></p></div></div>
+          </div>
+          <figure class="shot anim a3">
+            <div class="bar"><i></i><i></i><i></i><span class="url"><b>maahir.muhajirproject.org</b>/hits/koordinator</span></div>
+            <div class="pic"><img src="app-f5.png" alt="Leaderboard disiplin — titik mulai rutinitas koordinator" /></div>
+            <figcaption class="shotcap">Langkah 1: papan peringkat disiplin pengajar</figcaption>
+          </figure>
+        </div>
+      </div>
+      <div class="ring in"></div>
+    </section>
+
+    <!-- ============ 8 · PENUTUP ============ -->
+    <section class="slide">
+      <div class="band"><div class="left"><span class="pill">HITS</span><span class="lbl">Tim Koordinator · Majelis Pendidikan</span></div><span class="pg">08 / 08</span></div>
+      <div class="head anim a1">
+        <div class="badge"><svg viewBox="0 0 48 48"><path class="ic" d="M12 24l9 9 15-18"/></svg></div>
+        <div class="txt"><div class="eyebrow">Roadmap F0–F5 Tuntas</div><div class="title">Sistem yang mengingat, Anda yang membina</div><div class="uline"></div></div>
+      </div>
+      <div class="body" style="justify-content:center">
+        <div class="keybanner anim a2"><span>Tugas koordinator bukan lagi <span class="g">mengumpulkan catatan</span> — melainkan <span class="g">membaca papan peringkat</span> dan mengambil keputusan.</span></div>
+        <dl class="gloss anim a3">
+          <div><dt>KBBS</dt><dd>Kelas Berjalan Baik & Sesuai</dd></div>
+          <div><dt>Tabayyun</dt><dd>Permintaan klarifikasi ke pengajar</dd></div>
+          <div><dt>Ghosting</dt><dd>Tabayyun didiamkan &gt; 72 jam</dd></div>
+          <div><dt>Hutang menit</dt><dd>Saldo waktu tertunggak, bisa dicicil</dd></div>
+        </dl>
+      </div>
+      <div class="ring"></div><div class="ring in"></div>
+    </section>
+
+    <div class="foot"><span><span class="dot"></span>HITS OBSERVASI</span><span id="foot-title">RINGKASAN SISTEM</span></div>
+  </div>
+</div>
+
+<div class="hint">← → / spasi · F fullscreen</div>
+<div class="counter"><span id="cur">01</span> / <span id="tot">08</span></div>
+<div class="nav"><button id="prev">‹</button><button id="next">›</button></div>
+
+<script>
+  const stage=document.getElementById('stage');
+  function fit(){const s=Math.min(innerWidth/1920,innerHeight/1080)*0.96;stage.style.transform='scale('+s+')';}
+  addEventListener('resize',fit);fit();
+
+  const slides=[...document.querySelectorAll('.slide')];
+  const titles=['SAMPUL','INTI SISTEM','F1 · OBSERVASI','F2 · HUTANG MENIT','F3 · TABAYYUN','F4 & F5 · REPORT','ALUR KERJA','PENUTUP'];
+  let i=0;const tot=slides.length;
+  const prog=document.getElementById('progress');
+  function show(n){
+    i=(n+tot)%tot;
+    slides.forEach((s,k)=>s.classList.toggle('active',k===i));
+    document.getElementById('cur').textContent=String(i+1).padStart(2,'0');
+    document.getElementById('foot-title').textContent=titles[i]||'';
+    prog.style.width=((i+1)/tot*100)+'%';
+  }
+  document.getElementById('next').onclick=()=>show(i+1);
+  document.getElementById('prev').onclick=()=>show(i-1);
+  addEventListener('keydown',e=>{
+    if(['ArrowRight',' ','PageDown'].includes(e.key)){e.preventDefault();show(i+1);}
+    else if(['ArrowLeft','PageUp'].includes(e.key)){e.preventDefault();show(i-1);}
+    else if(e.key==='Home')show(0);else if(e.key==='End')show(tot-1);
+    else if(e.key.toLowerCase()==='f'){document.fullscreenElement?document.exitFullscreen():document.documentElement.requestFullscreen&&document.documentElement.requestFullscreen();}
+  });
+  let sx=0;addEventListener('touchstart',e=>sx=e.touches[0].clientX,{passive:true});
+  addEventListener('touchend',e=>{const d=e.changedTouches[0].clientX-sx;if(Math.abs(d)>50)show(i+(d<0?1:-1));},{passive:true});
+  show(0);
+</script>
+</body>
+</html>
