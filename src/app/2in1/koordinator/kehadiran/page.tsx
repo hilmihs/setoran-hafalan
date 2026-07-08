@@ -92,11 +92,36 @@ export default async function KoordinatorKehadiranPage({
           </div>
 
           {totalBelum > 0 && (
-            <div className="banner banner-error" style={{ marginBottom: 16 }}>
-              <div className="desc">
+            <details className="banner banner-error" style={{ marginBottom: 16 }}>
+              <summary className="desc" style={{ cursor: 'pointer', userSelect: 'none' }}>
                 <strong>{totalBelum} presensi belum diisi</strong> oleh ketua kelas pada bulan ini.
+                <span className="t-tiny" style={{ color: 'var(--muted-2)' }}> — tap untuk rincian</span>
+              </summary>
+              <div style={{ marginTop: 10, display: 'grid', gap: 8 }}>
+                {rekap
+                  .filter((k) => k.belumDiisi > 0)
+                  .map((k) => {
+                    const pj = k.anggota.filter((a) => a.isKetua || a.isWakil);
+                    const ketuaLabel = pj.length
+                      ? pj.map((a) => `${a.name}${a.isWakil ? ' (wakil)' : ''}`).join(', ')
+                      : 'Ketua belum ditunjuk';
+                    return (
+                      <div
+                        key={k.kelasId}
+                        style={{ display: 'flex', justifyContent: 'space-between', gap: 10, alignItems: 'baseline', borderBottom: '1px solid var(--surface-3)', paddingBottom: 6 }}
+                      >
+                        <div>
+                          <div className="t-small" style={{ fontWeight: 600 }}>{ketuaLabel}</div>
+                          <div className="t-tiny" style={{ color: 'var(--muted-2)' }}>
+                            {k.kelasName} · {k.gender === 'ikhwan' ? 'Ikhwan' : 'Akhwat'}
+                          </div>
+                        </div>
+                        <span className="badge badge-merah" style={{ whiteSpace: 'nowrap' }}>{k.belumDiisi} belum</span>
+                      </div>
+                    );
+                  })}
               </div>
-            </div>
+            </details>
           )}
 
           {rekap.length === 0 && (

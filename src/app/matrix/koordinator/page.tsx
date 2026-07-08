@@ -28,6 +28,7 @@ interface SearchParams {
   kelompok?: string;
   gender?: string;
   sync?: string;
+  q?: string;
 }
 
 const SCORE_COLS =
@@ -41,6 +42,7 @@ export default async function MatrixKoordinatorPage({
   const session = await requireOneOfRoles(['koordinator']);
   const selectedMonth = searchParams.bulan || currentYearMonth();
   const selectedKelompok = searchParams.kelompok || '';
+  const q = (searchParams.q || '').trim();
   const gender: Gender =
     searchParams.gender === 'ikhwan' || searchParams.gender === 'akhwat'
       ? searchParams.gender
@@ -69,6 +71,9 @@ export default async function MatrixKoordinatorPage({
     .eq('gender', gender);
   if (selectedKelompok) {
     pengajarQuery = pengajarQuery.eq('kelompok_id', selectedKelompok);
+  }
+  if (q) {
+    pengajarQuery = pengajarQuery.ilike('name', `%${q}%`);
   }
   const { data: pengajarList } = await pengajarQuery.order('name');
 
@@ -154,9 +159,11 @@ export default async function MatrixKoordinatorPage({
     const g = over.gender ?? gender;
     const b = over.bulan ?? selectedMonth;
     const k = over.kelompok ?? selectedKelompok;
+    const qq = over.q ?? q;
     if (g !== session.gender) p.set('gender', g);
     if (b !== currentYearMonth()) p.set('bulan', b);
     if (k) p.set('kelompok', k);
+    if (qq) p.set('q', qq);
     const s = p.toString();
     return s ? `/matrix/koordinator?${s}` : '/matrix/koordinator';
   };
@@ -243,6 +250,10 @@ export default async function MatrixKoordinatorPage({
                 <option value="">Semua kelompok</option>
                 {(kelompokList ?? []).map((k) => <option key={k.id} value={k.id}>{k.name}</option>)}
               </select>
+            </div>
+            <div style={{ flex: '2 1 200px', minWidth: 160 }}>
+              <label className="t-tiny" htmlFor="matrix_q" style={{ display: 'block', marginBottom: 4 }}>Cari nama</label>
+              <input id="matrix_q" name="q" type="search" defaultValue={q} placeholder="Nama pengajar…" className="input" style={{ height: 38 }} />
             </div>
             <button type="submit" className="btn btn-ghost btn-sm" style={{ height: 38 }}>Terapkan</button>
             {live && (

@@ -377,7 +377,10 @@ export async function computeMatrixForMonth(yearMonth: string): Promise<MatrixRo
     const skorKedisiplinan = disp && disp.total > 0 ? pctTo4(disp.baik / disp.total) : null;
 
     const lat = latihanByPengajar.get(pg.id);
-    const skorTanggungJawab = lat && lat.total > 0 ? pctTo4(lat.done / lat.total) : null;
+    // %latihan mandiri beres (report ketua kelas HITS). Dipakai Tanggung Jawab,
+    // dan sebagai fallback Evaluasi & Penguasaan bila ketua kelompok belum isi.
+    const skorLatihan = lat && lat.total > 0 ? pctTo4(lat.done / lat.total) : null;
+    const skorTanggungJawab = skorLatihan;
 
     // Komitmen Jadwal = rata-rata(Stabilitas Jadwal, Anti-Mangkir). Hanya dinilai
     // bila pengajar punya data HITS (≥1 keterangan non-libur), selain itu null.
@@ -397,13 +400,15 @@ export async function computeMatrixForMonth(yearMonth: string): Promise<MatrixRo
       skor_metode_pengajaran: ped?.skor_metode_pengajaran ?? null,
       skor_kepatuhan_silabus: ped?.skor_kepatuhan_silabus ?? null,
       skor_manajemen_halaqah: ped?.skor_manajemen_halaqah ?? null,
-      skor_evaluasi_penguasaan: ped?.skor_evaluasi_penguasaan ?? null,
+      skor_kepatuhan_sop: ped?.skor_kepatuhan_sop ?? null,
     };
     const soft = {
       skor_kedisiplinan_waktu: skorKedisiplinan,
       skor_komitmen_jadwal: skorKomitmen,
       skor_tanggung_jawab: skorTanggungJawab,
-      skor_kepatuhan_sop: ped?.skor_kepatuhan_sop ?? null,
+      // Ketua kelompok isi manual → pakai itu. Belum diisi → sinkron dari
+      // performa latihan mandiri (report ketua kelas).
+      skor_evaluasi_penguasaan: ped?.skor_evaluasi_penguasaan ?? skorLatihan,
     };
 
     // Hard skill berbobot 9 porsi: kehadiran maahir 3, kehadiran tibyan 3,
