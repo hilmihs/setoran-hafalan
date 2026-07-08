@@ -27,11 +27,11 @@ const INDIKATOR: Array<{
   { field: 'skor_metode_pengajaran', label: 'Metode Pengajaran',     short: 'Metode',    kategori: 'Pedagogis',  standar: 4 },
   { field: 'skor_kepatuhan_silabus', label: 'Kepatuhan Silabus',     short: 'Silabus',   kategori: 'Pedagogis',  standar: 4 },
   { field: 'skor_manajemen_halaqah', label: 'Manajemen Halaqah',     short: 'Halaqah',   kategori: 'Pedagogis',  standar: 4 },
-  { field: 'skor_evaluasi_penguasaan',label:'Evaluasi & Penguasaan', short: 'Evaluasi',  kategori: 'Pedagogis',  standar: 4 },
+  { field: 'skor_kepatuhan_sop',     label: 'Kepatuhan SOP Teknis',  short: 'SOP',       kategori: 'Pedagogis',  standar: 4 },
   { field: 'skor_kedisiplinan_waktu',label: 'Kedisiplinan Waktu',    short: 'Disiplin',  kategori: 'Soft Skill', standar: 4 },
   { field: 'skor_komitmen_jadwal',   label: 'Komitmen Jadwal',       short: 'Komitmen',  kategori: 'Soft Skill', standar: 4 },
   { field: 'skor_tanggung_jawab',    label: 'Tanggung Jawab',        short: 'Tanggung J',kategori: 'Soft Skill', standar: 4 },
-  { field: 'skor_kepatuhan_sop',     label: 'Kepatuhan SOP Teknis',  short: 'SOP',       kategori: 'Soft Skill', standar: 4 },
+  { field: 'skor_evaluasi_penguasaan',label:'Evaluasi & Penguasaan', short: 'Evaluasi',  kategori: 'Soft Skill', standar: 4 },
 ];
 
 const KATEGORI_COLOR: Record<string, string> = {

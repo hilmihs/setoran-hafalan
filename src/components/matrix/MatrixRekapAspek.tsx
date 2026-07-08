@@ -69,7 +69,7 @@ export function MatrixRekapAspek({ rows }: { rows: MatrixTableRow[] }) {
         <div>
           <h2 className="t-h3" style={{ marginBottom: 2 }}>Rekap Pemenuhan Aspek</h2>
           <p className="t-tiny" style={{ color: 'var(--muted)' }}>
-            {total} pengajar dinilai · terpenuhi = skor ≥ standar
+            {total} pengajar · total tiap aspek = jumlah yang DINILAI di aspek itu (bukan {total})
           </p>
         </div>
         <button type="button" className="btn btn-ghost btn-sm" style={{ height: 32 }} onClick={() => setOpen((o) => !o)}>
@@ -81,7 +81,11 @@ export function MatrixRekapAspek({ rows }: { rows: MatrixTableRow[] }) {
         {KAT_ORDER.map((kat) => {
           const standar = KATEGORI_STANDAR[kat];
           const avgKey = KAT_AVG_KEY[kat];
-          const aspekCount = tally(rows.map((r) => r[avgKey]), standar);
+          // Pool aspek = pengajar yang DINILAI di aspek ini (rata aspek non-null).
+          // Denominator ("batas akhir") pakai ini, bukan total keseluruhan.
+          const poolRows = rows.filter((r) => r[avgKey] !== null && r[avgKey] !== undefined);
+          const totalAspek = poolRows.length;
+          const aspekCount = tally(poolRows.map((r) => r[avgKey]), standar);
           const indikator = INDIKATOR_BY_KATEGORI[kat];
 
           return (
@@ -91,34 +95,36 @@ export function MatrixRekapAspek({ rows }: { rows: MatrixTableRow[] }) {
                 <span className="t-small" style={{ fontWeight: 600 }}>{KATEGORI_LABEL[kat]}</span>
                 <span className="t-tiny t-mono" style={{ color: 'var(--muted)' }}>
                   <span style={{ color: 'var(--hijau-ink)', fontWeight: 700 }}>{aspekCount.terpenuhi}</span>
-                  /{total} terpenuhi · {pct(aspekCount.terpenuhi, total)}%
+                  /{totalAspek} terpenuhi · {pct(aspekCount.terpenuhi, totalAspek)}%
                 </span>
               </div>
               <Bar c={aspekCount} />
               <p className="t-tiny" style={{ color: 'var(--muted-2)', marginTop: 4 }}>
-                {aspekCount.belum} belum · {aspekCount.tanpaData} tanpa data · standar rata-rata ≥ {standar}
+                {aspekCount.belum} di bawah standar · {totalAspek} dari {total} pengajar dinilai · standar rata-rata ≥ {standar}
               </p>
 
               {/* Rincian indikator */}
               {open && (
                 <div style={{ display: 'grid', gap: 8, marginTop: 10, paddingLeft: 4 }}>
                   {indikator.map((ind) => {
-                    const c = tally(rows.map((r) => r.scores[ind.key]), ind.standar);
+                    // Denominator = pool aspek. terpenuhi+belum+tanpaData = totalAspek.
+                    const c = tally(poolRows.map((r) => r.scores[ind.key]), ind.standar);
+                    const sudah = c.terpenuhi + c.belum; // skor terisi
                     return (
-                      <div key={ind.key} style={{ display: 'grid', gridTemplateColumns: '1fr 90px', gap: 8, alignItems: 'center' }}>
+                      <div key={ind.key} style={{ display: 'grid', gridTemplateColumns: '1fr 118px', gap: 8, alignItems: 'center' }}>
                         <div>
                           <div style={{ display: 'flex', justifyContent: 'space-between', gap: 6 }}>
                             <span className="t-tiny">{ind.label} <span style={{ color: 'var(--muted-2)' }}>(≥{ind.standar})</span></span>
                             <span className="t-tiny t-mono" style={{ color: 'var(--muted)' }}>
-                              <span style={{ color: 'var(--hijau-ink)', fontWeight: 700 }}>{c.terpenuhi}</span>
-                              {c.belum > 0 && <span style={{ color: 'var(--merah-ink)' }}> · {c.belum}✕</span>}
-                              {c.tanpaData > 0 && <span style={{ color: 'var(--muted-2)' }}> · {c.tanpaData}–</span>}
+                              <span style={{ color: 'var(--hijau-ink)', fontWeight: 700 }} title="terpenuhi">{c.terpenuhi}</span>
+                              {c.belum > 0 && <span style={{ color: 'var(--merah-ink)' }} title="di bawah standar"> · {c.belum}✕</span>}
+                              {c.tanpaData > 0 && <span style={{ color: 'var(--muted-2)' }} title="belum dinilai"> · {c.tanpaData} belum</span>}
                             </span>
                           </div>
                           <div style={{ marginTop: 3 }}><Bar c={c} /></div>
                         </div>
                         <div className="t-tiny t-mono" style={{ textAlign: 'right', color: 'var(--muted)' }}>
-                          {pct(c.terpenuhi, total)}%
+                          {sudah}/{totalAspek} dinilai
                         </div>
                       </div>
                     );

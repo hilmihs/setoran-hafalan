@@ -25,6 +25,14 @@ function monthLabel(month: string): string {
     timeZone: 'UTC',
   });
 }
+// Periode Maahir: 28 bulan lalu s/d 27 bulan ini (bukan kalender penuh).
+function periodeLabel(month: string): string {
+  const [y, m] = month.split('-').map(Number);
+  const start = new Date(Date.UTC(y, m - 2, 28));
+  const end = new Date(Date.UTC(y, m - 1, 27));
+  const f = (d: Date) => d.toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' });
+  return `${f(start)} – ${f(end)}`;
+}
 
 export default async function LaporanMaahirPage({
   searchParams,
@@ -62,6 +70,8 @@ export default async function LaporanMaahirPage({
           <div className="section-row" style={{ marginBottom: 6, alignItems: 'center' }}>
             <p className="t-small" style={{ color: 'var(--muted-2)' }}>
               Rekap program Maahir — <strong>{monthLabel(month)}</strong>
+              <br />
+              <span className="t-tiny">Periode {periodeLabel(month)}</span>
             </p>
             <MonthNavSelect options={monthOptions} value={month} />
           </div>

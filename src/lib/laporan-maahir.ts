@@ -67,9 +67,11 @@ export type LaporanMaahir = {
 
 function monthRange(month: string): { start: string; end: string } {
   const [y, m] = month.split('-').map(Number);
-  const start = `${y}-${String(m).padStart(2, '0')}-01`;
-  const lastDay = new Date(Date.UTC(y, m, 0)).getUTCDate();
-  let end = `${y}-${String(m).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
+  // Periode Maahir bukan kalender penuh: tgl 28 bulan LALU s/d tgl 27 bulan ini.
+  // mis. month=2026-06 → 2026-05-28 .. 2026-06-27.
+  const startD = new Date(Date.UTC(y, m - 2, 28)); // m 1-based → bulan sebelumnya = m-2
+  const start = `${startD.getUTCFullYear()}-${String(startD.getUTCMonth() + 1).padStart(2, '0')}-28`;
+  let end = `${y}-${String(m).padStart(2, '0')}-27`;
   const today = todayJakarta();
   if (end > today) end = today; // cap di hari ini
   return { start, end };
