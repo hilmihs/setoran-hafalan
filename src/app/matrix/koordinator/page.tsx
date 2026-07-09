@@ -68,7 +68,8 @@ export default async function MatrixKoordinatorPage({
   let pengajarQuery = supabaseAdmin
     .from('pengajar')
     .select('id, name, kelompok_id, active')
-    .eq('gender', gender);
+    .eq('gender', gender)
+    .neq('matrix_exclude', true); // guru observasi-saja (mis. DPQ) tak masuk matrix
   if (selectedKelompok) {
     pengajarQuery = pengajarQuery.eq('kelompok_id', selectedKelompok);
   }

@@ -27,6 +27,7 @@ export async function POST(req: NextRequest) {
       keterangan_evaluasi,
       skor_kepatuhan_sop,
       keterangan_sop,
+      catatan_umum,
     } = body as {
       pengajar_id: string;
       year_month: string;
@@ -40,6 +41,7 @@ export async function POST(req: NextRequest) {
       keterangan_evaluasi: string | null;
       skor_kepatuhan_sop: number | null;
       keterangan_sop: string | null;
+      catatan_umum: string | null;
     };
 
     if (!pengajar_id || !year_month) {
@@ -47,6 +49,9 @@ export async function POST(req: NextRequest) {
     }
     if (!/^\d{4}-\d{2}$/.test(year_month)) {
       return NextResponse.json({ error: 'Format year_month harus YYYY-MM' }, { status: 400 });
+    }
+    if (typeof catatan_umum === 'string' && catatan_umum.length > 2000) {
+      return NextResponse.json({ error: 'Catatan umum maksimal 2000 karakter.' }, { status: 400 });
     }
 
     // Pengajar yang dinilai harus anggota kelompok ketua ini
@@ -75,6 +80,7 @@ export async function POST(req: NextRequest) {
           keterangan_evaluasi: keterangan_evaluasi ?? null,
           skor_kepatuhan_sop: skor_kepatuhan_sop ?? null,
           keterangan_sop: keterangan_sop ?? null,
+          catatan_umum: catatan_umum ?? null,
           assessed_by: session.pengajar_id,
           updated_at: new Date().toISOString(),
         },

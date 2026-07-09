@@ -136,7 +136,7 @@ export default async function PengajarDetailPage({
     supabaseAdmin
       .from('penilaian_pedagogis')
       .select(
-        'year_month, skor_metode_pengajaran, keterangan_metode, skor_kepatuhan_silabus, keterangan_silabus, skor_manajemen_halaqah, keterangan_halaqah, skor_evaluasi_penguasaan, keterangan_evaluasi, skor_kepatuhan_sop, keterangan_sop, updated_at'
+        'year_month, skor_metode_pengajaran, keterangan_metode, skor_kepatuhan_silabus, keterangan_silabus, skor_manajemen_halaqah, keterangan_halaqah, skor_evaluasi_penguasaan, keterangan_evaluasi, skor_kepatuhan_sop, keterangan_sop, catatan_umum, updated_at'
       )
       .eq('pengajar_id', params.id)
       .order('year_month', { ascending: false })
@@ -311,6 +311,12 @@ export default async function PengajarDetailPage({
               </div>
             ) : (
               <p className="t-small" style={{ color: 'var(--muted)' }}>Belum ada data matrix untuk bulan {monthSel}.</p>
+            )}
+            {pedagogisSel?.catatan_umum && (
+              <div style={{ marginTop: 14, paddingTop: 12, borderTop: '1px solid var(--line)' }}>
+                <div className="t-tiny" style={{ color: 'var(--ink-2)', marginBottom: 4 }}>CATATAN UMUM KETUA KELOMPOK — BULAN {monthSel}</div>
+                <p className="t-small" style={{ margin: 0, color: 'var(--ink-2)', fontStyle: 'italic', whiteSpace: 'pre-wrap' }}>“{pedagogisSel.catatan_umum}”</p>
+              </div>
             )}
           </div>
 

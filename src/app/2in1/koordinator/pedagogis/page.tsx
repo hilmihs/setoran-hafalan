@@ -1,3 +1,4 @@
+import { Fragment } from 'react';
 import Link from 'next/link';
 import { requireKoordinator } from '@/lib/session';
 import { supabaseAdmin } from '@/lib/supabase-admin';
@@ -57,13 +58,13 @@ export default async function KoordinatorPedagogisPage({ searchParams }: { searc
 
   const { data: penilaianRaw } = await supabaseAdmin
     .from('penilaian_pedagogis')
-    .select('pengajar_id, skor_metode_pengajaran, skor_kepatuhan_silabus, skor_manajemen_halaqah, skor_evaluasi_penguasaan, skor_kepatuhan_sop')
+    .select('pengajar_id, skor_metode_pengajaran, skor_kepatuhan_silabus, skor_manajemen_halaqah, skor_evaluasi_penguasaan, skor_kepatuhan_sop, catatan_umum')
     .eq('year_month', ym)
     .in('pengajar_id', pengajarIds.length ? pengajarIds : ['00000000-0000-0000-0000-000000000000']);
   const avgByPengajar = new Map<string, number | null>();
-  const scoresByPengajar = new Map<string, Record<string, number | null>>();
+  const scoresByPengajar = new Map<string, Record<string, string | number | null>>();
   for (const p of penilaianRaw ?? []) {
-    scoresByPengajar.set(p.pengajar_id, p as Record<string, number | null>);
+    scoresByPengajar.set(p.pengajar_id, p as Record<string, string | number | null>);
     const scores = PED_FIELDS.map((f) => (p as Record<string, number | null>)[f]).filter((x): x is number => x !== null && x !== undefined);
     avgByPengajar.set(p.pengajar_id, scores.length ? Math.round((scores.reduce((a, b) => a + b, 0) / scores.length) * 10) / 10 : null);
   }
@@ -138,27 +139,38 @@ export default async function KoordinatorPedagogisPage({ searchParams }: { searc
                 {g.anggota.filter((p) => !p.is_ketua).map((p) => {
                   const sc = scoresByPengajar.get(p.id);
                   const avg = avgByPengajar.get(p.id);
+                  const num = (k: string) => (sc?.[k] as number | null) ?? null;
+                  const catatan = (sc?.catatan_umum as string | null) ?? null;
                   return (
-                    <tr key={p.id}>
-                      <td className="tbl-cardhead">
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                          <div className="avatar" style={{ width: 24, height: 24, fontSize: 10 }}><Initials name={p.name} /></div>
-                          <span style={{ fontSize: 13, fontWeight: 600 }}>{p.name}</span>
-                        </div>
-                      </td>
-                      <ScoreCell v={sc?.skor_metode_pengajaran ?? null} label="Metode" />
-                      <ScoreCell v={sc?.skor_kepatuhan_silabus ?? null} label="Silabus" />
-                      <ScoreCell v={sc?.skor_manajemen_halaqah ?? null} label="Halaqah" />
-                      <ScoreCell v={sc?.skor_evaluasi_penguasaan ?? null} label="Evaluasi" />
-                      <ScoreCell v={sc?.skor_kepatuhan_sop ?? null} muted label="SOP" />
-                      <td data-label="Rata²" style={{ textAlign: 'center' }}>
-                        {avg != null ? (
-                          <span style={{ fontSize: 14, fontWeight: 800, color: avg >= 3 ? 'var(--hijau-ink)' : avg >= 2 ? 'var(--kuning-ink)' : 'var(--merah-ink)' }}>{avg.toFixed(1)}</span>
-                        ) : (
-                          <span className="badge badge-merah" style={{ fontSize: 10 }}><span className="dot" />belum</span>
-                        )}
-                      </td>
-                    </tr>
+                    <Fragment key={p.id}>
+                      <tr>
+                        <td className="tbl-cardhead">
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                            <div className="avatar" style={{ width: 24, height: 24, fontSize: 10 }}><Initials name={p.name} /></div>
+                            <span style={{ fontSize: 13, fontWeight: 600 }}>{p.name}</span>
+                          </div>
+                        </td>
+                        <ScoreCell v={num('skor_metode_pengajaran')} label="Metode" />
+                        <ScoreCell v={num('skor_kepatuhan_silabus')} label="Silabus" />
+                        <ScoreCell v={num('skor_manajemen_halaqah')} label="Halaqah" />
+                        <ScoreCell v={num('skor_evaluasi_penguasaan')} label="Evaluasi" />
+                        <ScoreCell v={num('skor_kepatuhan_sop')} muted label="SOP" />
+                        <td data-label="Rata²" style={{ textAlign: 'center' }}>
+                          {avg != null ? (
+                            <span style={{ fontSize: 14, fontWeight: 800, color: avg >= 3 ? 'var(--hijau-ink)' : avg >= 2 ? 'var(--kuning-ink)' : 'var(--merah-ink)' }}>{avg.toFixed(1)}</span>
+                          ) : (
+                            <span className="badge badge-merah" style={{ fontSize: 10 }}><span className="dot" />belum</span>
+                          )}
+                        </td>
+                      </tr>
+                      {catatan && (
+                        <tr className="cat-row">
+                          <td colSpan={7} style={{ padding: '2px 8px 8px 40px', color: 'var(--ink-2)', fontSize: 12, fontStyle: 'italic', whiteSpace: 'pre-wrap' }}>
+                            📝 {catatan}
+                          </td>
+                        </tr>
+                      )}
+                    </Fragment>
                   );
                 })}
               </tbody>

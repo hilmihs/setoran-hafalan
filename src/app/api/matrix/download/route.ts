@@ -36,7 +36,8 @@ export async function GET(req: NextRequest) {
   let pq = supabaseAdmin
     .from('pengajar')
     .select('id, name, kelompok_id, active')
-    .eq('gender', gender);
+    .eq('gender', gender)
+    .neq('matrix_exclude', true); // guru observasi-saja (mis. DPQ) tak masuk matrix
   if (kelompokId) pq = pq.eq('kelompok_id', kelompokId);
   const { data: pengajarList } = await pq.order('name');
 

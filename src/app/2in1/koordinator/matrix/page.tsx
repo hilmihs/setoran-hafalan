@@ -38,7 +38,8 @@ export default async function Matrix2in1Page({
   const { data: pengajarList } = await supabaseAdmin
     .from('pengajar')
     .select('id, name, gender, kelompok:kelompok_id(name)')
-    .eq('active', true);
+    .eq('active', true)
+    .neq('matrix_exclude', true); // guru observasi-saja (mis. DPQ) tak masuk matrix
   const pengajarMap = new Map(
     (pengajarList ?? []).map((p) => [p.id, {
       name: p.name as string,

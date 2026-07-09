@@ -92,7 +92,7 @@ export default async function PenilaianPedagogisPage({
   // Penilaian bulan terpilih (untuk form edit)
   const { data: existing } = await supabaseAdmin
     .from('penilaian_pedagogis')
-    .select('pengajar_id, skor_metode_pengajaran, keterangan_metode, skor_kepatuhan_silabus, keterangan_silabus, skor_manajemen_halaqah, keterangan_halaqah, skor_evaluasi_penguasaan, keterangan_evaluasi, skor_kepatuhan_sop, keterangan_sop')
+    .select('pengajar_id, skor_metode_pengajaran, keterangan_metode, skor_kepatuhan_silabus, keterangan_silabus, skor_manajemen_halaqah, keterangan_halaqah, skor_evaluasi_penguasaan, keterangan_evaluasi, skor_kepatuhan_sop, keterangan_sop, catatan_umum')
     .eq('year_month', ym)
     .in('pengajar_id', memberIds.length ? memberIds : noId);
   const existingMap = new Map((existing ?? []).map((e) => [e.pengajar_id, e]));

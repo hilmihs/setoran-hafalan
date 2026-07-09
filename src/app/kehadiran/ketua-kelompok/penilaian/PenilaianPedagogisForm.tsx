@@ -36,6 +36,7 @@ type PenilaianData = {
   keterangan_evaluasi: string | null;
   skor_kepatuhan_sop: number | null;
   keterangan_sop: string | null;
+  catatan_umum: string | null;
 };
 
 type Member = { id: string; name: string; penilaian: PenilaianData | null };
@@ -47,6 +48,7 @@ const EMPTY: PenilaianData = {
   skor_manajemen_halaqah: null, keterangan_halaqah: null,
   skor_evaluasi_penguasaan: null, keterangan_evaluasi: null,
   skor_kepatuhan_sop: null, keterangan_sop: null,
+  catatan_umum: null,
 };
 
 export function PenilaianPedagogisForm({
@@ -88,6 +90,7 @@ export function PenilaianPedagogisForm({
           keterangan_evaluasi: state.keterangan_evaluasi,
           skor_kepatuhan_sop: state.skor_kepatuhan_sop,
           keterangan_sop: state.keterangan_sop,
+          catatan_umum: state.catatan_umum,
         }),
       });
       const json = await res.json();
@@ -233,6 +236,25 @@ export function PenilaianPedagogisForm({
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                     {SOP.map((a) => renderAspect(m, row, a))}
                   </div>
+                </div>
+                <div style={{ borderTop: '1px solid var(--line)', paddingTop: 10 }}>
+                  <div className="t-tiny" style={{ color: 'var(--muted)', margin: '2px 0 6px' }}>CATATAN UMUM (opsional)</div>
+                  {readOnly ? (
+                    row.catatan_umum ? (
+                      <p className="t-small" style={{ margin: 0, color: 'var(--ink-2)', whiteSpace: 'pre-wrap' }}>{row.catatan_umum}</p>
+                    ) : (
+                      <p className="t-small" style={{ margin: 0, color: 'var(--muted-2)' }}>—</p>
+                    )
+                  ) : (
+                    <textarea
+                      className="note-field"
+                      rows={3}
+                      style={{ width: '100%', resize: 'vertical' }}
+                      placeholder="Catatan bebas untuk pengajar ini (opsional)…"
+                      value={row.catatan_umum ?? ''}
+                      onChange={(e) => updateRow(m.id, { catatan_umum: e.target.value || null })}
+                    />
+                  )}
                 </div>
               </div>
             )}

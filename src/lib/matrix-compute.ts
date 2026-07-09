@@ -147,7 +147,8 @@ export async function computeMatrixForMonth(yearMonth: string): Promise<MatrixRo
   const { data: pengajarList } = await supabaseAdmin
     .from('pengajar')
     .select('id, name, gender, whatsapp_number')
-    .eq('active', true);
+    .eq('active', true)
+    .neq('matrix_exclude', true); // guru observasi-saja (mis. DPQ) tak masuk matrix
   const pengajars = pengajarList ?? [];
   if (!pengajars.length) return [];
 
