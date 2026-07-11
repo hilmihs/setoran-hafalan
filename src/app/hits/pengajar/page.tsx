@@ -8,6 +8,7 @@ import { deriveHalaqahPertemuanWithOverrides, type PertemuanOverride } from '@/l
 import { todayJakarta } from '@/lib/maahir-presensi';
 import { AssignKetuaPanel, type HalaqahForAssign } from './AssignKetuaStep';
 import { PindahHalaqahPanel } from './PindahHalaqahPanel';
+import { UbahLevelPanel } from './UbahLevelPanel';
 import { TabayyunAlasanPanel, type TabayyunForPengajar } from './TabayyunAlasanForm';
 import { getHitsBatches } from '@/lib/hits-rekap';
 
@@ -25,7 +26,7 @@ export default async function HitsPengajarPage() {
     : `pengajar_id.eq.${session.pengajar_id}`;
   const { data: halaqahRows } = await supabaseAdmin
     .from('hits_halaqah')
-    .select('id, batch_id, level, name, jadwal_raw, jadwal_hari, gender')
+    .select('id, batch_id, level, name, jadwal_raw, jadwal_hari, gender, program')
     .eq('active', true)
     .or(orFilter);
   const halaqah = halaqahRows ?? [];
@@ -167,6 +168,12 @@ export default async function HitsPengajarPage() {
           ) : (
             <AssignKetuaPanel halaqahList={panelData} />
           )}
+
+          <UbahLevelPanel halaqahList={halaqah.map((h) => ({
+            id: h.id as string,
+            name: h.name as string,
+            program: (h.program as 'dasar' | 'lanjutan' | null) ?? null,
+          }))} />
 
           <div style={{ marginTop: 24, paddingTop: 16, borderTop: '1px solid var(--line)' }}>
             <h2 className="t-h2" style={{ marginBottom: 4 }}>Pemindahan Halaqah</h2>

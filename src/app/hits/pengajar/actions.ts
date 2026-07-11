@@ -612,3 +612,45 @@ export async function ajukanKlaimHalaqah(_prev: PindahResult | undefined, fd: Fo
   });
   return { ok: true, waUrl: buildWaMeUrl(approverWa, msg) };
 }
+
+/** Pengajar mengubah level halaqahnya (dasar ↔ lanjutan). */
+export async function ubahLevelHalaqah(_prev: Res | undefined, fd: FormData): Promise<Res> {
+  const session = await requirePengajar();
+  const wa = await getSessionWa();
+  const halaqahId = fd.get('halaqah_id') as string;
+  const newProgram = fd.get('program') as string;
+
+  if (!halaqahId || !['dasar', 'lanjutan'].includes(newProgram)) {
+    return { error: 'Data tidak valid.' };
+  }
+
+  // Pastikan halaqah ini milik pengajar yang login.
+  const orFilter = wa
+    ? `pengajar_id.eq.${session.pengajar_id},pengajar_wa.eq.${wa}`
+    : `pengajar_id.eq.${session.pengajar_id}`;
+  const { data: halaqah } = await supabaseAdmin
+    .from('hits_halaqah')
+    .select('id, name, program, level')
+    .eq('id', halaqahId)
+    .or(orFilter)
+    .single();
+
+  if (!halaqah) return { error: 'Halaqah tidak ditemukan atau bukan milik Anda.' };
+
+  const newLevel = newProgram === 'dasar' ? 'qoidah_nuroniyyah' : 'perbaikan_bacaan';
+  const { error } = await supabaseAdmin
+    .from('hits_halaqah')
+    .update({ program: newProgram, level: newLevel, updated_at: new Date().toISOString() })
+    .eq('id', halaqahId);
+
+  if (error) return { error: error.message };
+
+  await logAudit(session as PengajarSession, 'ubah_level_halaqah', {
+    halaqah_id: halaqahId,
+    from: halaqah.program,
+    to: newProgram,
+  });
+
+  revalidatePath('/hits/pengajar');
+  return { ok: true };
+}

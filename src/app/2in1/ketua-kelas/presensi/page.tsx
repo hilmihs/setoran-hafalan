@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { supabaseAdmin } from '@/lib/supabase-admin';
 import { getSessionWa } from '@/lib/program-kelas';
@@ -92,9 +93,11 @@ export default async function PresensiWizardPage() {
           <div className="wordmark">
             <span className="mark">M</span> Presensi Wajib
           </div>
-          <LogoutButton />
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            <Link href="/2in1/ketua-kelas" className="btn btn-sm btn-ghost">← Menu Utama</Link>
+            <LogoutButton />
+          </div>
         </div>
-
         <div className="page">
           <div
             className="card"
