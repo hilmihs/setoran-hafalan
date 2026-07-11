@@ -28,6 +28,15 @@ function AssignForm({
 
   function handleSubmit(fd: FormData) {
     setError(null);
+    // Guard: dropdown mode tapi peserta belum dipilih → switch ke manual,
+    // jangan kirim ke server supaya user tidak bingung dengan error generik.
+    const pesertaId = (fd.get('peserta_id') as string) ?? '';
+    const ketuaNama = ((fd.get('ketua_nama') as string) ?? '').trim();
+    if (!manual && !pesertaId && !ketuaNama) {
+      setManual(true);
+      setError('Nama tidak ada di daftar? Tulis nama ketua secara manual, lalu submit ulang.');
+      return;
+    }
     startTransition(async () => {
       const res = await electKetua(undefined, fd);
       if (res?.error) {
@@ -194,7 +203,7 @@ export function AssignKetuaPanel({ halaqahList }: { halaqahList: HalaqahForAssig
                 </button>
               </div>
             ) : (
-              <AssignForm halaqah={modalHalaqah} onDone={(res) => handleDone(res, modalHalaqah.id)} />
+              <AssignForm key={modalHalaqah.id} halaqah={modalHalaqah} onDone={(res) => handleDone(res, modalHalaqah.id)} />
             )}
           </div>
         )}
