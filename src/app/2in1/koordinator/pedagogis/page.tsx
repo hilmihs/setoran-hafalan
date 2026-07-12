@@ -43,10 +43,14 @@ export default async function KoordinatorPedagogisPage({ searchParams }: { searc
   const cur = currentYearMonth();
   const ym = searchParams.month && /^\d{4}-\d{2}$/.test(searchParams.month) ? searchParams.month : cur;
 
-  const { data: kelompokList } = await supabaseAdmin
+  const { data: kelompokRaw } = await supabaseAdmin
     .from('kelompok_pengajar')
     .select('id, name, gender')
     .order('name');
+  // "Belum Ada Kelompok (...)" adalah bucket penampung pengajar yang belum
+  // diorganisir ke kelompok nyata — bukan halaqah beneran, jadi dikecualikan
+  // dari penilaian pedagogis (tidak punya ketua kelompok untuk menilai).
+  const kelompokList = (kelompokRaw ?? []).filter((k) => !k.name.startsWith('Belum Ada Kelompok'));
 
   const { data: pengajarRaw } = await supabaseAdmin
     .from('pengajar')
