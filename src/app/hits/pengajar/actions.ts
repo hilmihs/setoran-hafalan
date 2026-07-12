@@ -645,10 +645,12 @@ export async function ubahLevelHalaqah(_prev: Res | undefined, fd: FormData): Pr
 
   if (error) return { error: error.message };
 
-  await logAudit(session as PengajarSession, 'ubah_level_halaqah', {
-    halaqah_id: halaqahId,
-    from: halaqah.program,
-    to: newProgram,
+  await logAudit({
+    actor: session as PengajarSession,
+    action: 'ubah_level_halaqah',
+    targetTable: 'hits_halaqah',
+    targetId: halaqahId,
+    detail: { from: halaqah.program, to: newProgram },
   });
 
   revalidatePath('/hits/pengajar');
