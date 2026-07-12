@@ -25,8 +25,6 @@ export async function POST(req: NextRequest) {
       keterangan_halaqah,
       skor_evaluasi_penguasaan,
       keterangan_evaluasi,
-      skor_kepatuhan_sop,
-      keterangan_sop,
       catatan_umum,
     } = body as {
       pengajar_id: string;
@@ -39,8 +37,6 @@ export async function POST(req: NextRequest) {
       keterangan_halaqah: string | null;
       skor_evaluasi_penguasaan: number | null;
       keterangan_evaluasi: string | null;
-      skor_kepatuhan_sop: number | null;
-      keterangan_sop: string | null;
       catatan_umum: string | null;
     };
 
@@ -78,8 +74,8 @@ export async function POST(req: NextRequest) {
           keterangan_halaqah: keterangan_halaqah ?? null,
           skor_evaluasi_penguasaan: skor_evaluasi_penguasaan ?? null,
           keterangan_evaluasi: keterangan_evaluasi ?? null,
-          skor_kepatuhan_sop: skor_kepatuhan_sop ?? null,
-          keterangan_sop: keterangan_sop ?? null,
+          // skor_kepatuhan_sop/keterangan_sop TIDAK ditulis dari sini —
+          // diisi otomatis oleh sistem observasi ketua kelas HITS.
           catatan_umum: catatan_umum ?? null,
           assessed_by: session.pengajar_id,
           updated_at: new Date().toISOString(),

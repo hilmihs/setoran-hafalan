@@ -401,15 +401,17 @@ export async function computeMatrixForMonth(yearMonth: string): Promise<MatrixRo
       skor_metode_pengajaran: ped?.skor_metode_pengajaran ?? null,
       skor_kepatuhan_silabus: ped?.skor_kepatuhan_silabus ?? null,
       skor_manajemen_halaqah: ped?.skor_manajemen_halaqah ?? null,
-      skor_kepatuhan_sop: ped?.skor_kepatuhan_sop ?? null,
+      // Ketua kelompok isi manual → pakai itu. Belum diisi → sinkron dari
+      // performa latihan mandiri (report ketua kelas).
+      skor_evaluasi_penguasaan: ped?.skor_evaluasi_penguasaan ?? skorLatihan,
     };
     const soft = {
       skor_kedisiplinan_waktu: skorKedisiplinan,
       skor_komitmen_jadwal: skorKomitmen,
       skor_tanggung_jawab: skorTanggungJawab,
-      // Ketua kelompok isi manual → pakai itu. Belum diisi → sinkron dari
-      // performa latihan mandiri (report ketua kelas).
-      skor_evaluasi_penguasaan: ped?.skor_evaluasi_penguasaan ?? skorLatihan,
+      // Sekarang otomatis dari sistem observasi ketua kelas HITS, bukan
+      // input manual ketua kelompok — lihat penilaian-pedagogis/upsert.
+      skor_kepatuhan_sop: ped?.skor_kepatuhan_sop ?? null,
     };
 
     // Hard skill berbobot 9 porsi: kehadiran maahir 3, kehadiran tibyan 3,

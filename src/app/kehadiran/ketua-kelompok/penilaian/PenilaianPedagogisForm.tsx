@@ -19,11 +19,9 @@ const PEDAGOGIS = [
   { skorField: 'skor_evaluasi_penguasaan', ketField: 'keterangan_evaluasi', label: 'Evaluasi & Penguasaan' },
 ] as const;
 
-const SOP = [
-  { skorField: 'skor_kepatuhan_sop', ketField: 'keterangan_sop', label: 'Kepatuhan SOP Teknis' },
-] as const;
-
-const ALL = [...PEDAGOGIS, ...SOP];
+// Kepatuhan SOP Teknis (soft skill) TIDAK dinilai manual di sini — datanya
+// otomatis dari sistem observasi ketua kelas HITS.
+const ALL = PEDAGOGIS;
 
 type PenilaianData = {
   skor_metode_pengajaran: number | null;
@@ -88,8 +86,6 @@ export function PenilaianPedagogisForm({
           keterangan_halaqah: state.keterangan_halaqah,
           skor_evaluasi_penguasaan: state.skor_evaluasi_penguasaan,
           keterangan_evaluasi: state.keterangan_evaluasi,
-          skor_kepatuhan_sop: state.skor_kepatuhan_sop,
-          keterangan_sop: state.keterangan_sop,
           catatan_umum: state.catatan_umum,
         }),
       });
@@ -229,12 +225,6 @@ export function PenilaianPedagogisForm({
                   <div className="t-tiny" style={{ color: 'var(--emas-ink)', margin: '4px 0 2px' }}>KOMPETENSI PEDAGOGIS (4 aspek → Matrix)</div>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                     {PEDAGOGIS.map((a) => renderAspect(m, row, a))}
-                  </div>
-                </div>
-                <div>
-                  <div className="t-tiny" style={{ color: 'var(--muted)', margin: '2px 0' }}>SOP TEKNIS (Soft Skill)</div>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                    {SOP.map((a) => renderAspect(m, row, a))}
                   </div>
                 </div>
                 <div style={{ borderTop: '1px solid var(--line)', paddingTop: 10 }}>
