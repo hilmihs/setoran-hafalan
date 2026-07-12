@@ -8,22 +8,17 @@ import { normalizeWhatsApp } from './whatsapp';
 import type { RoleAccess } from '@/types/db';
 import { ROLE_LANDING } from './roles';
 import { logLogins, logLogout } from './session-log';
-import { logAudit } from './audit';
 
 const BCRYPT_COST = 12;
-
-// Trim + buang tanda bintang WA-bold yang tak sengaja ikut ter-copy
-// (template lama menampilkan password awal sebagai *123456*).
-function sanitizePassword(raw: string): string {
-  return raw.trim().replace(/^\*+|\*+$/g, '');
-}
 
 export async function login(
   _prev: { error?: string } | undefined,
   formData: FormData
 ): Promise<{ error?: string } | undefined> {
   const wa = normalizeWhatsApp(String(formData.get('whatsapp_number') ?? ''));
-  const password = sanitizePassword(String(formData.get('password') ?? ''));
+  // Trim + buang tanda bintang WA-bold yang tak sengaja ikut ter-copy
+  // (template lama menampilkan password awal sebagai *123456*).
+  const password = String(formData.get('password') ?? '').trim().replace(/^\*+|\*+$/g, '');
   if (!wa || !password) {
     return { error: 'Nomor WA dan password wajib diisi.' };
   }
@@ -249,9 +244,9 @@ export async function changePassword(
   _prev: { error?: string; ok?: boolean } | undefined,
   formData: FormData
 ): Promise<{ error?: string; ok?: boolean }> {
-  const current = sanitizePassword(String(formData.get('current_password') ?? ''));
-  const next = sanitizePassword(String(formData.get('new_password') ?? ''));
-  const confirm = sanitizePassword(String(formData.get('confirm_password') ?? ''));
+  const current = String(formData.get('current_password') ?? '');
+  const next = String(formData.get('new_password') ?? '');
+  const confirm = String(formData.get('confirm_password') ?? '');
 
   if (next.length < 6) {
     return { error: 'Password baru minimal 6 karakter.' };
@@ -295,13 +290,6 @@ export async function changePassword(
         .eq('whatsapp_number', waNum)
     )
   );
-
-  void logAudit({
-    actor: session,
-    action: 'change_password',
-    targetTable: roleTable.table,
-    targetId: roleTable.id,
-  });
 
   return { ok: true };
 }
