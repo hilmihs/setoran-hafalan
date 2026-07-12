@@ -1,0 +1,425 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>HITS Pengajar — Panduan Fitur</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Nunito+Sans:ital,opsz,wght@0,6..12,400..1000;1,6..12,400..800&display=swap" rel="stylesheet" />
+<style>
+  :root{
+    --krem:#F6F5EF; --hijau:#14503A; --hijau2:#1D6B4E;
+    --emas:#C2A14D; --emas-muda:#D8C48A; --emas-tint:#EFE6CC;
+    --ink:#23302A; --muted:#5C6B62; --merah:#9B2C2C;
+    --card:#ffffff; --shadow:0 18px 44px -22px rgba(20,80,58,.42);
+    --shadow-sm:0 8px 22px -14px rgba(20,80,58,.5);
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  body{background:#0c2c20;font-family:"Nunito Sans",system-ui,sans-serif;color:var(--ink);-webkit-font-smoothing:antialiased;overflow:hidden}
+
+  .deck{position:fixed;inset:0;display:grid;place-items:center;padding:2vmin}
+  .stage{position:relative;width:1920px;height:1080px;transform-origin:center;background:var(--krem);box-shadow:0 30px 80px -30px rgba(0,0,0,.6);overflow:hidden}
+  .slide{position:absolute;inset:0;display:none;flex-direction:column}
+  .slide.active{display:flex}
+  .slide.active .anim{opacity:0;animation:rise .5s cubic-bezier(.2,.8,.2,1) forwards}
+  .a1{animation-delay:.06s}.a2{animation-delay:.14s}.a3{animation-delay:.22s}.a4{animation-delay:.30s}.a5{animation-delay:.38s}.a6{animation-delay:.46s}
+  @keyframes rise{from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:none}}
+
+  .band{height:72px;background:var(--hijau);display:flex;align-items:center;justify-content:space-between;padding:0 64px;flex:0 0 auto}
+  .band .left{display:flex;align-items:center;gap:20px}
+  .pill{background:var(--emas);color:var(--hijau);font-weight:900;font-size:18px;letter-spacing:.06em;padding:6px 18px;border-radius:999px}
+  .band .lbl{color:var(--emas-muda);font-size:16px;font-weight:700;letter-spacing:.28em;text-transform:uppercase}
+  .band .pg{color:var(--emas-muda);font-size:18px;font-weight:800;letter-spacing:.12em}
+
+  .head{padding:40px 64px 0;display:flex;align-items:flex-start;gap:26px;flex:0 0 auto}
+  .badge{width:76px;height:76px;border-radius:16px;background:var(--hijau);display:grid;place-items:center;flex:0 0 auto;box-shadow:var(--shadow-sm)}
+  .badge svg{width:42px;height:42px}
+  .badge .num{color:var(--emas-muda);font-size:34px;font-weight:1000}
+  .head .txt{padding-top:2px}
+  .eyebrow{font-size:18px;font-weight:800;letter-spacing:.22em;text-transform:uppercase;color:var(--muted)}
+  .title{font-size:44px;font-weight:900;line-height:1.05;color:var(--hijau);margin-top:6px;letter-spacing:-.01em}
+  .uline{width:96px;height:6px;background:var(--emas);border-radius:6px;margin-top:14px}
+  .ring{position:absolute;right:-90px;bottom:-90px;width:340px;height:340px;border:2px solid var(--emas);border-radius:50%;opacity:.16;pointer-events:none}
+  .ring.in{right:-40px;bottom:-40px;width:210px;height:210px;opacity:.22}
+
+  .body{flex:1;padding:30px 64px 60px;display:flex;flex-direction:column;min-height:0}
+
+  .ic{fill:none;stroke:var(--emas);stroke-width:3.4;stroke-linecap:round;stroke-linejoin:round}
+  .ic-h{stroke:var(--hijau)}
+
+  .grid{display:grid;gap:24px;flex:1;grid-auto-rows:1fr}
+  .g2{grid-template-columns:1fr 1fr}.g3{grid-template-columns:repeat(3,1fr)}
+  .card{background:var(--card);border-top:4px solid var(--emas);border-radius:14px;box-shadow:var(--shadow);padding:28px 30px;display:flex;flex-direction:column;justify-content:center}
+  .card .cstrip{display:inline-flex;align-items:center;gap:12px;align-self:flex-start;background:var(--hijau);color:var(--emas-muda);font-weight:800;font-size:22px;padding:8px 18px;border-radius:10px;margin-bottom:16px}
+  .card .cstrip.gold{background:var(--emas);color:var(--hijau)}
+  .card .cstrip svg{width:26px;height:26px}
+  .card h3{font-size:26px;font-weight:800;color:var(--hijau);line-height:1.1}
+  .card p{font-size:21px;line-height:1.32;color:var(--ink);margin-top:8px}
+
+  ul.lead{list-style:none;display:flex;flex-direction:column;gap:14px}
+  ul.lead li{font-size:23px;line-height:1.3;color:var(--ink);padding-left:34px;position:relative}
+  ul.lead li::before{content:"";position:absolute;left:0;top:.5em;width:14px;height:14px;background:var(--emas);border-radius:3px;transform:rotate(45deg)}
+  ul.lead b{color:var(--hijau);font-weight:900}
+  ul.lead .r{color:var(--merah);font-weight:900}
+
+  .big{font-size:66px;font-weight:1000;color:var(--emas);line-height:.9;letter-spacing:-.02em}
+  .big small{display:block;font-size:18px;font-weight:800;color:var(--muted);letter-spacing:.04em;margin-top:10px;line-height:1.25}
+
+  .warn{background:rgba(155,44,44,.07);border-left:6px solid var(--merah);border-radius:0 12px 12px 0;padding:20px 24px}
+  .warn b{color:var(--merah);font-weight:900}
+  .warn p{font-size:21px;line-height:1.3;color:var(--ink)}
+  .note{background:var(--emas-tint);border-left:6px solid var(--emas);border-radius:0 12px 12px 0;padding:20px 24px}
+  .note b{color:#7a5f1e;font-weight:900}
+  .note p{font-size:21px;line-height:1.3;color:var(--ink)}
+
+  .keybanner{background:var(--hijau);border-radius:16px;padding:34px 40px;text-align:center;box-shadow:var(--shadow)}
+  .keybanner span{font-size:32px;font-weight:900;line-height:1.25;color:#fff}
+  .keybanner .g{color:var(--emas-muda)}
+
+  .road{display:flex;align-items:stretch;gap:0;margin-bottom:24px}
+  .seg{flex:1;padding:18px 26px 18px 40px;color:#fff;font-weight:800;position:relative;display:flex;flex-direction:column;justify-content:center}
+  .seg:first-child{border-radius:12px 0 0 12px;padding-left:26px}
+  .seg .sn{font-size:15px;letter-spacing:.14em;opacity:.85}
+  .seg .st{font-size:20px;margin-top:2px}
+  .seg::after{content:"";position:absolute;right:-22px;top:0;bottom:0;width:22px;background:inherit;clip-path:polygon(0 0,100% 50%,0 100%);z-index:2}
+  .seg:last-child::after{display:none}
+  .seg:last-child{border-radius:0 12px 12px 0}
+
+  .agenda{display:flex;flex-direction:column;gap:16px;flex:1;justify-content:center}
+  .agenda .row{display:flex;align-items:center;gap:24px;background:var(--card);border-top:4px solid var(--emas);border-radius:14px;box-shadow:var(--shadow-sm);padding:20px 28px}
+  .agenda .rc{width:56px;height:56px;flex:0 0 auto;border-radius:50%;background:var(--hijau);color:var(--emas-muda);display:grid;place-items:center;font-size:28px;font-weight:1000}
+  .agenda .rt b{font-size:24px;font-weight:900;color:var(--hijau)}
+  .agenda .rt p{font-size:19px;color:var(--ink);margin-top:3px;line-height:1.28}
+  .route{font-weight:900;color:var(--hijau2)}
+  .route .host{color:var(--muted);font-weight:800}
+
+  .split{display:grid;gap:26px;flex:1;min-height:0;align-items:stretch}
+  .split-11{grid-template-columns:1fr 1fr}
+  .split-32{grid-template-columns:1.12fr 1fr}
+  .split-23{grid-template-columns:1fr 1.15fr}
+  .shot{display:flex;flex-direction:column;min-height:0;border-radius:16px;overflow:hidden;background:#fff;box-shadow:var(--shadow);border:1px solid var(--emas-tint)}
+  .shot .bar{height:40px;flex:0 0 auto;background:var(--hijau);display:flex;align-items:center;gap:9px;padding:0 18px}
+  .shot .bar i{width:11px;height:11px;border-radius:50%;background:var(--emas-muda);opacity:.55;flex:0 0 auto}
+  .shot .bar .url{margin-left:14px;background:rgba(255,255,255,.1);color:var(--emas-muda);font-size:15px;font-weight:800;letter-spacing:.02em;padding:5px 16px;border-radius:999px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .shot .bar .url b{color:#fff}
+  .shot .pic{flex:1;min-height:0;overflow:hidden;background:#EEEDE6}
+  .shot .pic img{width:100%;height:100%;object-fit:cover;object-position:top;display:block}
+  .shot .pic.contain img{object-fit:contain;object-position:center;background:#EEEDE6}
+  .shotcap{flex:0 0 auto;background:var(--emas-tint);color:#7a5f1e;font-size:15px;font-weight:800;letter-spacing:.02em;padding:9px 18px}
+
+  .stat{font-size:15px;font-weight:900;letter-spacing:.08em;padding:5px 14px;border-radius:999px;text-transform:uppercase}
+  .stat.on{background:var(--hijau2);color:#fff}
+  .stat.off{background:var(--emas-tint);color:#7a5f1e}
+
+  table.rtbl{width:100%;border-collapse:collapse;background:var(--card);border-radius:14px;overflow:hidden;box-shadow:var(--shadow)}
+  table.rtbl th{background:var(--hijau);color:var(--emas-muda);text-align:left;font-size:17px;letter-spacing:.06em;text-transform:uppercase;padding:14px 22px}
+  table.rtbl td{padding:14px 22px;font-size:21px;border-top:1px solid var(--emas-tint)}
+  table.rtbl td .r{font-weight:900;color:var(--hijau2)}
+  table.rtbl td .r .host{color:var(--muted);font-weight:800}
+  table.rtbl tr td:first-child{font-weight:800;color:var(--hijau)}
+  table.rtbl tr td:last-child{color:var(--muted);font-weight:700}
+
+  .cover{background:var(--hijau);color:#fff;justify-content:center;align-items:center;text-align:center;padding:70px}
+  .cover .frame{position:absolute;inset:34px;border:2px solid rgba(194,161,77,.5);border-radius:10px;pointer-events:none}
+  .cover .hero{width:150px;height:150px;border-radius:50%;border:3px solid var(--emas);display:grid;place-items:center;position:relative;margin-bottom:34px}
+  .cover .hero svg{width:74px;height:74px}
+  .cover .hero .spark{position:absolute;top:-8px;right:-6px;color:var(--emas);font-size:34px}
+  .cover .cpill{background:var(--emas);color:var(--hijau);font-weight:1000;font-size:20px;letter-spacing:.08em;padding:8px 22px;border-radius:999px}
+  .cover .ceye{color:var(--emas-muda);font-size:22px;font-weight:800;letter-spacing:.30em;text-transform:uppercase;margin-top:26px}
+  .cover h1{font-size:92px;font-weight:1000;line-height:.98;letter-spacing:-.02em;margin-top:14px}
+  .cover h1 .g{color:var(--emas)}
+  .cover .cline{width:150px;height:7px;background:var(--emas);border-radius:7px;margin:30px auto}
+  .cover .tag{font-size:30px;font-weight:600;color:#e8eee9;max-width:34ch;line-height:1.35}
+  .cover .cfoot{position:absolute;left:64px;right:64px;bottom:60px;display:flex;justify-content:space-between;align-items:center;color:var(--emas-muda);font-size:19px;font-weight:700;letter-spacing:.06em}
+  .cover .logo{width:52px;height:52px;border-radius:12px;border:2px solid var(--emas);display:grid;place-items:center;font-weight:1000;color:var(--emas)}
+
+  .foot{position:absolute;left:0;right:0;bottom:0;height:52px;background:transparent;display:flex;justify-content:space-between;align-items:center;padding:0 64px;font-size:15px;font-weight:800;letter-spacing:.14em;color:var(--muted);text-transform:uppercase}
+  .foot .dot{width:8px;height:8px;border-radius:50%;background:var(--emas);display:inline-block;margin-right:10px}
+  .progress{position:absolute;left:0;top:0;height:6px;background:linear-gradient(90deg,var(--emas),var(--emas-muda));z-index:9;transition:width .4s ease}
+
+  .nav{position:fixed;bottom:20px;right:22px;display:flex;gap:8px;z-index:50}
+  .nav button{width:44px;height:44px;border-radius:50%;border:1px solid rgba(216,196,138,.4);background:rgba(20,80,58,.75);color:var(--emas-muda);font-size:20px;cursor:pointer;backdrop-filter:blur(6px);transition:.2s}
+  .nav button:hover{background:var(--emas);color:var(--hijau)}
+  .counter{position:fixed;bottom:28px;left:22px;z-index:50;font-family:"Nunito Sans";font-weight:800;font-size:14px;color:rgba(216,196,138,.75);letter-spacing:.16em}
+  .hint{position:fixed;top:18px;right:24px;z-index:50;font-size:12px;font-weight:800;letter-spacing:.16em;color:rgba(216,196,138,.5);text-transform:uppercase}
+
+  @media print{
+    @page{size:1920px 1080px;margin:0}
+    html,body{overflow:visible;background:#fff;height:auto}
+    .deck{position:static;display:block;padding:0}
+    .stage{transform:none!important;box-shadow:none;width:1920px;height:auto;overflow:visible}
+    .slide{display:flex!important;position:relative;width:1920px;height:1080px;overflow:hidden;break-after:page;page-break-after:always}
+    .slide:last-child{break-after:auto;page-break-after:auto}
+    .slide .anim{opacity:1!important;animation:none!important}
+    .nav,.counter,.hint,.progress,.foot{display:none}
+  }
+</style>
+</head>
+<body>
+<div class="deck">
+  <div class="stage" id="stage">
+    <div class="progress" id="progress"></div>
+
+    <!-- ============ 1 · COVER ============ -->
+    <section class="slide cover active">
+      <div class="frame"></div>
+      <div class="hero anim a1"><span class="spark">✦</span>
+        <svg viewBox="0 0 48 48"><path class="ic" d="M24 7a6 6 0 100 12 6 6 0 000-12z"/><path class="ic" d="M10 40c1.5-8 6.5-12 14-12s12.5 4 14 12"/><path class="ic" d="M33 12l3 3 6-7"/></svg>
+      </div>
+      <span class="cpill anim a2">HITS</span>
+      <div class="ceye anim a3">Panduan Fitur · Untuk Pengajar</div>
+      <h1 class="anim a3">Pengajar <span class="g">HITS</span></h1>
+      <div class="cline anim a4"></div>
+      <p class="tag anim a4">Ketua Kelas · Pemindahan Halaqah · Klaim Halaqah · Tabayyun · Ubah Level</p>
+      <div class="cfoot">
+        <span>PENGAJAR HITS · MUHAJIR PROJECT · MAAHIR</span>
+        <span style="display:flex;align-items:center;gap:18px">JULI 2026 <span class="logo">ح</span></span>
+      </div>
+    </section>
+
+    <!-- ============ 2 · DASHBOARD ============ -->
+    <section class="slide">
+      <div class="band"><div class="left"><span class="pill">HITS</span><span class="lbl">Pengajar · Dashboard</span></div><span class="pg">02 / 08</span></div>
+      <div class="head anim a1">
+        <div class="badge"><span class="num">1</span></div>
+        <div class="txt"><div class="eyebrow">Halaman Utama</div><div class="title">Dashboard Pengajar HITS</div><div class="uline"></div></div>
+      </div>
+      <div class="body">
+        <div class="split split-32">
+          <div class="agenda anim a2">
+            <div class="row"><div class="rc">1</div><div class="rt"><b>Akses via menu Tunjuk Ketua HITS</b><p>Login pengajar → halaman ini jadi pusat kontrol halaqah.</p></div></div>
+            <div class="row"><div class="rc">2</div><div class="rt"><b>Kelola halaqah dari satu tempat</b><p>Tunjuk ketua kelas, ubah level, pindahkan atau tambah halaqah.</p></div></div>
+            <div class="row"><div class="rc">3</div><div class="rt"><b>Respons tabayyun koordinator</b><p>Klarifikasi kondisi kelas yang tercatat tidak ideal langsung dari sini.</p></div></div>
+          </div>
+          <figure class="shot anim a3">
+            <div class="bar"><i></i><i></i><i></i><span class="url"><b>maahir.muhajirproject.org</b>/hits/pengajar</span></div>
+            <div class="pic"><img src="kk-pengajar-list.png" alt="Dashboard Pengajar HITS — daftar halaqah" /></div>
+            <figcaption class="shotcap">Daftar halaqah milik pengajar dengan status ketua kelas</figcaption>
+          </figure>
+        </div>
+      </div>
+      <div class="ring in"></div>
+    </section>
+
+    <!-- ============ 3 · PENUNJUKAN KETUA KELAS ============ -->
+    <section class="slide">
+      <div class="band"><div class="left"><span class="pill">HITS</span><span class="lbl">Pengajar · Ketua Kelas</span></div><span class="pg">03 / 08</span></div>
+      <div class="head anim a1">
+        <div class="badge"><span class="num">2</span></div>
+        <div class="txt"><div class="eyebrow">Fitur</div><div class="title">Penunjukan Ketua Kelas</div><div class="uline"></div></div>
+      </div>
+      <div class="body">
+        <div class="split split-23">
+          <figure class="shot anim a2">
+            <div class="bar"><i></i><i></i><i></i><span class="url"><b>maahir.muhajirproject.org</b>/hits/pengajar</span></div>
+            <div class="pic contain"><img src="kk-pengajar-modal-crop.png" alt="Jendela Tunjuk Ketua Kelas" /></div>
+            <figcaption class="shotcap">Jendela “Tunjuk Ketua Kelas” — pilih peserta &amp; nomor WA</figcaption>
+          </figure>
+          <div class="anim a3" style="display:flex;flex-direction:column;gap:18px;min-height:0;justify-content:center">
+            <div class="card" style="justify-content:center">
+              <div class="cstrip">Langkah penunjukan</div>
+              <ul class="lead">
+                <li>Halaqah belum berketua → <b>popup otomatis</b> saat halaman dibuka.</li>
+                <li>Klik <b>Tunjuk</b> (belum ada ketua) atau <b>Ganti</b> (ganti ketua).</li>
+                <li>Pilih peserta dari dropdown, atau tulis manual.</li>
+                <li>Isi <b>nomor WhatsApp ketua</b> — password awal = 6 digit terakhir nomor.</li>
+                <li>Klik <b>Tunjuk &amp; Kirim WhatsApp</b> → akun dibuat, info login terkirim.</li>
+              </ul>
+            </div>
+            <div class="note">
+              <p><b>Peran ganda.</b> Jika nomor WA sudah punya akun peran lain, muncul notifikasi persetujuan — koordinator akan mengonfirmasi.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="ring in"></div>
+    </section>
+
+    <!-- ============ 4 · PEMINDAHAN HALAQAH ============ -->
+    <section class="slide">
+      <div class="band"><div class="left"><span class="pill">HITS</span><span class="lbl">Pengajar · Pemindahan Halaqah</span></div><span class="pg">04 / 08</span></div>
+      <div class="head anim a1">
+        <div class="badge"><span class="num">3</span></div>
+        <div class="txt"><div class="eyebrow">Fitur</div><div class="title">Pemindahan Halaqah ke Pengajar Lain</div><div class="uline"></div></div>
+      </div>
+      <div class="body">
+        <div class="grid g2" style="flex:0 0 auto;margin-bottom:24px">
+          <div class="card anim a2" style="justify-content:center">
+            <div class="cstrip">Langkah 1 — Pilih Halaqah</div>
+            <ul class="lead">
+              <li>Klik <b>Pindahkan halaqah saya</b>.</li>
+              <li>Pilih halaqah mana yang ingin dipindahkan.</li>
+            </ul>
+          </div>
+          <div class="card anim a3" style="justify-content:center">
+            <div class="cstrip gold">Langkah 2 — Pilih Pengajar Tujuan</div>
+            <ul class="lead">
+              <li>Pilih dari dropdown (sesama gender) atau tulis manual.</li>
+              <li>Klik <b>Ajukan &amp; kirim WA</b>.</li>
+            </ul>
+          </div>
+        </div>
+        <div class="note anim a4">
+          <p><b>Persetujuan dua arah.</b> Sistem kirim tautan persetujuan ke pengajar tujuan via WhatsApp. Pengajar tujuan buka tautan (perlu login) dan menyetujui → halaqah otomatis berpindah.</p>
+        </div>
+      </div>
+      <div class="ring in"></div>
+    </section>
+
+    <!-- ============ 5 · TAMBAH / KLAIM HALAQAH ============ -->
+    <section class="slide">
+      <div class="band"><div class="left"><span class="pill">HITS</span><span class="lbl">Pengajar · Tambah / Klaim Halaqah</span></div><span class="pg">05 / 08</span></div>
+      <div class="head anim a1">
+        <div class="badge"><span class="num">4</span></div>
+        <div class="txt"><div class="eyebrow">Fitur</div><div class="title">Tambah / Klaim Halaqah</div><div class="uline"></div></div>
+      </div>
+      <div class="body">
+        <div class="agenda anim a2">
+          <div class="row"><div class="rc">1</div><div class="rt"><b>Klik Tambah halaqah (klaim)</b><p>Di halaman utama pengajar.</p></div></div>
+          <div class="row"><div class="rc">2</div><div class="rt"><b>Pilih batch (periode)</b><p>Dari dropdown yang tersedia.</p></div></div>
+          <div class="row"><div class="rc">3</div><div class="rt"><b>Lihat daftar halaqah tersedia</b><p>Muncul otomatis setelah batch dipilih — sesama gender.</p></div></div>
+          <div class="row"><div class="rc">4</div><div class="rt"><b>Pilih halaqah yang ingin diklaim</b><p>Permintaan terkirim ke pengajar lama (jika ada) atau langsung ke koordinator.</p></div></div>
+        </div>
+        <div class="note anim a3" style="margin-top:22px">
+          <p><b>Perlu persetujuan.</b> Klaim halaqah yang sudah ada pengajar perlu persetujuan pemilik lama. Halaqah tanpa pengajar langsung ditambahkan ke akun setelah koordinator konfirmasi.</p>
+        </div>
+      </div>
+      <div class="ring in"></div>
+    </section>
+
+    <!-- ============ 6 · TABAYYUN ============ -->
+    <section class="slide">
+      <div class="band"><div class="left"><span class="pill">HITS</span><span class="lbl">Pengajar · Tabayyun</span></div><span class="pg">06 / 08</span></div>
+      <div class="head anim a1">
+        <div class="badge"><span class="num">5</span></div>
+        <div class="txt"><div class="eyebrow">Fitur</div><div class="title">Tabayyun — Klarifikasi Kondisi Kelas</div><div class="uline"></div></div>
+      </div>
+      <div class="body">
+        <div class="split split-11">
+          <div class="anim a2" style="display:flex;flex-direction:column;gap:18px;min-height:0">
+            <div class="card" style="justify-content:center">
+              <div class="cstrip">Cara merespons</div>
+              <ul class="lead">
+                <li>Panel muncul otomatis di atas halaman saat login, jika ada tabayyun.</li>
+                <li>Tiap item tampilkan: nama halaqah, nomor pertemuan, tanggal, jenis kondisi.</li>
+                <li>Tulis alasan/klarifikasi di kolom teks.</li>
+                <li>Klik <b>Kirim Alasan</b> → terkirim ke koordinator.</li>
+              </ul>
+            </div>
+          </div>
+          <div class="card anim a3" style="justify-content:center">
+            <div class="cstrip gold" style="justify-content:space-between;width:100%"><span>Kapan muncul</span><span class="stat off">Otomatis</span></div>
+            <ul class="lead">
+              <li>Koordinator mencatat kondisi kelas <b>tidak ideal</b> pada hasil observasi (mis. tidak latihan, tidak ada keterangan, kurang berkualitas).</li>
+              <li>Setelah alasan terkirim, status berubah jadi <span class="r">menunggu keputusan koordinator</span>.</li>
+              <li>Koordinator memutuskan diterima atau perlu tindak lanjut.</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+      <div class="ring in"></div>
+    </section>
+
+    <!-- ============ 7 · RINGKASAN FITUR ============ -->
+    <section class="slide">
+      <div class="band"><div class="left"><span class="pill">HITS</span><span class="lbl">Pengajar · Ringkasan</span></div><span class="pg">07 / 08</span></div>
+      <div class="head anim a1">
+        <div class="badge"><svg viewBox="0 0 48 48"><path class="ic" d="M12 24l9 9 15-18"/></svg></div>
+        <div class="txt"><div class="eyebrow">Rangkuman</div><div class="title">Ringkasan Fitur Pengajar HITS</div><div class="uline"></div></div>
+      </div>
+      <div class="body">
+        <div class="grid g3 anim a2">
+          <div class="card">
+            <div class="cstrip">Tunjuk Ketua Kelas</div>
+            <p>Pilih peserta sebagai ketua kelas per halaqah. Sistem otomatis buat akun login ketua. Password awal = 6 digit terakhir nomor WA.</p>
+          </div>
+          <div class="card">
+            <div class="cstrip gold">Pindahkan Halaqah</div>
+            <p>Ajukan transfer halaqah ke pengajar lain (sesama gender). Pengajar tujuan harus menyetujui via tautan sebelum halaqah berpindah.</p>
+          </div>
+          <div class="card">
+            <div class="cstrip">Tambah / Klaim Halaqah</div>
+            <p>Klaim halaqah yang belum terhubung ke akun. Perlu persetujuan pemilik lama atau koordinator sebelum ditambahkan.</p>
+          </div>
+          <div class="card">
+            <div class="cstrip gold">Tabayyun Alasan</div>
+            <p>Respons permintaan klarifikasi kondisi kelas dari koordinator. Tulis alasan untuk tiap kondisi yang dicatat tidak ideal.</p>
+          </div>
+          <div class="card">
+            <div class="cstrip">Ubah Level Halaqah</div>
+            <p>Perbarui level materi halaqah (Dasar/Lanjutan) jika peserta berpindah level. Koordinator perlu memvalidasi perubahan ini.</p>
+          </div>
+          <div class="card">
+            <div class="cstrip gold">Cara Akses</div>
+            <p>Login dengan nomor WA &amp; password → menu Tunjuk Ketua HITS di navigasi atas. URL: <b>/hits/pengajar</b></p>
+          </div>
+        </div>
+      </div>
+      <div class="ring in"></div>
+    </section>
+
+    <!-- ============ 8 · PETA RUTE & PENUTUP ============ -->
+    <section class="slide">
+      <div class="band"><div class="left"><span class="pill">HITS</span><span class="lbl">Pengajar HITS · Majelis Pendidikan</span></div><span class="pg">08 / 08</span></div>
+      <div class="head anim a1">
+        <div class="badge"><svg viewBox="0 0 48 48"><circle class="ic" cx="24" cy="24" r="16"/><path class="ic" d="M24 12v12l8 5"/></svg></div>
+        <div class="txt"><div class="eyebrow">Rangkuman</div><div class="title">Peta rute fitur pengajar</div><div class="uline"></div></div>
+      </div>
+      <div class="body">
+        <table class="rtbl anim a2">
+          <thead><tr><th style="width:30%">Fitur</th><th>Fungsi</th><th style="width:34%">Rute</th></tr></thead>
+          <tbody>
+            <tr><td>Dashboard Pengajar</td><td>Pusat kontrol halaqah</td><td><span class="r"><span class="host">maahir.muhajirproject.org</span>/hits/pengajar</span></td></tr>
+            <tr><td>Tunjuk Ketua Kelas</td><td>Tunjuk / ganti ketua per halaqah</td><td><span class="r"><span class="host">maahir.muhajirproject.org</span>/hits/pengajar</span></td></tr>
+            <tr><td>Pindahkan Halaqah</td><td>Transfer halaqah ke pengajar lain</td><td><span class="r"><span class="host">maahir.muhajirproject.org</span>/hits/pengajar</span></td></tr>
+            <tr><td>Tambah / Klaim Halaqah</td><td>Klaim halaqah belum terhubung</td><td><span class="r"><span class="host">maahir.muhajirproject.org</span>/hits/pengajar</span></td></tr>
+            <tr><td>Tabayyun</td><td>Klarifikasi kondisi kelas ke koordinator</td><td><span class="r"><span class="host">maahir.muhajirproject.org</span>/hits/pengajar</span></td></tr>
+          </tbody>
+        </table>
+        <div class="keybanner anim a3" style="margin-top:22px;padding:26px 40px">
+          <span>Pengajar <span class="g">menunjuk &amp; mengelola</span> · Ketua <span class="g">mencatat</span> · Koordinator <span class="g">menindaklanjuti</span>.</span>
+        </div>
+      </div>
+      <div class="ring"></div><div class="ring in"></div>
+    </section>
+
+    <div class="foot"><span><span class="dot"></span>HITS PENGAJAR</span><span id="foot-title">PANDUAN FITUR</span></div>
+  </div>
+</div>
+
+<div class="hint">← → / spasi · F fullscreen</div>
+<div class="counter"><span id="cur">01</span> / <span id="tot">08</span></div>
+<div class="nav"><button id="prev">‹</button><button id="next">›</button></div>
+
+<script>
+  const stage=document.getElementById('stage');
+  function fit(){const s=Math.min(innerWidth/1920,innerHeight/1080)*0.96;stage.style.transform='scale('+s+')';}
+  addEventListener('resize',fit);fit();
+
+  const slides=[...document.querySelectorAll('.slide')];
+  const titles=['SAMPUL','DASHBOARD','TUNJUK KETUA KELAS','PEMINDAHAN HALAQAH','TAMBAH / KLAIM HALAQAH','TABAYYUN','RINGKASAN FITUR','PETA RUTE'];
+  let i=0;const tot=slides.length;
+  const prog=document.getElementById('progress');
+  function show(n){
+    i=(n+tot)%tot;
+    slides.forEach((s,k)=>s.classList.toggle('active',k===i));
+    document.getElementById('cur').textContent=String(i+1).padStart(2,'0');
+    document.getElementById('foot-title').textContent=titles[i]||'';
+    prog.style.width=((i+1)/tot*100)+'%';
+  }
+  document.getElementById('next').onclick=()=>show(i+1);
+  document.getElementById('prev').onclick=()=>show(i-1);
+  addEventListener('keydown',e=>{
+    if(['ArrowRight',' ','PageDown'].includes(e.key)){e.preventDefault();show(i+1);}
+    else if(['ArrowLeft','PageUp'].includes(e.key)){e.preventDefault();show(i-1);}
+    else if(e.key==='Home')show(0);else if(e.key==='End')show(tot-1);
+    else if(e.key.toLowerCase()==='f'){document.fullscreenElement?document.exitFullscreen():document.documentElement.requestFullscreen&&document.documentElement.requestFullscreen();}
+  });
+  let sx=0;addEventListener('touchstart',e=>sx=e.touches[0].clientX,{passive:true});
+  addEventListener('touchend',e=>{const d=e.changedTouches[0].clientX-sx;if(Math.abs(d)>50)show(i+(d<0?1:-1));},{passive:true});
+  show(0);
+</script>
+</body>
+</html>
