@@ -6,7 +6,7 @@ import { getSession } from '@/lib/session';
 import { getSessionWa } from '@/lib/program-kelas';
 import { logAudit } from '@/lib/audit';
 import { absUrl } from '@/lib/url';
-import { buildWaMeUrl, tplKetuaKelasTerpilih, tplKetuaDualRoleInfo } from '@/lib/whatsapp';
+import { buildWaMeUrl, tplKetuaKelasTerpilih, tplKetuaDualRoleInfo, tplKetuaDualRoleDisetujui } from '@/lib/whatsapp';
 import type { RoleAccess } from '@/types/db';
 
 const BCRYPT_COST = 12;
@@ -16,6 +16,7 @@ export type DecideDualRoleResult = {
   error?: string;
   decided?: 'approved' | 'rejected';
   ketuaWaUrl?: string;
+  pengajarWaUrl?: string;
 };
 
 type DualReq = {
@@ -28,13 +29,15 @@ type DualReq = {
   approver_kind: 'pengajar' | 'koordinator_kk';
   target_pengajar_id: string | null;
   target_wa: string | null;
+  requested_by_wa: string | null;
+  requested_by_name: string | null;
   status: string;
 };
 
 async function loadByToken(token: string): Promise<DualReq | null> {
   const { data } = await supabaseAdmin
     .from('ketua_dualrole_request')
-    .select('id, ketua_wa, ketua_name, gender, new_halaqah_id, new_peserta_id, approver_kind, target_pengajar_id, target_wa, status')
+    .select('id, ketua_wa, ketua_name, gender, new_halaqah_id, new_peserta_id, approver_kind, target_pengajar_id, target_wa, requested_by_wa, requested_by_name, status')
     .eq('token', token)
     .maybeSingle();
   return (data as DualReq | null) ?? null;
@@ -162,7 +165,18 @@ export async function approveDualRole(token: string, catatan: string): Promise<D
         initialPassword,
       });
 
-  return { ok: true, decided: 'approved', ketuaWaUrl: buildWaMeUrl(req.ketua_wa, ketuaMsg) };
+  const pengajarWaUrl = req.requested_by_wa
+    ? buildWaMeUrl(
+        req.requested_by_wa,
+        tplKetuaDualRoleDisetujui({
+          pengajarName: req.requested_by_name ?? 'Pengajar',
+          ketuaName: req.ketua_name,
+          newHalaqahName: halaqahName,
+        })
+      )
+    : undefined;
+
+  return { ok: true, decided: 'approved', ketuaWaUrl: buildWaMeUrl(req.ketua_wa, ketuaMsg), pengajarWaUrl };
 }
 
 export async function rejectDualRole(token: string, catatan: string): Promise<DecideDualRoleResult> {

@@ -28,13 +28,11 @@ function AssignForm({
 
   function handleSubmit(fd: FormData) {
     setError(null);
-    // Guard: dropdown mode tapi peserta belum dipilih → switch ke manual,
-    // jangan kirim ke server supaya user tidak bingung dengan error generik.
     const pesertaId = (fd.get('peserta_id') as string) ?? '';
     const ketuaNama = ((fd.get('ketua_nama') as string) ?? '').trim();
-    if (!manual && !pesertaId && !ketuaNama) {
-      setManual(true);
-      setError('Nama tidak ada di daftar? Tulis nama ketua secara manual, lalu submit ulang.');
+    // Dropdown mode tapi belum pilih peserta → tunjukkan error, jangan switch ke manual.
+    if (!manual && !pesertaId) {
+      setError('Pilih peserta dari daftar terlebih dahulu.');
       return;
     }
     startTransition(async () => {

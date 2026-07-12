@@ -1,6 +1,8 @@
 import { supabaseAdmin } from '@/lib/supabase-admin';
 import { getSession } from '@/lib/session';
 import { getSessionWa } from '@/lib/program-kelas';
+import { buildWaMeUrl, tplKetuaDualRoleInfo, tplKetuaDualRoleDisetujui } from '@/lib/whatsapp';
+import { absUrl } from '@/lib/url';
 import { DecideDualRolePanel } from './DecideDualRolePanel';
 
 export const dynamic = 'force-dynamic';
@@ -64,11 +66,31 @@ export default async function KetuaDualRolePage({ params }: { params: { token: s
         </div>
 
         {req.status !== 'pending' ? (
-          <div className="card-flat" style={{ padding: 16, textAlign: 'center' }}>
-            <p className="t-body" style={{ fontWeight: 600, color: req.status === 'approved' ? 'var(--hijau-ink)' : 'var(--danger)' }}>
-              {req.status === 'approved' ? 'Sudah disetujui.' : 'Sudah ditolak.'}
-            </p>
-          </div>
+          (() => {
+            const ketuaWaUrl = req.status === 'approved'
+              ? buildWaMeUrl(req.ketua_wa, tplKetuaDualRoleInfo({ ketuaName: req.ketua_name, newHalaqahName: halaqah?.name ?? 'halaqah', loginUrl: absUrl('/') }))
+              : null;
+            const pengajarWaUrl = req.status === 'approved' && req.requested_by_wa
+              ? buildWaMeUrl(req.requested_by_wa, tplKetuaDualRoleDisetujui({ pengajarName: req.requested_by_name ?? 'Pengajar', ketuaName: req.ketua_name, newHalaqahName: halaqah?.name ?? 'halaqah' }))
+              : null;
+            return (
+              <div className="card-flat" style={{ padding: 16, textAlign: 'center' }}>
+                <p className="t-body" style={{ fontWeight: 600, color: req.status === 'approved' ? 'var(--hijau-ink)' : 'var(--danger)' }}>
+                  {req.status === 'approved' ? 'Sudah disetujui.' : 'Sudah ditolak.'}
+                </p>
+                {ketuaWaUrl && (
+                  <a href={ketuaWaUrl} target="_blank" rel="noopener noreferrer" className="btn btn-wa btn-block" style={{ marginTop: 12 }}>
+                    Infokan auth ke ketua via WhatsApp
+                  </a>
+                )}
+                {pengajarWaUrl && (
+                  <a href={pengajarWaUrl} target="_blank" rel="noopener noreferrer" className="btn btn-wa btn-block" style={{ marginTop: 8 }}>
+                    Beritahu pengajar (sudah disetujui)
+                  </a>
+                )}
+              </div>
+            );
+          })()
         ) : isApprover ? (
           <DecideDualRolePanel token={token} status={req.status} catatan={req.catatan} />
         ) : (

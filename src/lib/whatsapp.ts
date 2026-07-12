@@ -740,6 +740,21 @@ export function tplKetuaDualRoleInfo(args: {
   ].join('\n');
 }
 
+/** Ke pengajar: konfirmasi peran ganda ketua disetujui. */
+export function tplKetuaDualRoleDisetujui(args: {
+  pengajarName: string;
+  ketuaName: string;
+  newHalaqahName: string;
+}): string {
+  return [
+    `Assalamu'alaikum ${args.pengajarName},`,
+    ``,
+    `Pengajuan peran ganda *${args.ketuaName}* sebagai ketua kelas *${args.newHalaqahName}* telah *disetujui*.`,
+    ``,
+    `Jazakumullahu khairan.`,
+  ].join('\n');
+}
+
 /** Ke koordinator KK: minta keputusan koreksi pertemuan. */
 export function tplKoreksiPertemuanApproval(args: {
   approverName: string;

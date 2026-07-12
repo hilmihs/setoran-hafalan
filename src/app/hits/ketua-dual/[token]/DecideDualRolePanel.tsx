@@ -7,10 +7,14 @@ export function DecideDualRolePanel({
   token,
   status,
   catatan,
+  initialKetuaWaUrl,
+  initialPengajarWaUrl,
 }: {
   token: string;
   status: string;
   catatan: string | null;
+  initialKetuaWaUrl?: string | null;
+  initialPengajarWaUrl?: string | null;
 }) {
   const [pending, startTransition] = useTransition();
   const [note, setNote] = useState('');
@@ -18,7 +22,8 @@ export function DecideDualRolePanel({
   const [done, setDone] = useState<'approved' | 'rejected' | null>(
     status === 'approved' ? 'approved' : status === 'rejected' ? 'rejected' : null
   );
-  const [ketuaWaUrl, setKetuaWaUrl] = useState<string | null>(null);
+  const [ketuaWaUrl, setKetuaWaUrl] = useState<string | null>(initialKetuaWaUrl ?? null);
+  const [pengajarWaUrl, setPengajarWaUrl] = useState<string | null>(initialPengajarWaUrl ?? null);
 
   if (done) {
     return (
@@ -30,6 +35,11 @@ export function DecideDualRolePanel({
         {done === 'approved' && ketuaWaUrl && (
           <a href={ketuaWaUrl} target="_blank" rel="noopener noreferrer" className="btn btn-wa btn-block" style={{ marginTop: 12 }}>
             Infokan auth ke ketua via WhatsApp
+          </a>
+        )}
+        {done === 'approved' && pengajarWaUrl && (
+          <a href={pengajarWaUrl} target="_blank" rel="noopener noreferrer" className="btn btn-wa btn-block" style={{ marginTop: 8 }}>
+            Beritahu pengajar (sudah disetujui)
           </a>
         )}
       </div>
@@ -44,6 +54,7 @@ export function DecideDualRolePanel({
       if (res?.decided) {
         setDone(res.decided);
         if (res.ketuaWaUrl) setKetuaWaUrl(res.ketuaWaUrl);
+        if (res.pengajarWaUrl) setPengajarWaUrl(res.pengajarWaUrl);
       }
     });
   }
