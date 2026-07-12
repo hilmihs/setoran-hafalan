@@ -41,9 +41,10 @@ export default async function PesertaPage() {
   // Ketua banner: cek apakah peserta ini ketua/wakil kelas program Maahir
   const { data: me } = await supabaseAdmin
     .from('peserta')
-    .select('whatsapp_number')
+    .select('whatsapp_number, name')
     .eq('id', session.peserta_id)
     .maybeSingle();
+  const displayName = me?.name ?? session.name;
   let isKetua = false;
   let pertemuanHariIni: { id: string; nama_kegiatan: string } | null = null;
   if (me?.whatsapp_number) {
@@ -89,7 +90,7 @@ export default async function PesertaPage() {
     if (setoran.status === 'submitted' && musyrif) {
       const cekUrl = absUrl(`/2in1/musyrif/cek/${setoran.id}`);
       const waText = tplPesertaSubmitToMusyrif({
-        pesertaName: session.name,
+        pesertaName: displayName,
         pesertaGender: session.gender,
         kelasName: kelas?.name ?? '',
         musyrifGender: musyrif.gender,
@@ -152,10 +153,14 @@ export default async function PesertaPage() {
   const restoredCurrent: Partial<Record<JenisRekaman, { audioUrl: string; durationSec: number }>> = {};
   for (const r of curReks) {
     if (r.audio_url) {
-      restoredCurrent[r.jenis] = {
-        audioUrl: await signedAudioUrl(r.audio_url, 86400),
-        durationSec: r.duration_seconds ?? 0,
-      };
+      try {
+        restoredCurrent[r.jenis] = {
+          audioUrl: await signedAudioUrl(r.audio_url, 86400),
+          durationSec: r.duration_seconds ?? 0,
+        };
+      } catch {
+        // storage error — audio tidak bisa dipulihkan, peserta bisa rekam ulang
+      }
     }
   }
 
@@ -226,11 +231,11 @@ export default async function PesertaPage() {
               className="avatar"
               style={{ background: 'var(--accent-tint)', color: 'var(--accent-2)' }}
             >
-              {initialsOf(session.name)}
+              {initialsOf(displayName)}
             </div>
             <div style={{ flex: 1 }}>
               <div style={{ fontSize: 12, color: 'var(--muted)' }}>Peserta</div>
-              <div style={{ fontSize: 16, fontWeight: 600 }}>{session.name}</div>
+              <div style={{ fontSize: 16, fontWeight: 600 }}>{displayName}</div>
             </div>
             <span className="pekan-tag">
               <span className="dot" />

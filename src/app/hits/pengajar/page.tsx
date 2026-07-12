@@ -79,7 +79,7 @@ export default async function HitsPengajarPage() {
       };
     });
 
-    const [{ data: kaldikList }, { data: overrideList }, { data: pesertaList }] = await Promise.all([
+    const [{ data: kaldikList }, { data: overrideList }, { data: pesertaList }, { data: ketuaKelasList }] = await Promise.all([
       supabaseAdmin
         .from('hits_kaldik_hari')
         .select('batch_id, level, tanggal, pekan, is_libur')
@@ -94,6 +94,11 @@ export default async function HitsPengajarPage() {
         .in('halaqah_id', halaqahIds)
         .eq('active', true)
         .order('nama'),
+      supabaseAdmin
+        .from('ketua_kelas')
+        .select('id, name, hits_halaqah_id')
+        .in('hits_halaqah_id', halaqahIds)
+        .eq('active', true),
     ]);
 
     const kaldikByBL = new Map<string, { tanggal: string; pekan: number | null; is_libur: boolean }[]>();
@@ -110,12 +115,15 @@ export default async function HitsPengajarPage() {
       overridesByHalaqah.set(o.halaqah_id, arr);
     }
     const pesertaByHalaqah = new Map<string, { id: string; nama: string }[]>();
-    const ketuaByHalaqah = new Map<string, string>();
     for (const p of pesertaList ?? []) {
       const arr = pesertaByHalaqah.get(p.halaqah_id) ?? [];
       arr.push({ id: p.id, nama: p.nama });
       pesertaByHalaqah.set(p.halaqah_id, arr);
-      if (p.is_ketua) ketuaByHalaqah.set(p.halaqah_id, p.nama);
+    }
+    // Ketua aktif bersumber dari ketua_kelas (punya login), bukan is_ketua di peserta.
+    const ketuaByHalaqah = new Map<string, string>();
+    for (const kk of ketuaKelasList ?? []) {
+      ketuaByHalaqah.set(kk.hits_halaqah_id as string, kk.name as string);
     }
 
     panelData = halaqah.map((h) => {
