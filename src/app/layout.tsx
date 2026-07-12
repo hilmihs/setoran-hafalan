@@ -83,8 +83,8 @@ export default async function RootLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const session = await getActiveSession();
-  const waNumber = session ? await getWaNumber(session) : null;
+  const session = await getActiveSession().catch(() => null);
+  const waNumber = session ? await getWaNumber(session).catch(() => null) : null;
   const user = session
     ? {
         name: session.name,
