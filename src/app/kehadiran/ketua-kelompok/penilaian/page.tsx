@@ -69,11 +69,7 @@ export default async function PenilaianPedagogisPage({
       .from('kelompok_pengajar')
       .select('id, name')
       .order('name');
-    // "Belum Ada Kelompok (...)" = bucket pengajar belum terorganisir, bukan
-    // halaqah nyata — tidak relevan untuk penilaian pedagogis.
-    kelompokOptions = (allKelompok ?? [])
-      .filter((k) => !k.name.startsWith('Belum Ada Kelompok'))
-      .map((k) => ({ value: k.id, label: k.name }));
+    kelompokOptions = (allKelompok ?? []).map((k) => ({ value: k.id, label: k.name }));
     const wanted = searchParams.kelompok;
     kelompokId = wanted && kelompokOptions.some((k) => k.value === wanted)
       ? wanted
