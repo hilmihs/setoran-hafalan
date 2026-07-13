@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
+import { maintenanceGate } from '@/lib/maintenance';
 
 // Prefix halaman terproteksi (butuh login). Bila belum login (cookie sesi
 // tak ada) → arahkan ke home dengan ?next= supaya setelah login balik ke sini.
@@ -11,6 +12,11 @@ const PROTECTED = [
 const SESSION_COOKIE = 'maahir-hits-session';
 
 export function middleware(req: NextRequest) {
+  // Kunci maintenance (mulai 13 Juli 2026 WIB). Jalan paling awal, meng-cover
+  // semua route termasuk /api/*. /api/health & bypass admin tetap lolos.
+  const maint = maintenanceGate(req);
+  if (maint) return maint;
+
   const { pathname, search } = req.nextUrl;
   // Sebarkan path ke server component (dipakai guard untuk redirect-after-login).
   const withPath = () => {
@@ -38,5 +44,7 @@ export function middleware(req: NextRequest) {
 }
 
 export const config = {
-  matcher: ['/((?!api|_next/static|_next/image|favicon.ico).*)'],
+  // Sertakan /api/* juga supaya maintenance bisa mengunci API. Aset statis
+  // tetap di-exclude. /api/health & bypass admin di-allowlist di maintenanceGate.
+  matcher: ['/((?!_next/static|_next/image|favicon.ico).*)'],
 };

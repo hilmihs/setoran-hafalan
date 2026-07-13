@@ -21,3 +21,7 @@ pnpm-workspace.yaml
 
 # Playwright MCP transient artifacts
 .playwright-mcp/
+
+# Supabase full backup (data JSON + audio + dumps). Berisi data sensitif
+# (hash password, nomor WA). JANGAN commit.
+_backup_supabase/

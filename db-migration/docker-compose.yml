@@ -1,0 +1,38 @@
+# docker-compose.yml — Postgres 17 lokal untuk restore + test DB Maahir.
+#
+# INI HANYA DATABASE. Aplikasi Next.js TIDAK bicara langsung ke Postgres —
+# ia memakai Supabase (PostgREST + Storage) lewat supabase-js. Untuk MENJALANKAN
+# aplikasi, target harus punya stack Supabase (self-hosted atau managed).
+# Lihat README.md bagian "Pilihan Target".
+#
+# Compose ini berguna untuk: memuat schema+data, verifikasi, pg_dump, atau
+# sebagai basis Postgres yang nanti di-front PostgREST/Storage.
+#
+# Pakai:
+#   docker compose -f db-migration/docker-compose.yml up -d
+#   # tunggu ~5 detik, lalu (dari root repo):
+#   export DATABASE_URL="postgres://postgres:postgres@localhost:54329/postgres"
+#   psql "$DATABASE_URL" -f db-migration/00_roles.sql
+#   psql "$DATABASE_URL" -f db-migration/schema.sql
+#   npm run load-data          # butuh _backup_supabase/data + `npm i pg`
+#
+services:
+  db:
+    image: postgres:17
+    container_name: maahir-postgres
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: postgres
+    ports:
+      - "54329:5432"   # host 54329 → hindari bentrok Postgres lokal lain
+    volumes:
+      - maahir_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  maahir_pgdata:
