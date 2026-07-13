@@ -18,8 +18,8 @@ export function GET() {
       env: {
         SESSION_SECRET_set: ss.length > 0,
         SESSION_SECRET_len_ok: ss.length >= 32,
-        NEXT_PUBLIC_SUPABASE_URL: !!process.env.NEXT_PUBLIC_SUPABASE_URL,
-        SUPABASE_SERVICE_ROLE_KEY: !!process.env.SUPABASE_SERVICE_ROLE_KEY,
+        DATABASE_URL_set: !!process.env.DATABASE_URL,
+        STORAGE_DIR: process.env.STORAGE_DIR ?? null,
         NEXT_PUBLIC_APP_URL: process.env.NEXT_PUBLIC_APP_URL ?? null,
         NODE_ENV: process.env.NODE_ENV ?? null,
       },

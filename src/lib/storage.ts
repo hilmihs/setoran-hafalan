@@ -34,7 +34,7 @@ export async function signedAudioUrl(
   const { data, error } = await supabaseAdmin.storage
     .from(AUDIO_BUCKET)
     .createSignedUrl(path, expiresInSeconds);
-  if (error) throw error;
+  if (error || !data) throw error ?? new Error('Gagal membuat signed URL audio');
   return data.signedUrl;
 }
 

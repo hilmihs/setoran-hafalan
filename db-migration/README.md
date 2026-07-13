@@ -10,31 +10,26 @@ Panduan untuk memindahkan database aplikasi **Setoran Hafalan / HITS Maahir**
 
 ---
 
-## 0. Ringkas: yang WAJIB dipahami dulu
+## 0. Ringkas: arsitektur baru (PURE PostgreSQL)
 
-**Aplikasi TIDAK memakai koneksi Postgres langsung.** Ia bicara ke Supabase
-lewat `@supabase/supabase-js` → **PostgREST** (REST di atas Postgres) dan
-**Supabase Storage** (bucket audio). Autentikasi login **custom** (iron-session +
-bcrypt), **bukan** Supabase Auth — jadi tidak ada ketergantungan ke skema `auth`.
+Aplikasi **sudah dimigrasikan keluar dari Supabase**. Sekarang ia bicara
+**langsung ke PostgreSQL** via `node-postgres` (`pg`), dan menyimpan **audio di
+filesystem lokal**. **Tidak perlu Supabase, PostgREST, GoTrue, atau layanan
+tambahan apa pun** — cukup PostgreSQL 17 + folder storage.
 
-Konsekuensi: **Postgres polos saja TIDAK cukup untuk menjalankan aplikasi.**
-Target harus menyediakan, minimal:
+Ini dimungkinkan oleh shim di `src/lib/pg-shim.ts` yang meniru API query-builder
+`supabase-js` (`.from().select().eq()...`) di atas SQL, sehingga ~568 call-site
+aplikasi tidak berubah. Autentikasi login tetap custom (iron-session + bcrypt).
 
-| Komponen        | Dipakai untuk                                   | Wajib? |
-|-----------------|-------------------------------------------------|--------|
-| PostgreSQL 17   | Semua data                                      | Ya     |
-| PostgREST       | Semua query aplikasi (via supabase-js)          | Ya     |
-| Supabase Storage| Simpan/serve rekaman audio setoran              | Ya (kalau fitur audio dipakai) |
-| GoTrue (Auth)   | —                                               | Tidak (auth custom) |
+| Komponen           | Dipakai untuk                     | Perlu di target? |
+|--------------------|-----------------------------------|------------------|
+| PostgreSQL 17      | Semua data                        | **Ya** (satu-satunya) |
+| Folder storage     | Simpan/serve rekaman audio        | Ya (kalau fitur audio dipakai) |
+| PostgREST / Supabase / GoTrue | —                      | **Tidak** |
 
-→ **Rekomendasi target: Self-Hosted Supabase** (Docker) atau **project Supabase
-baru di akun/host lain**. Keduanya menyediakan PostgREST + Storage sehingga kode
-aplikasi **tidak perlu diubah** — cukup ganti 3 env (URL + 2 key).
-
-Kalau host tujuan benar-benar hanya menyediakan "PostgreSQL", database tetap bisa
-di-restore (schema + data di bawah ini valid & teruji), tapi **aplikasi belum
-akan jalan** sampai ada PostgREST + Storage di depannya. Diskusikan ini dengan
-penyedia host.
+Yang perlu di-set di server (lihat bagian 5): `DATABASE_URL`, `STORAGE_DIR`,
+`SESSION_SECRET`. Sudah diuji end-to-end: schema+data restore, login tiap role,
+dan dashboard (termasuk join bertingkat + audio) berjalan di Postgres polos.
 
 ---
 
@@ -62,9 +57,11 @@ scripts/export-supabase.ts        script export (re-run untuk lanjutkan audio)
 scripts/test-restore-pglite.ts    verifikasi restore end-to-end (tanpa docker)
 ```
 
-Status verifikasi: `npm run test-restore` **LULUS** — 44/44 migrasi apply di
-Postgres bersih, jumlah baris 58 tabel cocok manifest, 80 foreign key valid
-(tidak ada baris yatim).
+Status verifikasi:
+- `npm run test-restore` **LULUS** — 44/44 migrasi apply, 58 tabel cocok manifest, 80 FK valid.
+- `npm run test-shim` **LULUS** — 18 pola query aplikasi (embed 2-level, or/not, count/head, upsert).
+- **End-to-end di Postgres polos**: login koordinator + dashboard (join bertingkat
+  peserta→kelas→musyrif, daftar risiko, filter) render benar. Aplikasi jalan tanpa Supabase.
 
 ---
 
@@ -122,80 +119,65 @@ Catatan:
 
 ---
 
-## 3. Pilihan Target
+## 3. Menyiapkan PostgreSQL di server tujuan
 
-### Opsi A — Self-Hosted Supabase (rekomendasi, app tanpa perubahan kode)
+1. Pasang **PostgreSQL 17** (paket resmi PGDG). Buat database, mis. `maahir`.
+2. Restore schema + data (bagian 2 — cara tercepat: `psql -f maahir_full_dump.sql`).
+   `00_roles.sql` membuat role `anon/authenticated/service_role` yang dipakai
+   policy RLS; aman & idempotent di Postgres polos.
+3. Sediakan folder storage audio (mis. `/var/www/html/maahir/storage`) dan taruh
+   audio ke sana (bagian 4).
+4. Set env `DATABASE_URL`, `STORAGE_DIR`, `SESSION_SECRET` (bagian 5).
+5. Deploy, matikan maintenance (bagian 6). Selesai — tanpa Supabase/PostgREST.
 
-1. Ikuti https://supabase.com/docs/guides/self-hosting/docker (clone `supabase`,
-   `docker compose up -d`). Ini sudah menyediakan Postgres + PostgREST + Storage +
-   Kong (gateway) + role anon/authenticated/service_role.
-2. Restore schema + data ke Postgres-nya (bagian 2). Karena role sudah ada,
-   `00_roles.sql` akan idempotent (aman).
-3. Buat bucket storage `setoran-audio` (private), lalu upload audio (bagian 4).
-4. Ambil dari `docker-compose`/`.env` Supabase: `SUPABASE_URL` (mis.
-   `http://<host>:8000`), `ANON_KEY`, `SERVICE_ROLE_KEY`.
-5. Set env aplikasi (bagian 5), deploy, matikan maintenance (bagian 6).
-
-### Opsi B — Project Supabase baru (akun/region lain)
-
-1. Buat project baru di Supabase. Di **SQL Editor**, jalankan `00_roles.sql`
-   (idempotent — role sudah ada) lalu `schema.sql`.
-2. Load data: pakai **connection string** project baru (Settings → Database →
-   Connection string / URI) sebagai `DATABASE_URL`, jalankan `npm run load-data`.
-3. Storage → buat bucket `setoran-audio` (private) → upload audio (bagian 4).
-4. Ambil URL + anon key + service_role key baru → set env (bagian 5).
-
-### Opsi C — Postgres polos (mis. dari host tujuan)
-
-- Restore DB persis bagian 2 (sudah teruji jalan di Postgres 17 murni).
-- **Aplikasi belum jalan** tanpa PostgREST + Storage. Perlu pasang PostgREST
-  (https://postgrest.org) + storage-api sendiri, atau bungkus dengan Opsi A.
-- Untuk test lokal cepat DB-nya: `docker compose -f db-migration/docker-compose.yml up -d`.
+> Tidak ada Docker wajib. `db-migration/docker-compose.yml` hanya opsi praktis
+> kalau ingin Postgres 17 cepat via container.
 
 ---
 
-## 4. Audio / Storage (⚠️ butuh aksi)
+## 4. Audio / Storage (filesystem)
 
-- Bucket `setoran-audio`: **608 objek, ~4.8 GB** rekaman `.webm` (setoran peserta
-  & musyrif). Daftar lengkap di `_backup_supabase/storage-manifest.json`.
-- Saat export, project sudah restricted → **hanya 7 file** yang sempat terunduh.
-  Sisanya **belum** ada byte-nya (byte audio hanya bisa diambil lewat Storage API
-  yang sekarang terkunci).
+Audio kini file biasa di disk: `${STORAGE_DIR}/setoran-audio/<path>`, diserve oleh
+route `/api/audio/...` (signed URL HMAC `SESSION_SECRET`). Path objek sama seperti
+yang tersimpan di tabel `rekaman`/`rekaman_musyrif`:
+`{peserta_id}/{week_start}/{jenis}.webm` dan `musyrif/{musyrif_id}/.../{jenis}.webm`.
 
-**Untuk menyelamatkan audio penuh, salah satu:**
-1. **Lepas restriction dulu** (di Supabase: hapus spend cap / tambah billing /
-   kosongkan storage sampai < kuota) supaya Storage API aktif lagi, LALU:
-   ```bash
-   npm run export-supabase     # resume: lewati yg sudah ada, unduh sisa ~601 file
-   ```
-   Ini menaruh semua audio di `_backup_supabase/storage/<path>`.
-2. Setelah audio ada di lokal, upload ke bucket target (Opsi A/B) dengan
-   `scripts/upload-storage.ts` (lihat catatan di bawah) atau `supabase storage cp`.
+**Restore audio:** salin isi `_backup_supabase/storage/setoran-audio/` ke
+`${STORAGE_DIR}/setoran-audio/`. Selesai — link download langsung jalan.
 
-> Path objek = `{peserta_id}/{week_start}/{jenis}.webm` dan
-> `musyrif/{musyrif_id}/{week_start}/{jenis}.webm`. Tabel `rekaman` /
-> `rekaman_musyrif` menyimpan path relatif ini, jadi cukup dipertahankan sama.
+⚠️ **Audio belum lengkap.** Saat export, project Supabase sudah restricted
+(kuota storage 4.8 GB > 1 GB free) → **hanya 7 dari 608 file** yang sempat
+terunduh. Byte sisanya hanya bisa diambil lewat Storage API Supabase yang
+terkunci. Untuk menyelamatkan semuanya: lepas restriction Supabase (upgrade Pro
+sementara), lalu:
 
-Kalau audio lama direlakan (mulai bersih), tabel `rekaman`/`setoran` tetap valid;
-hanya link download audio lama yang mati.
+```bash
+npm run export-supabase   # resume: unduh sisa ~601 file ke _backup_supabase/storage
+```
+
+lalu salin ke `${STORAGE_DIR}/setoran-audio/`. Kalau audio lama direlakan, tabel
+`rekaman`/`setoran` tetap valid; hanya playback rekaman lama yang mati. Daftar
+lengkap objek: `_backup_supabase/storage-manifest.json`.
 
 ---
 
-## 5. Env aplikasi yang perlu diganti
+## 5. Env aplikasi
 
 Di server (`/var/www/html/maahir`, env via Azure Variable Group `ENV_*` →
-`env_vars.sh`), ganti nilai berikut ke host baru:
+`env_vars.sh`). Ganti dari model Supabase lama ke:
 
 ```
-NEXT_PUBLIC_SUPABASE_URL=<url PostgREST/Supabase baru>
-NEXT_PUBLIC_SUPABASE_ANON_KEY=<anon key baru>
-SUPABASE_SERVICE_ROLE_KEY=<service_role key baru>
-SUPABASE_AUDIO_BUCKET=setoran-audio      # tetap
-SESSION_SECRET=<biarkan sama>            # ganti = semua sesi login logout
+DATABASE_URL=postgres://user:pass@localhost:5432/maahir   # Postgres tujuan
+STORAGE_DIR=/var/www/html/maahir/storage                  # folder audio
+SUPABASE_AUDIO_BUCKET=setoran-audio                        # nama subfolder (tetap)
+SESSION_SECRET=<biarkan sama>       # ganti = semua sesi login logout + link audio lama mati
 NEXT_PUBLIC_APP_URL=https://maahir.muhajirproject.org
+# PG_POOL_MAX opsional (default 10) — biarkan default utk Postgres asli.
 ```
 
-Tidak ada env lain yang berubah. Kode aplikasi tidak perlu disentuh.
+Var lama `NEXT_PUBLIC_SUPABASE_URL / _ANON_KEY / SUPABASE_SERVICE_ROLE_KEY`
+**tidak dipakai lagi** oleh aplikasi (boleh dihapus). Kode aplikasi tidak perlu
+disentuh — shim `pg` menangani semuanya.
 
 ---
 
@@ -228,13 +210,20 @@ Deploy otomatis via Azure DevOps: push ke branch `main` → pipeline SSH ke
 
 ## 8. Checklist migrasi
 
-- [ ] Target menyediakan PostgREST + Storage (Opsi A/B) — atau sadar app belum
-      jalan (Opsi C)
-- [ ] `00_roles.sql` + `schema.sql` ter-apply tanpa error
-- [ ] `npm run load-data` selesai; `npm run test-restore` LULUS (opsional lokal)
+- [ ] PostgreSQL 17 terpasang; database dibuat
+- [ ] Restore: `psql -f maahir_full_dump.sql` (atau `00_roles.sql` + `schema.sql` + `npm run load-data`)
 - [ ] Jumlah baris cocok (peserta 84, setoran 186, audit_log 4432, dst.)
-- [ ] (Audio) restriction dilepas → `npm run export-supabase` selesai → upload ke bucket
-- [ ] Bucket `setoran-audio` (private) ada di target
-- [ ] Env aplikasi (URL + anon + service_role) diganti ke host baru
+- [ ] `STORAGE_DIR` disiapkan; audio disalin ke `${STORAGE_DIR}/setoran-audio/`
+- [ ] (Audio penuh) restriction Supabase dilepas → `npm run export-supabase` resume → salin
+- [ ] Env: `DATABASE_URL` + `STORAGE_DIR` + `SESSION_SECRET` di-set (var Supabase lama dibuang)
 - [ ] Test login 1 akun tiap role + buka 1 setoran (cek data & audio)
 - [ ] `MAINTENANCE_MODE=off` → deploy → situs normal
+
+## 9. Uji lokal (opsional, tanpa Postgres sistem)
+
+- `npm run test-restore` — restore schema+data di PGlite, cek baris + FK.
+- `npm run test-shim` — 18 pola query aplikasi (embed, or/not, count, upsert) di PGlite.
+- Uji runtime penuh (app → pg.Pool → wire): jalankan `npx tsx scripts/pg-serve-test.ts`
+  (server Postgres-wire dari PGlite di :54329), lalu `next start` dgn
+  `DATABASE_URL=postgres://postgres:postgres@127.0.0.1:54329/postgres PG_POOL_MAX=1`.
+  (PGlite-socket satu koneksi → set `PG_POOL_MAX=1`; Postgres asli pakai default.)
