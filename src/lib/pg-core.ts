@@ -9,7 +9,23 @@
  *
  * ENV: DATABASE_URL=postgres://user:pass@host:5432/db
  */
-import { Pool } from 'pg';
+import { Pool, types } from 'pg';
+
+// ── Samakan tipe hasil dengan supabase-js (PostgREST JSON) ──────────────────
+// node-postgres default mengembalikan objek Date untuk date/timestamp dan string
+// untuk numeric/int8. Kode aplikasi ditulis untuk keluaran supabase-js (JSON):
+// tanggal = string, numeric = number. Selaraskan lewat type parser global supaya
+// ~568 call-site tak perlu diubah (mis. `week_start.split('-')` butuh string).
+//   1082 date        → "YYYY-MM-DD" (apa adanya)
+//   1114 timestamp   → ISO-ish string (ganti spasi → 'T')
+//   1184 timestamptz → ISO string (…Z)
+//   1700 numeric     → number
+//   20   int8/bigint → number
+types.setTypeParser(1082, (v) => v);
+types.setTypeParser(1114, (v) => (v == null ? v : String(v).replace(' ', 'T')));
+types.setTypeParser(1184, (v) => (v == null ? v : new Date(v).toISOString()));
+types.setTypeParser(1700, (v) => (v == null ? v : parseFloat(v)));
+types.setTypeParser(20, (v) => (v == null ? v : parseInt(v, 10)));
 
 export type Row = Record<string, any>;
 export type Exec = (text: string, params?: any[]) => Promise<{ rows: Row[]; rowCount: number }>;
