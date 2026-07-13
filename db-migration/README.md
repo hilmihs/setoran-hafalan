@@ -38,9 +38,9 @@ dan dashboard (termasuk join bertingkat + audio) berjalan di Postgres polos.
 ```
 _backup_supabase/                 (TIDAK di-commit — berisi data sensitif)
   data/<tabel>.json               58 tabel, 26.277 baris — LENGKAP ✅
-  storage/<path>.webm             rekaman audio — SEBAGIAN (7 file) ⚠️
-  storage-manifest.json           daftar 608 objek audio (path+size) — LENGKAP
+  storage-manifest.json           daftar 608 objek audio lama (referensi saja)
   manifest.json                   ringkasan + jumlah baris per tabel
+  (audio ~4.8 GB TIDAK diikutkan — lihat bagian 4)
 
 db-migration/                     (di-commit KECUALI dump)
   README.md                       file ini
@@ -142,22 +142,18 @@ route `/api/audio/...` (signed URL HMAC `SESSION_SECRET`). Path objek sama seper
 yang tersimpan di tabel `rekaman`/`rekaman_musyrif`:
 `{peserta_id}/{week_start}/{jenis}.webm` dan `musyrif/{musyrif_id}/.../{jenis}.webm`.
 
-**Restore audio:** salin isi `_backup_supabase/storage/setoran-audio/` ke
-`${STORAGE_DIR}/setoran-audio/`. Selesai — link download langsung jalan.
+**KEPUTUSAN: audio lama (~4.8 GB) TIDAK dimigrasikan.** Saat export, project
+Supabase sudah restricted (kuota storage 4.8 GB > 1 GB free) sehingga byte audio
+tak bisa ditarik, dan diputuskan direlakan. Konsekuensi: tabel `rekaman`/`setoran`
+tetap valid, hanya **playback rekaman lama yang mati** (file tidak ada di disk).
+Setoran/rekaman BARU tetap berfungsi normal — tersimpan ke `${STORAGE_DIR}`.
 
-⚠️ **Audio belum lengkap.** Saat export, project Supabase sudah restricted
-(kuota storage 4.8 GB > 1 GB free) → **hanya 7 dari 608 file** yang sempat
-terunduh. Byte sisanya hanya bisa diambil lewat Storage API Supabase yang
-terkunci. Untuk menyelamatkan semuanya: lepas restriction Supabase (upgrade Pro
-sementara), lalu:
+Tidak ada yang perlu dilakukan untuk audio saat migrasi. Cukup pastikan folder
+`${STORAGE_DIR}/setoran-audio/` ada & bisa ditulis oleh proses aplikasi.
 
-```bash
-npm run export-supabase   # resume: unduh sisa ~601 file ke _backup_supabase/storage
-```
-
-lalu salin ke `${STORAGE_DIR}/setoran-audio/`. Kalau audio lama direlakan, tabel
-`rekaman`/`setoran` tetap valid; hanya playback rekaman lama yang mati. Daftar
-lengkap objek: `_backup_supabase/storage-manifest.json`.
+> (Kalau suatu saat ingin menyelamatkan audio lama: lepas restriction Supabase
+> lalu `npm run export-supabase` untuk resume unduhan, salin ke
+> `${STORAGE_DIR}/setoran-audio/`. Daftar objek di `storage-manifest.json`.)
 
 ---
 
@@ -213,8 +209,8 @@ Deploy otomatis via Azure DevOps: push ke branch `main` → pipeline SSH ke
 - [ ] PostgreSQL 17 terpasang; database dibuat
 - [ ] Restore: `psql -f maahir_full_dump.sql` (atau `00_roles.sql` + `schema.sql` + `npm run load-data`)
 - [ ] Jumlah baris cocok (peserta 84, setoran 186, audit_log 4432, dst.)
-- [ ] `STORAGE_DIR` disiapkan; audio disalin ke `${STORAGE_DIR}/setoran-audio/`
-- [ ] (Audio penuh) restriction Supabase dilepas → `npm run export-supabase` resume → salin
+- [ ] `STORAGE_DIR` disiapkan + folder `${STORAGE_DIR}/setoran-audio/` bisa ditulis
+      (audio lama TIDAK dimigrasikan — hanya untuk setoran baru)
 - [ ] Env: `DATABASE_URL` + `STORAGE_DIR` + `SESSION_SECRET` di-set (var Supabase lama dibuang)
 - [ ] Test login 1 akun tiap role + buka 1 setoran (cek data & audio)
 - [ ] `MAINTENANCE_MODE=off` → deploy → situs normal
