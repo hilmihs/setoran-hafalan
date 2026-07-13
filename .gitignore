@@ -29,3 +29,6 @@ _backup_supabase/
 # commit — dikirim ke penerima bersama _backup_supabase, atau regen via
 # `npm run generate-dump`.
 db-migration/maahir_full_dump.sql
+
+# Arsip handoff DB (data sensitif). JANGAN commit.
+maahir-db-handoff.tar.gz
