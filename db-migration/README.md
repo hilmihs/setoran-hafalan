@@ -47,11 +47,14 @@ _backup_supabase/                 (TIDAK di-commit — berisi data sensitif)
   storage-manifest.json           daftar 608 objek audio (path+size) — LENGKAP
   manifest.json                   ringkasan + jumlah baris per tabel
 
-db-migration/                     (di-commit)
+db-migration/                     (di-commit KECUALI dump)
   README.md                       file ini
   00_roles.sql                    buat role anon/authenticated/service_role
   schema.sql                      gabungan 44 migrasi (schema lengkap)
-  load-data.ts                    muat data/*.json ke Postgres tujuan
+  load-data.ts                    muat data/*.json ke Postgres tujuan (butuh Node)
+  maahir_full_dump.sql            ⭐ SATU file: roles+schema+data. Restore 1 perintah.
+                                  TIDAK di-git (data sensitif) — dikirim bersama
+                                  _backup_supabase, atau regen `npm run generate-dump`.
   docker-compose.yml              Postgres 17 lokal (untuk restore/test)
 
 supabase/migrations/*.sql         44 migrasi asli (sumber schema, urut nomor)
@@ -69,6 +72,23 @@ Postgres bersih, jumlah baris 58 tabel cocok manifest, 80 foreign key valid
 
 Berlaku untuk target apa pun (self-hosted Supabase, project Supabase baru, atau
 Postgres polos). Butuh `psql` + `DATABASE_URL` ke Postgres 17 tujuan.
+
+### Cara TERCEPAT — satu file (tanpa Node)
+
+```bash
+psql "$DATABASE_URL" -f db-migration/maahir_full_dump.sql
+```
+
+File ini = `00_roles.sql` + `schema.sql` + semua data (INSERT). Idempotent
+(TRUNCATE dulu, load ulang). Sudah diverifikasi: restore ulang di Postgres bersih
+menghasilkan jumlah baris persis sama dgn manifest. Kalau file belum ada, buat:
+`npm run generate-dump` (butuh `_backup_supabase/data`).
+
+> Butuh koneksi sbg superuser / role yg boleh `SET session_replication_role`
+> (postgres default di self-hosted Supabase & project Supabase bisa). Kalau tidak,
+> pakai cara bertahap di bawah.
+
+### Cara bertahap (schema + loader Node)
 
 ```bash
 # 1) Role Supabase (anon/authenticated/service_role) — dibutuhkan RLS policy.

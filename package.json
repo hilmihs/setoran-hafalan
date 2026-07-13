@@ -14,6 +14,7 @@
     "test-ranking": "tsx --env-file=.env.local scripts/test-ranking.ts",
     "export-supabase": "tsx --env-file=.env.local scripts/export-supabase.ts",
     "test-restore": "tsx scripts/test-restore-pglite.ts",
+    "generate-dump": "tsx scripts/generate-sql-dump.ts",
     "load-data": "tsx db-migration/load-data.ts",
     "upload-storage": "tsx --env-file=.env.local scripts/upload-storage.ts",
     "seed": "tsx --env-file=.env.local scripts/seed.ts",
