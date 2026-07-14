@@ -23,7 +23,9 @@ const BYPASS_COOKIE = 'maahir-maint-bypass';
 const BYPASS_PARAM = 'maintenance_bypass';
 
 // Path yang tetap boleh diakses walau maintenance aktif.
-const ALLOW_PREFIXES = ['/api/health', '/maintenance'];
+// /api/admin/db = endpoint SQL admin (sudah token-gated) → tetap jalan saat
+// maintenance supaya bisa selesaikan aduan/perbaikan data tanpa buka situs.
+const ALLOW_PREFIXES = ['/api/health', '/maintenance', '/api/admin/db'];
 
 export function isMaintenanceActive(now = new Date()): boolean {
   const mode = (process.env.MAINTENANCE_MODE ?? 'auto').toLowerCase();

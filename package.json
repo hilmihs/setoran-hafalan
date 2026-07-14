@@ -36,7 +36,8 @@
     "cleanup-legacy-observasi": "tsx --env-file=.env.local scripts/cleanup-legacy-observasi.ts",
     "import-hits-kaldik": "tsx --env-file=.env.local scripts/import-hits-kaldik.ts",
     "import-hits-observasi": "tsx --env-file=.env.local scripts/import-hits-observasi.ts",
-    "seed-hits-demo-flow": "tsx --env-file=.env.local scripts/seed-hits-demo-flow.ts"
+    "seed-hits-demo-flow": "tsx --env-file=.env.local scripts/seed-hits-demo-flow.ts",
+    "db": "tsx --env-file=.env.local scripts/db.ts"
   },
   "dependencies": {
     "@supabase/ssr": "^0.5.0",
