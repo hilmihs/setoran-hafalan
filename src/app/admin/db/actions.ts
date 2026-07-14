@@ -10,10 +10,12 @@ import {
   type BrowseResult,
   type MutateResult,
 } from '@/lib/admin-crud';
+import { getSchemaTree, type SchemaGroup } from '@/lib/admin-schema';
 
 export type ConsoleResult = ({ ok: true } & AdminSqlResult) | { ok: false; error: string };
 export type BrowseActionResult = ({ ok: true } & BrowseResult) | { ok: false; error: string };
 export type MutateActionResult = ({ ok: true } & MutateResult) | { ok: false; error: string };
+export type SchemaActionResult = { ok: true; groups: SchemaGroup[] } | { ok: false; error: string };
 
 /**
  * Server actions untuk /admin/db. requireAdmin() di TIAP action (jangan andalkan
@@ -26,6 +28,16 @@ export async function runConsoleSql(sql: string, confirm: boolean, allowNonTx = 
   try {
     const result = await runAdminSql(sql, { confirm, allowNonTx, source: 'console', actor });
     return { ok: true, ...result };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : String(e) };
+  }
+}
+
+export async function getSchemaAction(): Promise<SchemaActionResult> {
+  await requireAdmin();
+  try {
+    const groups = await getSchemaTree();
+    return { ok: true, groups };
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : String(e) };
   }

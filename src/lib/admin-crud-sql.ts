@@ -101,3 +101,67 @@ export function buildDeleteQuery(table: string, pkColumns: string[], pkValues: a
   const where = pkColumns.map((c, i) => `${quoteIdent(c)} = $${i + 1}`).join(' AND ');
   return { text: `DELETE FROM ${ident} WHERE ${where}`, params: pkValues };
 }
+
+// ── Introspeksi borongan (untuk tab Skema — 1 query per jenis, bukan per-tabel) ──
+export const ALL_COLUMNS_SQL =
+  `SELECT table_name, column_name, data_type, udt_name, is_nullable, column_default, ` +
+  `is_generated, identity_generation, ordinal_position ` +
+  `FROM information_schema.columns WHERE table_schema='public' ` +
+  `ORDER BY table_name, ordinal_position`;
+
+export const ALL_PK_SQL =
+  `SELECT tc.table_name, kcu.column_name FROM information_schema.table_constraints tc ` +
+  `JOIN information_schema.key_column_usage kcu ` +
+  `  ON kcu.constraint_name=tc.constraint_name AND kcu.table_schema=tc.table_schema ` +
+  `WHERE tc.table_schema='public' AND tc.constraint_type='PRIMARY KEY'`;
+
+export const ALL_FK_SQL =
+  `SELECT tc.table_name AS src, kcu.column_name AS col, ` +
+  `       ccu.table_name AS ref, ccu.column_name AS refcol ` +
+  `FROM information_schema.table_constraints tc ` +
+  `JOIN information_schema.key_column_usage kcu ` +
+  `  ON kcu.constraint_name=tc.constraint_name AND kcu.table_schema=tc.table_schema ` +
+  `JOIN information_schema.constraint_column_usage ccu ` +
+  `  ON ccu.constraint_name=tc.constraint_name AND ccu.table_schema=tc.table_schema ` +
+  `WHERE tc.constraint_type='FOREIGN KEY' AND tc.table_schema='public'`;
+
+export const ALL_ENUM_SQL =
+  `SELECT t.typname, e.enumlabel FROM pg_enum e JOIN pg_type t ON t.oid=e.enumtypid ` +
+  `ORDER BY t.typname, e.enumsortorder`;
+
+// ── Klasifikasi domain tabel (untuk grouping tree) — pure, testable ─────────
+export const SCHEMA_DOMAINS = [
+  'Identitas & Role',
+  'Setoran & Hafalan',
+  'HITS',
+  'Penilaian & Matrix',
+  'Kehadiran & Program',
+  'Tabayyun, Teguran & Alasan',
+  'Sistem & Audit',
+  'Lainnya',
+] as const;
+
+const DOMAIN_MAP: Record<string, string> = {
+  peserta: 'Identitas & Role', musyrif: 'Identitas & Role', koordinator: 'Identitas & Role',
+  koordinator_hits: 'Identitas & Role', syaikh: 'Identitas & Role', pengajar: 'Identitas & Role',
+  ketua_kelas: 'Identitas & Role', koordinator_ketua_kelas: 'Identitas & Role',
+  kelompok_pengajar: 'Identitas & Role', kelas: 'Identitas & Role', kelas_hits: 'Identitas & Role',
+  setoran: 'Setoran & Hafalan', setoran_musyrif: 'Setoran & Hafalan',
+  rekaman: 'Setoran & Hafalan', rekaman_musyrif: 'Setoran & Hafalan',
+  penilaian_masyaikh: 'Penilaian & Matrix', penilaian_pedagogis: 'Penilaian & Matrix',
+  matrix_rekap: 'Penilaian & Matrix', indikator_standar: 'Penilaian & Matrix',
+  checkin_pengajar: 'Kehadiran & Program', program_kehadiran: 'Kehadiran & Program',
+  program_kelas_libur: 'Kehadiran & Program', program_kelas_libur_request: 'Kehadiran & Program',
+  libur_program: 'Kehadiran & Program', jadwal_pindah: 'Kehadiran & Program',
+  observasi_kelas: 'Kehadiran & Program',
+  tabayyun: 'Tabayyun, Teguran & Alasan', teguran: 'Tabayyun, Teguran & Alasan',
+  shakwa: 'Tabayyun, Teguran & Alasan', pengajuan_alasan: 'Tabayyun, Teguran & Alasan',
+  ketua_dualrole_request: 'Tabayyun, Teguran & Alasan',
+  audit_log: 'Sistem & Audit', session_log: 'Sistem & Audit', wa_reminder_log: 'Sistem & Audit',
+  koordinator_notes: 'Sistem & Audit', batch_config: 'Sistem & Audit',
+};
+
+export function tableDomain(name: string): string {
+  if (name.startsWith('hits_')) return 'HITS';
+  return DOMAIN_MAP[name] ?? 'Lainnya';
+}
