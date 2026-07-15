@@ -154,8 +154,11 @@ export default async function PenilaianPage({
           <p className="t-body">Belum ada pengajar aktif.</p>
         )}
 
-        <PenilaianMasyaikhForm pengajarList={ikhwanList} yearMonth={yearMonth} title="Ikhwan" />
+        {/* key sertakan yearMonth → form re-mount saat ganti bulan, supaya state skor
+            reset dari data bulan terpilih (cegah skor basi tersimpan ke bulan baru). */}
+        <PenilaianMasyaikhForm key={`ikhwan:${yearMonth}`} pengajarList={ikhwanList} yearMonth={yearMonth} title="Ikhwan" />
         <PenilaianMasyaikhForm
+          key={`akhwat:${yearMonth}`}
           pengajarList={akhwatList}
           yearMonth={yearMonth}
           title="Akhwat"

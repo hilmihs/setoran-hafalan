@@ -143,7 +143,10 @@ export default async function PenilaianPedagogisPage({
           ) : (
             <>
               <div className="t-tiny" style={{ marginBottom: 8 }}>{spectator ? 'LIHAT' : 'EDIT'} {monthLabelOf(ym).toUpperCase()}</div>
-              <PenilaianPedagogisForm members={membersWithPenilaian} yearMonth={ym} readOnly={spectator} />
+              {/* key = bulan+kelompok → form RE-MOUNT saat ganti bulan/kelompok, supaya
+                  state (skor) reset dari data bulan terpilih. Tanpa ini, ganti bulan
+                  (soft nav) tak reset useState → skor basi tersimpan ke bulan baru. */}
+              <PenilaianPedagogisForm key={`${ym}:${kelompokId ?? 'none'}`} members={membersWithPenilaian} yearMonth={ym} readOnly={spectator} />
 
               {/* Riwayat bulan-ke-bulan */}
               <div style={{ marginTop: 28 }}>
