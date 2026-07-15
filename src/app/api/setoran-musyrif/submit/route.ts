@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase-admin';
 import { getSession } from '@/lib/session';
 import { ensureAudioBucket, uploadAudioMusyrif } from '@/lib/storage';
-import { currentCycleStart } from '@/lib/week';
+import { currentCycleStart, isValidCycleStart } from '@/lib/week';
 import { buildWaMeUrl, tplMusyrifSubmitToSyaikh } from '@/lib/whatsapp';
 import { absUrl } from '@/lib/url';
 import { JENIS_REKAMAN, type JenisRekaman, type Gender } from '@/types/db';
@@ -57,7 +57,11 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const weekStart = currentCycleStart();
+    // Cycle berjalan (default) ATAU periode lampau (backfill) bila client kirim
+    // week_start valid (sejak anchor, bukan masa depan). Selain itu → cycle berjalan.
+    const rawWeek = form.get('week_start');
+    const weekStart =
+      typeof rawWeek === 'string' && isValidCycleStart(rawWeek) ? rawWeek : currentCycleStart();
 
     const { data: existing } = await supabaseAdmin
       .from('setoran_musyrif')

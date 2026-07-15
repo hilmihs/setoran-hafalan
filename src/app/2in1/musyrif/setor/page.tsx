@@ -8,8 +8,13 @@ import {
 } from '@/components/PesertaSetoranForm';
 import { Icon } from '@/components/icons';
 import { LogoutButton } from '@/components/LogoutButton';
-import { currentCycleStart, formatCycleRange } from '@/lib/week';
-import { formatCycleRangeShort } from '@/lib/week';
+import {
+  currentCycleStart,
+  formatCycleRange,
+  formatCycleRangeShort,
+  allCyclesSinceAnchor,
+  CYCLE_ANCHOR,
+} from '@/lib/week';
 import {
   buildWaMeUrl,
   salutation,
@@ -78,6 +83,36 @@ export default async function MusyrifSetorPage() {
     };
   }
 
+  // --- Backfill periode terlewat (sejak anchor): setoran_musyrif belum dicek & <3 rekaman audio ---
+  const allCycles = allCyclesSinceAnchor();
+  const { data: allSetoran } = await supabaseAdmin
+    .from('setoran_musyrif')
+    .select('id, week_start, status')
+    .eq('musyrif_id', musyrifId)
+    .gte('week_start', CYCLE_ANCHOR);
+  const setoranIds = (allSetoran ?? []).map((r) => r.id);
+  const { data: allRekaman } = setoranIds.length
+    ? await supabaseAdmin
+        .from('rekaman_musyrif')
+        .select('setoran_musyrif_id, jenis, audio_url')
+        .in('setoran_musyrif_id', setoranIds)
+    : { data: [] };
+  const setoranById = new Map((allSetoran ?? []).map((r) => [r.id, r]));
+  const submittedByCycle = new Map<string, JenisRekaman[]>();
+  for (const r of allRekaman ?? []) {
+    if (!r.audio_url) continue;
+    const st = setoranById.get(r.setoran_musyrif_id);
+    if (!st) continue;
+    const arr = submittedByCycle.get(st.week_start) ?? [];
+    arr.push(r.jenis as JenisRekaman);
+    submittedByCycle.set(st.week_start, arr);
+  }
+  const statusByCycle = new Map((allSetoran ?? []).map((r) => [r.week_start, r.status]));
+  const backfillCycles = allCycles
+    .filter((c) => c !== cycle) // cycle berjalan ditangani form utama
+    .filter((c) => statusByCycle.get(c) !== 'checked' && (submittedByCycle.get(c)?.length ?? 0) < 3)
+    .map((c) => ({ cycleStart: c, label: formatCycleRange(c), submittedJenis: submittedByCycle.get(c) ?? [] }));
+
   const sapaan = salutation(musyrifGender);
   const titel = syaikh ? syaikhTitle(syaikh.gender) : musyrifGender === 'ikhwan' ? 'Syaikh' : 'Ustadzah';
 
@@ -132,6 +167,49 @@ export default async function MusyrifSetorPage() {
             <p className="t-body">
               Tidak ada {titel.toLowerCase()} aktif untuk gender ini. Hubungi koordinator.
             </p>
+          )}
+
+          {syaikh && backfillCycles.length > 0 && (
+            <div style={{ marginTop: 28 }}>
+              <h2 className="t-h1" style={{ fontSize: 18, marginBottom: 2 }}>
+                Setor periode terlewat
+              </h2>
+              <p className="t-small" style={{ marginBottom: 14 }}>
+                Periode lalu yang belum lengkap. Rekam ke-3 jenis lalu kirim untuk
+                periode tersebut.
+              </p>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                {backfillCycles.map((bc) => (
+                  <details key={bc.cycleStart} className="card" style={{ padding: 14 }}>
+                    <summary
+                      style={{
+                        cursor: 'pointer',
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                        gap: 8,
+                        listStyle: 'none',
+                      }}
+                    >
+                      <span style={{ fontSize: 14, fontWeight: 600 }}>Periode {bc.label}</span>
+                      <span className="t-small">{bc.submittedJenis.length}/3 · setor →</span>
+                    </summary>
+                    <div style={{ marginTop: 12 }}>
+                      <PesertaSetoranForm
+                        musyrifName={`${titel} ${syaikh.name}`}
+                        musyrifInitials={initialsOf(syaikh.name)}
+                        existing={null}
+                        endpoint="/api/setoran-musyrif/submit"
+                        targetRoleLabel={`${titel} Anda`}
+                        cacheKey={`m-${bc.cycleStart}`}
+                        periodWeekStart={bc.cycleStart}
+                        submittedJenis={bc.submittedJenis}
+                      />
+                    </div>
+                  </details>
+                ))}
+              </div>
+            </div>
           )}
         </div>
       </div>
