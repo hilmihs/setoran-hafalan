@@ -2,6 +2,10 @@ import { NextRequest, NextResponse } from 'next/server';
 import ExcelJS from 'exceljs';
 import { getSession } from '@/lib/session';
 import { supabaseAdmin } from '@/lib/supabase-admin';
+import { INDIKATOR } from '@/lib/matrix-indicators';
+
+const KAT_SHORT: Record<string, string> = { hard: 'Hard Skill', pedagogis: 'Pedagogis', soft: 'Soft Skill' };
+const XLSX_MIME = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
 
 export const runtime = 'nodejs';
 export const maxDuration = 60;
@@ -51,6 +55,70 @@ export async function GET(req: NextRequest) {
     : { data: [] };
 
   const matrixByPengajar = new Map((matrixData ?? []).map((m) => [m.pengajar_id, m]));
+
+  // ── Mode "belum lengkap" (?incomplete=1): hanya pengajar dgn ≥1 indikator kosong,
+  //    + kolom rincian bagian yang belum terisi (dikelompokkan per kategori) + halaqah.
+  if (req.nextUrl.searchParams.get('incomplete') === '1') {
+    const { data: halaqahData } = pengajarIds.length
+      ? await supabaseAdmin
+          .from('hits_halaqah')
+          .select('pengajar_id, name')
+          .in('pengajar_id', pengajarIds)
+          .eq('active', true)
+      : { data: [] };
+    const halaqahByPengajar = new Map<string, string[]>();
+    for (const h of halaqahData ?? []) {
+      if (!h.pengajar_id) continue;
+      const arr = halaqahByPengajar.get(h.pengajar_id) ?? [];
+      arr.push(h.name);
+      halaqahByPengajar.set(h.pengajar_id, arr);
+    }
+
+    const wbI = new ExcelJS.Workbook();
+    wbI.creator = 'Maahir';
+    wbI.created = new Date();
+    const sh = wbI.addWorksheet('Belum Lengkap');
+    sh.columns = [
+      { header: 'Nama', key: 'nama', width: 28 },
+      { header: 'Kelompok', key: 'kelompok', width: 18 },
+      { header: 'Aktif', key: 'active', width: 8 },
+      { header: 'Halaqah', key: 'halaqah', width: 44 },
+      { header: 'Terisi', key: 'terisi', width: 8 },
+      { header: 'Bagian Belum Terisi', key: 'kosong', width: 80 },
+    ];
+    sh.getRow(1).font = { bold: true };
+
+    let count = 0;
+    for (const p of pengajarList ?? []) {
+      const m = matrixByPengajar.get(p.id) as Record<string, unknown> | undefined;
+      const kosong = INDIKATOR.filter((i) => !m || m[i.key] == null);
+      if (kosong.length === 0) continue; // sudah lengkap → skip
+      count++;
+      const byKat: Record<string, string[]> = {};
+      for (const ind of kosong) (byKat[ind.kategori] ??= []).push(ind.label);
+      const detail = (['hard', 'pedagogis', 'soft'] as const)
+        .filter((k) => byKat[k]?.length)
+        .map((k) => `${KAT_SHORT[k]}: ${byKat[k].join(', ')}`)
+        .join('  |  ');
+      const hal = halaqahByPengajar.get(p.id);
+      sh.addRow({
+        nama: p.name,
+        kelompok: kelompokMap.get(p.kelompok_id ?? '') ?? '',
+        active: p.active ? 'Ya' : 'Tidak',
+        halaqah: hal && hal.length ? hal.join(', ') : '(tak ada halaqah aktif)',
+        terisi: `${INDIKATOR.length - kosong.length}/${INDIKATOR.length}`,
+        kosong: detail,
+      });
+    }
+    if (count === 0) sh.addRow({ nama: '(semua pengajar sudah lengkap)' });
+
+    const buf = await wbI.xlsx.writeBuffer();
+    const fn = `matrix-belum-lengkap-${bulan}-${gender}${kelompokId ? `-${kelompokId.slice(0, 8)}` : ''}.xlsx`;
+    return new NextResponse(buf, {
+      status: 200,
+      headers: { 'Content-Type': XLSX_MIME, 'Content-Disposition': `attachment; filename="${fn}"` },
+    });
+  }
 
   const wb = new ExcelJS.Workbook();
   wb.creator = 'Maahir';
