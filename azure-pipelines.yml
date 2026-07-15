@@ -54,6 +54,19 @@ steps:
           echo "✅ nginx upload limit sudah ada, skip"
         fi
   - task: Ssh@0
+    displayName: "📁 Ensure audio storage dir writable (filesystem migration)"
+    inputs:
+      sshEndpoint: "server-staging@103.181.142.223"
+      runOptions: "inline"
+      failOnStdErr: false
+      inline: |
+        # Storage audio pindah Supabase→filesystem. Service next-maahir jalan root,
+        # jadi cukup pastikan folder ada (writeFile root ke dir root = OK).
+        sudo mkdir -p /var/www/html/maahir/storage/setoran-audio
+        sudo chmod -R 0775 /var/www/html/maahir/storage
+        echo "✅ storage dir:"; ls -ld /var/www/html/maahir/storage /var/www/html/maahir/storage/setoran-audio
+        df -h /var/www/html/maahir/storage | tail -1
+  - task: Ssh@0
     displayName: "🚀 Deploy Next.js Frontend"
     inputs:
       sshEndpoint: "server-staging@103.181.142.223"
