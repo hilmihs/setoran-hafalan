@@ -33,6 +33,10 @@ async function storageProbe(): Promise<Record<string, unknown>> {
   const file = join(dir, `.health-probe-${process.pid}`);
   const out: Record<string, unknown> = { dir };
   try {
+    out.uid = typeof process.getuid === 'function' ? process.getuid() : null;
+    out.gid = typeof process.getgid === 'function' ? process.getgid() : null;
+  } catch {}
+  try {
     await mkdir(dir, { recursive: true });
     out.mkdir = 'ok';
     await writeFile(file, 'ok');

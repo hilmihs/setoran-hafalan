@@ -63,7 +63,10 @@ steps:
         # Storage audio pindah Supabase→filesystem. Service next-maahir jalan root,
         # jadi cukup pastikan folder ada (writeFile root ke dir root = OK).
         sudo mkdir -p /var/www/html/maahir/storage/setoran-audio
-        sudo chmod -R 0775 /var/www/html/maahir/storage
+        # Service next-maahir jalan sbg user NON-root (probe /api/health kasih EACCES),
+        # jadi 0775 root:root tak cukup. 0777 supaya user service bisa tulis audio.
+        # Dir ini di balik auth app (/api/audio HMAC), bukan diekspos langsung.
+        sudo chmod -R 0777 /var/www/html/maahir/storage
         echo "✅ storage dir:"; ls -ld /var/www/html/maahir/storage /var/www/html/maahir/storage/setoran-audio
         df -h /var/www/html/maahir/storage | tail -1
   - task: Ssh@0
