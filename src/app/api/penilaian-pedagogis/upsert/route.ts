@@ -1,15 +1,23 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase-admin';
-import { requireKetuaKelompok } from '@/lib/session';
+import { getSession } from '@/lib/session';
 
 export const runtime = 'nodejs';
 
 export async function POST(req: NextRequest) {
   try {
-    let session;
-    try {
-      session = await requireKetuaKelompok();
-    } catch {
+    // Dua penilai:
+    //  - Ketua kelompok → menilai ANGGOTA kelompoknya (existing).
+    //  - Koordinator    → menilai KETUA KELOMPOK segendernya (baru).
+    const s = await getSession();
+    const accesses = s.accesses ?? (s.session ? [s.session] : []);
+    const ketuaKelompok = accesses.find(
+      (a) => a.role === 'pengajar' && a.is_ketua
+    ) as { role: 'pengajar'; pengajar_id: string; kelompok_id: string | null; gender: string } | undefined;
+    const koordinator = accesses.find((a) => a.role === 'koordinator') as
+      | { role: 'koordinator'; koordinator_id: string; gender: string }
+      | undefined;
+    if (!ketuaKelompok && !koordinator) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -50,14 +58,32 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Catatan umum maksimal 2000 karakter.' }, { status: 400 });
     }
 
-    // Pengajar yang dinilai harus anggota kelompok ketua ini
     const { data: target } = await supabaseAdmin
       .from('pengajar')
-      .select('id, kelompok_id')
+      .select('id, kelompok_id, is_ketua, gender')
       .eq('id', pengajar_id)
       .single();
-    if (!target || target.kelompok_id !== session.kelompok_id) {
-      return NextResponse.json({ error: 'Pengajar bukan anggota kelompok Anda.' }, { status: 403 });
+    if (!target) {
+      return NextResponse.json({ error: 'Pengajar tidak ditemukan.' }, { status: 404 });
+    }
+
+    // Otorisasi + atribusi (assessed_by):
+    let assessedBy: string | null;
+    if (koordinator) {
+      // Koordinator hanya boleh menilai KETUA KELOMPOK segendernya.
+      if (!target.is_ketua || target.gender !== koordinator.gender) {
+        return NextResponse.json(
+          { error: 'Koordinator hanya menilai ketua kelompok segender.' },
+          { status: 403 }
+        );
+      }
+      assessedBy = null; // penilai koordinator (bukan pengajar) → atribusi kosong
+    } else {
+      // Ketua kelompok → target harus anggota kelompoknya.
+      if (target.kelompok_id !== ketuaKelompok!.kelompok_id) {
+        return NextResponse.json({ error: 'Pengajar bukan anggota kelompok Anda.' }, { status: 403 });
+      }
+      assessedBy = ketuaKelompok!.pengajar_id;
     }
 
     const { error } = await supabaseAdmin
@@ -77,7 +103,7 @@ export async function POST(req: NextRequest) {
           // skor_kepatuhan_sop/keterangan_sop TIDAK ditulis dari sini —
           // diisi otomatis oleh sistem observasi ketua kelas HITS.
           catatan_umum: catatan_umum ?? null,
-          assessed_by: session.pengajar_id,
+          assessed_by: assessedBy,
           updated_at: new Date().toISOString(),
         },
         { onConflict: 'pengajar_id,year_month' }
