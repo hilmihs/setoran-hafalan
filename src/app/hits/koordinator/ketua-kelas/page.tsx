@@ -14,8 +14,8 @@ type Halaqah = {
   name: string;
   gender: Gender | null;
   batch_id: string | null;
+  pengajar_id: string | null;
   pengajar_nama_sheet: string | null;
-  pengajar_wa: string | null;
 };
 type Ketua = { name: string; whatsapp_number: string | null; hits_halaqah_id: string | null };
 
@@ -41,12 +41,23 @@ export default async function KetuaKelasHitsPage({
 
   let hq = supabaseAdmin
     .from('hits_halaqah')
-    .select('id, name, gender, batch_id, pengajar_nama_sheet, pengajar_wa')
+    .select('id, name, gender, batch_id, pengajar_id, pengajar_nama_sheet')
     .eq('active', true)
     .order('name');
   if (genderFilter) hq = hq.eq('gender', genderFilter);
   const { data: halaqahRaw } = await hq;
   const halaqah = ((halaqahRaw ?? []) as Halaqah[]).filter((h) => !/\(observasi\)/i.test(h.name));
+
+  // Ambil pengajar dari RECORD pengajar (via pengajar_id) → nama + WA otoritatif,
+  // sama sumbernya dengan Matrix Skill Guru. Field pengajar_wa di halaqah (dari
+  // sheet) sering basi, jadi tak dipakai.
+  const pengajarIds = Array.from(new Set(halaqah.map((h) => h.pengajar_id).filter(Boolean))) as string[];
+  const { data: pengajarRows } = pengajarIds.length
+    ? await supabaseAdmin.from('pengajar').select('id, name, whatsapp_number').in('id', pengajarIds)
+    : { data: [] };
+  const pengajarById = new Map(
+    ((pengajarRows ?? []) as Array<{ id: string; name: string; whatsapp_number: string | null }>).map((p) => [p.id, p])
+  );
 
   const { data: ketuaRaw } = await supabaseAdmin
     .from('ketua_kelas')
@@ -131,6 +142,9 @@ export default async function KetuaKelasHitsPage({
                           {list.map((h) => {
                             const k = ketuaByHalaqah.get(h.id);
                             const noKetua = !k;
+                            const pg = h.pengajar_id ? pengajarById.get(h.pengajar_id) : undefined;
+                            const pengajarNama = pg?.name ?? h.pengajar_nama_sheet;
+                            const pengajarWa = pg?.whatsapp_number ?? null;
                             return (
                               <tr
                                 key={h.id}
@@ -140,17 +154,17 @@ export default async function KetuaKelasHitsPage({
                                 <td style={{ textAlign: 'center', color: 'var(--muted)', fontSize: 12 }}>
                                   {h.gender === 'ikhwan' ? 'Ikhwan' : h.gender === 'akhwat' ? 'Akhwat' : '—'}
                                 </td>
-                                <td>{h.pengajar_nama_sheet || <span style={{ color: 'var(--muted)' }}>—</span>}</td>
+                                <td>{pengajarNama || <span style={{ color: 'var(--muted)' }}>—</span>}</td>
                                 <td>
-                                  {h.pengajar_wa ? (
+                                  {pengajarWa ? (
                                     <a
-                                      href={buildWaMeUrl(h.pengajar_wa, '')}
+                                      href={buildWaMeUrl(pengajarWa, '')}
                                       target="_blank"
                                       rel="noopener noreferrer"
                                       className="t-mono"
                                       style={{ color: 'var(--hijau-ink)', fontSize: 12 }}
                                     >
-                                      {h.pengajar_wa}
+                                      {pengajarWa}
                                     </a>
                                   ) : (
                                     <span style={{ color: 'var(--muted)' }}>—</span>
