@@ -84,6 +84,9 @@ export default async function HitsKoordinatorPage({
             <span className="mark">H</span> Soft Skill HITS
           </div>
           <div style={{ display: 'flex', gap: 8 }}>
+            <Link href="/hits/koordinator/ketua-kelas" className="back">
+              {Icon.shield(12)} Ketua Kelas
+            </Link>
             <Link href="/hits/koordinator/pertemuan" className="back">
               {Icon.shield(12)} Override Pertemuan
             </Link>
