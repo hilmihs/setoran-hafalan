@@ -457,11 +457,16 @@ export async function computeMatrixForMonth(yearMonth: string): Promise<MatrixRo
     if (da !== db) return db - da; // lebih lengkap dulu
     return b.rata_rata_keseluruhan - a.rata_rata_keseluruhan;
   });
-  let rank = 0;
+  // Ranking DIPISAH per gender (ikhwan & akhwat punya papan sendiri, mulai dari 1).
+  // Urutan tiebreak (aspek lengkap → rata) sudah di-sort di atas; tinggal hitung
+  // nomor per gender mengikuti urutan itu.
+  const genderOf = new Map(pengajars.map((p) => [p.id, p.gender]));
+  const rankByGender: Record<string, number> = {};
   for (const r of ranked) {
     if (r.rata_rata_keseluruhan !== null) {
-      rank += 1;
-      r.ranking = rank;
+      const g = (genderOf.get(r.pengajar_id) as string) ?? 'akhwat';
+      rankByGender[g] = (rankByGender[g] ?? 0) + 1;
+      r.ranking = rankByGender[g];
     }
   }
 

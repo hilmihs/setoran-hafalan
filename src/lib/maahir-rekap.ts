@@ -33,6 +33,7 @@ export type RekapPertemuan = {
 export type RekapAnggota = {
   anggotaId: string;
   name: string;
+  whatsappNumber: string | null;
   isKetua: boolean;
   isWakil: boolean;
   perPertemuan: Record<string, StatusCode>; // pertemuanId → code ('-' jika tak ada data)
@@ -115,7 +116,7 @@ export async function getMaahirRekap(
   // 3. Anggota
   const { data: anggotaRows } = await supabaseAdmin
     .from('program_kelas_anggota')
-    .select('id, program_kelas_id, name, is_ketua, is_wakil')
+    .select('id, program_kelas_id, name, whatsapp_number, is_ketua, is_wakil')
     .in('program_kelas_id', kelasIds)
     .order('name');
 
@@ -194,6 +195,7 @@ export async function getMaahirRekap(
       return {
         anggotaId: a.id,
         name: a.name,
+        whatsappNumber: a.whatsapp_number ?? null,
         isKetua: a.is_ketua,
         isWakil: a.is_wakil,
         perPertemuan,

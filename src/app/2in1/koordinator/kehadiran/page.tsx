@@ -8,6 +8,8 @@ import { MonthNavSelect } from '@/components/MonthNavSelect';
 import { monthOptionsSince } from '@/lib/month';
 import { SectionHeader } from '@/components/ui/SectionHeader';
 import { Icon } from '@/components/icons';
+import { buildWaMeUrl, tplReminderKetuaIsiPresensi } from '@/lib/whatsapp';
+import { absUrl } from '@/lib/url';
 
 export const dynamic = 'force-dynamic';
 
@@ -105,6 +107,24 @@ export default async function KoordinatorKehadiranPage({
                     const ketuaLabel = pj.length
                       ? pj.map((a) => `${a.name}${a.isWakil ? ' (wakil)' : ''}`).join(', ')
                       : 'Ketua belum ditunjuk';
+                    const presensiUrl = absUrl('/2in1/ketua-kelas/presensi');
+                    const waReminders = pj
+                      .filter((a) => a.whatsappNumber)
+                      .map((a) => ({
+                        name: a.name,
+                        isWakil: a.isWakil,
+                        url: buildWaMeUrl(
+                          a.whatsappNumber!,
+                          tplReminderKetuaIsiPresensi({
+                            ketuaName: a.name,
+                            gender: k.gender,
+                            kelasName: k.kelasName,
+                            belumCount: k.belumDiisi,
+                            monthLabel: month,
+                            presensiUrl,
+                          })
+                        ),
+                      }));
                     return (
                       <div
                         key={k.kelasId}
@@ -114,6 +134,26 @@ export default async function KoordinatorKehadiranPage({
                           <div className="t-small" style={{ fontWeight: 600 }}>{ketuaLabel}</div>
                           <div className="t-tiny" style={{ color: 'var(--muted-2)' }}>
                             {k.kelasName} · {k.gender === 'ikhwan' ? 'Ikhwan' : 'Akhwat'}
+                          </div>
+                          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 4 }}>
+                            {waReminders.length > 0 ? (
+                              waReminders.map((w, i) => (
+                                <a
+                                  key={i}
+                                  href={w.url}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="t-tiny"
+                                  style={{ color: 'var(--hijau-ink)', fontWeight: 600 }}
+                                >
+                                  📲 Ingatkan {w.name}{w.isWakil ? ' (wakil)' : ''}
+                                </a>
+                              ))
+                            ) : (
+                              <span className="t-tiny" style={{ color: 'var(--muted)' }}>
+                                (WA ketua tidak tersedia)
+                              </span>
+                            )}
                           </div>
                         </div>
                         <span className="badge badge-merah" style={{ whiteSpace: 'nowrap' }}>{k.belumDiisi} belum</span>
