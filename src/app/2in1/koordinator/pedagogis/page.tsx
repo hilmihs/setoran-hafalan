@@ -306,7 +306,11 @@ export default async function KoordinatorPedagogisPage({ searchParams }: { searc
             <div>
               <h2 className="t-h2" style={{ fontSize: 18, margin: '0 0 2px' }}>Penilaian Ketua Kelompok</h2>
               <p className="t-small" style={{ color: 'var(--muted-2)', margin: 0 }}>
-                Dinilai koordinator via <strong>Nilai Ketua Kelompok</strong> · {ketuaDinilai}/{ketuaRows.length} ketua dinilai
+                Dinilai koordinator via{' '}
+                <Link href="/2in1/koordinator/penilaian-ketua" style={{ color: 'var(--emas-ink)', fontWeight: 700 }}>
+                  Nilai Ketua Kelompok →
+                </Link>{' '}
+                · {ketuaDinilai}/{ketuaRows.length} ketua dinilai
               </p>
             </div>
             {ketuaIkhwan.length > 0 && (
