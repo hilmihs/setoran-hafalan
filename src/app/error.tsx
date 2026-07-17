@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect } from 'react';
+import { maybeRecoverFromChunkError } from '@/lib/chunk-reload';
 
 export default function Error({
   error,
@@ -10,6 +11,8 @@ export default function Error({
   reset: () => void;
 }) {
   useEffect(() => {
+    // ChunkLoadError (deploy skew) → auto-reload sekali ambil chunk terbaru.
+    if (maybeRecoverFromChunkError(error)) return;
     console.error('App error:', error);
   }, [error]);
 
