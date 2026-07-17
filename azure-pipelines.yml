@@ -70,44 +70,91 @@ steps:
         echo "✅ storage dir:"; ls -ld /var/www/html/maahir/storage /var/www/html/maahir/storage/setoran-audio
         df -h /var/www/html/maahir/storage | tail -1
   - task: Ssh@0
-    displayName: "🚀 Deploy Next.js Frontend"
+    displayName: "🚀 Deploy Next.js Frontend (atomic + rollback — nol window chunk-500)"
     inputs:
       sshEndpoint: "server-staging@103.181.142.223"
       runOptions: "inline"
       failOnStdErr: false
       inline: |
-        echo "🚀 START: Deploy Next.js Frontend"
-        set -euo pipefail 2>/dev/null || set -eu
+        echo "🚀 START: Deploy Next.js Frontend (atomic, hardened)"
+        set -eu
 
         export NVM_DIR="$HOME/.nvm"
         [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
 
-        cd /var/www/html/maahir
-        echo "📂 Current folder: $(pwd)"
+        LIVE=/var/www/html/maahir
+        BUILD=/var/www/html/maahir-build
+        SERVICE=next-maahir
 
-        echo "⬇️ Git sync Web Maahir (strict)"
+        # ── 0) Preflight disk (info; tak hard-block) ────────────────────────
+        echo "💽 Disk (butuh ruang utk salinan build kedua):"
+        df -h "$LIVE" | tail -1
+
+        # ── 1) BUILD di direktori TERPISAH ──────────────────────────────────
+        # Kunci fix: service lama di $LIVE terus melayani & $LIVE/.next TAK
+        # disentuh selama build (beberapa menit). Pipeline lama menghapus
+        # $LIVE/.next di awal (`rm -rf .next`) → tiap request chunk yang belum
+        # ter-cache balas 500 (ChunkLoadError) selama durasi build.
+        # Bonus: $BUILD/.next tak pernah dilayani service → tak ada cache runtime
+        # root-owned yang memblok rebuild (alasan asli `sudo rm -rf .next`).
+        if [ ! -d "$BUILD/.git" ]; then
+          sudo rm -rf "$BUILD"
+          git clone "$LIVE" "$BUILD"
+        fi
+        cd "$BUILD"
+        git remote set-url origin "$(git -C "$LIVE" config --get remote.origin.url)"
         git fetch origin main
         git reset --hard origin/main
-        echo "📌 Deployed commit: $(git log -1 --oneline)"
+        echo "📌 Build commit: $(git log -1 --oneline)"
 
-        echo "📦 Install dependency Web Maahir"
+        # `next build` butuh SESSION_SECRET saat build (throw module-level di
+        # session.ts). Prod menyuplainya lewat file .env* (BUKAN env_vars.sh yang
+        # ber-prefix ENV_). Salin file env dari live agar identik. Bila tak ada →
+        # build gagal di sini (set -eu) SEBELUM menyentuh live → live aman.
+        cp "$LIVE"/.env* "$BUILD"/ 2>/dev/null || true
+
+        echo "📦 npm install (build dir)"
         nvm exec 24.15.0 npm install
 
-        # Build duluan selagi service lama masih serve traffic — hindari 502
-        # berkepanjangan. rm .next aman walau service jalan: proses standalone
-        # pegang inode file yang sudah terbuka. Kalau build gagal, script exit
-        # sebelum restart sehingga versi lama tetap hidup.
-        echo "🧹 Clean .next lama (file cache runtime standalone bisa owned by root)"
-        sudo rm -rf .next
-
-        echo "⚙️ Build Web Maahir (service lama tetap jalan)"
+        echo "⚙️ Build (di $BUILD — $LIVE tetap melayani)"
         nvm exec 24.15.0 npm run build
+        # `npm run build` menjalankan `postbuild` → salin .next/static + public
+        # ke .next/standalone (self-complete; hash server↔static dari build SAMA).
 
-        echo "📁 Copy static files to standalone folder"
-        cp -r .next/static .next/standalone/.next/
+        # Sanity artefak SEBELUM menyentuh live (gagal → exit, live tetap hidup)
+        test -f "$BUILD/.next/standalone/server.js"
+        test -d "$BUILD/.next/standalone/.next/static"
 
-        echo "🔄 restart systemd service (downtime ~2 detik)"
-        sudo systemctl restart next-maahir
-        sudo systemctl status next-maahir --no-pager
+        # ── 2) STAGE ke filesystem $LIVE (live masih serve .next lama) ───────
+        # cp ke .next.new (bukan mv) → dijamin berada di FS yang SAMA dengan
+        # $LIVE, sehingga rename final pasti atomik walau $BUILD beda mount.
+        echo "📦 Stage artefak ke $LIVE/.next.new"
+        sudo rm -rf "$LIVE/.next.new"
+        sudo cp -a "$BUILD/.next" "$LIVE/.next.new"
 
-        echo "✅ Next.js frontend deployment selesai"
+        # ── 3) SWAP ATOMIK dalam $LIVE (rename same-FS = instan) ─────────────
+        sudo rm -rf "$LIVE/.next.old"
+        if [ -d "$LIVE/.next" ]; then sudo mv "$LIVE/.next" "$LIVE/.next.old"; fi
+        sudo mv "$LIVE/.next.new" "$LIVE/.next"
+
+        # Sinkron source live (hygiene; tak menyentuh .next runtime)
+        cd "$LIVE"
+        git fetch origin main
+        git reset --hard origin/main
+
+        # ── 4) Restart + health-check + ROLLBACK bila gagal ─────────────────
+        echo "🔄 restart $SERVICE (downtime ~2 detik)"
+        sudo systemctl restart "$SERVICE"
+        sleep 3
+        if ! sudo systemctl is-active --quiet "$SERVICE"; then
+          echo "❌ $SERVICE tidak aktif setelah restart → ROLLBACK ke versi lama"
+          sudo rm -rf "$LIVE/.next"
+          if [ -d "$LIVE/.next.old" ]; then sudo mv "$LIVE/.next.old" "$LIVE/.next"; fi
+          sudo systemctl restart "$SERVICE"
+          sudo systemctl status "$SERVICE" --no-pager | head -6
+          exit 1
+        fi
+
+        sudo systemctl status "$SERVICE" --no-pager | head -6
+        sudo rm -rf "$LIVE/.next.old"
+        echo "✅ Deploy selesai — build di luar live, swap atomik, rollback-on-fail aktif"
