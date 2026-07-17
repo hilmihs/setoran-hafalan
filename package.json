@@ -4,7 +4,8 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
+    "build": "next build && npm run postbuild",
+    "postbuild": "rm -rf .next/standalone/.next/static .next/standalone/public && cp -r .next/static .next/standalone/.next/static && cp -r public .next/standalone/public",
     "start": "next start",
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
@@ -18,6 +19,7 @@
     "generate-dump": "tsx scripts/generate-sql-dump.ts",
     "load-data": "tsx db-migration/load-data.ts",
     "upload-storage": "tsx --env-file=.env.local scripts/upload-storage.ts",
+    "delete-audio": "tsx --env-file=.env.local scripts/delete-audio.ts",
     "seed": "tsx --env-file=.env.local scripts/seed.ts",
     "seed-maahir": "tsx --env-file=.env.local scripts/seed-maahir.ts",
     "seed-itsnain": "tsx --env-file=.env.local scripts/seed-itsnain.ts",
