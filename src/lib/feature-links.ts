@@ -43,7 +43,7 @@ export const FEATURE_LINKS: FeatureLink[] = [
     title: 'Kehadiran Maahir',
     navLabel: 'Kehadiran Maahir',
     description: 'Rekap kehadiran semua kelas Maahir per bulan',
-    match: (a) => a.role === 'koordinator',
+    match: (a) => a.role === 'koordinator' || a.role === 'koordinator_kehadiran',
   },
   {
     href: '/kehadiran/pengajar',

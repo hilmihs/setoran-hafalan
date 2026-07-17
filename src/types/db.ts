@@ -681,6 +681,19 @@ export interface KoordinatorKetuaKelasSession {
   gender: Gender;
 }
 
+/**
+ * Koordinator akses TERBATAS — hanya rekap Kehadiran Maahir
+ * (/2in1/koordinator/kehadiran). Bukan role 'koordinator' penuh: semua halaman
+ * koordinator lain (pedagogis, matrix, admin) tetap tertutup (deny-by-default).
+ * Berasal dari baris koordinator dgn kolom kehadiran_only = true.
+ */
+export interface KoordinatorKehadiranSession {
+  role: 'koordinator_kehadiran';
+  koordinator_id: string;
+  name: string;
+  gender: Gender;
+}
+
 export type RoleAccess =
   | PesertaSession
   | MusyrifSession
@@ -688,7 +701,8 @@ export type RoleAccess =
   | SyaikhSession
   | PengajarSession
   | KetuaKelasSession
-  | KoordinatorKetuaKelasSession;
+  | KoordinatorKetuaKelasSession
+  | KoordinatorKehadiranSession;
 
 export type Session = RoleAccess;
 export type Role = RoleAccess['role'];

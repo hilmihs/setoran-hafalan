@@ -22,7 +22,7 @@ export async function loadAccessesForWa(wa: string): Promise<RoleAccess[]> {
   ] = await Promise.all([
     supabaseAdmin.from('peserta').select('id, name, gender, kelas_id, active').eq('whatsapp_number', wa).maybeSingle(),
     supabaseAdmin.from('musyrif').select('id, name, gender, active').eq('whatsapp_number', wa).maybeSingle(),
-    supabaseAdmin.from('koordinator').select('id, name, gender, active').eq('whatsapp_number', wa).maybeSingle(),
+    supabaseAdmin.from('koordinator').select('id, name, gender, active, kehadiran_only').eq('whatsapp_number', wa).maybeSingle(),
     supabaseAdmin.from('syaikh').select('id, name, gender, active').eq('whatsapp_number', wa).maybeSingle(),
     supabaseAdmin.from('pengajar').select('id, name, gender, kelompok_id, is_ketua, active').eq('whatsapp_number', wa).maybeSingle(),
     // ketua_kelas: WA tak unik (peran ganda) → ambil 1 baris aktif untuk identitas sesi.
@@ -33,7 +33,15 @@ export async function loadAccessesForWa(wa: string): Promise<RoleAccess[]> {
   const out: RoleAccess[] = [];
   if (peserta?.active) out.push({ role: 'peserta', peserta_id: peserta.id, name: peserta.name, gender: peserta.gender, kelas_id: peserta.kelas_id });
   if (musyrif?.active) out.push({ role: 'musyrif', musyrif_id: musyrif.id, name: musyrif.name, gender: musyrif.gender });
-  if (koor?.active) out.push({ role: 'koordinator', koordinator_id: koor.id, name: koor.name, gender: koor.gender });
+  if (koor?.active) {
+    // kehadiran_only → role TERBATAS (hanya rekap Kehadiran Maahir), bukan
+    // koordinator penuh. Deny-by-default: halaman koordinator lain tetap tertutup.
+    out.push(
+      koor.kehadiran_only
+        ? { role: 'koordinator_kehadiran', koordinator_id: koor.id, name: koor.name, gender: koor.gender }
+        : { role: 'koordinator', koordinator_id: koor.id, name: koor.name, gender: koor.gender }
+    );
+  }
   if (syaikh?.active) out.push({ role: 'syaikh', syaikh_id: syaikh.id, name: syaikh.name, gender: syaikh.gender });
   if (pengajar?.active) out.push({ role: 'pengajar', pengajar_id: pengajar.id, name: pengajar.name, gender: pengajar.gender, kelompok_id: pengajar.kelompok_id, is_ketua: pengajar.is_ketua });
   if (ketuaKelas?.active) out.push({ role: 'ketua_kelas', ketua_kelas_id: ketuaKelas.id, name: ketuaKelas.name, gender: ketuaKelas.gender, kelas_hits_id: ketuaKelas.kelas_hits_id, hits_halaqah_id: ketuaKelas.hits_halaqah_id ?? null });

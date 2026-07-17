@@ -10,6 +10,7 @@ const ROLE_TABLE_MAP: Record<RoleAccess['role'], { table: string; idField: keyof
   peserta: { table: 'peserta', idField: 'peserta_id' },
   musyrif: { table: 'musyrif', idField: 'musyrif_id' },
   koordinator: { table: 'koordinator', idField: 'koordinator_id' },
+  koordinator_kehadiran: { table: 'koordinator', idField: 'koordinator_id' },
   syaikh: { table: 'syaikh', idField: 'syaikh_id' },
   pengajar: { table: 'pengajar', idField: 'pengajar_id' },
   ketua_kelas: { table: 'ketua_kelas', idField: 'ketua_kelas_id' },
