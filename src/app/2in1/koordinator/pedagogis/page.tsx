@@ -122,8 +122,10 @@ export default async function KoordinatorPedagogisPage({ searchParams }: { searc
           )}
         </div>
 
-        {/* anggota — tabel rinci per aspek */}
-        {g.totalAnggota === 0 ? (
+        {/* anggota — tabel rinci per aspek. Baris ketua kelompok ikut tampil
+            (dinilai oleh koordinator via /2in1/koordinator/penilaian-ketua),
+            jadi koordinator bisa memantau penilaian ketua kelompok di sini. */}
+        {g.totalAnggota === 0 && !g.ketua ? (
           <div className="t-small" style={{ color: 'var(--muted-2)', marginTop: 10 }}>Tidak ada anggota.</div>
         ) : (
           <div className="table-scroll" style={{ marginTop: 10 }}>
@@ -140,18 +142,21 @@ export default async function KoordinatorPedagogisPage({ searchParams }: { searc
                 </tr>
               </thead>
               <tbody>
-                {g.anggota.filter((p) => !p.is_ketua).map((p) => {
+                {[...(g.ketua ? [g.ketua] : []), ...g.anggota.filter((p) => !p.is_ketua)].map((p) => {
                   const sc = scoresByPengajar.get(p.id);
                   const avg = avgByPengajar.get(p.id);
                   const num = (k: string) => (sc?.[k] as number | null) ?? null;
                   const catatan = (sc?.catatan_umum as string | null) ?? null;
                   return (
                     <Fragment key={p.id}>
-                      <tr>
+                      <tr style={p.is_ketua ? { background: 'var(--surface-2)' } : undefined}>
                         <td className="tbl-cardhead">
                           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                             <div className="avatar" style={{ width: 24, height: 24, fontSize: 10 }}><Initials name={p.name} /></div>
                             <span style={{ fontSize: 13, fontWeight: 600 }}>{p.name}</span>
+                            {p.is_ketua && (
+                              <span className="badge badge-kuning" style={{ fontSize: 9 }}>Ketua · dinilai koord.</span>
+                            )}
                           </div>
                         </td>
                         <ScoreCell v={num('skor_metode_pengajaran')} label="Metode" />
