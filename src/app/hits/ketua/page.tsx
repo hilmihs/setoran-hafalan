@@ -246,6 +246,7 @@ export default async function HitsKetuaPage({
           {kajianCard && <div style={{ marginBottom: 16 }}>{kajianCard}</div>}
 
           <HitsKetuaForm
+            halaqahId={halaqah.id}
             halaqahName={halaqah.name}
             pengajarName={halaqah.pengajar_name ?? halaqah.pengajar_nama_sheet ?? '—'}
             slots={slots}

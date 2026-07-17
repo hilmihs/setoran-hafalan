@@ -3,7 +3,7 @@
 import { revalidatePath } from 'next/cache';
 import { supabaseAdmin } from '@/lib/supabase-admin';
 import { requireKetuaKelas } from '@/lib/session';
-import { loadHalaqahPertemuan } from '@/lib/hits-ketua';
+import { loadHalaqahPertemuan, resolveKetuaHalaqah } from '@/lib/hits-ketua';
 import { computeHutangForHalaqah } from '@/lib/hits-hutang';
 import { todayJakarta, dayIndexOf } from '@/lib/maahir-presensi';
 import { statusOnCheckin, KAJIAN_GHOSTING_DAYS } from '@/lib/hits-kajian';
@@ -22,8 +22,10 @@ export async function ajukanHapusPertemuan(
   fd: FormData
 ): Promise<AjukanHapusResult> {
   const session = await requireKetuaKelas();
-  const halaqahId = session.hits_halaqah_id;
-  if (!halaqahId) return { error: 'Akun ini bukan ketua kelas HITS.' };
+  // Hormati halaqah yang sedang dipilih (ketua multi-halaqah via switcher).
+  const resolved = await resolveKetuaHalaqah(session, String(fd.get('halaqah_id') ?? '') || null);
+  if (!resolved) return { error: 'Akun ini bukan ketua kelas HITS.' };
+  const halaqahId = resolved.halaqahId;
 
   const pertemuanNo = Number(fd.get('pertemuan_no'));
   const level = String(fd.get('level') ?? '') as HitsLevel;
@@ -50,7 +52,7 @@ export async function ajukanHapusPertemuan(
       tanggal,
       alasan: alasan || null,
       gender,
-      requested_by_ketua_id: session.ketua_kelas_id,
+      requested_by_ketua_id: resolved.ketuaKelasId,
       requested_by_name: session.name,
       token,
       status: 'pending',
@@ -151,8 +153,10 @@ export async function submitKeteranganHarian(
   fd: FormData
 ): Promise<KetuaHarianResult> {
   const session = await requireKetuaKelas();
-  const halaqahId = session.hits_halaqah_id;
-  if (!halaqahId) return { error: 'Akun ini bukan ketua kelas HITS.' };
+  // Hormati halaqah yang sedang dipilih (ketua multi-halaqah via switcher).
+  const resolved = await resolveKetuaHalaqah(session, String(fd.get('halaqah_id') ?? '') || null);
+  if (!resolved) return { error: 'Akun ini bukan ketua kelas HITS.' };
+  const halaqahId = resolved.halaqahId;
 
   const pertemuanNo = Number(fd.get('pertemuan_no'));
   const level = String(fd.get('level') ?? '') as HitsLevel;
@@ -234,7 +238,7 @@ export async function submitKeteranganHarian(
         catatan,
         editable: true,
         diisi_by_role: 'ketua_kelas',
-        diisi_by_id: session.ketua_kelas_id,
+        diisi_by_id: resolved.ketuaKelasId,
       },
       { onConflict: 'halaqah_id,level,pertemuan_no' }
     )
