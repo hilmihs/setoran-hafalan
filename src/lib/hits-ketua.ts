@@ -20,6 +20,9 @@ export type HalaqahLite = {
   jadwal_raw: string | null;
   jadwal_hari: string[];
   pengajar_nama_sheet: string | null;
+  /** Nama pengajar otoritatif dari record pengajar (via pengajar_id), sama sumber Matrix. */
+  pengajar_name: string | null;
+  pengajar_wa: string | null;
   start_date: string | null;
 };
 
@@ -32,12 +35,27 @@ export type HalaqahPertemuan = {
 export async function loadHalaqahPertemuan(
   halaqahId: string
 ): Promise<HalaqahPertemuan | null> {
-  const { data: halaqah } = await supabaseAdmin
+  const { data: halaqahRow } = await supabaseAdmin
     .from('hits_halaqah')
-    .select('id, batch_id, level, program, name, jadwal_raw, jadwal_hari, pengajar_nama_sheet, start_date')
+    .select('id, batch_id, level, program, name, jadwal_raw, jadwal_hari, pengajar_id, pengajar_nama_sheet, start_date')
     .eq('id', halaqahId)
     .maybeSingle();
-  if (!halaqah) return null;
+  if (!halaqahRow) return null;
+
+  // Resolve pengajar via record (via pengajar_id) → nama + WA otoritatif, sama sumber
+  // dengan Matrix Skill Guru. pengajar_nama_sheet (free-text) fallback bila belum ter-link.
+  let pengajar_name: string | null = null;
+  let pengajar_wa: string | null = null;
+  if (halaqahRow.pengajar_id) {
+    const { data: pg } = await supabaseAdmin
+      .from('pengajar')
+      .select('name, whatsapp_number')
+      .eq('id', halaqahRow.pengajar_id)
+      .maybeSingle();
+    pengajar_name = pg?.name ?? null;
+    pengajar_wa = pg?.whatsapp_number ?? null;
+  }
+  const halaqah = { ...halaqahRow, pengajar_name, pengajar_wa };
 
   const kaldikLevels = programKaldikLevels(halaqah.program);
   const [{ data: kaldikList }, { data: overrideList }] = await Promise.all([
