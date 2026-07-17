@@ -313,9 +313,13 @@ class PgBuilder implements PromiseLike<ResultMany> {
   }
 
   private async run(): Promise<Result> {
-    const meta = await loadMeta(this.exec);
     const A = 't';
     try {
+      // loadMeta DI DALAM try: bila gagal (mis. cold start / pool sibuk saat
+      // warm-up pertama) harus jadi {error} yang ditangani call-site, BUKAN
+      // reject tak tertangkap yang menembus ke error boundary halaman
+      // ("Terjadi kendala"). Meta di-cache; sukses pertama → tak diquery lagi.
+      const meta = await loadMeta(this.exec);
       if (this.op === 'select') {
         let count: number | null = null;
         if (this.countOpt) {
