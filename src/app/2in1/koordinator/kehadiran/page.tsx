@@ -73,6 +73,14 @@ export default async function KoordinatorKehadiranPage({
             <MonthNavSelect options={monthOptions} value={month} />
           </div>
 
+          <Link
+            href="/2in1/koordinator/kehadiran/tibyan"
+            className="btn btn-sm btn-ghost"
+            style={{ textDecoration: 'none', marginBottom: 16, display: 'inline-flex', gap: 6, alignItems: 'center' }}
+          >
+            📊 Lihat khusus Kehadiran At-Tibyan (per kelas)
+          </Link>
+
           {/* Filter gender */}
           <div style={{ display: 'flex', gap: 6, marginBottom: 16, flexWrap: 'wrap' }}>
             {GENDER_TABS.map((t) => {
