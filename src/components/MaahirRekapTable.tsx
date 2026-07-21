@@ -2,22 +2,7 @@
 
 import { Fragment, useState } from 'react';
 import type { RekapKelas, StatusCode } from '@/lib/maahir-rekap';
-
-const CODE_COLOR: Record<StatusCode, string> = {
-  H: 'var(--hijau)',
-  T: 'var(--kuning)',
-  I: '#64b5f6',
-  S: '#ce93d8',
-  A: 'var(--merah)',
-  '-': 'var(--muted-2)',
-};
-
-function persenBadgeClass(p: number | null): string {
-  if (p === null) return 'badge';
-  if (p >= 80) return 'badge badge-hijau';
-  if (p >= 50) return 'badge badge-kuning';
-  return 'badge badge-merah';
-}
+import { CODE_COLOR, persenBadgeClass } from '@/lib/status-color';
 
 function Chip({ code }: { code: StatusCode }) {
   return (

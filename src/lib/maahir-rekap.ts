@@ -79,7 +79,7 @@ function monthRange(month: string): { start: string; end: string } {
  */
 export async function getMaahirRekap(
   month: string,
-  opts?: { kelasIds?: string[]; gender?: 'ikhwan' | 'akhwat' }
+  opts?: { kelasIds?: string[]; gender?: 'ikhwan' | 'akhwat'; program?: MaahirProgram }
 ): Promise<RekapKelas[]> {
   const { start, end } = monthRange(month);
   // Bulan di masa depan (start > today) → tak ada data.
@@ -102,14 +102,15 @@ export async function getMaahirRekap(
   // Libur per kelas dalam rentang bulan (dikecualikan dari hari diharapkan).
   const liburByKelas = await getLiburDatesForKelas(kelasIds, start, end);
 
-  // 2. Pertemuan dalam rentang bulan
-  const { data: pertemuanRows } = await supabaseAdmin
+  // 2. Pertemuan dalam rentang bulan (opsional difilter per program).
+  let pq = supabaseAdmin
     .from('pertemuan_program')
     .select('id, program_kelas_id, program, tanggal')
     .in('program_kelas_id', kelasIds)
     .gte('tanggal', start)
-    .lte('tanggal', end)
-    .order('tanggal');
+    .lte('tanggal', end);
+  if (opts?.program) pq = pq.eq('program', opts.program);
+  const { data: pertemuanRows } = await pq.order('tanggal');
 
   const pertemuanIds = (pertemuanRows ?? []).map((p) => p.id);
 
@@ -206,7 +207,11 @@ export async function getMaahirRekap(
 
     // belumDiisi: hari diharapkan (anchor bulan s/d min(akhir bulan, today)) − pertemuan terisi.
     // matchKey: harian per (program,tanggal); mingguan per pekan.
-    const expected = expectedDaysInRange(k, start, end, liburByKelas.get(k.id));
+    const expectedAll = expectedDaysInRange(k, start, end, liburByKelas.get(k.id));
+    // Filter ke program tertentu (mis. hanya At-Tibyan) bila diminta.
+    const expected = opts?.program
+      ? expectedAll.filter((e) => e.program === opts.program)
+      : expectedAll;
     const filledKeys = new Set(
       (pertemuanRows ?? [])
         .filter((p) => p.program_kelas_id === k.id && filledPertemuan.has(p.id))
