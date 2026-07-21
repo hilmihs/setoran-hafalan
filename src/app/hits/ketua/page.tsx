@@ -212,7 +212,7 @@ export default async function HitsKetuaPage({
 
           <h1 className="t-h1" style={{ marginBottom: 4 }}>{halaqah.name}</h1>
           <p className="t-body" style={{ marginBottom: 4 }}>
-            Pengajar: {halaqah.pengajar_nama_sheet ?? '—'}
+            Pengajar: {halaqah.pengajar_name ?? halaqah.pengajar_nama_sheet ?? '—'}
           </p>
           <p className="t-small" style={{ color: 'var(--muted-2)', marginBottom: 16 }}>
             {session.name} (Ketua Kelas) — {today}
@@ -246,8 +246,9 @@ export default async function HitsKetuaPage({
           {kajianCard && <div style={{ marginBottom: 16 }}>{kajianCard}</div>}
 
           <HitsKetuaForm
+            halaqahId={halaqah.id}
             halaqahName={halaqah.name}
-            pengajarName={halaqah.pengajar_nama_sheet ?? '—'}
+            pengajarName={halaqah.pengajar_name ?? halaqah.pengajar_nama_sheet ?? '—'}
             slots={slots}
             todayUnfilled={!!todaySlot && !todaySlot.keterangan}
             hutangSaldo={hutang.saldo}

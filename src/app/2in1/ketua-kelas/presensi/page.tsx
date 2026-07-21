@@ -4,6 +4,7 @@ import { supabaseAdmin } from '@/lib/supabase-admin';
 import { getSessionWa } from '@/lib/program-kelas';
 import { getUnfilledMaahirDays, PROGRAM_LABEL, weekRangeLabel } from '@/lib/maahir-presensi';
 import { PresensiWizardForm } from './PresensiWizardForm';
+import { LiburButton } from './LiburButton';
 import { LogoutButton } from '@/components/LogoutButton';
 
 export const dynamic = 'force-dynamic';
@@ -136,6 +137,15 @@ export default async function PresensiWizardPage() {
             pertemuanId={pertemuan.id}
             pesertaList={pesertaRows}
             remaining={total}
+          />
+
+          {/* Opsi tandai LIBUR (langsung, tanpa ACC). Untuk Takhassus Ikhwan,
+              ketua (Abdul Majid Aziz) / wakil (Ibrahim Asadullah) bisa pakai ini. */}
+          <LiburButton
+            programKelasId={day.program_kelas_id}
+            tanggal={day.tanggal}
+            mingguan={!!day.mingguan}
+            label={`${day.kelasName} · ${tanggalLabel}`}
           />
         </div>
       </div>

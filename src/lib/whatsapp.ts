@@ -108,6 +108,25 @@ export function tplReminderPesertaBelumSetor(args: {
   ].join('\n');
 }
 
+export function tplReminderKetuaIsiPresensi(args: {
+  ketuaName: string;
+  gender: Gender;
+  kelasName: string;
+  belumCount: number;
+  monthLabel: string;
+  presensiUrl: string;
+}): string {
+  const sapaan = salutation(args.gender);
+  return [
+    `Assalamu'alaikum ${sapaan} ${args.ketuaName},`,
+    ``,
+    `Pengingat — presensi kehadiran kelas ${args.kelasName} (${args.monthLabel}) masih ada ${args.belumCount} yang belum diisi. Mohon segera dilengkapi melalui tautan berikut:`,
+    args.presensiUrl,
+    ``,
+    `Jazakumullahu khairan.`,
+  ].join('\n');
+}
+
 export function tplReminderMusyrifBelumCek(args: {
   musyrifName: string;
   musyrifGender: Gender;

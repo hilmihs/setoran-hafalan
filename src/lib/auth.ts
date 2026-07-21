@@ -49,7 +49,7 @@ export async function login(
       .maybeSingle(),
     supabaseAdmin
       .from('koordinator')
-      .select('id, name, gender, password_hash, active')
+      .select('id, name, gender, password_hash, active, kehadiran_only')
       .eq('whatsapp_number', wa)
       .maybeSingle(),
     supabaseAdmin
@@ -112,12 +112,22 @@ export async function login(
     },
     {
       row: koor,
-      build: () => ({
-        role: 'koordinator' as const,
-        koordinator_id: koor!.id,
-        name: koor!.name,
-        gender: koor!.gender,
-      }),
+      // kehadiran_only → role TERBATAS (hanya rekap Kehadiran Maahir), bukan
+      // koordinator penuh. Halaman koordinator lain tetap tertutup.
+      build: (): RoleAccess =>
+        koor!.kehadiran_only
+          ? {
+              role: 'koordinator_kehadiran' as const,
+              koordinator_id: koor!.id,
+              name: koor!.name,
+              gender: koor!.gender,
+            }
+          : {
+              role: 'koordinator' as const,
+              koordinator_id: koor!.id,
+              name: koor!.name,
+              gender: koor!.gender,
+            },
       table: 'koordinator',
       trackLastLogin: true,
     },

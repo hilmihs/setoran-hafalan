@@ -73,6 +73,7 @@ function pelFromSlot(k: SlotKeterangan | null): PelDraft {
 }
 
 interface Props {
+  halaqahId: string;
   halaqahName: string;
   pengajarName: string;
   slots: PertemuanSlot[];
@@ -80,7 +81,7 @@ interface Props {
   hutangSaldo: number;
 }
 
-export function HitsKetuaForm({ halaqahName, pengajarName, slots: initialSlots, todayUnfilled, hutangSaldo }: Props) {
+export function HitsKetuaForm({ halaqahId, halaqahName, pengajarName, slots: initialSlots, todayUnfilled, hutangSaldo }: Props) {
   const [slots, setSlots] = useState(initialSlots);
   const [editingKey, setEditingKey] = useState<string | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
@@ -117,6 +118,7 @@ export function HitsKetuaForm({ halaqahName, pengajarName, slots: initialSlots, 
     setHapusError(null);
     startHapus(async () => {
       const fd = new FormData();
+      fd.set('halaqah_id', halaqahId);
       fd.set('pertemuan_no', String(hapusSlot.pertemuanNo));
       fd.set('level', hapusSlot.level);
       fd.set('tanggal', hapusSlot.tanggal);
@@ -223,6 +225,7 @@ export function HitsKetuaForm({ halaqahName, pengajarName, slots: initialSlots, 
       return { ok: false, err: 'Pilih "KBBS" (kelas berjalan baik) atau centang minimal 1 pelanggaran.' };
     }
     const fd = new FormData();
+    fd.set('halaqah_id', halaqahId);
     fd.set('pertemuan_no', String(editing.pertemuanNo));
     fd.set('level', editing.level);
     fd.set('tanggal', editing.tanggal);

@@ -484,6 +484,13 @@ export default async function KoordinatorDashboard({
             Pedagogis
           </Link>
           <Link
+            href="/2in1/koordinator/penilaian-ketua"
+            className="btn btn-sm btn-ghost"
+            style={{ height: 30, padding: '0 12px', textDecoration: 'none' }}
+          >
+            Nilai Ketua
+          </Link>
+          <Link
             href="/2in1/koordinator/libur"
             className="btn btn-sm btn-ghost"
             style={{ height: 30, padding: '0 12px', textDecoration: 'none' }}

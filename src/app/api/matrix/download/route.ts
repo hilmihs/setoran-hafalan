@@ -2,6 +2,10 @@ import { NextRequest, NextResponse } from 'next/server';
 import ExcelJS from 'exceljs';
 import { getSession } from '@/lib/session';
 import { supabaseAdmin } from '@/lib/supabase-admin';
+import { INDIKATOR } from '@/lib/matrix-indicators';
+
+const KAT_SHORT: Record<string, string> = { hard: 'Hard Skill', pedagogis: 'Pedagogis', soft: 'Soft Skill' };
+const XLSX_MIME = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
 
 export const runtime = 'nodejs';
 export const maxDuration = 60;
@@ -51,6 +55,158 @@ export async function GET(req: NextRequest) {
     : { data: [] };
 
   const matrixByPengajar = new Map((matrixData ?? []).map((m) => [m.pengajar_id, m]));
+
+  // ── Mode "belum lengkap" (?incomplete=1): hanya pengajar dgn ≥1 indikator kosong,
+  //    + kolom rincian bagian yang belum terisi (dikelompokkan per kategori) + halaqah.
+  if (req.nextUrl.searchParams.get('incomplete') === '1') {
+    const { data: halaqahData } = pengajarIds.length
+      ? await supabaseAdmin
+          .from('hits_halaqah')
+          .select('pengajar_id, name')
+          .in('pengajar_id', pengajarIds)
+          .eq('active', true)
+      : { data: [] };
+    const halaqahByPengajar = new Map<string, string[]>();
+    for (const h of halaqahData ?? []) {
+      if (!h.pengajar_id) continue;
+      const arr = halaqahByPengajar.get(h.pengajar_id) ?? [];
+      arr.push(h.name);
+      halaqahByPengajar.set(h.pengajar_id, arr);
+    }
+
+    // Rakit baris dulu (biar bisa sort: prioritas tinggi = kurang selain SOP dulu).
+    type Item = {
+      prioritas: 'Tinggi' | 'SOP saja';
+      nama: string; kelompok: string; active: boolean; halaqah: string;
+      terisiN: number; detail: string;
+    };
+    const items: Item[] = [];
+    for (const p of pengajarList ?? []) {
+      const m = matrixByPengajar.get(p.id) as Record<string, unknown> | undefined;
+      const kosong = INDIKATOR.filter((i) => !m || m[i.key] == null);
+      if (kosong.length === 0) continue;
+      const adaSelainSop = kosong.some((i) => i.key !== 'skor_kepatuhan_sop');
+      const byKat: Record<string, string[]> = {};
+      for (const ind of kosong) (byKat[ind.kategori] ??= []).push(ind.label);
+      const detail = (['hard', 'pedagogis', 'soft'] as const)
+        .filter((k) => byKat[k]?.length)
+        .map((k) => `${KAT_SHORT[k]}: ${byKat[k].join(', ')}`)
+        .join('   •   ');
+      const hal = halaqahByPengajar.get(p.id);
+      items.push({
+        prioritas: adaSelainSop ? 'Tinggi' : 'SOP saja',
+        nama: p.name,
+        kelompok: kelompokMap.get(p.kelompok_id ?? '') ?? '',
+        active: p.active,
+        halaqah: hal && hal.length ? hal.join(', ') : '(tak ada halaqah aktif)',
+        terisiN: INDIKATOR.length - kosong.length,
+        detail,
+      });
+    }
+    // Tinggi dulu, lalu nama.
+    items.sort((a, b) =>
+      a.prioritas !== b.prioritas ? (a.prioritas === 'Tinggi' ? -1 : 1) : a.nama.localeCompare(b.nama)
+    );
+    const tinggiN = items.filter((i) => i.prioritas === 'Tinggi').length;
+
+    // ── Styling ────────────────────────────────────────────────────────────
+    const INK = 'FF1F3A2E';       // hijau gelap header
+    const HEAD_TXT = 'FFFFFFFF';
+    const ZEBRA = 'FFF4F7F5';     // baris genap
+    const RED_BG = 'FFFCE8E6';    // prioritas tinggi
+    const RED_TX = 'FFB4231A';
+    const YEL_BG = 'FFFEF7E0';    // SOP saja
+    const YEL_TX = 'FF9A6B00';
+    const thin = { style: 'thin' as const, color: { argb: 'FFE0E0E0' } };
+    const border = { top: thin, left: thin, bottom: thin, right: thin };
+
+    const wbI = new ExcelJS.Workbook();
+    wbI.creator = 'Maahir';
+    wbI.created = new Date();
+    const sh = wbI.addWorksheet('Belum Lengkap', {
+      views: [{ state: 'frozen', ySplit: 4 }],
+    });
+    const cols = [
+      { key: 'prioritas', w: 12 },
+      { key: 'nama', w: 30 },
+      { key: 'kelompok', w: 20 },
+      { key: 'active', w: 8 },
+      { key: 'halaqah', w: 46 },
+      { key: 'terisi', w: 9 },
+      { key: 'kosong', w: 90 },
+    ];
+    cols.forEach((c, i) => (sh.getColumn(i + 1).width = c.w));
+    const NC = cols.length;
+    const genderLabel = gender === 'ikhwan' ? 'Ikhwan' : 'Akhwat';
+
+    // Baris 1: judul
+    sh.mergeCells(1, 1, 1, NC);
+    const t = sh.getCell(1, 1);
+    t.value = `Matrix Skill Guru — BELUM LENGKAP · ${bulan} · ${genderLabel}`;
+    t.font = { bold: true, size: 14, color: { argb: INK } };
+    t.alignment = { vertical: 'middle' };
+    sh.getRow(1).height = 24;
+    // Baris 2: ringkasan
+    sh.mergeCells(2, 1, 2, NC);
+    const sub = sh.getCell(2, 1);
+    sub.value = `${items.length} pengajar belum lengkap  (🔴 Tinggi = kurang selain SOP: ${tinggiN}  ·  🟡 SOP saja: ${items.length - tinggiN}).  Terisi = jumlah dari ${INDIKATOR.length} indikator.`;
+    sub.font = { size: 10, color: { argb: 'FF6B6B6B' } };
+    sh.getRow(3).height = 4;
+
+    // Baris 4: header
+    const HEAD = ['Prioritas', 'Nama', 'Kelompok', 'Aktif', 'Halaqah', 'Terisi', 'Bagian Belum Terisi'];
+    const hr = sh.getRow(4);
+    HEAD.forEach((h, i) => {
+      const c = hr.getCell(i + 1);
+      c.value = h;
+      c.font = { bold: true, color: { argb: HEAD_TXT } };
+      c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: INK } };
+      c.alignment = { vertical: 'middle', horizontal: i >= 3 && i <= 5 ? 'center' : 'left' };
+      c.border = border;
+    });
+    hr.height = 20;
+    sh.autoFilter = { from: { row: 4, column: 1 }, to: { row: 4, column: NC } };
+
+    // Data
+    items.forEach((it, idx) => {
+      const r = sh.getRow(5 + idx);
+      const hi = it.prioritas === 'Tinggi';
+      const rowBg = hi ? RED_BG : idx % 2 ? ZEBRA : 'FFFFFFFF';
+      const vals = [
+        it.prioritas,
+        it.nama,
+        it.kelompok,
+        it.active ? 'Ya' : 'Tidak',
+        it.halaqah,
+        `${it.terisiN}/${INDIKATOR.length}`,
+        it.detail,
+      ];
+      vals.forEach((v, i) => {
+        const c = r.getCell(i + 1);
+        c.value = v;
+        c.border = border;
+        c.alignment = { vertical: 'top', wrapText: i === 4 || i === 6, horizontal: i >= 3 && i <= 5 ? 'center' : 'left' };
+        c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: rowBg } };
+      });
+      // prioritas cell warna
+      const pc = r.getCell(1);
+      pc.font = { bold: true, color: { argb: hi ? RED_TX : YEL_TX } };
+      if (!hi) pc.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: YEL_BG } };
+      // terisi rendah → merah
+      if (it.terisiN < 7) r.getCell(6).font = { bold: true, color: { argb: RED_TX } };
+    });
+    if (items.length === 0) {
+      sh.mergeCells(5, 1, 5, NC);
+      sh.getCell(5, 1).value = '✓ Semua pengajar sudah lengkap.';
+    }
+
+    const buf = await wbI.xlsx.writeBuffer();
+    const fn = `matrix-belum-lengkap-${bulan}-${gender}${kelompokId ? `-${kelompokId.slice(0, 8)}` : ''}.xlsx`;
+    return new NextResponse(buf, {
+      status: 200,
+      headers: { 'Content-Type': XLSX_MIME, 'Content-Disposition': `attachment; filename="${fn}"` },
+    });
+  }
 
   const wb = new ExcelJS.Workbook();
   wb.creator = 'Maahir';

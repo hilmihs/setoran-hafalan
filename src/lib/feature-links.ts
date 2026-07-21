@@ -43,7 +43,7 @@ export const FEATURE_LINKS: FeatureLink[] = [
     title: 'Kehadiran Maahir',
     navLabel: 'Kehadiran Maahir',
     description: 'Rekap kehadiran semua kelas Maahir per bulan',
-    match: (a) => a.role === 'koordinator',
+    match: (a) => a.role === 'koordinator' || a.role === 'koordinator_kehadiran',
   },
   {
     href: '/kehadiran/pengajar',
@@ -78,6 +78,13 @@ export const FEATURE_LINKS: FeatureLink[] = [
     title: 'Penilaian Pedagogis (Kelompok)',
     navLabel: 'Penilaian Pedagogis Kelompok',
     description: 'Lihat detail rubrik pedagogis per anggota tiap kelompok (baca-saja)',
+    match: (a) => a.role === 'koordinator',
+  },
+  {
+    href: '/2in1/koordinator/penilaian-ketua',
+    title: 'Penilaian Ketua Kelompok',
+    navLabel: 'Nilai Ketua Kelompok',
+    description: 'Koordinator menilai pedagogis para ketua kelompok (yang tak dinilai di flow kelompok)',
     match: (a) => a.role === 'koordinator',
   },
   {

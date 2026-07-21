@@ -83,12 +83,27 @@ export default async function HitsKoordinatorPage({
           <div className="wordmark">
             <span className="mark">H</span> Soft Skill HITS
           </div>
-          <div style={{ display: 'flex', gap: 8 }}>
-            <Link href="/hits/koordinator/pertemuan" className="back">
-              {Icon.shield(12)} Override Pertemuan
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            <Link
+              href="/hits/koordinator/ketua-kelas"
+              className="btn btn-sm btn-primary"
+              style={{ height: 32, padding: '0 12px', gap: 6, textDecoration: 'none' }}
+            >
+              {Icon.shield(13)} Ketua Kelas
             </Link>
-            <Link href="/hits/koordinator/validasi" className="back">
-              {Icon.shield(12)} Validasi & Sumber Data
+            <Link
+              href="/hits/koordinator/pertemuan"
+              className="btn btn-sm btn-ghost"
+              style={{ height: 32, padding: '0 12px', gap: 6, textDecoration: 'none', border: '1px solid var(--line)' }}
+            >
+              {Icon.shield(13)} Override Pertemuan
+            </Link>
+            <Link
+              href="/hits/koordinator/validasi"
+              className="btn btn-sm btn-ghost"
+              style={{ height: 32, padding: '0 12px', gap: 6, textDecoration: 'none', border: '1px solid var(--line)' }}
+            >
+              {Icon.shield(13)} Validasi & Sumber Data
             </Link>
           </div>
         </div>

@@ -263,9 +263,17 @@ export default async function MatrixKoordinatorPage({
               </Link>
             )}
             <a
+              href={`/api/matrix/download?bulan=${selectedMonth}&gender=${gender}${selectedKelompok ? `&kelompok=${selectedKelompok}` : ''}&incomplete=1`}
+              className="btn btn-ghost btn-sm"
+              style={{ height: 38, marginLeft: 'auto' }}
+              title="Hanya pengajar yang matrix-nya belum lengkap + rincian bagian yang kosong"
+            >
+              Export Belum Lengkap
+            </a>
+            <a
               href={`/api/matrix/download?bulan=${selectedMonth}&gender=${gender}${selectedKelompok ? `&kelompok=${selectedKelompok}` : ''}`}
               className="btn btn-accent btn-sm"
-              style={{ height: 38, marginLeft: 'auto' }}
+              style={{ height: 38 }}
             >
               Export Excel
             </a>

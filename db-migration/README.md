@@ -215,6 +215,28 @@ Deploy otomatis via Azure DevOps: push ke branch `main` → pipeline SSH ke
 - [ ] Test login 1 akun tiap role + buka 1 setoran (cek data & audio)
 - [ ] `MAINTENANCE_MODE=off` → deploy → situs normal
 
+## 8b. Catatan shim pg — batasan yang perlu diperhatikan
+
+Hasil audit migrasi (Supabase→pg). Tidak ada bug aktif; berikut hal LATEN yang
+perlu diingat saat mengembangkan lagi:
+
+- **Tipe kolom diselaraskan di `src/lib/pg-core.ts`** (type parser): `date`→string
+  `"YYYY-MM-DD"`, `timestamptz`→ISO `…Z`, `numeric`/`int8`→number. Ini yang bikin
+  kode lama (mengandalkan JSON supabase-js) tetap jalan. **Kalau menambah kolom
+  bertipe baru**, pastikan tipenya cocok dengan asumsi kode.
+- **Embedded join (`alias:fk(cols)`)** di-serialize oleh `to_jsonb` Postgres,
+  BUKAN lewat type parser. Saat ini tak ada embed yang memilih kolom
+  `timestamptz`. Kalau nanti ada, format waktunya beda (`+00:00` vs `Z`) — jangan
+  string-slice/compare langsung; parse dgn `new Date()`.
+- **`.or()` menyisipkan nilai mentah** (mis. `.or(\`ketua_wa.eq.${wa},...\`)`) —
+  aman utk nomor WA/UUID, tapi nilai yg mengandung `.`/`,`/`)` bakal misparse.
+  Jangan taruh input bebas ke `.or()`.
+- **Storage filesystem** (`pg-storage.ts`) selalu overwrite (`upsert:true`
+  di semua pemanggil) & set Content-Type dari ekstensi. Kalau butuh cegah
+  overwrite (`upsert:false`), impl perlu ditambah.
+- **Tak ada cap 1000 baris** (PostgREST dulu memotong diam-diam). Shim kembalikan
+  semua baris; select besar tanpa `.range()` akan memuat semuanya.
+
 ## 9. Uji lokal (opsional, tanpa Postgres sistem)
 
 - `npm run test-restore` — restore schema+data di PGlite, cek baris + FK.
