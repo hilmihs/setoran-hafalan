@@ -18,7 +18,8 @@
  * Prasyarat: migration 0045 (pekan CHECK 13->40) sudah diterapkan, karena ABK &
  * Nurul Iman berjalan >13 pekan (1x/pekan).
  */
-import { createClient } from '@supabase/supabase-js';
+// Pakai shim supabaseAdmin (Postgres langsung via DATABASE_URL), bukan Supabase hosted.
+import { supabaseAdmin as sb } from '../src/lib/supabase-admin';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { readFileSync } from 'node:fs';
@@ -26,12 +27,6 @@ import type { HitsLevel } from '../src/types/db';
 
 const CONFIRM = process.argv.includes('--confirm');
 const __dirname = dirname(fileURLToPath(import.meta.url));
-
-const sb = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!,
-  { auth: { persistSession: false, autoRefreshToken: false } }
-);
 
 const HARI_ID = ['Ahad', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
 const LEVEL_MAP: Record<string, HitsLevel> = {

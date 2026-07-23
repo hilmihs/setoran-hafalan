@@ -8,13 +8,8 @@
  *    yang halaqahnya jadwal 1 hari/pekan (atau >2) — kalau ada, numbering-nya
  *    bakal geser. Kalau semua batch berkaldik hanya 2 hari/pekan → aman total.
  */
-import { createClient } from '@supabase/supabase-js';
-
-const sb = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!,
-  { auth: { persistSession: false, autoRefreshToken: false } }
-);
+// Pakai shim supabaseAdmin (Postgres langsung via DATABASE_URL), bukan Supabase hosted.
+import { supabaseAdmin as sb } from '../src/lib/supabase-admin';
 
 async function main() {
   const { data: batches, error } = await sb
