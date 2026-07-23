@@ -45,6 +45,16 @@ export type PengajuanRow = {
   createdAt: string;
   decidedAt: string | null;
   decidedByRole: string | null;
+  /** Untuk pengajuan pending: sedang menunggu keputusan siapa. */
+  waitingOn: WaitingOn;
+};
+
+export type WaitingOn = 'pengajar_tujuan' | 'pemilik_halaqah' | 'koordinator';
+
+export const WAITING_LABEL: Record<WaitingOn, string> = {
+  pengajar_tujuan: 'Menunggu pengajar tujuan',
+  pemilik_halaqah: 'Menunggu pemilik halaqah',
+  koordinator: 'Menunggu keputusan koordinator',
 };
 
 type HalaqahLite = {
@@ -80,7 +90,7 @@ export async function getHitsPengajuan(which: 'pending' | 'decided'): Promise<Pe
       supabaseAdmin
         .from('hits_halaqah_pindah_request')
         .select(
-          'id, halaqah_id, requested_by_name, requested_by_wa, target_name, token, status, decided_by_role, decided_at, created_at'
+          'id, halaqah_id, requested_by_name, requested_by_wa, target_name, token, status, decided_by_role, decided_at, created_at, request_type, approver_kind'
         )
     ),
     withStatus(
@@ -101,7 +111,7 @@ export async function getHitsPengajuan(which: 'pending' | 'decided'): Promise<Pe
       supabaseAdmin
         .from('ketua_dualrole_request')
         .select(
-          'id, new_halaqah_id, gender, requested_by_name, requested_by_wa, target_name, token, status, decided_by_role, decided_at, created_at'
+          'id, new_halaqah_id, gender, requested_by_name, requested_by_wa, target_name, token, status, decided_by_role, decided_at, created_at, approver_kind'
         )
     ),
   ]);
@@ -188,6 +198,14 @@ export async function getHitsPengajuan(which: 'pending' | 'decided'): Promise<Pe
     decidedAt: r.decided_at ?? null,
     decidedByRole: r.decided_by_role ?? null,
     ageDays: daysBetween(r.created_at, today),
+    waitingOn: ((): WaitingOn => {
+      if (jenis === 'pindah') {
+        if (r.request_type === 'transfer_out') return 'pengajar_tujuan';
+        return r.approver_kind === 'koordinator_kk' ? 'koordinator' : 'pemilik_halaqah';
+      }
+      if (jenis === 'dual') return r.approver_kind === 'koordinator_kk' ? 'koordinator' : 'pengajar_tujuan';
+      return 'koordinator'; // hapus, koreksi
+    })(),
   });
 
   const rows: PengajuanRow[] = [];

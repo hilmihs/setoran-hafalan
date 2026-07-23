@@ -7,6 +7,7 @@ import {
   getHitsPengajuan,
   countByJenis,
   PENGAJUAN_LABEL,
+  WAITING_LABEL,
   JENIS_ORDER,
   type PengajuanJenis,
   type PengajuanRow,
@@ -163,6 +164,19 @@ function PengajuanCard({ r, tab }: { r: PengajuanRow; tab: 'menunggu' | 'riwayat
             {tab === 'menunggu' && (
               <span className={`badge ${ageBadgeClass(r.ageDays)}`}>
                 <span className="dot" /> {r.ageDays} hari
+              </span>
+            )}
+            {tab === 'menunggu' && (
+              <span
+                className="badge"
+                style={{
+                  background: r.waitingOn === 'koordinator' ? 'var(--amber-bg, #f8f1d9)' : 'rgba(120,140,170,.16)',
+                  color: r.waitingOn === 'koordinator' ? 'var(--amber-ink, #a8871a)' : 'inherit',
+                  fontWeight: 600,
+                }}
+                title="Progress persetujuan"
+              >
+                {WAITING_LABEL[r.waitingOn]}
               </span>
             )}
             {r.gender && <span className="t-tiny">{r.gender === 'ikhwan' ? 'Ikhwan' : 'Akhwat'}</span>}
