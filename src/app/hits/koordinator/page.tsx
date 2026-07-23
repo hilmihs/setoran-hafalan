@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { requireKoordinatorKetuaKelas } from '@/lib/session';
 import { getDisiplinRanking, getNoDataActionInfo } from '@/lib/hits-ranking';
+import { getHitsPengajuan } from '@/lib/hits-pengajuan';
 import { GenderNavSelect } from '@/components/GenderNavSelect';
 import { MonthNavSelect } from '@/components/MonthNavSelect';
 import { WeekNavSelect } from '@/components/WeekNavSelect';
@@ -27,6 +28,10 @@ export default async function HitsKoordinatorPage({
   } catch {
     redirect('/');
   }
+
+  const pengajuanPending = await getHitsPengajuan('pending');
+  const pengajuanCount = pengajuanPending.length;
+  const pengajuanConflict = pengajuanPending.some((r) => r.conflict);
 
   const nowMonth = new Date()
     .toLocaleDateString('sv-SE', { timeZone: 'Asia/Jakarta' })
@@ -97,6 +102,24 @@ export default async function HitsKoordinatorPage({
               style={{ height: 32, padding: '0 12px', gap: 6, textDecoration: 'none', border: '1px solid var(--line)' }}
             >
               {Icon.shield(13)} Override Pertemuan
+            </Link>
+            <Link
+              href="/hits/koordinator/pengajuan"
+              className="btn btn-sm btn-ghost"
+              style={{
+                height: 32,
+                padding: '0 12px',
+                gap: 6,
+                textDecoration: 'none',
+                border: pengajuanConflict ? '1px solid var(--merah)' : '1px solid var(--line)',
+              }}
+            >
+              {Icon.shield(13)} Pengajuan
+              {pengajuanCount > 0 && (
+                <span className="badge badge-merah" style={{ marginLeft: 2 }}>
+                  {pengajuanCount}
+                </span>
+              )}
             </Link>
             <Link
               href="/hits/koordinator/validasi"

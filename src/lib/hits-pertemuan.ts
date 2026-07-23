@@ -1,6 +1,9 @@
 // Derivasi pertemuan_no <-> tanggal untuk satu halaqah.
-// Tiap pekan punya 2 pertemuan: sesi ke-1 (hari paling awal sesuai jadwal) =
-// 2*pekan-1, sesi ke-2 = 2*pekan. 1 sesi = 1 pertemuan.
+// pertemuan_no = sesiPerPekan*(pekan-1) + slot, di mana sesiPerPekan = jumlah hari
+// jadwal halaqah (mis. [Senin,Rabu] -> 2, [Sabtu] -> 1) dan slot = urutan sesi dalam
+// pekan (1..sesiPerPekan). Untuk 2 hari/pekan ini IDENTIK rumus lama (2*pekan-1 / 2*pekan)
+// sehingga numbering batch lama tidak berubah; juga mendukung 1 hari/pekan (kursus
+// mingguan panjang, mis. HITS Nurul Iman / ABK). 1 sesi = 1 pertemuan.
 
 import { HARI_INDEX } from '@/lib/hits';
 import { dayNameOf } from '@/lib/maahir-presensi';
@@ -77,6 +80,9 @@ export function deriveHalaqahPertemuan(
   const wanted = hariIndexSet(jadwalHari);
   if (wanted.size === 0) return [];
 
+  // Cadence per pekan = jumlah hari jadwal. [Sabtu,Ahad] -> 2, [Sabtu] -> 1.
+  const sesiPerPekan = wanted.size;
+
   // group by pekan
   const byPekan = new Map<number, string[]>();
   for (const row of kaldik) {
@@ -90,9 +96,11 @@ export function deriveHalaqahPertemuan(
   const out: DerivedPertemuan[] = [];
   for (const [pekan, dates] of [...byPekan.entries()].sort((a, b) => a[0] - b[0])) {
     const sorted = [...new Set(dates)].sort();
-    if (sorted[0]) out.push({ pertemuan_no: 2 * pekan - 1, tanggal: sorted[0], pekan });
-    if (sorted[1]) out.push({ pertemuan_no: 2 * pekan, tanggal: sorted[1], pekan });
-    // sesi >2 dalam sepekan diabaikan (di luar 2 pertemuan/pekan)
+    // slot 1..sesiPerPekan; sesi lebih dari cadence dalam sepekan diabaikan.
+    const n = Math.min(sorted.length, sesiPerPekan);
+    for (let slot = 1; slot <= n; slot++) {
+      out.push({ pertemuan_no: sesiPerPekan * (pekan - 1) + slot, tanggal: sorted[slot - 1], pekan });
+    }
   }
   return out;
 }
