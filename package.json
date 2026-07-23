@@ -16,8 +16,6 @@
     "test-pengajuan": "tsx --env-file=.env.local scripts/test-hits-pengajuan.ts",
     "export-supabase": "tsx --env-file=.env.local scripts/export-supabase.ts",
     "test-derive": "tsx --env-file=.env.local scripts/test-derive-pertemuan.ts",
-    "diag-hits-cadence": "tsx --env-file=.env.local scripts/diag-hits-cadence.ts",
-    "seed-hits-kaldik-juli": "tsx --env-file=.env.local scripts/seed-hits-kaldik-juli.ts",
     "test-restore": "tsx scripts/test-restore-pglite.ts",
     "test-shim": "tsx scripts/test-pg-shim.ts",
     "generate-dump": "tsx scripts/generate-sql-dump.ts",
