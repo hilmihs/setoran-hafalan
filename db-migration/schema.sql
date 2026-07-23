@@ -1334,7 +1334,7 @@ create table hits_kaldik_hari (
   level hits_level not null,
   tanggal date not null,
   hari text not null,                 -- 'Senin' ...
-  pekan smallint check (pekan between 1 and 13),  -- carry-forward dari kolom Pekan
+  pekan smallint check (pekan between 1 and 40),  -- carry-forward dari kolom Pekan (relax 13->40 di 0045)
   is_libur boolean not null default false,
   libur_note text,
   source hits_source not null default 'sheet',
