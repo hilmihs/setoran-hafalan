@@ -2,8 +2,9 @@
 
 import { revalidatePath } from 'next/cache';
 import { supabaseAdmin } from '@/lib/supabase-admin';
-import { requirePengajar } from '@/lib/session';
+import { requireOneOfRoles, getAllAccesses } from '@/lib/session';
 import { getSessionWa } from '@/lib/program-kelas';
+import { resolveDecider } from '@/lib/hits-pindah-decider';
 import { logAudit } from '@/lib/audit';
 import { absUrl } from '@/lib/url';
 import { buildWaMeUrl, tplPindahDisetujuiToRequester } from '@/lib/whatsapp';
@@ -24,47 +25,23 @@ async function loadByToken(token: string) {
   return data;
 }
 
-/**
- * Verifikasi pengajar yang login adalah pengajar TUJUAN pengajuan ini.
- * Match via target_pengajar_id (dari daftar) atau target_wa (manual).
- */
-function isTargetPengajar(
-  req: { target_pengajar_id: string | null; target_wa: string | null },
-  session: { pengajar_id: string },
-  wa: string | null
-): boolean {
-  if (req.target_pengajar_id && req.target_pengajar_id === session.pengajar_id) return true;
-  if (req.target_wa && wa && wa === req.target_wa) return true;
-  return false;
+/** Ambil gender halaqah (untuk cek hak koordinator ketua kelas). */
+async function halaqahGenderOf(halaqahId: string): Promise<string | null> {
+  const { data } = await supabaseAdmin.from('hits_halaqah').select('gender').eq('id', halaqahId).maybeSingle();
+  return (data?.gender as string | null) ?? null;
 }
 
-/**
- * Siapa yang berhak memutuskan pengajuan ini.
- * - transfer_out: pengajar TUJUAN (target).
- * - claim_in: APPROVER (owner halaqah / koordinator KK), bukan target (= pengaju).
- */
-function isDecider(
-  req: { request_type?: string | null; target_pengajar_id: string | null; target_wa: string | null; approver_pengajar_id?: string | null; approver_wa?: string | null },
-  session: { pengajar_id: string },
-  wa: string | null
-): boolean {
-  if (req.request_type === 'claim_in') {
-    if (req.approver_pengajar_id && req.approver_pengajar_id === session.pengajar_id) return true;
-    if (req.approver_wa && wa && wa === req.approver_wa) return true;
-    return false;
-  }
-  return isTargetPengajar(req, session, wa);
-}
-
-/** Pengajar tujuan menyetujui: halaqah pindah ke dirinya. */
+/** Pengajar tujuan / pemilik halaqah / koordinator KK menyetujui. */
 export async function approvePindah(token: string, catatan: string): Promise<DecidePindahResult> {
-  const session = await requirePengajar();
+  await requireOneOfRoles(['pengajar', 'koordinator_ketua_kelas']);
+  const accesses = await getAllAccesses();
   const wa = await getSessionWa();
 
   const req = await loadByToken(token);
   if (!req) return { error: 'Pengajuan tidak ditemukan.' };
   if (req.status !== 'pending') return { error: 'Pengajuan ini sudah diputuskan.' };
-  if (!isDecider(req, session, wa)) {
+  const decider = resolveDecider(req, await halaqahGenderOf(req.halaqah_id), accesses, wa);
+  if (!decider) {
     return {
       error: req.request_type === 'claim_in'
         ? 'Hanya pengajar pemilik halaqah / koordinator ketua kelas yang bisa menyetujui pengambilan ini.'
@@ -72,11 +49,11 @@ export async function approvePindah(token: string, catatan: string): Promise<Dec
     };
   }
 
-  // claim_in: halaqah pindah ke PENGAJU. transfer_out: ke pengajar tujuan (yang login).
+  // claim_in: halaqah pindah ke PENGAJU. transfer_out: ke pengajar tujuan (= pemutus).
   const isClaim = req.request_type === 'claim_in';
-  const newPengajarId = isClaim ? req.requested_by_pengajar_id : session.pengajar_id;
+  const newPengajarId = isClaim ? req.requested_by_pengajar_id : decider.id;
   const newPengajarWa = isClaim ? req.requested_by_wa : (wa ?? req.target_wa);
-  const newPengajarName = isClaim ? req.requested_by_name : session.name;
+  const newPengajarName = isClaim ? req.requested_by_name : decider.actor.name;
   const { error: upErr } = await supabaseAdmin
     .from('hits_halaqah')
     .update({
@@ -92,19 +69,19 @@ export async function approvePindah(token: string, catatan: string): Promise<Dec
     .from('hits_halaqah_pindah_request')
     .update({
       status: 'approved',
-      decided_by_role: 'pengajar',
-      decided_by_id: session.pengajar_id,
+      decided_by_role: decider.role,
+      decided_by_id: decider.id,
       decided_at: new Date().toISOString(),
       catatan: catatan || null,
     })
     .eq('id', req.id);
 
   await logAudit({
-    actor: session,
+    actor: decider.actor,
     action: 'hits.halaqah.pindah.approve',
     targetTable: 'hits_halaqah_pindah_request',
     targetId: req.id,
-    detail: { halaqah_id: req.halaqah_id, target_pengajar_id: session.pengajar_id },
+    detail: { halaqah_id: req.halaqah_id, decided_by_role: decider.role, decided_by_id: decider.id },
   });
 
   revalidatePath('/hits/pengajar');
@@ -129,7 +106,7 @@ export async function approvePindah(token: string, catatan: string): Promise<Dec
     const msg = tplPindahDisetujuiToRequester({
       requesterName: req.requested_by_name,
       requesterGender,
-      targetName: session.name,
+      targetName: decider.actor.name,
       halaqahName: hq?.name ?? 'halaqah',
       pengajarUrl: absUrl('/hits/pengajar'),
     });
@@ -141,13 +118,15 @@ export async function approvePindah(token: string, catatan: string): Promise<Dec
 
 /** Pengajar tujuan menolak pengajuan. */
 export async function rejectPindah(token: string, catatan: string): Promise<DecidePindahResult> {
-  const session = await requirePengajar();
+  await requireOneOfRoles(['pengajar', 'koordinator_ketua_kelas']);
+  const accesses = await getAllAccesses();
   const wa = await getSessionWa();
 
   const req = await loadByToken(token);
   if (!req) return { error: 'Pengajuan tidak ditemukan.' };
   if (req.status !== 'pending') return { error: 'Pengajuan ini sudah diputuskan.' };
-  if (!isDecider(req, session, wa)) {
+  const decider = resolveDecider(req, await halaqahGenderOf(req.halaqah_id), accesses, wa);
+  if (!decider) {
     return { error: 'Anda tidak berhak menolak pengajuan ini.' };
   }
 
@@ -155,19 +134,19 @@ export async function rejectPindah(token: string, catatan: string): Promise<Deci
     .from('hits_halaqah_pindah_request')
     .update({
       status: 'rejected',
-      decided_by_role: 'pengajar',
-      decided_by_id: session.pengajar_id,
+      decided_by_role: decider.role,
+      decided_by_id: decider.id,
       decided_at: new Date().toISOString(),
       catatan: catatan || null,
     })
     .eq('id', req.id);
 
   await logAudit({
-    actor: session,
+    actor: decider.actor,
     action: 'hits.halaqah.pindah.reject',
     targetTable: 'hits_halaqah_pindah_request',
     targetId: req.id,
-    detail: { halaqah_id: req.halaqah_id },
+    detail: { halaqah_id: req.halaqah_id, decided_by_role: decider.role, decided_by_id: decider.id },
   });
 
   return { ok: true, decided: 'rejected' };

@@ -1,19 +1,22 @@
 import { supabaseAdmin } from '@/lib/supabase-admin';
-import { requirePengajar } from '@/lib/session';
+import { requireOneOfRoles, getAllAccesses } from '@/lib/session';
 import { getSessionWa } from '@/lib/program-kelas';
+import { resolveDecider } from '@/lib/hits-pindah-decider';
 import { DecidePindahPanel } from './DecidePindahPanel';
 
 export const dynamic = 'force-dynamic';
 
 export default async function PindahHalaqahPage({ params }: { params: { token: string } }) {
-  // Wajib login sebagai pengajar (middleware redirect unauth /hits/* → /?next=).
-  const session = await requirePengajar();
+  // Wajib login sebagai pengajar / koordinator ketua kelas (middleware redirect
+  // unauth /hits/* → /?next=).
+  await requireOneOfRoles(['pengajar', 'koordinator_ketua_kelas']);
+  const accesses = await getAllAccesses();
   const wa = await getSessionWa();
   const { token } = params;
 
   const { data: req } = await supabaseAdmin
     .from('hits_halaqah_pindah_request')
-    .select('*, halaqah:halaqah_id(name, pengajar_nama_sheet)')
+    .select('*, halaqah:halaqah_id(name, pengajar_nama_sheet, gender)')
     .eq('token', token)
     .maybeSingle();
 
@@ -28,15 +31,12 @@ export default async function PindahHalaqahPage({ params }: { params: { token: s
     );
   }
 
-  const halaqah = req.halaqah as unknown as { name: string; pengajar_nama_sheet: string | null } | null;
+  const halaqah = req.halaqah as unknown as { name: string; pengajar_nama_sheet: string | null; gender: string | null } | null;
 
   const isClaim = req.request_type === 'claim_in';
-  // Yang berhak memutuskan: transfer_out → target; claim_in → approver.
-  const isTarget = isClaim
-    ? (!!req.approver_pengajar_id && req.approver_pengajar_id === session.pengajar_id) ||
-      (!!req.approver_wa && !!wa && wa === req.approver_wa)
-    : (!!req.target_pengajar_id && req.target_pengajar_id === session.pengajar_id) ||
-      (!!req.target_wa && !!wa && wa === req.target_wa);
+  // Yang berhak memutuskan: transfer_out → pengajar tujuan; claim_in → pemilik
+  // halaqah atau koordinator ketua kelas segender halaqah.
+  const isTarget = resolveDecider(req, halaqah?.gender ?? null, accesses, wa) !== null;
 
   // Peserta preview.
   const { data: peserta } = await supabaseAdmin
