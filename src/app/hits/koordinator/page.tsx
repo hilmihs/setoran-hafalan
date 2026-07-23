@@ -21,7 +21,7 @@ const ANCHOR_MONTH = '2026-01'; // batch HITS paling awal mulai Jan 2026
 export default async function HitsKoordinatorPage({
   searchParams,
 }: {
-  searchParams: { mode?: string; month?: string; week?: string; gender?: string };
+  searchParams: { mode?: string; month?: string; week?: string; gender?: string; sort?: string; dir?: string };
 }) {
   try {
     await requireKoordinatorKetuaKelas();
@@ -67,6 +67,33 @@ export default async function HitsKoordinatorPage({
   const ranked = rows.filter((r) => r.rank !== null);
   const noData = rows.filter((r) => r.rank === null);
   const noDataAksi = await getNoDataActionInfo(noData);
+
+  // Sortir kolom (tinggi→rendah default). Tanpa sort → urutan ranking asli (%KBBS).
+  const SORT_KEYS = ['pctKbbs', 'kmt', 'kbla', 'jkg', 'tidakLatihan', 'hutangSaldo', 'halaqahCount', 'pengajarNama'] as const;
+  type SortKey = (typeof SORT_KEYS)[number];
+  const sortKey = (SORT_KEYS as readonly string[]).includes(searchParams.sort ?? '') ? (searchParams.sort as SortKey) : null;
+  const dir: 'asc' | 'desc' = searchParams.dir === 'asc' ? 'asc' : 'desc';
+  if (sortKey) {
+    ranked.sort((a, b) => {
+      if (sortKey === 'pengajarNama') {
+        const c = a.pengajarNama.localeCompare(b.pengajarNama);
+        return dir === 'asc' ? c : -c;
+      }
+      const av = (a[sortKey] as number) ?? 0;
+      const bv = (b[sortKey] as number) ?? 0;
+      return dir === 'asc' ? av - bv : bv - av;
+    });
+  }
+  // Base query utk link sortir (pertahankan periode + gender).
+  const sortBase =
+    `?mode=${mode}` +
+    (mode === 'minggu' ? `&week=${week}` : `&month=${month}`) +
+    (genderFilter ? `&gender=${genderFilter}` : '');
+  const sortHref = (key: SortKey) => {
+    const nextDir = sortKey === key && dir === 'desc' ? 'asc' : 'desc';
+    return `${sortBase}&sort=${key}&dir=${nextDir}`;
+  };
+  const arrow = (key: SortKey) => (sortKey === key ? (dir === 'desc' ? ' ↓' : ' ↑') : '');
 
   const genderLabel =
     genderFilter === 'ikhwan' ? 'Ikhwan' : genderFilter === 'akhwat' ? 'Akhwat' : 'Ikhwan & Akhwat';
@@ -208,14 +235,14 @@ export default async function HitsKoordinatorPage({
                     <thead>
                       <tr>
                         <th style={{ width: 44, textAlign: 'right' }}>#</th>
-                        <th>Pengajar</th>
-                        <th style={{ textAlign: 'right' }}>%KBBS</th>
-                        <th style={{ textAlign: 'right' }} title="Kelas Mulai Terlambat">KMT</th>
-                        <th style={{ textAlign: 'right' }} title="Kelas Berakhir Lebih Awal">KBLA</th>
-                        <th style={{ textAlign: 'right' }} title="Jadwal Kelas Ganti">JKG</th>
-                        <th style={{ textAlign: 'right' }} title="Tidak memberikan latihan">TL</th>
-                        <th style={{ textAlign: 'right' }}>Hutang (mnt)</th>
-                        <th style={{ textAlign: 'right' }}>Halaqah</th>
+                        <th><a href={sortHref('pengajarNama')} style={{ color: 'inherit', textDecoration: 'none', cursor: 'pointer', whiteSpace: 'nowrap' }}>Pengajar{arrow('pengajarNama')}</a></th>
+                        <th style={{ textAlign: 'right' }}><a href={sortHref('pctKbbs')} style={{ color: 'inherit', textDecoration: 'none', cursor: 'pointer', whiteSpace: 'nowrap' }}>%KBBS{arrow('pctKbbs')}</a></th>
+                        <th style={{ textAlign: 'right' }} title="Kelas Mulai Terlambat"><a href={sortHref('kmt')} style={{ color: 'inherit', textDecoration: 'none', cursor: 'pointer', whiteSpace: 'nowrap' }}>KMT{arrow('kmt')}</a></th>
+                        <th style={{ textAlign: 'right' }} title="Kelas Berakhir Lebih Awal"><a href={sortHref('kbla')} style={{ color: 'inherit', textDecoration: 'none', cursor: 'pointer', whiteSpace: 'nowrap' }}>KBLA{arrow('kbla')}</a></th>
+                        <th style={{ textAlign: 'right' }} title="Jadwal Kelas Ganti"><a href={sortHref('jkg')} style={{ color: 'inherit', textDecoration: 'none', cursor: 'pointer', whiteSpace: 'nowrap' }}>JKG{arrow('jkg')}</a></th>
+                        <th style={{ textAlign: 'right' }} title="Tidak memberikan latihan"><a href={sortHref('tidakLatihan')} style={{ color: 'inherit', textDecoration: 'none', cursor: 'pointer', whiteSpace: 'nowrap' }}>TL{arrow('tidakLatihan')}</a></th>
+                        <th style={{ textAlign: 'right' }}><a href={sortHref('hutangSaldo')} style={{ color: 'inherit', textDecoration: 'none', cursor: 'pointer', whiteSpace: 'nowrap' }}>Hutang (mnt){arrow('hutangSaldo')}</a></th>
+                        <th style={{ textAlign: 'right' }}><a href={sortHref('halaqahCount')} style={{ color: 'inherit', textDecoration: 'none', cursor: 'pointer', whiteSpace: 'nowrap' }}>Halaqah{arrow('halaqahCount')}</a></th>
                       </tr>
                     </thead>
                     <tbody>
