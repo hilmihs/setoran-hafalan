@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { requireKoordinatorKetuaKelas } from '@/lib/session';
 import { getDisiplinRanking, getNoDataActionInfo } from '@/lib/hits-ranking';
+import { getHitsPengajuan } from '@/lib/hits-pengajuan';
 import { GenderNavSelect } from '@/components/GenderNavSelect';
 import { MonthNavSelect } from '@/components/MonthNavSelect';
 import { WeekNavSelect } from '@/components/WeekNavSelect';
@@ -27,6 +28,10 @@ export default async function HitsKoordinatorPage({
   } catch {
     redirect('/');
   }
+
+  const pengajuanPending = await getHitsPengajuan('pending');
+  const pengajuanCount = pengajuanPending.length;
+  const pengajuanConflict = pengajuanPending.some((r) => r.conflict);
 
   const nowMonth = new Date()
     .toLocaleDateString('sv-SE', { timeZone: 'Asia/Jakarta' })
@@ -97,6 +102,35 @@ export default async function HitsKoordinatorPage({
               style={{ height: 32, padding: '0 12px', gap: 6, textDecoration: 'none', border: '1px solid var(--line)' }}
             >
               {Icon.shield(13)} Override Pertemuan
+            </Link>
+            <Link
+              href="/hits/koordinator/pengajuan"
+              className="card-flat"
+              style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                padding: '12px 14px',
+                marginBottom: 12,
+                textDecoration: 'none',
+                color: 'inherit',
+                borderRadius: 10,
+                borderLeft: pengajuanConflict ? '3px solid var(--merah)' : undefined,
+              }}
+            >
+              <div>
+                <div style={{ fontSize: 13, fontWeight: 600 }}>Pengajuan Masuk</div>
+                <div className="t-tiny" style={{ color: 'var(--muted-2)' }}>
+                  Pindah/claim · hapus · koreksi · dual-role — tinjau &amp; putuskan
+                </div>
+              </div>
+              {pengajuanCount > 0 ? (
+                <span className="badge badge-merah">
+                  <span className="dot" /> {pengajuanCount}
+                </span>
+              ) : (
+                <span style={{ color: 'var(--muted-2)' }}>→</span>
+              )}
             </Link>
             <Link
               href="/hits/koordinator/validasi"
