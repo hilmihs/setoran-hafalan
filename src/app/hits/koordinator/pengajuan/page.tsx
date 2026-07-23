@@ -48,10 +48,12 @@ export default async function PengajuanInboxPage({
     searchParams.gender === 'ikhwan' || searchParams.gender === 'akhwat' ? searchParams.gender : undefined;
 
   const all = await getHitsPengajuan(tab === 'riwayat' ? 'decided' : 'pending');
-  const counts = countByJenis(all);
-  let rows = all;
+  // Hitung per jenis dihormati filter gender (tapi tak dipersempit filter jenis —
+  // chip harus tetap bisa pindah antar jenis).
+  const genderScoped = genderFilter ? all.filter((r) => r.gender === genderFilter) : all;
+  const counts = countByJenis(genderScoped);
+  let rows = genderScoped;
   if (jenisFilter) rows = rows.filter((r) => r.jenis === jenisFilter);
-  if (genderFilter) rows = rows.filter((r) => r.gender === genderFilter);
 
   const qs = (patch: Record<string, string | undefined>) => {
     const merged: Record<string, string | undefined> = { tab, jenis: jenisFilter, gender: genderFilter, ...patch };
@@ -95,7 +97,7 @@ export default async function PengajuanInboxPage({
               className={`badge ${!jenisFilter ? 'badge-hijau' : 'badge-neutral'}`}
               style={{ textDecoration: 'none' }}
             >
-              Semua {all.length}
+              Semua {genderScoped.length}
             </Link>
             {JENIS_ORDER.map((j) => (
               <Link

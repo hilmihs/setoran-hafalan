@@ -58,6 +58,7 @@ type HalaqahLite = {
 
 /** Selisih hari kalender (fromIso .. today), minimal 0. */
 function daysBetween(fromIso: string, todayIso: string): number {
+  if (!fromIso) return 0;
   const a = Date.parse(fromIso.slice(0, 10) + 'T00:00:00Z');
   const b = Date.parse(todayIso + 'T00:00:00Z');
   if (Number.isNaN(a) || Number.isNaN(b)) return 0;
