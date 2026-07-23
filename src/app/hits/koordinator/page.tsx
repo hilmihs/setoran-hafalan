@@ -105,31 +105,20 @@ export default async function HitsKoordinatorPage({
             </Link>
             <Link
               href="/hits/koordinator/pengajuan"
-              className="card-flat"
+              className="btn btn-sm btn-ghost"
               style={{
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-                padding: '12px 14px',
-                marginBottom: 12,
+                height: 32,
+                padding: '0 12px',
+                gap: 6,
                 textDecoration: 'none',
-                color: 'inherit',
-                borderRadius: 10,
-                borderLeft: pengajuanConflict ? '3px solid var(--merah)' : undefined,
+                border: pengajuanConflict ? '1px solid var(--merah)' : '1px solid var(--line)',
               }}
             >
-              <div>
-                <div style={{ fontSize: 13, fontWeight: 600 }}>Pengajuan Masuk</div>
-                <div className="t-tiny" style={{ color: 'var(--muted-2)' }}>
-                  Pindah/claim · hapus · koreksi · dual-role — tinjau &amp; putuskan
-                </div>
-              </div>
-              {pengajuanCount > 0 ? (
-                <span className="badge badge-merah">
-                  <span className="dot" /> {pengajuanCount}
+              {Icon.shield(13)} Pengajuan
+              {pengajuanCount > 0 && (
+                <span className="badge badge-merah" style={{ marginLeft: 2 }}>
+                  {pengajuanCount}
                 </span>
-              ) : (
-                <span style={{ color: 'var(--muted-2)' }}>→</span>
               )}
             </Link>
             <Link
