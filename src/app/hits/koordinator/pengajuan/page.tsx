@@ -11,6 +11,8 @@ import {
   type PengajuanJenis,
   type PengajuanRow,
 } from '@/lib/hits-pengajuan';
+import { absUrl } from '@/lib/url';
+import { ShareLinkButton } from './ShareLinkButton';
 
 export const dynamic = 'force-dynamic';
 
@@ -202,7 +204,12 @@ function PengajuanCard({ r, tab }: { r: PengajuanRow; tab: 'menunggu' | 'riwayat
                   WA pengaju
                 </a>
               )}
-              {/* Tombol Bagikan link ditambahkan di Task 4 */}
+              {r.decideHref && (
+                <ShareLinkButton
+                  url={absUrl(r.decideHref)}
+                  label={`Pengajuan ${PENGAJUAN_LABEL[r.jenis]} — ${r.halaqahName}`}
+                />
+              )}
             </>
           ) : (
             <>
