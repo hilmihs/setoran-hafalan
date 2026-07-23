@@ -32,3 +32,7 @@ db-migration/maahir_full_dump.sql
 
 # Arsip handoff DB (data sensitif). JANGAN commit.
 maahir-db-handoff.tar.gz
+
+# Data export (PII: WA, password_hash) — never commit
+maahir-export/
+*.export.json
