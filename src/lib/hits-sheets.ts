@@ -52,6 +52,21 @@ export async function enumerateTabs(spreadsheetId: string): Promise<SheetTab[]> 
   }
 }
 
+/**
+ * Tab yang belum terdaftar (gid belum ada di `existingGids`) — pure, buat
+ * auto-discover tab presensi baru tiap sync & cegah duplikat saat re-enumerate.
+ */
+export function newTabsToRegister(tabs: SheetTab[], existingGids: Iterable<string>): SheetTab[] {
+  const seen = new Set(existingGids);
+  const out: SheetTab[] = [];
+  for (const t of tabs) {
+    if (seen.has(t.gid)) continue;
+    seen.add(t.gid); // dedup juga bila pubhtml mengulang gid
+    out.push(t);
+  }
+  return out;
+}
+
 /** Parse daftar {name, gid} dari menu sheet di pubhtml. */
 export function parsePubhtmlTabs(html: string): SheetTab[] {
   const out: SheetTab[] = [];
