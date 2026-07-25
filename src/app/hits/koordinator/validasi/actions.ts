@@ -4,7 +4,7 @@ import { revalidatePath } from 'next/cache';
 import { supabaseAdmin } from '@/lib/supabase-admin';
 import { requireKoordinatorKetuaKelas } from '@/lib/session';
 import { normalizeWhatsApp } from '@/lib/whatsapp';
-import { extractSpreadsheetId, enumerateTabs } from '@/lib/hits-sheets';
+import { extractSpreadsheetId, enumerateTabs, newTabsToRegister } from '@/lib/hits-sheets';
 import { syncBatch, linkPengajarByWa } from '@/lib/hits-sync';
 import { batchSlug } from '@/lib/hits';
 import { logAudit } from '@/lib/audit';
@@ -66,17 +66,32 @@ export async function enumeratePresensiTabs(_prev: Res | undefined, fd: FormData
         'Tidak bisa enumerasi tab. Pastikan "Publish entire document" aktif, atau tambahkan tiap tab manual (gid).',
     };
   }
-  const rows = tabs.map((t) => ({
+  // Dedup: hits_sheet_source tak punya unique constraint, jadi upsert tanpa
+  // onConflict akan selalu INSERT (konflik ke PK id yang kosong) → duplikat tiap
+  // re-enumerate. Ambil gid yang sudah terdaftar utk spreadsheet ini, sisipkan
+  // hanya tab baru.
+  const { data: existing } = await supabaseAdmin
+    .from('hits_sheet_source')
+    .select('gid')
+    .eq('batch_id', batchId)
+    .eq('kind', 'presensi')
+    .eq('spreadsheet_id', spreadsheetId);
+  const existingGids = (existing ?? []).map((r) => r.gid).filter((g): g is string => !!g);
+  const fresh = newTabsToRegister(tabs, existingGids);
+  if (fresh.length === 0) {
+    return { ok: true, info: `${tabs.length} tab; semua sudah terdaftar.` };
+  }
+  const rows = fresh.map((t) => ({
     batch_id: batchId,
     kind: 'presensi' as const,
     spreadsheet_id: spreadsheetId,
     gid: t.gid,
     label: t.name,
   }));
-  const { error } = await supabaseAdmin.from('hits_sheet_source').upsert(rows);
+  const { error } = await supabaseAdmin.from('hits_sheet_source').insert(rows);
   if (error) return { error: `Gagal: ${error.message}` };
   revalidatePath('/hits/koordinator/validasi');
-  return { ok: true, info: `${tabs.length} tab ditemukan & ditambahkan.` };
+  return { ok: true, info: `${fresh.length} tab baru ditambahkan (${tabs.length} total di sheet).` };
 }
 
 export async function runSync(_prev: Res | undefined, fd: FormData): Promise<Res> {

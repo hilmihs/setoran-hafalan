@@ -5,7 +5,7 @@
 
 import { supabaseAdmin } from '@/lib/supabase-admin';
 import { normalizeWhatsApp } from '@/lib/whatsapp';
-import { fetchCsv } from '@/lib/hits-sheets';
+import { fetchCsv, enumerateTabs, newTabsToRegister } from '@/lib/hits-sheets';
 import { parseKaldikTab, startDatesByLevel } from '@/lib/hits-kaldik-parse';
 import { parsePresensiTab } from '@/lib/hits-presensi-parse';
 import { guessLevel } from '@/lib/hits';
@@ -51,7 +51,7 @@ export async function syncBatch(batchId: string): Promise<SyncResult> {
     .eq('active', true);
 
   const kaldikSources = (sources ?? []).filter((s) => s.kind === 'kaldik');
-  const presensiSources = (sources ?? []).filter((s) => s.kind === 'presensi');
+  let presensiSources = (sources ?? []).filter((s) => s.kind === 'presensi');
 
   // 1) Kaldik
   let startByLevel: Record<HitsLevel, string | null> = {
@@ -97,6 +97,48 @@ export async function syncBatch(batchId: string): Promise<SyncResult> {
     .sort()[0];
   if (earliest) {
     await supabaseAdmin.from('hits_batch').update({ start_date: earliest }).eq('id', batchId);
+  }
+
+  // 1b) Auto-discover tab presensi baru dari sheet.
+  // Fix "halaqah baru selalu miss": enumerasi manual (enumeratePresensiTabs)
+  // hanya jalan sekali; tab yang ditambah ke sheet setelahnya tak pernah punya
+  // baris hits_sheet_source → sync melewatkannya selamanya. Di sini kita
+  // re-enumerate tiap sync dan daftarkan gid yang belum ada.
+  if (presensiSources.length > 0) {
+    const gidsBySpreadsheet = new Map<string, Set<string>>();
+    for (const s of presensiSources) {
+      if (!s.spreadsheet_id) continue;
+      const set = gidsBySpreadsheet.get(s.spreadsheet_id) ?? new Set<string>();
+      if (s.gid) set.add(s.gid);
+      gidsBySpreadsheet.set(s.spreadsheet_id, set);
+    }
+    const newRows: {
+      batch_id: string;
+      kind: 'presensi';
+      spreadsheet_id: string;
+      gid: string;
+      label: string;
+    }[] = [];
+    for (const [spreadsheetId, gids] of gidsBySpreadsheet) {
+      const tabs = await enumerateTabs(spreadsheetId);
+      for (const t of newTabsToRegister(tabs, gids)) {
+        newRows.push({ batch_id: batchId, kind: 'presensi', spreadsheet_id: spreadsheetId, gid: t.gid, label: t.name });
+      }
+    }
+    if (newRows.length > 0) {
+      const { error } = await supabaseAdmin.from('hits_sheet_source').insert(newRows);
+      if (error) {
+        errors.push(`auto-discover tab: ${error.message}`);
+      } else {
+        // Re-fetch supaya tab baru (dengan id) ikut diproses run ini.
+        const { data: refreshed } = await supabaseAdmin
+          .from('hits_sheet_source')
+          .select('*')
+          .eq('batch_id', batchId)
+          .eq('active', true);
+        presensiSources = (refreshed ?? []).filter((s) => s.kind === 'presensi');
+      }
+    }
   }
 
   // 2) Presensi — kumpulkan nama halaqah yang terlihat untuk rekonsiliasi.
