@@ -27,13 +27,17 @@ export type DerivedPertemuan = {
 // - kaldikLevel = kaldik mana yang dipakai untuk turunkan tanggal pertemuannya.
 // Dasar: 2 tahap (Nuroniyyah pakai kaldik qoidah, lalu Perbaikan pakai kaldik perbaikan).
 // Lanjutan: 1 tahap (Perbaikan) TAPI berjalan sejak KBM batch → pakai kaldik qoidah.
-export type StageDef = { level: HitsLevel; kaldikLevel: HitsLevel };
+// kaldikFallback: dipakai bila kaldik `kaldikLevel` kosong. Batch lanjutan-only
+// (mis. HITS Safar) kadang hanya punya kaldik perbaikan_bacaan (tak ada kaldik
+// qoidah "KBM"), sehingga derive lanjutan yang mematok qoidah menghasilkan 0
+// pertemuan. Fallback ke perbaikan_bacaan memakai satu-satunya kaldik yang ada.
+export type StageDef = { level: HitsLevel; kaldikLevel: HitsLevel; kaldikFallback?: HitsLevel };
 export const PROGRAM_STAGE_DEFS: Record<string, StageDef[]> = {
   dasar: [
     { level: 'qoidah_nuroniyyah', kaldikLevel: 'qoidah_nuroniyyah' },
     { level: 'perbaikan_bacaan', kaldikLevel: 'perbaikan_bacaan' },
   ],
-  lanjutan: [{ level: 'perbaikan_bacaan', kaldikLevel: 'qoidah_nuroniyyah' }],
+  lanjutan: [{ level: 'perbaikan_bacaan', kaldikLevel: 'qoidah_nuroniyyah', kaldikFallback: 'perbaikan_bacaan' }],
 };
 
 // Level keterangan per program (untuk listing/grouping).
@@ -45,7 +49,12 @@ export const PROGRAM_STAGES: Record<string, HitsLevel[]> = {
 /** Kaldik level yang perlu dimuat untuk sebuah program (distinct). */
 export function programKaldikLevels(program: string): HitsLevel[] {
   const defs = PROGRAM_STAGE_DEFS[program] ?? PROGRAM_STAGE_DEFS.dasar;
-  return [...new Set(defs.map((d) => d.kaldikLevel))];
+  const out = new Set<HitsLevel>();
+  for (const d of defs) {
+    out.add(d.kaldikLevel);
+    if (d.kaldikFallback) out.add(d.kaldikFallback); // muat juga kaldik fallback
+  }
+  return [...out];
 }
 
 export const HITS_LEVEL_SHORT: Record<HitsLevel, string> = {
@@ -177,7 +186,10 @@ export function deriveHalaqahProgram(
   const out: DerivedPertemuan[] = [];
   let prevLast: string | null = null;
   for (const def of defs) {
-    const kaldik = kaldikByLevel.get(def.kaldikLevel) ?? [];
+    let kaldik = kaldikByLevel.get(def.kaldikLevel) ?? [];
+    if (kaldik.length === 0 && def.kaldikFallback) {
+      kaldik = kaldikByLevel.get(def.kaldikFallback) ?? []; // Safar: qoidah kosong → pakai perbaikan
+    }
     if (kaldik.length === 0) continue;
     let derived = deriveHalaqahPertemuanWithOverrides(jadwalHari, kaldik, overridesByLevel.get(def.level) ?? []);
     if (prevLast) derived = derived.filter((d) => d.tanggal > prevLast!);
