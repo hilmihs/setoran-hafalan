@@ -16,6 +16,8 @@ import {
   loadRecordings,
   clearRecordings,
 } from '@/lib/recording-cache';
+import { buildWaMeUrl } from '@/lib/whatsapp';
+import { ADMIN_WA } from '@/lib/constants';
 
 type Recordings = Record<JenisRekaman, { blob: Blob; durationSec: number } | null>;
 
@@ -51,6 +53,9 @@ export function PesertaSetoranForm({
   periodWeekStart,
   submittedJenis,
   restored,
+  pesertaName,
+  pesertaId,
+  kelasName,
 }: {
   musyrifName: string;
   musyrifInitials: string;
@@ -61,6 +66,10 @@ export function PesertaSetoranForm({
   cacheKey?: string;
   periodWeekStart?: string;
   submittedJenis?: JenisRekaman[];
+  // Identitas peserta → dipakai isi laporan gagal upload ke support (WA).
+  pesertaName?: string;
+  pesertaId?: string;
+  kelasName?: string;
   // Rekaman yang sudah tersimpan di server → dipulihkan untuk diputar.
   restored?: Partial<Record<JenisRekaman, { audioUrl: string; durationSec: number }>>;
 }) {
@@ -81,6 +90,44 @@ export function PesertaSetoranForm({
   });
   const [perJenisError, setPerJenisError] = useState<Partial<Record<JenisRekaman, string>>>({});
   const [singleWaUrl, setSingleWaUrl] = useState<string | null>(null);
+  // WA link "lapor ke support" — terisi saat upload gagal, berisi diagnostik.
+  const [perJenisReportUrl, setPerJenisReportUrl] = useState<Partial<Record<JenisRekaman, string>>>({});
+  const [reportUrl, setReportUrl] = useState<string | null>(null);
+
+  // Bangun teks laporan diagnostik + WA URL ke ADMIN_WA (technical support).
+  function buildReportUrl(ctx: {
+    jenisLabel: string;
+    sizeBytes?: number;
+    mime?: string;
+    durationSec?: number;
+    httpStatus?: number | null;
+    errorMsg: string;
+  }): string {
+    const mb =
+      ctx.sizeBytes != null ? `${(ctx.sizeBytes / (1024 * 1024)).toFixed(2)} MB` : '-';
+    const ua = typeof navigator !== 'undefined' ? navigator.userAgent : '-';
+    const now =
+      typeof Date !== 'undefined' ? new Date().toLocaleString('id-ID') : '-';
+    const msg = [
+      '*LAPORAN GAGAL UPLOAD SETORAN*',
+      `Peserta: ${pesertaName ?? '-'}${pesertaId ? ` (${pesertaId})` : ''}`,
+      `Kelas: ${kelasName ?? '-'} → ${musyrifName}`,
+      `Rekaman: ${ctx.jenisLabel}`,
+      `Periode: ${periodWeekStart ?? cacheKey ?? '-'}`,
+      `Durasi: ${ctx.durationSec ?? '-'} detik`,
+      `Ukuran: ${mb}`,
+      `Format: ${ctx.mime || '-'}`,
+      `Status: ${
+        ctx.httpStatus == null ? 'TIDAK ADA RESPON (kemungkinan jaringan)' : ctx.httpStatus
+      }`,
+      `Error: ${ctx.errorMsg}`,
+      `Waktu: ${now}`,
+      `Device: ${ua}`,
+      '',
+      'Mohon dibantu ustadz/ustadzah. Jazaakumullahu khairan.',
+    ].join('\n');
+    return buildWaMeUrl(ADMIN_WA, msg);
+  }
 
   useEffect(() => {
     if (!cacheKey) return;
@@ -126,6 +173,8 @@ export function PesertaSetoranForm({
     if (!rec) return;
     setPerJenisState((p) => ({ ...p, [jenis]: 'submitting' }));
     setPerJenisError((p) => ({ ...p, [jenis]: undefined }));
+    setPerJenisReportUrl((p) => ({ ...p, [jenis]: undefined }));
+    let httpStatus: number | null = null;
     try {
       const fd = new FormData();
       fd.append('jenis', jenis);
@@ -133,14 +182,29 @@ export function PesertaSetoranForm({
       fd.append('duration_sec', String(rec.durationSec));
       if (periodWeekStart) fd.append('week_start', periodWeekStart);
       const res = await fetch(singleSubmitEndpoint, { method: 'POST', body: fd });
-      const json = await res.json();
-      if (!res.ok) throw new Error(json.error ?? 'Gagal submit');
+      httpStatus = res.status;
+      let json: { error?: string; wa_url?: string } = {};
+      try {
+        json = await res.json();
+      } catch {
+        /* body bukan JSON (mis. 413 dari nginx) → biarkan json kosong */
+      }
+      if (!res.ok) throw new Error(json.error ?? `Gagal submit (HTTP ${res.status})`);
       if (cacheKey) deleteRecording(cacheKey, jenis);
       setPerJenisState((p) => ({ ...p, [jenis]: 'done' }));
       if (json.wa_url && !singleWaUrl) setSingleWaUrl(json.wa_url);
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : 'Gagal submit';
+      const reportWa = buildReportUrl({
+        jenisLabel: JENIS_LABEL_FORM[jenis],
+        sizeBytes: rec.blob.size,
+        mime: rec.blob.type,
+        durationSec: rec.durationSec,
+        httpStatus,
+        errorMsg: msg,
+      });
       setPerJenisError((p) => ({ ...p, [jenis]: msg }));
+      setPerJenisReportUrl((p) => ({ ...p, [jenis]: reportWa }));
       setPerJenisState((p) => ({ ...p, [jenis]: 'idle' }));
     }
   }
@@ -149,6 +213,17 @@ export function PesertaSetoranForm({
     if (!allRecorded || submitting) return;
     setSubmitting(true);
     setError(null);
+    setReportUrl(null);
+    let httpStatus: number | null = null;
+    let totalBytes = 0;
+    let firstMime = '';
+    for (const j of JENIS_REKAMAN) {
+      const r = recordings[j];
+      if (r) {
+        totalBytes += r.blob.size;
+        if (!firstMime) firstMime = r.blob.type;
+      }
+    }
     try {
       const fd = new FormData();
       for (const j of JENIS_REKAMAN) {
@@ -158,16 +233,31 @@ export function PesertaSetoranForm({
       }
       if (periodWeekStart) fd.append('week_start', periodWeekStart);
       const res = await fetch(endpoint, { method: 'POST', body: fd });
-      const json = await res.json();
-      if (!res.ok) throw new Error(json.error ?? 'Gagal submit');
+      httpStatus = res.status;
+      let json: { error?: string; wa_url?: string } = {};
+      try {
+        json = await res.json();
+      } catch {
+        /* body bukan JSON (mis. 413 dari nginx) */
+      }
+      if (!res.ok) throw new Error(json.error ?? `Gagal submit (HTTP ${res.status})`);
       if (cacheKey) clearRecordings(cacheKey);
-      setResultWaUrl(json.wa_url);
+      setResultWaUrl(json.wa_url ?? null);
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : 'Gagal submit';
       setError(
         msg === 'Failed to fetch'
           ? 'Koneksi gagal. Rekaman masih tersimpan, coba kirim lagi.'
           : msg
+      );
+      setReportUrl(
+        buildReportUrl({
+          jenisLabel: 'Semua rekaman (3 sekaligus)',
+          sizeBytes: totalBytes,
+          mime: firstMime,
+          httpStatus,
+          errorMsg: msg,
+        })
       );
     } finally {
       setSubmitting(false);
@@ -335,6 +425,17 @@ export function PesertaSetoranForm({
                   {perErr && (
                     <p style={{ color: 'var(--merah-ink)', fontSize: 11, marginBottom: 4 }}>{perErr}</p>
                   )}
+                  {perJenisReportUrl[j] && (
+                    <a
+                      href={perJenisReportUrl[j]}
+                      target="_blank"
+                      rel="noopener"
+                      className="btn btn-wa btn-xs"
+                      style={{ width: '100%', marginBottom: 6, justifyContent: 'center' }}
+                    >
+                      {Icon.wa(12)} Laporkan gagal ke Technical Support
+                    </a>
+                  )}
                   <button
                     type="button"
                     onClick={() => submitSingle(j)}
@@ -358,9 +459,20 @@ export function PesertaSetoranForm({
 
       {error && (
         <div className="banner banner-error" style={{ marginTop: 16 }}>
-          <div>
+          <div style={{ flex: 1 }}>
             <div className="title">Gagal mengirim</div>
             <div className="desc">{error}</div>
+            {reportUrl && (
+              <a
+                href={reportUrl}
+                target="_blank"
+                rel="noopener"
+                className="btn btn-wa btn-xs"
+                style={{ marginTop: 8, justifyContent: 'center' }}
+              >
+                {Icon.wa(12)} Laporkan gagal ke Technical Support
+              </a>
+            )}
           </div>
         </div>
       )}

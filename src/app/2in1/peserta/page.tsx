@@ -289,6 +289,9 @@ export default async function PesertaPage() {
               cacheKey={week}
               submittedJenis={currentSubmittedJenis}
               restored={restoredCurrent}
+              pesertaName={displayName}
+              pesertaId={session.peserta_id}
+              kelasName={kelas?.name}
             />
           ) : (
             <p className="t-body">
@@ -336,6 +339,9 @@ export default async function PesertaPage() {
                         cacheKey={bc.cycleStart}
                         periodWeekStart={bc.cycleStart}
                         submittedJenis={bc.submittedJenis}
+                        pesertaName={displayName}
+                        pesertaId={session.peserta_id}
+                        kelasName={kelas?.name}
                       />
                     </div>
                   </details>
