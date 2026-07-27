@@ -149,6 +149,13 @@ export default async function HitsKoordinatorPage({
               )}
             </Link>
             <Link
+              href="/hits/koordinator/indisipliner"
+              className="btn btn-sm btn-ghost"
+              style={{ height: 32, padding: '0 12px', gap: 6, textDecoration: 'none', border: '1px solid var(--line)' }}
+            >
+              {Icon.shield(13)} Indisipliner & Tabayyun
+            </Link>
+            <Link
               href="/hits/koordinator/validasi"
               className="btn btn-sm btn-ghost"
               style={{ height: 32, padding: '0 12px', gap: 6, textDecoration: 'none', border: '1px solid var(--line)' }}

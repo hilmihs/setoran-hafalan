@@ -4,7 +4,9 @@ import { requireKoordinatorKetuaKelas } from '@/lib/session';
 import { supabaseAdmin } from '@/lib/supabase-admin';
 import { loadHalaqahPertemuan } from '@/lib/hits-ketua';
 import { HITS_LEVEL_SHORT } from '@/lib/hits-pertemuan';
+import { getIndisiplinerRekap, type IndisiplinerInsiden, type IndisiplinerStatus } from '@/lib/hits-rekap';
 import { todayJakarta, dayNameOf } from '@/lib/maahir-presensi';
+import { buildWaMeUrl } from '@/lib/whatsapp';
 import { HITS_KONDISI_LABEL, HITS_STATUS_LATIHAN_LABEL, HITS_LEVEL_LABEL } from '@/types/db';
 import type { HitsKeteranganHarian, HitsKondisi } from '@/types/db';
 import { Icon } from '@/components/icons';
@@ -15,6 +17,28 @@ function kondisiStyle(k: HitsKondisi) {
   if (k === 'KBBS') return { bg: 'var(--hijau-tint)', bd: 'var(--hijau-line)', ink: 'var(--hijau-ink)' };
   if (k === 'LIBUR') return { bg: 'var(--surface-3)', bd: 'var(--line)', ink: 'var(--muted)' };
   return { bg: 'var(--kuning-tint)', bd: 'var(--kuning-line)', ink: 'var(--kuning-ink)' };
+}
+
+const INDIS_STATUS_LABEL: Record<IndisiplinerStatus, string> = {
+  belum_ditabayyun: 'Belum ditabayyun',
+  nunggu_alasan: 'Nunggu alasan pengajar',
+  pending: 'Pending koordinator',
+  diputus: 'Diputus',
+};
+
+function indisStatusStyle(s: IndisiplinerStatus) {
+  if (s === 'diputus') return { bg: 'var(--hijau-tint)', bd: 'var(--hijau-line)', ink: 'var(--hijau-ink)' };
+  if (s === 'belum_ditabayyun') return { bg: 'var(--surface-3)', bd: 'var(--line)', ink: 'var(--muted)' };
+  return { bg: 'var(--kuning-tint)', bd: 'var(--kuning-line)', ink: 'var(--kuning-ink)' };
+}
+
+function udzurCell(i: IndisiplinerInsiden) {
+  if (i.status !== 'diputus' || i.isUdzurSyari === null) return <span className="t-small" style={{ color: 'var(--muted)' }}>—</span>;
+  return i.isUdzurSyari ? (
+    <span className="badge" style={{ background: 'var(--hijau-tint)', borderColor: 'var(--hijau-line)', color: 'var(--hijau-ink)' }}>✅ Diterima</span>
+  ) : (
+    <span className="badge" style={{ background: 'var(--merah-tint)', borderColor: 'var(--merah-line)', color: 'var(--merah-ink)' }}>❌ Tolak</span>
+  );
 }
 
 export default async function HalaqahDetailPage({ params }: { params: { id: string } }) {
@@ -47,6 +71,10 @@ export default async function HalaqahDetailPage({ params }: { params: { id: stri
 
   const terisi = rows.filter((r) => r.k && r.tanggal <= today).length;
   const expected = rows.filter((r) => r.tanggal <= today).length;
+
+  // Insiden indisipliner + tabayyun bulan berjalan.
+  const nowMonth = today.slice(0, 7);
+  const { insiden } = await getIndisiplinerRekap(nowMonth, { halaqahId: params.id });
 
   return (
     <main style={{ minHeight: '100vh' }}>
@@ -116,6 +144,73 @@ export default async function HalaqahDetailPage({ params }: { params: { id: stri
                                 : 'Tidak ada latihan'}
                           </td>
                           <td className="t-small" style={{ color: 'var(--muted-2)' }}>{k?.catatan ?? ''}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {/* ── Indisipliner & Tabayyun (bulan berjalan) ── */}
+          <h2 className="t-h1" style={{ fontSize: 18, marginTop: 26, marginBottom: 4 }}>
+            Indisipliner &amp; Tabayyun
+          </h2>
+          <p className="t-small" style={{ color: 'var(--muted-2)', marginBottom: 12 }}>
+            Bulan berjalan ({nowMonth}) · {insiden.length} insiden
+            {insiden[0]?.ketuaWa && (
+              <>
+                {' · '}
+                <a
+                  href={buildWaMeUrl(insiden[0].ketuaWa, `Assalamu'alaikum. Terkait laporan indisipliner di halaqah ${h.name} bulan ${nowMonth}, mohon konfirmasinya. Syukron.`)}
+                  target="_blank"
+                  rel="noopener"
+                  style={{ color: 'var(--hijau-ink)', textDecoration: 'none' }}
+                >
+                  {Icon.wa(11)} WA ketua
+                </a>
+              </>
+            )}
+          </p>
+
+          {insiden.length === 0 ? (
+            <div className="card-flat" style={{ padding: 20, textAlign: 'center' }}>
+              <p className="t-small" style={{ color: 'var(--muted-2)' }}>Tak ada insiden indisipliner bulan ini.</p>
+            </div>
+          ) : (
+            <div className="card-flat" style={{ padding: 0, overflow: 'hidden' }}>
+              <div style={{ overflowX: 'auto' }}>
+                <table className="k-table">
+                  <thead>
+                    <tr>
+                      <th>Tanggal</th>
+                      <th>Prt</th>
+                      <th>Pelanggaran</th>
+                      <th>Alasan pengajar</th>
+                      <th>Status</th>
+                      <th>Udzur?</th>
+                      <th>Alasan putusan</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {insiden.map((i) => {
+                      const ss = indisStatusStyle(i.status);
+                      return (
+                        <tr key={i.keteranganId}>
+                          <td className="t-small" style={{ whiteSpace: 'nowrap' }}>{i.tanggal}</td>
+                          <td className="t-mono">{i.pertemuanNo}</td>
+                          <td>
+                            <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+                              {i.pelanggaran.map((b) => (
+                                <span key={b} className="badge" style={{ background: b === 'TL' ? 'var(--merah-tint)' : 'var(--kuning-tint)', borderColor: b === 'TL' ? 'var(--merah-line)' : 'var(--kuning-line)', color: b === 'TL' ? 'var(--merah-ink)' : 'var(--kuning-ink)' }}>{b}</span>
+                              ))}
+                            </div>
+                          </td>
+                          <td className="t-small" style={{ color: 'var(--muted-2)', maxWidth: 200 }}>{i.alasanPengajar ?? '—'}</td>
+                          <td><span className="badge" style={{ background: ss.bg, borderColor: ss.bd, color: ss.ink }}>{INDIS_STATUS_LABEL[i.status]}</span></td>
+                          <td style={{ whiteSpace: 'nowrap' }}>{udzurCell(i)}</td>
+                          <td className="t-small" style={{ color: 'var(--muted-2)', maxWidth: 220 }}>{i.keputusanCatatan ?? '—'}</td>
                         </tr>
                       );
                     })}
