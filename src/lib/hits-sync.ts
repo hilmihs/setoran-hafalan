@@ -202,7 +202,7 @@ async function upsertHalaqah(
     .maybeSingle();
 
   // Kolom dari sheet (boleh ditimpa). Kolom curated (level, pengajar_*) TIDAK.
-  const sheetCols = {
+  const sheetCols: Record<string, unknown> = {
     sheet_gid: gid,
     jadwal_raw: parsed.jadwal_raw,
     jadwal_hari: parsed.jadwal_hari,
@@ -212,6 +212,17 @@ async function upsertHalaqah(
     pengajar_nama_sheet: parsed.pengajar_nama_sheet,
     active: true,
   };
+
+  // Guard: jangan timpa jadwal existing dengan kosong. Sebagian halaqah punya sel
+  // jadwal kosong di sheet → jadwal diisi manual (koordinator). Sync berikutnya
+  // TIDAK boleh menghapusnya. Hanya lewati kolom jadwal saat parse kosong.
+  const jadwalKosong = !parsed.jadwal_hari || parsed.jadwal_hari.length === 0;
+  if (jadwalKosong) {
+    delete sheetCols.jadwal_hari;
+    delete sheetCols.jadwal_raw;
+    delete sheetCols.waktu_mulai;
+    delete sheetCols.waktu_selesai;
+  }
 
   if (existing) {
     await supabaseAdmin.from('hits_halaqah').update(sheetCols).eq('id', existing.id);
