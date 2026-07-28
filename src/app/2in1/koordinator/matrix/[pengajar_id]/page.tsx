@@ -20,7 +20,6 @@ const INDIKATOR: Array<{
   standar: number;
 }> = [
   { field: 'skor_bacaan',            label: 'Kualitas Bacaan',       short: 'Bacaan',    kategori: 'Hard Skill', standar: 3 },
-  { field: 'skor_hafalan',           label: 'Hafalan (Tahfidz)',      short: 'Hafalan',   kategori: 'Hard Skill', standar: 1 },
   { field: 'skor_tajwid',            label: 'Tajwid (nilai rekaman)', short: 'Tajwid',    kategori: 'Hard Skill', standar: 2 },
   { field: 'skor_kehadiran_maahir',  label: 'Kehadiran Kelas Maahir',short: 'Hdr Maahir',kategori: 'Hard Skill', standar: 4 },
   { field: 'skor_kehadiran_tibyan',  label: 'Kehadiran At-Tibyan',   short: 'At-Tibyan', kategori: 'Hard Skill', standar: 4 },
@@ -328,7 +327,7 @@ export default async function MatrixDetailPage({
         {matrix && (
           <div className="card-flat" style={{ padding: '16px', marginBottom: 20 }}>
             <div className="t-tiny" style={{ marginBottom: 10 }}>
-              Profil Kompetensi (14 Indikator)
+              Profil Kompetensi (12 Indikator)
             </div>
             <MatrixRadarChart data={radarData} height={260} />
             <div

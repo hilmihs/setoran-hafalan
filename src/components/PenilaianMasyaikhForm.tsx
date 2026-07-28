@@ -4,18 +4,14 @@ import { useCallback, useMemo, useRef, useState } from 'react';
 import { ScoreSelector } from '@/components/ScoreSelector';
 import {
   RUBRIK_BACAAN,
-  RUBRIK_HAFALAN,
   CATATAN_BACAAN,
   KRITERIA_BACAAN,
-  KRITERIA_HAFALAN,
   type RubrikSkala,
 } from '@/lib/penilaian-rubrik';
 
 type PenilaianRow = {
   skor_bacaan: number | null;
   keterangan_bacaan: string | null;
-  skor_hafalan: number | null;
-  keterangan_hafalan: string | null;
   assessor_role: string | null;
 };
 
@@ -31,8 +27,6 @@ type PengajarItem = {
 type RowState = {
   skor_bacaan: number | null;
   keterangan_bacaan: string;
-  skor_hafalan: number | null;
-  keterangan_hafalan: string;
   status: 'idle' | 'saving' | 'saved' | 'error';
   error?: string;
 };
@@ -55,8 +49,6 @@ export function PenilaianMasyaikhForm({
       out[p.id] = {
         skor_bacaan: p.penilaian?.skor_bacaan ?? null,
         keterangan_bacaan: p.penilaian?.keterangan_bacaan ?? '',
-        skor_hafalan: p.penilaian?.skor_hafalan ?? null,
-        keterangan_hafalan: p.penilaian?.keterangan_hafalan ?? '',
         status: p.penilaian ? 'saved' : 'idle',
       };
     }
@@ -79,8 +71,6 @@ export function PenilaianMasyaikhForm({
           year_month: yearMonth,
           skor_bacaan: state.skor_bacaan,
           keterangan_bacaan: state.keterangan_bacaan || null,
-          skor_hafalan: state.skor_hafalan,
-          keterangan_hafalan: state.keterangan_hafalan || null,
         }),
       });
       const json = await res.json();
@@ -114,18 +104,15 @@ export function PenilaianMasyaikhForm({
   // Realtime progress per kategori
   const progress = useMemo(() => {
     let bacaan = 0;
-    let hafalan = 0;
     for (const p of pengajarList) {
       const r = rows[p.id];
       if (r?.skor_bacaan !== null && r?.skor_bacaan !== undefined) bacaan++;
-      if (r?.skor_hafalan !== null && r?.skor_hafalan !== undefined) hafalan++;
     }
-    return { bacaan, hafalan, total: pengajarList.length };
+    return { bacaan, total: pengajarList.length };
   }, [rows, pengajarList]);
 
   // Tooltip per pill (skala -> teks rubrik)
   const titleBacaan = useMemo(() => RUBRIK_BACAAN.map((r) => `${r.skala}: ${r.teks}`), []);
-  const titleHafalan = useMemo(() => RUBRIK_HAFALAN.map((r) => `${r.skala}: ${r.teks}`), []);
 
   if (pengajarList.length === 0) return null;
 
@@ -141,9 +128,6 @@ export function PenilaianMasyaikhForm({
         <span className={`prog-pill${progress.bacaan === progress.total ? ' done' : ''}`}>
           Bacaan {progress.bacaan}/{progress.total}
         </span>
-        <span className={`prog-pill${progress.hafalan === progress.total ? ' done' : ''}`}>
-          Hafalan {progress.hafalan}/{progress.total}
-        </span>
         <span className="caret">▼</span>
       </button>
 
@@ -156,7 +140,6 @@ export function PenilaianMasyaikhForm({
                 <tr>
                   <th className="name-col">Nama</th>
                   <th>Bacaan (0–4)</th>
-                  <th>Hafalan (0–4)</th>
                   <th style={{ width: 36 }} aria-label="Catatan" />
                   <th style={{ width: 22 }} aria-label="Status" />
                 </tr>
@@ -165,7 +148,7 @@ export function PenilaianMasyaikhForm({
                 {pengajarList.map((p) => {
                   const row = rows[p.id];
                   const noteOpen = !!openNotes[p.id];
-                  const hasNote = !!(row.keterangan_bacaan || row.keterangan_hafalan);
+                  const hasNote = !!row.keterangan_bacaan;
                   return (
                     <FragmentRow key={p.id}>
                       <tr className="pen-row">
@@ -182,14 +165,6 @@ export function PenilaianMasyaikhForm({
                             value={row.skor_bacaan}
                             onChange={(v) => updateRow(p.id, { skor_bacaan: v })}
                             titles={titleBacaan}
-                          />
-                        </td>
-                        <td>
-                          <ScoreSelector
-                            label={`Hafalan ${p.name}`}
-                            value={row.skor_hafalan}
-                            onChange={(v) => updateRow(p.id, { skor_hafalan: v })}
-                            titles={titleHafalan}
                           />
                         </td>
                         <td style={{ textAlign: 'center' }}>
@@ -224,15 +199,6 @@ export function PenilaianMasyaikhForm({
                               onChange={(e) => updateRow(p.id, { keterangan_bacaan: e.target.value })}
                             />
                           </td>
-                          <td>
-                            <input
-                              type="text"
-                              className="note-field"
-                              placeholder="Catatan hafalan…"
-                              value={row.keterangan_hafalan}
-                              onChange={(e) => updateRow(p.id, { keterangan_hafalan: e.target.value })}
-                            />
-                          </td>
                           <td colSpan={2} />
                         </tr>
                       )}
@@ -261,7 +227,6 @@ function PanduanStandar() {
           kriteria={KRITERIA_BACAAN}
           catatan={CATATAN_BACAAN}
         />
-        <RubrikBlock judul="Hafalan (Tahfidz)" items={RUBRIK_HAFALAN} kriteria={KRITERIA_HAFALAN} />
       </div>
     </details>
   );

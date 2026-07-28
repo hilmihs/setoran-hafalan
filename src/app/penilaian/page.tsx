@@ -56,23 +56,19 @@ export default async function PenilaianPage({
 
   const { data: existingPenilaian } = await supabaseAdmin
     .from('penilaian_masyaikh')
-    .select('id, pengajar_id, skor_bacaan, keterangan_bacaan, skor_hafalan, keterangan_hafalan, assessor_role')
+    .select('id, pengajar_id, skor_bacaan, keterangan_bacaan, assessor_role')
     .eq('year_month', yearMonth)
     .in('pengajar_id', pengajarIds.length ? pengajarIds : ['00000000-0000-0000-0000-000000000000']);
 
   const penilaianByPengajar = new Map<string, {
     skor_bacaan: number | null;
     keterangan_bacaan: string | null;
-    skor_hafalan: number | null;
-    keterangan_hafalan: string | null;
     assessor_role: string | null;
   }>();
   for (const p of existingPenilaian ?? []) {
     penilaianByPengajar.set(p.pengajar_id, {
       skor_bacaan: p.skor_bacaan,
       keterangan_bacaan: p.keterangan_bacaan,
-      skor_hafalan: p.skor_hafalan,
-      keterangan_hafalan: p.keterangan_hafalan,
       assessor_role: p.assessor_role,
     });
   }
@@ -126,7 +122,7 @@ export default async function PenilaianPage({
             Penilaian Pengajar — {monthLabel}
           </h1>
           <p className="t-small">
-            Kualitas Bacaan &amp; Hafalan pengajar (skala 0–4). Ketuk angka (atau tekan 0–4 saat
+            Kualitas Bacaan pengajar (skala 0–4). Ketuk angka (atau tekan 0–4 saat
             baris fokus). Lihat “Panduan Standar Skala” untuk kriteria tiap nilai. Tersimpan otomatis.
           </p>
         </div>

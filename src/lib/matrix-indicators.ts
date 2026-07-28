@@ -1,4 +1,4 @@
-// Single source of truth untuk 14 indikator Matrix Skill Guru.
+// Single source of truth untuk 12 indikator Matrix Skill Guru.
 // Label, kategori, standar, dan deskripsi diambil dari templat penilaian
 // (Matrix Guru xlsx baris 1-4). Dipakai oleh tabel koordinator, halaman detail
 // pengajar, radar chart, dan export Excel — supaya konsisten satu tempat.
@@ -10,7 +10,6 @@ export type Kategori = 'hard' | 'pedagogis' | 'soft';
 // key = nama kolom skor_* di matrix_rekap / MatrixRow.
 export type IndikatorKey =
   | 'skor_bacaan'
-  | 'skor_hafalan'
   | 'skor_tajwid'
   | 'skor_kehadiran_maahir'
   | 'skor_kehadiran_tibyan'
@@ -56,13 +55,12 @@ export const KATEGORI_STANDAR: Record<Kategori, number> = {
 
 export const STANDAR_KESELURUHAN = 3.67;
 
-// Bobot hard skill — total 9 porsi. Null di-skip beserta bobotnya saat hitung
+// Bobot hard skill — total 8 porsi. Null di-skip beserta bobotnya saat hitung
 // rata_rata_hard_skill (lihat weightedAvg di matrix-compute.ts).
 export const HARD_BOBOT: Partial<Record<IndikatorKey, number>> = {
   skor_kehadiran_maahir: 3,
   skor_kehadiran_tibyan: 3,
   skor_bacaan: 1,
-  skor_hafalan: 1,
   skor_tajwid: 1,
 };
 
@@ -76,16 +74,6 @@ export const INDIKATOR: Indikator[] = [
     standar: 3,
     deskripsi: 'Nilai Ujian 70–85 — kualitas bacaan Al-Qur’an pengajar.',
     keteranganKey: 'keterangan_bacaan',
-    sumber: 'Penilaian Masyaikh',
-  },
-  {
-    key: 'skor_hafalan',
-    label: 'Hafalan (Tahfidz)',
-    short: 'Hafalan',
-    kategori: 'hard',
-    standar: 1,
-    deskripsi: 'Hafal 5–10 juz.',
-    keteranganKey: 'keterangan_hafalan',
     sumber: 'Penilaian Masyaikh',
   },
   {
