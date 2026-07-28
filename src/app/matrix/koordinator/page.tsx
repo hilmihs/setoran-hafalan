@@ -271,6 +271,14 @@ export default async function MatrixKoordinatorPage({
               Export Belum Lengkap
             </a>
             <a
+              href={`/api/matrix/pdf?bulan=${selectedMonth}&gender=${gender}${selectedKelompok ? `&kelompok=${selectedKelompok}` : ''}`}
+              className="btn btn-ghost btn-sm"
+              style={{ height: 38 }}
+              title="Unduh matrix sebagai PDF (sel diwarnai per standar)"
+            >
+              Unduh PDF
+            </a>
+            <a
               href={`/api/matrix/download?bulan=${selectedMonth}&gender=${gender}${selectedKelompok ? `&kelompok=${selectedKelompok}` : ''}`}
               className="btn btn-accent btn-sm"
               style={{ height: 38 }}
