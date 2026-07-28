@@ -73,13 +73,22 @@ export default async function KoordinatorKehadiranPage({
             <MonthNavSelect options={monthOptions} value={month} />
           </div>
 
-          <Link
-            href="/2in1/koordinator/kehadiran/tibyan"
-            className="btn btn-sm btn-ghost"
-            style={{ textDecoration: 'none', marginBottom: 16, display: 'inline-flex', gap: 6, alignItems: 'center' }}
-          >
-            📊 Lihat khusus Kehadiran At-Tibyan (per kelas)
-          </Link>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 16 }}>
+            <Link
+              href="/2in1/koordinator/kehadiran/tibyan"
+              className="btn btn-sm btn-ghost"
+              style={{ textDecoration: 'none', display: 'inline-flex', gap: 6, alignItems: 'center' }}
+            >
+              📊 Kehadiran At-Tibyan (per kelas)
+            </Link>
+            <Link
+              href="/2in1/koordinator/kehadiran/sp"
+              className="btn btn-sm btn-ghost"
+              style={{ textDecoration: 'none', display: 'inline-flex', gap: 6, alignItems: 'center' }}
+            >
+              ⚠️ Pendataan SP (Surat Peringatan)
+            </Link>
+          </div>
 
           {/* Filter gender */}
           <div style={{ display: 'flex', gap: 6, marginBottom: 16, flexWrap: 'wrap' }}>

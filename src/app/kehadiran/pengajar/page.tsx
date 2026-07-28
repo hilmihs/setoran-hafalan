@@ -130,6 +130,24 @@ export default async function KehadiranPengajarPage() {
             </div>
           )}
 
+          <a
+            href="/kehadiran/pengajar/matrix"
+            className="card-flat"
+            style={{
+              display: 'block',
+              padding: '12px 16px',
+              marginBottom: 16,
+              textDecoration: 'none',
+              color: 'inherit',
+              borderLeft: '3px solid var(--hijau)',
+            }}
+          >
+            <div style={{ fontWeight: 600, marginBottom: 2 }}>Matrix Saya</div>
+            <div className="t-small" style={{ color: 'var(--muted-2)' }}>
+              Lihat nilai kompetensi Anda bulan ini &amp; rinciannya
+            </div>
+          </a>
+
           {session.is_ketua && (
             <a
               href="/kehadiran/ketua-kelompok"

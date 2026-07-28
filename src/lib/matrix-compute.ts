@@ -2,9 +2,9 @@
 // Idempotent — aman dipanggil berulang, hasil di-upsert ke matrix_rekap.
 //
 // Sumber data (pengajar ↔ peserta di-link via nomor WA):
-//   Hard skill : penilaian_masyaikh (bacaan, hafalan), rekaman setoran (tajwid),
+//   Hard skill : penilaian_masyaikh (bacaan), rekaman setoran (tajwid),
 //                kehadiran_peserta via program_kelas_anggota (2 program: maahir, tibyan)
-//   Bobot hard skill: 9 porsi (maahir 3, tibyan 3, bacaan 1, hafalan 1, tajwid 1).
+//   Bobot hard skill: 8 porsi (maahir 3, tibyan 3, bacaan 1, tajwid 1).
 //   Pedagogis  : penilaian_pedagogis (4 aspek, oleh ketua kelompok)
 //   Soft skill : hits_keterangan_harian via hits_halaqah (kedisiplinan = %KBBS,
 //                tanggung jawab = %latihan beres), penilaian_pedagogis.skor_kepatuhan_sop (SOP).
@@ -92,8 +92,8 @@ function avg(nums: Array<number | null>): number | null {
 
 /**
  * Rata-rata berbobot, null di-skip beserta bobotnya (re-normalisasi atas bobot
- * yang terisi). Dipakai hard skill: 9 porsi → maahir 3, tibyan 3, bacaan 1,
- * hafalan 1, tajwid 1.
+ * yang terisi). Dipakai hard skill: 8 porsi → maahir 3, tibyan 3, bacaan 1,
+ * tajwid 1.
  */
 function weightedAvg(parts: Array<{ v: number | null; w: number }>): number | null {
   let sum = 0;
@@ -111,7 +111,6 @@ export type MatrixRow = {
   pengajar_id: string;
   year_month: string;
   skor_bacaan: number | null;
-  skor_hafalan: number | null;
   skor_tajwid: number | null;
   skor_kehadiran_maahir: number | null;
   skor_kehadiran_tibyan: number | null;
@@ -170,7 +169,7 @@ export async function computeMatrixForMonth(yearMonth: string): Promise<MatrixRo
   const pengajarIds = pengajars.map((p) => p.id);
   const { data: masyaikhList } = await supabaseAdmin
     .from('penilaian_masyaikh')
-    .select('pengajar_id, skor_bacaan, skor_hafalan')
+    .select('pengajar_id, skor_bacaan')
     .eq('year_month', yearMonth)
     .in('pengajar_id', pengajarIds);
   const masyaikhByPengajar = new Map((masyaikhList ?? []).map((p) => [p.pengajar_id, p]));
@@ -392,7 +391,6 @@ export async function computeMatrixForMonth(yearMonth: string): Promise<MatrixRo
 
     const hard = {
       skor_bacaan: masyaikh?.skor_bacaan ?? null,
-      skor_hafalan: masyaikh?.skor_hafalan ?? null,
       skor_tajwid: skorTajwid,
       skor_kehadiran_maahir: kehadiranSkor('kelas_maahir'),
       skor_kehadiran_tibyan: kehadiranSkor('at_tibyan'),
@@ -414,13 +412,12 @@ export async function computeMatrixForMonth(yearMonth: string): Promise<MatrixRo
       skor_kepatuhan_sop: ped?.skor_kepatuhan_sop ?? null,
     };
 
-    // Hard skill berbobot 9 porsi: kehadiran maahir 3, kehadiran tibyan 3,
-    // bacaan 1, hafalan 1, tajwid 1. (Muallim Najih dihapus dari penilaian.)
+    // Hard skill berbobot 8 porsi: kehadiran maahir 3, kehadiran tibyan 3,
+    // bacaan 1, tajwid 1. (Muallim Najih & Hafalan dihapus dari penilaian.)
     const rataHard = weightedAvg([
       { v: hard.skor_kehadiran_maahir, w: 3 },
       { v: hard.skor_kehadiran_tibyan, w: 3 },
       { v: hard.skor_bacaan, w: 1 },
-      { v: hard.skor_hafalan, w: 1 },
       { v: hard.skor_tajwid, w: 1 },
     ]);
     const rataPedagogis = avg(Object.values(pedagogis));

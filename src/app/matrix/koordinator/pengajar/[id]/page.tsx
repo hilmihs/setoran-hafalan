@@ -53,7 +53,7 @@ const KATEGORI_LABEL: Record<string, { label: string; color: string }> = {
 };
 
 const SCORE_COLS_DETAIL =
-  'skor_bacaan, skor_hafalan, skor_tajwid, skor_kehadiran_maahir, skor_kehadiran_tibyan, skor_metode_pengajaran, skor_kepatuhan_silabus, skor_manajemen_halaqah, skor_evaluasi_penguasaan, skor_kedisiplinan_waktu, skor_komitmen_jadwal, skor_tanggung_jawab, skor_kepatuhan_sop';
+  'skor_bacaan, skor_tajwid, skor_kehadiran_maahir, skor_kehadiran_tibyan, skor_metode_pengajaran, skor_kepatuhan_silabus, skor_manajemen_halaqah, skor_evaluasi_penguasaan, skor_kedisiplinan_waktu, skor_komitmen_jadwal, skor_tanggung_jawab, skor_kepatuhan_sop';
 
 const KONDISI_LABEL: Record<string, { label: string; badge: string }> = {
   KBBS: { label: 'KBBS — Kelas Berlangsung Baik', badge: 'badge-hijau' },
@@ -128,7 +128,7 @@ export default async function PengajarDetailPage({
     supabaseAdmin
       .from('penilaian_masyaikh')
       .select(
-        'year_month, skor_bacaan, keterangan_bacaan, skor_hafalan, keterangan_hafalan, assessor_role, updated_at'
+        'year_month, skor_bacaan, keterangan_bacaan, assessor_role, updated_at'
       )
       .eq('pengajar_id', params.id)
       .order('year_month', { ascending: false })
@@ -171,14 +171,13 @@ export default async function PengajarDetailPage({
   const mc = matrixCurrent as Record<string, unknown> | null;
 
   const masyaikhSel = (penilaianMasyaikh ?? []).find((p) => p.year_month === monthSel) as
-    | { keterangan_bacaan?: string | null; keterangan_hafalan?: string | null }
+    | { keterangan_bacaan?: string | null }
     | undefined;
   const pedagogisSel = (penilaianPedagogis ?? []).find((p) => p.year_month === monthSel) as
     | Record<string, string | null>
     | undefined;
   const keteranganOf: Partial<Record<IndikatorKey, string | null>> = {
     skor_bacaan: masyaikhSel?.keterangan_bacaan ?? null,
-    skor_hafalan: masyaikhSel?.keterangan_hafalan ?? null,
     skor_metode_pengajaran: pedagogisSel?.keterangan_metode ?? null,
     skor_kepatuhan_silabus: pedagogisSel?.keterangan_silabus ?? null,
     skor_manajemen_halaqah: pedagogisSel?.keterangan_halaqah ?? null,
@@ -419,8 +418,8 @@ export default async function PengajarDetailPage({
             </div>
           )}
 
-          {/* Penilaian Masyaikh (bacaan/hafalan) */}
-          <h2 className="t-h2" style={{ marginBottom: 10 }}>Penilaian Masyaikh — Bacaan &amp; Hafalan</h2>
+          {/* Penilaian Masyaikh (bacaan) */}
+          <h2 className="t-h2" style={{ marginBottom: 10 }}>Penilaian Masyaikh — Bacaan</h2>
           {penilaianMasyaikh && penilaianMasyaikh.length > 0 ? (
             <div className="card-flat" style={{ padding: 0, overflowX: 'auto', marginBottom: 24 }}>
               <table className="t-mono tbl-cards" style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13, minWidth: 560 }}>
@@ -428,7 +427,6 @@ export default async function PengajarDetailPage({
                   <tr style={{ background: 'var(--surface-2)', textAlign: 'left' }}>
                     <th style={{ padding: '10px 12px', fontWeight: 600 }}>Bulan</th>
                     <th style={{ padding: '10px 8px', fontWeight: 600, textAlign: 'right' }}>Bacaan (≥3)</th>
-                    <th style={{ padding: '10px 8px', fontWeight: 600, textAlign: 'right' }}>Hafalan (≥1)</th>
                     <th style={{ padding: '10px 12px', fontWeight: 600 }}>Assessor</th>
                   </tr>
                 </thead>
@@ -437,7 +435,6 @@ export default async function PengajarDetailPage({
                     <tr key={p.year_month} style={{ borderTop: '1px solid var(--line)', background: i % 2 ? 'var(--surface)' : 'transparent' }}>
                       <td className="tbl-cardhead" style={{ padding: '10px 12px', fontWeight: 600 }}>{p.year_month}</td>
                       <td data-label="Bacaan (≥3)" style={{ padding: '10px 8px', textAlign: 'right', color: scoreColor(p.skor_bacaan, 3) }}>{p.skor_bacaan ?? '—'}</td>
-                      <td data-label="Hafalan (≥1)" style={{ padding: '10px 8px', textAlign: 'right', color: scoreColor(p.skor_hafalan, 1) }}>{p.skor_hafalan ?? '—'}</td>
                       <td data-label="Assessor" style={{ padding: '10px 12px', color: 'var(--muted)' }}>{p.assessor_role}</td>
                     </tr>
                   ))}

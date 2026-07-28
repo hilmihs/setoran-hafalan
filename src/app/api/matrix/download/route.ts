@@ -219,7 +219,6 @@ export async function GET(req: NextRequest) {
     { header: 'Kelompok', key: 'kelompok', width: 18 },
     { header: 'Aktif', key: 'active', width: 8 },
     { header: 'Bacaan', key: 'bacaan', width: 8 },
-    { header: 'Hafalan', key: 'hafalan', width: 8 },
     { header: 'Tajwid', key: 'tajwid', width: 8 },
     { header: 'Kehadiran Maahir', key: 'kehadiran_maahir', width: 16 },
     { header: 'Kehadiran At-Tibyan', key: 'kehadiran_tibyan', width: 18 },
@@ -250,7 +249,6 @@ export async function GET(req: NextRequest) {
       kelompok: kelompokMap.get(p.kelompok_id ?? '') ?? '',
       active: p.active ? 'Ya' : 'Tidak',
       bacaan: m?.skor_bacaan ?? '',
-      hafalan: m?.skor_hafalan ?? '',
       tajwid: m?.skor_tajwid ?? '',
       kehadiran_maahir: m?.skor_kehadiran_maahir ?? '',
       kehadiran_tibyan: m?.skor_kehadiran_tibyan ?? '',
@@ -277,7 +275,6 @@ export async function GET(req: NextRequest) {
   const legendRow = sheet.addRow({
     nama: 'Standar per indikator',
     bacaan: '≥3',
-    hafalan: '≥1',
     tajwid: '≥2',
     kehadiran_maahir: '≥4',
     kehadiran_tibyan: '≥4',

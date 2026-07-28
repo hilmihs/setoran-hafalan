@@ -13,13 +13,11 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json();
-    const { pengajar_id, year_month, skor_bacaan, keterangan_bacaan, skor_hafalan, keterangan_hafalan } = body as {
+    const { pengajar_id, year_month, skor_bacaan, keterangan_bacaan } = body as {
       pengajar_id: string;
       year_month: string;
       skor_bacaan: number | null;
       keterangan_bacaan: string | null;
-      skor_hafalan: number | null;
-      keterangan_hafalan: string | null;
     };
 
     if (!pengajar_id || !year_month) {
@@ -44,8 +42,6 @@ export async function POST(req: NextRequest) {
           year_month,
           skor_bacaan: skor_bacaan ?? null,
           keterangan_bacaan: keterangan_bacaan ?? null,
-          skor_hafalan: skor_hafalan ?? null,
-          keterangan_hafalan: keterangan_hafalan ?? null,
           assessor_role: assessorRole,
           assessor_id: assessorId,
           updated_at: new Date().toISOString(),

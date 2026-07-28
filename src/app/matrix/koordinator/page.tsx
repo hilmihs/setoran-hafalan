@@ -32,7 +32,7 @@ interface SearchParams {
 }
 
 const SCORE_COLS =
-  'pengajar_id, year_month, skor_bacaan, skor_hafalan, skor_tajwid, skor_kehadiran_maahir, skor_kehadiran_tibyan, rata_rata_hard_skill, skor_metode_pengajaran, skor_kepatuhan_silabus, skor_manajemen_halaqah, skor_evaluasi_penguasaan, rata_rata_pedagogis, skor_kedisiplinan_waktu, skor_komitmen_jadwal, skor_tanggung_jawab, skor_kepatuhan_sop, rata_rata_soft_skill, rata_rata_keseluruhan, ranking, total_teguran_bulan, total_teguran_kumulatif, finalized_at';
+  'pengajar_id, year_month, skor_bacaan, skor_tajwid, skor_kehadiran_maahir, skor_kehadiran_tibyan, rata_rata_hard_skill, skor_metode_pengajaran, skor_kepatuhan_silabus, skor_manajemen_halaqah, skor_evaluasi_penguasaan, rata_rata_pedagogis, skor_kedisiplinan_waktu, skor_komitmen_jadwal, skor_tanggung_jawab, skor_kepatuhan_sop, rata_rata_soft_skill, rata_rata_keseluruhan, ranking, total_teguran_bulan, total_teguran_kumulatif, finalized_at';
 
 export default async function MatrixKoordinatorPage({
   searchParams,
@@ -271,6 +271,14 @@ export default async function MatrixKoordinatorPage({
               Export Belum Lengkap
             </a>
             <a
+              href={`/api/matrix/pdf?bulan=${selectedMonth}&gender=${gender}${selectedKelompok ? `&kelompok=${selectedKelompok}` : ''}`}
+              className="btn btn-ghost btn-sm"
+              style={{ height: 38 }}
+              title="Unduh matrix sebagai PDF (sel diwarnai per standar)"
+            >
+              Unduh PDF
+            </a>
+            <a
               href={`/api/matrix/download?bulan=${selectedMonth}&gender=${gender}${selectedKelompok ? `&kelompok=${selectedKelompok}` : ''}`}
               className="btn btn-accent btn-sm"
               style={{ height: 38 }}
@@ -302,7 +310,7 @@ export default async function MatrixKoordinatorPage({
           )}
 
           <p className="t-small" style={{ color: 'var(--muted-2)', marginTop: 16 }}>
-            Standar: Bacaan ≥3 · Hafalan ≥1 · Tajwid ≥2 · Kehadiran ≥4 · Pedagogis ≥4 · Soft ≥4.
+            Standar: Bacaan ≥3 · Tajwid ≥2 · Kehadiran ≥4 · Pedagogis ≥4 · Soft ≥4.
             Hijau = melampaui, kuning = mendekati, merah = di bawah. Teguran kumulatif ≥3 = peringatan
             terakhir sebelum nonaktif (4 teguran).
           </p>
