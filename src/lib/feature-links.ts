@@ -53,6 +53,13 @@ export const FEATURE_LINKS: FeatureLink[] = [
     match: (a) => a.role === 'pengajar',
   },
   {
+    href: '/kehadiran/pengajar/matrix',
+    title: 'Matrix Saya',
+    navLabel: 'Matrix Saya',
+    description: 'Lihat nilai kompetensi (matrix) Anda bulan ini & rinciannya',
+    match: (a) => a.role === 'pengajar',
+  },
+  {
     href: '/kehadiran/ketua-kelompok/penilaian',
     title: 'Penilaian Pedagogis',
     navLabel: 'Penilaian Pedagogis',
