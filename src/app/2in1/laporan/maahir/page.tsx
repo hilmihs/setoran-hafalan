@@ -5,6 +5,7 @@ import { PRESENSI_ANCHOR } from '@/lib/maahir-presensi';
 import { monthOptionsSince } from '@/lib/month';
 import { MonthNavSelect } from '@/components/MonthNavSelect';
 import { Icon } from '@/components/icons';
+import { NotesEditor } from './NotesEditor';
 
 export const dynamic = 'force-dynamic';
 
@@ -82,6 +83,7 @@ export default async function LaporanMaahirPage({
             </a>
           </div>
 
+          <NotesEditor month={month} notes={lap.notes} />
           <TakhassusBlock lap={lap} />
           <MaahirBlock lap={lap} />
           <AtTibyanBlock lap={lap} />
@@ -181,6 +183,7 @@ function BawahTargetTable({ list }: { list: StudentAtt[] }) {
             <th style={{ width: 50 }}>Sakit</th>
             <th style={{ width: 50 }}>Alpa</th>
             <th style={{ width: 70 }}>Tanpa ket.</th>
+            <th style={{ width: 60 }}>Online</th>
             <th>Keterangan</th>
           </tr>
         </thead>
@@ -209,7 +212,15 @@ function BawahTargetTable({ list }: { list: StudentAtt[] }) {
                 <td style={{ textAlign: 'center' }}>{s.counts.S}</td>
                 <td style={{ textAlign: 'center' }}>{s.counts.A}</td>
                 <td style={{ textAlign: 'center' }}>{tanpaKet}</td>
-                <td className="t-tiny" style={{ color: 'var(--muted-2)' }}>{s.keterangan || '—'}</td>
+                <td style={{ textAlign: 'center' }}>{s.online > 0 ? `${s.online}×` : '—'}</td>
+                <td className="t-tiny" style={{ color: 'var(--muted-2)' }}>
+                  {s.keterangan || '—'}
+                  {s.diputihkan !== null && (
+                    <div style={{ color: 'var(--hijau-ink)' }}>
+                      diputihkan{s.diputihkan ? `: ${s.diputihkan}` : ''}
+                    </div>
+                  )}
+                </td>
               </tr>
             );
           })}

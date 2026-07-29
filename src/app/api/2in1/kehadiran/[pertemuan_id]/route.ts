@@ -13,7 +13,7 @@ export async function GET(
 ) {
   const { data, error } = await supabaseAdmin
     .from('kehadiran_peserta')
-    .select('anggota_id, status, catatan, setoran_halaman, diisi_at')
+    .select('anggota_id, status, catatan, setoran_halaman, mode, diisi_at')
     .eq('pertemuan_id', params.pertemuan_id);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json({ kehadiran: data ?? [] });
@@ -49,6 +49,7 @@ export async function PUT(
       status: Status;
       catatan?: string;
       setoran_halaman?: number | string | null;
+      mode?: string | null; // 'online' | 'offline'
     }>;
 
     if (!Array.isArray(rows) || rows.length === 0) {
@@ -90,6 +91,8 @@ export async function PUT(
       status: VALID_STATUS.includes(r.status) ? r.status : 'tidak_ada_keterangan',
       catatan: r.catatan || null,
       setoran_halaman: parseSetoran(r),
+      // Hadir online/offline; default offline bila tak dikirim klien.
+      mode: r.mode === 'online' ? 'online' : 'offline',
       diisi_at: now,
       updated_at: now,
     }));

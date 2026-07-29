@@ -22,7 +22,7 @@ const C = {
   border: 'FFCBD5E1', zebra: 'FFF6FBF8', ok: 'FF15803D', bad: 'FFB91C1C',
   muted: 'FF64748B', white: 'FFFFFFFF', ink: 'FF1F2937',
 };
-const NCOL = 12;
+const NCOL = 13;
 
 export async function buildLaporanMaahirWorkbook(lap: LaporanMaahir, bulan: string) {
   const wb = new ExcelJS.Workbook();
@@ -40,7 +40,8 @@ export async function buildLaporanMaahirWorkbook(lap: LaporanMaahir, bulan: stri
   ws.columns = [
     { width: 6 }, { width: 26 }, { width: 12 }, { width: 12 },
     { width: 11 }, { width: 11 }, { width: 10 }, { width: 7 },
-    { width: 7 }, { width: 7 }, { width: 9 }, { width: 26 },
+    { width: 7 }, { width: 7 }, { width: 9 }, { width: 8 },
+    { width: 24 },
   ];
 
   const thin = { style: 'thin' as const, color: { argb: C.border } };
@@ -157,7 +158,8 @@ export async function buildLaporanMaahirWorkbook(lap: LaporanMaahir, bulan: stri
       { text: 'Sakit', from: 9, to: 9 },
       { text: 'Alpa', from: 10, to: 10 },
       { text: 'Tanpa Ket.', from: 11, to: 11 },
-      { text: 'Keterangan', from: 12, to: NCOL, align: 'left' },
+      { text: 'Online', from: 12, to: 12 },
+      { text: 'Keterangan', from: 13, to: NCOL, align: 'left' },
     ]);
     if (list.length === 0) {
       dataRow([{ text: 'Tidak ada peserta di bawah target.', from: 1, to: NCOL, align: 'left', ink: C.muted }]);
@@ -179,7 +181,15 @@ export async function buildLaporanMaahirWorkbook(lap: LaporanMaahir, bulan: stri
         { text: st.counts.S, from: 9, to: 9 },
         { text: st.counts.A, from: 10, to: 10 },
         { text: tanpaKet, from: 11, to: 11 },
-        { text: st.keterangan, from: 12, to: NCOL, align: 'left', ink: C.muted },
+        { text: st.online > 0 ? `${st.online}x` : '', from: 12, to: 12, ink: C.muted },
+        {
+          text:
+            st.keterangan +
+            (st.diputihkan !== null
+              ? `${st.keterangan ? ' · ' : ''}diputihkan${st.diputihkan ? `: ${st.diputihkan}` : ''}`
+              : ''),
+          from: 13, to: NCOL, align: 'left', ink: C.muted,
+        },
       ], i % 2 === 1);
     });
   }
@@ -237,7 +247,20 @@ export async function buildLaporanMaahirWorkbook(lap: LaporanMaahir, bulan: stri
   bawahTargetTable(t.dibawahTarget.list);
   spacer();
   band('CATATAN / POIN MENARIK', C.sub, C.subInk);
-  dataRow([{ text: t.catatan ?? '', from: 1, to: NCOL, align: 'left', ink: C.muted }]);
+  if (lap.notes.length === 0 && !t.catatan) {
+    dataRow([{ text: '', from: 1, to: NCOL, align: 'left', ink: C.muted }]);
+  } else {
+    if (t.catatan) {
+      dataRow([{ text: t.catatan, from: 1, to: NCOL, align: 'left', ink: C.muted }]);
+    }
+    lap.notes.forEach((n, i) => {
+      dataRow([{ text: `• ${n.teks}`, from: 1, to: NCOL, align: 'left', ink: C.ink }], i % 2 === 1);
+    });
+  }
+  // Baris kosong untuk catatan tulis-tangan saat laporan dicetak.
+  for (let i = 0; i < 3; i++) {
+    dataRow([{ text: '', from: 1, to: NCOL, align: 'left' }]);
+  }
   spacer(); spacer();
 
   // ===== MAAHIR =====

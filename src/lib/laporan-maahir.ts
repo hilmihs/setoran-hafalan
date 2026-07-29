@@ -9,6 +9,8 @@ import { fetchAllRows } from '@/lib/supabase-page';
 import { getLiburDatesForKelas } from '@/lib/maahir-libur';
 import { todayJakarta } from '@/lib/maahir-presensi';
 import { getMaahirSP, type SPRekap } from '@/lib/maahir-sp';
+import { getPemutihanMap } from '@/lib/maahir-pemutihan';
+import { getLaporanNotes, type LaporanNote } from '@/lib/laporan-note';
 
 export const TAKHASSUS_IKHWAN = 'Maahir Takhassus Ikhwan';
 export const TAKHASSUS_AKHWAT = 'Maahir Takhassus Akhwat';
@@ -39,6 +41,8 @@ export type StudentAtt = {
   persen: number | null; // (H+T)/pertemuan terisi * 100; null bila belum ada pertemuan
   keterangan: string; // catatan tergabung (bila ada)
   mulaiTanggal: string | null; // tgl gabung kelas bila di tengah periode (denominator dipotong)
+  online: number; // sesi yang dihadiri secara online
+  diputihkan: string | null; // alasan pemutihan (persen dianggap 100%) bila ada
 };
 
 /** Rincian setoran hafalan peserta Takhassus dalam periode laporan. */
@@ -78,6 +82,8 @@ export type LaporanMaahir = {
   };
   /** Pendataan SP disiplin kehadiran (kumulatif sejak program berjalan). */
   sp: SPRekap;
+  /** Catatan bebas koordinator untuk bulan ini. */
+  notes: LaporanNote[];
 };
 
 function monthRange(month: string): { start: string; end: string } {
@@ -135,6 +141,7 @@ export async function getLaporanMaahir(month: string): Promise<LaporanMaahir> {
       dibawahTarget: { ikhwan: 0, akhwat: 0, total: 0, list: [] },
     },
     sp: { list: [], summary: { total: 0, sp1: 0, sp2: 0, sp3: 0 } },
+    notes: [],
   };
 
   // Bulan di masa depan → tak ada data.
@@ -196,8 +203,11 @@ export async function getLaporanMaahir(month: string): Promise<LaporanMaahir> {
     anggotaList.map((a) => [a.id, joinDateOf(a)])
   );
 
+  // Pemutihan bulan ini: peserta dianggap hadir penuh (baris presensi tak diubah).
+  const pemutihan = await getPemutihanMap(month);
+
   // 4. Kehadiran terisi
-  type Stat = { H: number; I: number; S: number; A: number; T: number; catatan: Set<string> };
+  type Stat = { H: number; I: number; S: number; A: number; T: number; online: number; catatan: Set<string> };
   const statByAnggotaScope = new Map<string, Stat>(); // key: anggotaId|program
   const filledByKelasScope = new Map<string, Set<string>>(); // key: kelasId|program → set pertemuanId
   // Setoran hafalan per anggota (khusus scope kelas_maahir): tanggal → halaman.
@@ -212,10 +222,11 @@ export async function getLaporanMaahir(month: string): Promise<LaporanMaahir> {
       catatan: string | null;
       diisi_at: string | null;
       setoran_halaman: number | null;
+      mode: string | null;
     }>((from, to) =>
       supabaseAdmin
         .from('kehadiran_peserta')
-        .select('pertemuan_id, anggota_id, status, catatan, diisi_at, setoran_halaman')
+        .select('pertemuan_id, anggota_id, status, catatan, diisi_at, setoran_halaman, mode')
         .in('pertemuan_id', pertemuanIds)
         .not('diisi_at', 'is', null)
         .order('id')
@@ -244,9 +255,10 @@ export async function getLaporanMaahir(month: string): Promise<LaporanMaahir> {
       // tally per anggota+scope
       const sKey = `${k.anggota_id}|${program}`;
       let st = statByAnggotaScope.get(sKey);
-      if (!st) { st = { H: 0, I: 0, S: 0, A: 0, T: 0, catatan: new Set() }; statByAnggotaScope.set(sKey, st); }
+      if (!st) { st = { H: 0, I: 0, S: 0, A: 0, T: 0, online: 0, catatan: new Set() }; statByAnggotaScope.set(sKey, st); }
       const code = STATUS_TO_CODE[k.status] ?? 'A';
       st[code]++;
+      if (k.mode === 'online' && (code === 'H' || code === 'T')) st.online++;
       if (k.catatan && typeof k.catatan === 'string' && k.catatan.trim()) st.catatan.add(k.catatan.trim());
 
       // setoran halaman (diisi peserta saat presensi mandiri)
@@ -281,11 +293,15 @@ export async function getLaporanMaahir(month: string): Promise<LaporanMaahir> {
         : mulaiTanggal
           ? [...fset].filter((pid) => (pertemuanById.get(pid)?.tanggal ?? '') >= mulaiTanggal).length
           : fset.size;
-      const persen = filled > 0 ? Math.round(((counts.H + counts.T) / filled) * 100) : null;
+      const persenAsli = filled > 0 ? Math.round(((counts.H + counts.T) / filled) * 100) : null;
       // Tidak hadir = pertemuan terisi − (hadir+terlambat). Termasuk sesi yang
       // peserta tak punya catatan sama sekali (bukan hanya izin/sakit/alpa),
       // supaya tak muncul "0x" padahal di bawah target.
-      const tidakHadir = Math.max(0, filled - (counts.H + counts.T));
+      const tidakHadirAsli = Math.max(0, filled - (counts.H + counts.T));
+      // Diputihkan → dianggap hadir penuh untuk periode ini.
+      const diputihkan = pemutihan.has(a.id) ? (pemutihan.get(a.id) ?? '') : null;
+      const persen = diputihkan !== null && filled > 0 ? 100 : persenAsli;
+      const tidakHadir = diputihkan !== null ? 0 : tidakHadirAsli;
       out.push({
         anggotaId: a.id,
         name: a.name,
@@ -297,6 +313,8 @@ export async function getLaporanMaahir(month: string): Promise<LaporanMaahir> {
         persen,
         keterangan: st ? Array.from(st.catatan).join('; ') : '',
         mulaiTanggal,
+        online: st?.online ?? 0,
+        diputihkan,
       });
     }
     return out;
@@ -359,8 +377,9 @@ export async function getLaporanMaahir(month: string): Promise<LaporanMaahir> {
   const tibyanBawahI = tibyanBawah.filter((s) => s.gender === 'ikhwan').length;
   const tibyanBawahA = tibyanBawah.filter((s) => s.gender === 'akhwat').length;
 
-  // Pendataan SP (kumulatif, sumber sama dengan halaman SP koordinator).
-  const sp = await getMaahirSP();
+  // Pendataan SP (kumulatif, sumber sama dengan halaman SP koordinator) +
+  // catatan bebas koordinator untuk bulan ini.
+  const [sp, notes] = await Promise.all([getMaahirSP(), getLaporanNotes(month)]);
 
   return {
     month,
@@ -383,5 +402,6 @@ export async function getLaporanMaahir(month: string): Promise<LaporanMaahir> {
       dibawahTarget: { ikhwan: tibyanBawahI, akhwat: tibyanBawahA, total: tibyanBawah.length, list: tibyanBawah },
     },
     sp,
+    notes,
   };
 }

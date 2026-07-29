@@ -38,18 +38,23 @@ export default async function PertemuanDetailPage({ params }: { params: { id: st
   // Kehadiran existing
   const { data: existingKehadiran } = await supabaseAdmin
     .from('kehadiran_peserta')
-    .select('anggota_id, status, catatan, setoran_halaman')
+    .select('anggota_id, status, catatan, setoran_halaman, mode')
     .eq('pertemuan_id', params.id);
 
   const kehadiranMap = new Map<
     string,
-    { status: string; catatan: string | null; setoran: number | null }
+    { status: string; catatan: string | null; setoran: number | null; mode: string | null }
   >(
     (existingKehadiran ?? [])
       .filter((k) => k.anggota_id)
       .map((k) => [
         k.anggota_id as string,
-        { status: k.status, catatan: k.catatan, setoran: k.setoran_halaman ?? null },
+        {
+          status: k.status,
+          catatan: k.catatan,
+          setoran: k.setoran_halaman ?? null,
+          mode: (k.mode as string | null) ?? null,
+        },
       ])
   );
 
@@ -61,6 +66,7 @@ export default async function PertemuanDetailPage({ params }: { params: { id: st
     catatan: kehadiranMap.get(a.id)?.catatan ?? '',
     setoran:
       kehadiranMap.get(a.id)?.setoran != null ? String(kehadiranMap.get(a.id)!.setoran) : '',
+    mode: (kehadiranMap.get(a.id)?.mode === 'online' ? 'online' : 'offline') as 'offline' | 'online',
   }));
 
   const tanggalLabel = new Date(pertemuan.tanggal + 'T00:00:00').toLocaleDateString('id-ID', {

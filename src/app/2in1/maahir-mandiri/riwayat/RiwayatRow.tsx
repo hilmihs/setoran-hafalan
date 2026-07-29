@@ -23,6 +23,7 @@ export function RiwayatRow({
   status,
   catatan,
   setoran,
+  mode,
   askSetoran,
 }: {
   kelasId: string;
@@ -34,6 +35,7 @@ export function RiwayatRow({
   status: string;
   catatan: string | null;
   setoran: number | null;
+  mode: 'offline' | 'online';
   askSetoran: boolean;
 }) {
   const [editing, setEditing] = useState(false);
@@ -69,6 +71,7 @@ export function RiwayatRow({
             initialStatus={status as Status}
             initialCatatan={catatan ?? ''}
             initialSetoran={setoran}
+            initialMode={mode}
             submitLabel="Simpan perubahan"
           />
         </div>

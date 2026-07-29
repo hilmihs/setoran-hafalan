@@ -8,6 +8,7 @@
 import { supabaseAdmin } from '@/lib/supabase-admin';
 import { getLiburDatesForKelas } from '@/lib/maahir-libur';
 import { fetchAllRows } from '@/lib/supabase-page';
+import { getPemutihanKeys, periodeMonthOf } from '@/lib/maahir-pemutihan';
 import type { Gender } from '@/types/db';
 
 // Anchor rentang libur (program Maahir mulai ~awal 2026).
@@ -91,6 +92,9 @@ export async function getMaahirSP(opts?: { gender?: Gender }): Promise<SPRekap> 
       .range(from, to)
   );
 
+  // Bulan yang diputihkan koordinator tak dihitung sebagai alpa/izin.
+  const pemutihanKeys = await getPemutihanKeys();
+
   type Tally = { H: number; T: number; I: number; S: number; A: number };
   const byAnggota = new Map<string, Tally>();
   for (const k of kehadiranRows) {
@@ -98,6 +102,7 @@ export async function getMaahirSP(opts?: { gender?: Gender }): Promise<SPRekap> 
     const p = pertById.get(k.pertemuan_id);
     if (!p) continue;
     if (liburByKelas.get(p.kelasId)?.has(p.tanggal)) continue; // anulir libur
+    if (pemutihanKeys.has(`${k.anggota_id}|${periodeMonthOf(p.tanggal)}`)) continue; // diputihkan
     let t = byAnggota.get(k.anggota_id);
     if (!t) {
       t = { H: 0, T: 0, I: 0, S: 0, A: 0 };

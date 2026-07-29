@@ -53,6 +53,7 @@ export async function submitSelfPresensi(_prev: SelfPresensiResult | undefined, 
   const status = String(fd.get('status') ?? '');
   const catatan = String(fd.get('catatan') ?? '').trim();
   const setoranRaw = String(fd.get('setoran_halaman') ?? '').trim();
+  const modeRaw = String(fd.get('mode') ?? '').trim();
   if (!kelasId || !anggotaId || !tanggal || !program) return { error: 'Data tidak lengkap.' };
   if (!VALID_STATUS.includes(status as (typeof VALID_STATUS)[number])) return { error: 'Status tidak valid.' };
 
@@ -111,6 +112,8 @@ export async function submitSelfPresensi(_prev: SelfPresensiResult | undefined, 
         status,
         catatan: catatan || null,
         setoran_halaman: setoranHalaman,
+        // Hadir offline (default) / online — hanya relevan saat hadir/terlambat.
+        mode: modeRaw === 'online' ? 'online' : 'offline',
         diisi_at: now,
         updated_at: now,
       },

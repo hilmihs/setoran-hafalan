@@ -24,6 +24,7 @@ export function SelfPresensiForm({
   initialStatus = 'hadir',
   initialCatatan = '',
   initialSetoran = null,
+  initialMode = 'offline',
   submitLabel,
 }: {
   kelasId: string;
@@ -35,14 +36,19 @@ export function SelfPresensiForm({
   initialStatus?: Status;
   initialCatatan?: string;
   initialSetoran?: number | null;
+  initialMode?: 'offline' | 'online';
   submitLabel?: string;
 }) {
   const router = useRouter();
   const [status, setStatus] = useState<Status>(initialStatus);
   const [catatan, setCatatan] = useState(initialCatatan);
   const [setoran, setSetoran] = useState(initialSetoran === null ? '' : String(initialSetoran));
+  const [mode, setMode] = useState<'offline' | 'online'>(initialMode);
   const [pending, start] = useTransition();
   const [error, setError] = useState<string | null>(null);
+
+  // Ikut offline/online hanya relevan saat hadir.
+  const showMode = status === 'hadir' || status === 'terlambat';
 
   // Setoran hafalan hanya untuk sesi Kelas Maahir & saat hadir/terlambat.
   const showSetoran = askSetoran && program === 'kelas_maahir' && (status === 'hadir' || status === 'terlambat');
@@ -58,6 +64,7 @@ export function SelfPresensiForm({
       fd.set('status', status);
       fd.set('catatan', catatan);
       if (showSetoran) fd.set('setoran_halaman', setoran);
+      if (showMode) fd.set('mode', mode);
       const res = await submitSelfPresensi(undefined, fd);
       if (res?.error) { setError(res.error); return; }
       router.refresh();
@@ -84,6 +91,32 @@ export function SelfPresensiForm({
           </button>
         ))}
       </div>
+
+      {showMode && (
+        <div style={{ marginTop: 12 }}>
+          <div className="t-tiny" style={{ color: 'var(--muted-2)', marginBottom: 4 }}>
+            Ikut kelas secara
+          </div>
+          <div style={{ display: 'flex', gap: 6 }}>
+            {(['offline', 'online'] as const).map((m) => (
+              <button
+                key={m}
+                type="button"
+                onClick={() => setMode(m)}
+                style={{
+                  flex: 1, padding: '8px 10px', borderRadius: 8, cursor: 'pointer', fontSize: 13,
+                  border: mode === m ? '2px solid var(--accent, #3b82f6)' : '1px solid var(--line)',
+                  background: mode === m ? 'var(--accent, #3b82f6)' : 'var(--surface)',
+                  color: mode === m ? '#fff' : 'inherit',
+                  fontWeight: mode === m ? 700 : 500,
+                }}
+              >
+                {m === 'offline' ? 'Offline (hadir di tempat)' : 'Online'}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
 
       {showSetoran && (
         <div style={{ marginTop: 12 }}>

@@ -89,6 +89,13 @@ export default async function KoordinatorKehadiranPage({
             >
               ⚠️ Pendataan SP (Surat Peringatan)
             </Link>
+            <Link
+              href="/2in1/koordinator/kehadiran/pemutihan"
+              className="btn btn-sm btn-ghost"
+              style={{ textDecoration: 'none', display: 'inline-flex', gap: 6, alignItems: 'center' }}
+            >
+              🤍 Pemutihan Absensi
+            </Link>
           </div>
 
           {/* Filter gender */}

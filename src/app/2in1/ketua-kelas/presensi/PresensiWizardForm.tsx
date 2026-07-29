@@ -20,6 +20,7 @@ type PesertaRow = {
   status: Status;
   catatan: string;
   setoran: string; // halaman setoran pertemuan ini (kosong = belum diisi)
+  mode: 'offline' | 'online';
 };
 
 export function PresensiWizardForm({
@@ -61,6 +62,7 @@ export function PresensiWizardForm({
             anggota_id: r.id,
             status: r.status,
             catatan: r.catatan || undefined,
+            mode: r.mode,
             ...(showSetoran ? { setoran_halaman: r.setoran === '' ? null : r.setoran } : {}),
           })),
         }),
@@ -137,6 +139,31 @@ export function PresensiWizardForm({
                 </button>
               ))}
             </div>
+            {/* Hadir offline / online — hanya untuk peserta yang hadir. */}
+            {(p.status === 'hadir' || p.status === 'terlambat') && (
+              <div style={{ marginTop: 6, display: 'flex', gap: 4, alignItems: 'center' }}>
+                <span className="t-tiny" style={{ color: 'var(--muted-2)', marginRight: 2 }}>Ikut</span>
+                {(['offline', 'online'] as const).map((m) => (
+                  <button
+                    key={m}
+                    type="button"
+                    onClick={() => updateRow(p.id, { mode: m })}
+                    style={{
+                      padding: '3px 10px',
+                      fontSize: 11,
+                      fontWeight: p.mode === m ? 700 : 400,
+                      background: p.mode === m ? 'var(--accent, #3b82f6)' : 'var(--bg-input, #f0f0f0)',
+                      color: p.mode === m ? '#fff' : 'var(--muted-2)',
+                      border: 'none',
+                      borderRadius: 6,
+                      cursor: 'pointer',
+                    }}
+                  >
+                    {m === 'offline' ? 'Offline' : 'Online'}
+                  </button>
+                ))}
+              </div>
+            )}
             {/* Setoran hafalan pertemuan ini — hanya sesi Kelas Maahir & peserta hadir. */}
             {showSetoran && (p.status === 'hadir' || p.status === 'terlambat' || p.setoran) && (
               <div style={{ marginTop: 6, display: 'flex', alignItems: 'center', gap: 6 }}>

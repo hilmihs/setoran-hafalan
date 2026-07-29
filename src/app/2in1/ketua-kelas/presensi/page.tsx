@@ -55,18 +55,23 @@ export default async function PresensiWizardPage() {
 
   const { data: existing } = await supabaseAdmin
     .from('kehadiran_peserta')
-    .select('anggota_id, status, catatan, setoran_halaman')
+    .select('anggota_id, status, catatan, setoran_halaman, mode')
     .eq('pertemuan_id', pertemuan.id);
 
   const existingMap = new Map<
     string,
-    { status: string; catatan: string | null; setoran: number | null }
+    { status: string; catatan: string | null; setoran: number | null; mode: string | null }
   >(
     (existing ?? [])
       .filter((k) => k.anggota_id)
       .map((k) => [
         k.anggota_id as string,
-        { status: k.status, catatan: k.catatan, setoran: k.setoran_halaman ?? null },
+        {
+          status: k.status,
+          catatan: k.catatan,
+          setoran: k.setoran_halaman ?? null,
+          mode: (k.mode as string | null) ?? null,
+        },
       ])
   );
 
@@ -77,6 +82,7 @@ export default async function PresensiWizardPage() {
     status: (existingMap.get(a.id)?.status ?? 'hadir') as StatusType,
     catatan: existingMap.get(a.id)?.catatan ?? '',
     setoran: existingMap.get(a.id)?.setoran != null ? String(existingMap.get(a.id)!.setoran) : '',
+    mode: (existingMap.get(a.id)?.mode === 'online' ? 'online' : 'offline') as 'offline' | 'online',
   }));
 
   // Mingguan (mis. Alumni/Talaqqi): tampil sebagai rentang pekan, bukan hari Senin spesifik.

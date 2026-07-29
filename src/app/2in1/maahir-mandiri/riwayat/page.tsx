@@ -20,18 +20,23 @@ export default async function MaahirMandiriRiwayatPage() {
   // Kehadiran yang sudah diisi peserta ini + tanggal/program pertemuannya.
   const { data: rows } = await supabaseAdmin
     .from('kehadiran_peserta')
-    .select('status, catatan, setoran_halaman, pertemuan:pertemuan_id(tanggal, program, program_kelas_id)')
+    .select('status, catatan, setoran_halaman, mode, pertemuan:pertemuan_id(tanggal, program, program_kelas_id)')
     .eq('anggota_id', anggotaId)
     .not('diisi_at', 'is', null);
 
   type Row = {
     tanggal: string; program: string; status: string; catatan: string | null; setoran: number | null;
+    mode: 'offline' | 'online';
   };
   const list: Row[] = (rows ?? [])
     .map((r) => {
       const p = r.pertemuan as unknown as { tanggal: string; program: string; program_kelas_id: string } | null;
       if (!p || p.program_kelas_id !== kelas.id) return null;
-      return { tanggal: p.tanggal, program: p.program, status: r.status, catatan: r.catatan, setoran: r.setoran_halaman };
+      return {
+        tanggal: p.tanggal, program: p.program, status: r.status, catatan: r.catatan,
+        setoran: r.setoran_halaman,
+        mode: (r.mode === 'online' ? 'online' : 'offline') as 'offline' | 'online',
+      };
     })
     .filter((r): r is Row => r !== null)
     .sort((a, b) => (a.tanggal < b.tanggal ? 1 : a.tanggal > b.tanggal ? -1 : 0));
@@ -72,6 +77,7 @@ export default async function MaahirMandiriRiwayatPage() {
                 status={r.status}
                 catatan={r.catatan}
                 setoran={r.setoran}
+                mode={r.mode}
                 askSetoran={r.program === 'kelas_maahir'}
               />
             ))
