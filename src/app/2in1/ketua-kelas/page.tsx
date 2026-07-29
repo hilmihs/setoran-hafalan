@@ -136,6 +136,29 @@ export default async function KetuaKelasPage() {
           </Link>
 
           <Link
+            href="/2in1/ketua-kelas/setoran"
+            className="card-flat"
+            style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              padding: '12px 14px',
+              marginBottom: 12,
+              textDecoration: 'none',
+              color: 'inherit',
+              borderRadius: 10,
+            }}
+          >
+            <div>
+              <div style={{ fontSize: 13, fontWeight: 600 }}>Setoran Hafalan (isi cepat)</div>
+              <div className="t-tiny" style={{ color: 'var(--muted-2)' }}>
+                Isi jumlah halaman per pertemuan — termasuk pertemuan yang sudah lalu
+              </div>
+            </div>
+            <span style={{ color: 'var(--muted-2)' }}>→</span>
+          </Link>
+
+          <Link
             href="/2in1/ketua-kelas/pertemuan"
             className="card-flat"
             style={{
