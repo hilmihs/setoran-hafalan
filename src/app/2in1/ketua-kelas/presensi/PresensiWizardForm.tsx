@@ -19,16 +19,19 @@ type PesertaRow = {
   name: string;
   status: Status;
   catatan: string;
+  setoran: string; // halaman setoran pertemuan ini (kosong = belum diisi)
 };
 
 export function PresensiWizardForm({
   pertemuanId,
   pesertaList,
   remaining,
+  showSetoran = false,
 }: {
   pertemuanId: string;
   pesertaList: PesertaRow[];
   remaining: number;
+  showSetoran?: boolean;
 }) {
   const router = useRouter();
   const [rows, setRows] = useState<PesertaRow[]>(pesertaList);
@@ -58,6 +61,7 @@ export function PresensiWizardForm({
             anggota_id: r.id,
             status: r.status,
             catatan: r.catatan || undefined,
+            ...(showSetoran ? { setoran_halaman: r.setoran === '' ? null : r.setoran } : {}),
           })),
         }),
       });
@@ -133,6 +137,29 @@ export function PresensiWizardForm({
                 </button>
               ))}
             </div>
+            {/* Setoran hafalan pertemuan ini — hanya sesi Kelas Maahir & peserta hadir. */}
+            {showSetoran && (p.status === 'hadir' || p.status === 'terlambat' || p.setoran) && (
+              <div style={{ marginTop: 6, display: 'flex', alignItems: 'center', gap: 6 }}>
+                <span className="t-tiny" style={{ color: 'var(--muted-2)' }}>Setoran</span>
+                <input
+                  type="number"
+                  min={0}
+                  inputMode="numeric"
+                  value={p.setoran}
+                  onChange={(e) => updateRow(p.id, { setoran: e.target.value })}
+                  placeholder="0"
+                  style={{
+                    width: 70,
+                    fontSize: 11,
+                    padding: '4px 8px',
+                    borderRadius: 6,
+                    border: '1px solid var(--border)',
+                    background: 'var(--bg-input, #f5f5f5)',
+                  }}
+                />
+                <span className="t-tiny" style={{ color: 'var(--muted-2)' }}>halaman</span>
+              </div>
+            )}
             {(p.status === 'izin' || p.status === 'sakit' || p.catatan) && (
               <input
                 type="text"

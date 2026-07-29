@@ -117,9 +117,17 @@ export async function getMaahirRekap(
   // 3. Anggota
   const { data: anggotaRows } = await supabaseAdmin
     .from('program_kelas_anggota')
-    .select('id, program_kelas_id, name, whatsapp_number, is_ketua, is_wakil')
+    .select('id, program_kelas_id, name, whatsapp_number, is_ketua, is_wakil, created_at')
     .in('program_kelas_id', kelasIds)
     .order('name');
+
+  // Tanggal gabung (WIB) bila peserta masuk di tengah periode — pertemuan
+  // sebelum ia terdaftar tak boleh menggerus persentasenya.
+  const joinDateOf = (a: { created_at?: string | null }): string | null => {
+    if (!a.created_at) return null;
+    const d = new Date(a.created_at).toLocaleDateString('sv-SE', { timeZone: 'Asia/Jakarta' });
+    return d > start && d <= end ? d : null;
+  };
 
   // 4. Kehadiran (hanya yang sudah disubmit)
   const kehadiranByPertemuan = new Map<string, Map<string, StatusCode>>();
@@ -184,15 +192,20 @@ export async function getMaahirRekap(
     const anggota: RekapAnggota[] = (anggotaByKelas.get(k.id) ?? []).map((a) => {
       const perPertemuan: Record<string, StatusCode> = {};
       const totals = { H: 0, I: 0, S: 0, A: 0, T: 0 };
+      const mulai = joinDateOf(a);
+      let dihitung = 0; // pertemuan sejak peserta bergabung (denominator %)
       for (const p of pertemuan) {
+        if (mulai && p.tanggal < mulai) {
+          perPertemuan[p.id] = '-';
+          continue;
+        }
+        dihitung++;
         const code = kehadiranByPertemuan.get(p.id)?.get(a.id) ?? '-';
         perPertemuan[p.id] = code;
         if (code !== '-') totals[code]++;
       }
       const persenHadir =
-        pertemuan.length > 0
-          ? Math.round(((totals.H + totals.T) / pertemuan.length) * 100)
-          : null;
+        dihitung > 0 ? Math.round(((totals.H + totals.T) / dihitung) * 100) : null;
       return {
         anggotaId: a.id,
         name: a.name,

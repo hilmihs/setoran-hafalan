@@ -13,7 +13,7 @@ export async function GET(
 ) {
   const { data, error } = await supabaseAdmin
     .from('kehadiran_peserta')
-    .select('anggota_id, status, catatan, diisi_at')
+    .select('anggota_id, status, catatan, setoran_halaman, diisi_at')
     .eq('pertemuan_id', params.pertemuan_id);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json({ kehadiran: data ?? [] });
@@ -32,7 +32,7 @@ export async function PUT(
     // Verify pertemuan + caller is ketua/wakil of the program_kelas
     const { data: pertemuan } = await supabaseAdmin
       .from('pertemuan_program')
-      .select('id, program_kelas_id, program_kelas:program_kelas_id(ketua_wa, wakil_wa)')
+      .select('id, program_kelas_id, program, program_kelas:program_kelas_id(ketua_wa, wakil_wa)')
       .eq('id', params.pertemuan_id)
       .single();
     if (!pertemuan || !pertemuan.program_kelas_id) {
@@ -48,6 +48,7 @@ export async function PUT(
       anggota_id: string;
       status: Status;
       catatan?: string;
+      setoran_halaman?: number | string | null;
     }>;
 
     if (!Array.isArray(rows) || rows.length === 0) {
@@ -62,6 +63,25 @@ export async function PUT(
       .in('id', anggotaIds);
     const pesertaByAnggota = new Map((anggotaList ?? []).map((a) => [a.id, a.peserta_id]));
 
+    // Setoran halaman hanya untuk sesi Kelas Maahir. Nilai lama dipertahankan
+    // bila klien tak mengirim field-nya (mis. peserta sudah isi via presensi
+    // mandiri, lalu ketua menyimpan ulang kehadiran).
+    const isKelasMaahir = pertemuan.program === 'kelas_maahir';
+    const { data: existingRows } = await supabaseAdmin
+      .from('kehadiran_peserta')
+      .select('anggota_id, setoran_halaman')
+      .eq('pertemuan_id', params.pertemuan_id);
+    const setoranLama = new Map(
+      (existingRows ?? []).map((e) => [e.anggota_id as string, e.setoran_halaman as number | null])
+    );
+    const parseSetoran = (r: (typeof rows)[number]): number | null => {
+      if (!isKelasMaahir) return null;
+      if (r.setoran_halaman === undefined) return setoranLama.get(r.anggota_id) ?? null;
+      if (r.setoran_halaman === null || r.setoran_halaman === '') return null;
+      const n = Number(r.setoran_halaman);
+      return Number.isInteger(n) && n >= 0 ? n : (setoranLama.get(r.anggota_id) ?? null);
+    };
+
     const now = new Date().toISOString();
     const upsertData = rows.map((r) => ({
       pertemuan_id: params.pertemuan_id,
@@ -69,6 +89,7 @@ export async function PUT(
       peserta_id: pesertaByAnggota.get(r.anggota_id) ?? null,
       status: VALID_STATUS.includes(r.status) ? r.status : 'tidak_ada_keterangan',
       catatan: r.catatan || null,
+      setoran_halaman: parseSetoran(r),
       diisi_at: now,
       updated_at: now,
     }));

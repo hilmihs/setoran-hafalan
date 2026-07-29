@@ -38,13 +38,19 @@ export default async function PertemuanDetailPage({ params }: { params: { id: st
   // Kehadiran existing
   const { data: existingKehadiran } = await supabaseAdmin
     .from('kehadiran_peserta')
-    .select('anggota_id, status, catatan')
+    .select('anggota_id, status, catatan, setoran_halaman')
     .eq('pertemuan_id', params.id);
 
-  const kehadiranMap = new Map<string, { status: string; catatan: string | null }>(
+  const kehadiranMap = new Map<
+    string,
+    { status: string; catatan: string | null; setoran: number | null }
+  >(
     (existingKehadiran ?? [])
       .filter((k) => k.anggota_id)
-      .map((k) => [k.anggota_id as string, { status: k.status, catatan: k.catatan }])
+      .map((k) => [
+        k.anggota_id as string,
+        { status: k.status, catatan: k.catatan, setoran: k.setoran_halaman ?? null },
+      ])
   );
 
   type StatusType = 'hadir' | 'izin' | 'terlambat' | 'sakit' | 'tidak_ada_keterangan';
@@ -53,6 +59,8 @@ export default async function PertemuanDetailPage({ params }: { params: { id: st
     name: a.name + (a.is_ketua ? ' (Ketua)' : a.is_wakil ? ' (Wakil)' : ''),
     status: (kehadiranMap.get(a.id)?.status ?? 'tidak_ada_keterangan') as StatusType,
     catatan: kehadiranMap.get(a.id)?.catatan ?? '',
+    setoran:
+      kehadiranMap.get(a.id)?.setoran != null ? String(kehadiranMap.get(a.id)!.setoran) : '',
   }));
 
   const tanggalLabel = new Date(pertemuan.tanggal + 'T00:00:00').toLocaleDateString('id-ID', {
@@ -72,6 +80,7 @@ export default async function PertemuanDetailPage({ params }: { params: { id: st
         <KehadiranForm
           pertemuanId={params.id}
           pesertaList={anggotaWithStatus}
+          showSetoran={pertemuan.program === 'kelas_maahir'}
         />
       </div>
     </main>

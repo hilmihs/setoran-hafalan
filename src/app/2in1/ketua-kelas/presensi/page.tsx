@@ -55,13 +55,19 @@ export default async function PresensiWizardPage() {
 
   const { data: existing } = await supabaseAdmin
     .from('kehadiran_peserta')
-    .select('anggota_id, status, catatan')
+    .select('anggota_id, status, catatan, setoran_halaman')
     .eq('pertemuan_id', pertemuan.id);
 
-  const existingMap = new Map<string, { status: string; catatan: string | null }>(
+  const existingMap = new Map<
+    string,
+    { status: string; catatan: string | null; setoran: number | null }
+  >(
     (existing ?? [])
       .filter((k) => k.anggota_id)
-      .map((k) => [k.anggota_id as string, { status: k.status, catatan: k.catatan }])
+      .map((k) => [
+        k.anggota_id as string,
+        { status: k.status, catatan: k.catatan, setoran: k.setoran_halaman ?? null },
+      ])
   );
 
   type StatusType = 'hadir' | 'izin' | 'terlambat' | 'sakit' | 'tidak_ada_keterangan';
@@ -70,6 +76,7 @@ export default async function PresensiWizardPage() {
     name: a.name + (a.is_ketua ? ' (Ketua)' : a.is_wakil ? ' (Wakil)' : ''),
     status: (existingMap.get(a.id)?.status ?? 'hadir') as StatusType,
     catatan: existingMap.get(a.id)?.catatan ?? '',
+    setoran: existingMap.get(a.id)?.setoran != null ? String(existingMap.get(a.id)!.setoran) : '',
   }));
 
   // Mingguan (mis. Alumni/Talaqqi): tampil sebagai rentang pekan, bukan hari Senin spesifik.
@@ -137,6 +144,7 @@ export default async function PresensiWizardPage() {
             pertemuanId={pertemuan.id}
             pesertaList={pesertaRows}
             remaining={total}
+            showSetoran={day.program === 'kelas_maahir'}
           />
 
           {/* Opsi tandai LIBUR (langsung, tanpa ACC). Untuk Takhassus Ikhwan,
