@@ -8,6 +8,7 @@ import { supabaseAdmin } from '@/lib/supabase-admin';
 import { fetchAllRows } from '@/lib/supabase-page';
 import { getLiburDatesForKelas } from '@/lib/maahir-libur';
 import { todayJakarta } from '@/lib/maahir-presensi';
+import { getMaahirSP, type SPRekap } from '@/lib/maahir-sp';
 
 export const TAKHASSUS_IKHWAN = 'Maahir Takhassus Ikhwan';
 export const TAKHASSUS_AKHWAT = 'Maahir Takhassus Akhwat';
@@ -75,6 +76,8 @@ export type LaporanMaahir = {
     kehadiran: { avgIkhwan: number | null; avgAkhwat: number | null; aktual: number | null; benchmark: number };
     dibawahTarget: { ikhwan: number; akhwat: number; total: number; list: StudentAtt[] }; // < 100%
   };
+  /** Pendataan SP disiplin kehadiran (kumulatif sejak program berjalan). */
+  sp: SPRekap;
 };
 
 function monthRange(month: string): { start: string; end: string } {
@@ -131,6 +134,7 @@ export async function getLaporanMaahir(month: string): Promise<LaporanMaahir> {
       kehadiran: empty(100),
       dibawahTarget: { ikhwan: 0, akhwat: 0, total: 0, list: [] },
     },
+    sp: { list: [], summary: { total: 0, sp1: 0, sp2: 0, sp3: 0 } },
   };
 
   // Bulan di masa depan → tak ada data.
@@ -355,6 +359,9 @@ export async function getLaporanMaahir(month: string): Promise<LaporanMaahir> {
   const tibyanBawahI = tibyanBawah.filter((s) => s.gender === 'ikhwan').length;
   const tibyanBawahA = tibyanBawah.filter((s) => s.gender === 'akhwat').length;
 
+  // Pendataan SP (kumulatif, sumber sama dengan halaman SP koordinator).
+  const sp = await getMaahirSP();
+
   return {
     month,
     takhassus: {
@@ -375,5 +382,6 @@ export async function getLaporanMaahir(month: string): Promise<LaporanMaahir> {
       kehadiran: { avgIkhwan: tibyanAvgI, avgAkhwat: tibyanAvgA, aktual: avgOfGenders(tibyanAvgI, tibyanAvgA), benchmark: 100 },
       dibawahTarget: { ikhwan: tibyanBawahI, akhwat: tibyanBawahA, total: tibyanBawah.length, list: tibyanBawah },
     },
+    sp,
   };
 }

@@ -7,6 +7,7 @@ import { MaahirRekapTable } from '@/components/MaahirRekapTable';
 import { MonthNavSelect } from '@/components/MonthNavSelect';
 import { monthOptionsSince } from '@/lib/month';
 import { SectionHeader } from '@/components/ui/SectionHeader';
+import { SearchableBlocks } from '@/components/SearchableBlocks';
 import { Icon } from '@/components/icons';
 import { buildWaMeUrl, tplReminderKetuaIsiPresensi } from '@/lib/whatsapp';
 import { absUrl } from '@/lib/url';
@@ -188,7 +189,13 @@ export default async function KoordinatorKehadiranPage({
             </p>
           )}
 
-          {rekap.map((k) => (
+          <SearchableBlocks
+            blocks={rekap.map((k) => ({
+              key: k.kelasId,
+              text: [k.kelasName, k.gender, ...k.anggota.map((a) => a.name)]
+                .join(' ')
+                .toLowerCase(),
+              node: (
             <div key={k.kelasId} style={{ marginBottom: 28 }}>
               <SectionHeader
                 title={`${k.kelasName}`}
@@ -237,7 +244,9 @@ export default async function KoordinatorKehadiranPage({
 
               <MaahirRekapTable kelas={k} />
             </div>
-          ))}
+              ),
+            }))}
+          />
         </div>
       </div>
     </main>

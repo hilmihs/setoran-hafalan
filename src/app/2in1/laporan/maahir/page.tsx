@@ -85,6 +85,7 @@ export default async function LaporanMaahirPage({
           <TakhassusBlock lap={lap} />
           <MaahirBlock lap={lap} />
           <AtTibyanBlock lap={lap} />
+          <SPBlock lap={lap} />
 
           <p className="t-tiny" style={{ color: 'var(--muted-2)', marginTop: 20 }}>
             Presensi mulai dilacak {monthLabel(ANCHOR_MONTH)}. Bulan sebelumnya kosong.
@@ -297,6 +298,66 @@ function MaahirBlock({ lap }: { lap: Awaited<ReturnType<typeof getLaporanMaahir>
       <GenderRata ikhwan={m.kehadiran.avgIkhwan} akhwat={m.kehadiran.avgAkhwat} rata={m.kehadiran.aktual} />
       <div className="t-tiny" style={{ color: 'var(--muted-2)', margin: '4px 0' }}>Peserta di bawah target (&lt; 80%)</div>
       <BawahTargetTable list={m.dibawahTarget.list} />
+    </section>
+  );
+}
+
+/** Pendataan SP disiplin kehadiran peserta — kumulatif sejak program berjalan. */
+function SPBlock({ lap }: { lap: Awaited<ReturnType<typeof getLaporanMaahir>> }) {
+  const { list, summary } = lap.sp;
+  const spBadge = (n: number) =>
+    n >= 3
+      ? { bg: 'var(--merah-tint)', bd: 'var(--merah-line)', ink: 'var(--merah-ink)' }
+      : n === 2
+        ? { bg: 'var(--kuning-tint)', bd: 'var(--kuning-line)', ink: 'var(--kuning-ink)' }
+        : { bg: 'var(--surface-3)', bd: 'var(--line)', ink: 'var(--ink-2, var(--ink))' };
+  return (
+    <section style={{ marginBottom: 28 }}>
+      <h2 className="t-h2" style={{ marginBottom: 8 }}>Pendataan SP (Surat Peringatan)</h2>
+      <p className="t-tiny" style={{ color: 'var(--muted-2)', marginBottom: 8 }}>
+        Kumulatif sejak program berjalan, dari presensi yang diinput ketua kelas.
+        Alpa 1×/2×/≥3× → SP1/SP2/SP3 · Izin 2×/3×/≥4× → SP1/SP2/SP3 (diambil yang tertinggi).
+        Total {summary.total} peserta — SP1 {summary.sp1} · SP2 {summary.sp2} · SP3 {summary.sp3}.
+      </p>
+      {list.length === 0 ? (
+        <p className="t-small" style={{ color: 'var(--muted-2)' }}>Tidak ada peserta terkena SP.</p>
+      ) : (
+        <div className="table-scroll" style={{ marginBottom: 12 }}>
+          <table className="k-table" style={{ width: '100%' }}>
+            <thead>
+              <tr>
+                <th>Peserta</th>
+                <th>Kelas</th>
+                <th style={{ width: 60 }}>SP</th>
+                <th style={{ width: 50 }}>Alpa</th>
+                <th style={{ width: 50 }}>Izin</th>
+                <th style={{ width: 50 }}>Sakit</th>
+                <th style={{ width: 60 }}>Hadir</th>
+              </tr>
+            </thead>
+            <tbody>
+              {list.map((p) => {
+                const st = spBadge(p.sp);
+                return (
+                  <tr key={p.anggotaId}>
+                    <td>{p.name}</td>
+                    <td className="t-tiny">{p.kelasName}</td>
+                    <td style={{ textAlign: 'center' }}>
+                      <span className="badge" style={{ background: st.bg, borderColor: st.bd, color: st.ink }}>
+                        SP{p.sp}
+                      </span>
+                    </td>
+                    <td style={{ textAlign: 'center' }}>{p.alpa}</td>
+                    <td style={{ textAlign: 'center' }}>{p.izin}</td>
+                    <td style={{ textAlign: 'center' }}>{p.sakit}</td>
+                    <td style={{ textAlign: 'center' }}>{p.hadir + p.terlambat}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
     </section>
   );
 }

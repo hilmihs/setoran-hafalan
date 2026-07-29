@@ -296,6 +296,44 @@ export async function buildLaporanMaahirWorkbook(lap: LaporanMaahir, bulan: stri
 
   band('Peserta di Bawah Target (< 100%)', C.danger, C.dangerInk);
   bawahTargetTable(a.dibawahTarget.list);
+  spacer(); spacer();
+
+  // ===== PENDATAAN SP =====
+  const sp = lap.sp;
+  band('PENDATAAN SP (SURAT PERINGATAN)');
+  dataRow([
+    {
+      text:
+        `Kumulatif sejak program berjalan · Total ${sp.summary.total} peserta — ` +
+        `SP1 ${sp.summary.sp1} · SP2 ${sp.summary.sp2} · SP3 ${sp.summary.sp3}. ` +
+        `Alpa 1x/2x/>=3x → SP1/SP2/SP3 · Izin 2x/3x/>=4x → SP1/SP2/SP3.`,
+      from: 1, to: NCOL, align: 'left', ink: C.muted,
+    },
+  ]);
+  tableHead([
+    { text: 'Peserta', from: 1, to: 2, align: 'left' },
+    { text: 'Kelas', from: 3, to: 5, align: 'left' },
+    { text: 'SP', from: 6, to: 6 },
+    { text: 'Alpa', from: 7, to: 8 },
+    { text: 'Izin', from: 9, to: 9 },
+    { text: 'Sakit', from: 10, to: 10 },
+    { text: 'Hadir', from: 11, to: NCOL },
+  ]);
+  if (sp.list.length === 0) {
+    dataRow([{ text: 'Tidak ada peserta terkena SP.', from: 1, to: NCOL, align: 'left', ink: C.muted }]);
+  } else {
+    sp.list.forEach((p, i) => {
+      dataRow([
+        { text: p.name, from: 1, to: 2, align: 'left' },
+        { text: p.kelasName, from: 3, to: 5, align: 'left', ink: C.muted },
+        { text: `SP${p.sp}`, from: 6, to: 6, bold: true, ink: p.sp >= 2 ? C.bad : C.ink },
+        { text: p.alpa, from: 7, to: 8 },
+        { text: p.izin, from: 9, to: 9 },
+        { text: p.sakit, from: 10, to: 10 },
+        { text: p.hadir + p.terlambat, from: 11, to: NCOL },
+      ], i % 2 === 1);
+    });
+  }
 
   return wb.xlsx.writeBuffer();
 }
