@@ -33,19 +33,31 @@ export type StudentAtt = {
   kelasName: string;
   gender: Gender;
   counts: PctCounts;
-  filled: number; // jumlah pertemuan terisi (denominator) di scope
+  filled: number; // jumlah pertemuan terisi (denominator) di scope, sejak bergabung
   tidakHadir: number; // filled - (H+T): sesi tak hadir termasuk yg tak tercatat
   persen: number | null; // (H+T)/pertemuan terisi * 100; null bila belum ada pertemuan
   keterangan: string; // catatan tergabung (bila ada)
+  mulaiTanggal: string | null; // tgl gabung kelas bila di tengah periode (denominator dipotong)
+};
+
+/** Rincian setoran hafalan peserta Takhassus dalam periode laporan. */
+export type SetoranPeserta = {
+  anggotaId: string;
+  name: string;
+  gender: Gender;
+  kelasName: string;
+  halaman: number | null; // total halaman sebulan; null bila belum pernah isi
+  pertemuanSetor: number; // jumlah pertemuan yang diisi setorannya
+  rincian: string; // 'DD/MM: N hal · …' per pertemuan
 };
 
 export type LaporanMaahir = {
   month: string; // YYYY-MM
   takhassus: {
     setoran: {
-      benchmark: number; // 80
-      aktual: number | null; // kosong
-      peserta: Array<{ name: string; gender: Gender; kelasName: string }>; // semua anggota 2 kelas
+      benchmark: number; // 80 halaman/bulan
+      aktual: number | null; // rata-rata halaman per peserta yang sudah setor
+      peserta: SetoranPeserta[]; // semua anggota 2 kelas takhassus
     };
     kehadiran: { avgIkhwan: number | null; avgAkhwat: number | null; aktual: number | null; benchmark: number };
     dibawahTarget: { jumlah: number; list: StudentAtt[] }; // < 80%
@@ -158,15 +170,34 @@ export async function getLaporanMaahir(month: string): Promise<LaporanMaahir> {
   // 3. Anggota
   const { data: anggotaRows } = await supabaseAdmin
     .from('program_kelas_anggota')
-    .select('id, program_kelas_id, name')
+    .select('id, program_kelas_id, name, created_at')
     .in('program_kelas_id', kelasIds)
     .order('name');
-  const anggotaList = (anggotaRows ?? []) as Array<{ id: string; program_kelas_id: string; name: string }>;
+  const anggotaList = (anggotaRows ?? []) as Array<{
+    id: string;
+    program_kelas_id: string;
+    name: string;
+    created_at: string | null;
+  }>;
+
+  // Tanggal gabung (WIB) — peserta yang masuk di tengah periode tak boleh
+  // dihukum oleh pertemuan sebelum ia terdaftar. Hanya berlaku bila tanggal
+  // gabung ada DI DALAM periode; sebelum periode → denominator penuh.
+  const joinDateOf = (a: { created_at: string | null }): string | null => {
+    if (!a.created_at) return null;
+    const d = new Date(a.created_at).toLocaleDateString('sv-SE', { timeZone: 'Asia/Jakarta' });
+    return d > start && d <= end ? d : null;
+  };
+  const joinByAnggota = new Map<string, string | null>(
+    anggotaList.map((a) => [a.id, joinDateOf(a)])
+  );
 
   // 4. Kehadiran terisi
   type Stat = { H: number; I: number; S: number; A: number; T: number; catatan: Set<string> };
   const statByAnggotaScope = new Map<string, Stat>(); // key: anggotaId|program
   const filledByKelasScope = new Map<string, Set<string>>(); // key: kelasId|program → set pertemuanId
+  // Setoran hafalan per anggota (khusus scope kelas_maahir): tanggal → halaman.
+  const setoranByAnggota = new Map<string, Array<{ tanggal: string; halaman: number }>>();
 
   if (pertemuanIds.length > 0) {
     // Paginasi: kehadiran sebulan lintas-kelas bisa >1000 baris (limit PostgREST).
@@ -176,10 +207,11 @@ export async function getLaporanMaahir(month: string): Promise<LaporanMaahir> {
       status: string;
       catatan: string | null;
       diisi_at: string | null;
+      setoran_halaman: number | null;
     }>((from, to) =>
       supabaseAdmin
         .from('kehadiran_peserta')
-        .select('pertemuan_id, anggota_id, status, catatan, diisi_at')
+        .select('pertemuan_id, anggota_id, status, catatan, diisi_at, setoran_halaman')
         .in('pertemuan_id', pertemuanIds)
         .not('diisi_at', 'is', null)
         .order('id')
@@ -200,6 +232,11 @@ export async function getLaporanMaahir(month: string): Promise<LaporanMaahir> {
       if (!fset) { fset = new Set(); filledByKelasScope.set(fKey, fset); }
       fset.add(k.pertemuan_id);
 
+      // Sesi sebelum peserta bergabung tak dihitung (denominator juga dipotong
+      // di studentsFor) — mencegah persen >100% atau tergerus sesi pra-gabung.
+      const joined = joinByAnggota.get(k.anggota_id);
+      if (joined && p.tanggal < joined) continue;
+
       // tally per anggota+scope
       const sKey = `${k.anggota_id}|${program}`;
       let st = statByAnggotaScope.get(sKey);
@@ -207,6 +244,13 @@ export async function getLaporanMaahir(month: string): Promise<LaporanMaahir> {
       const code = STATUS_TO_CODE[k.status] ?? 'A';
       st[code]++;
       if (k.catatan && typeof k.catatan === 'string' && k.catatan.trim()) st.catatan.add(k.catatan.trim());
+
+      // setoran halaman (diisi peserta saat presensi mandiri)
+      if (program === 'kelas_maahir' && typeof k.setoran_halaman === 'number') {
+        const arr = setoranByAnggota.get(k.anggota_id) ?? [];
+        arr.push({ tanggal: p.tanggal, halaman: k.setoran_halaman });
+        setoranByAnggota.set(k.anggota_id, arr);
+      }
     }
   }
 
@@ -223,7 +267,16 @@ export async function getLaporanMaahir(month: string): Promise<LaporanMaahir> {
       const counts: PctCounts = st
         ? { H: st.H, I: st.I, S: st.S, A: st.A, T: st.T }
         : { H: 0, I: 0, S: 0, A: 0, T: 0 };
-      const filled = filledByKelasScope.get(`${kelas.id}|${scope}`)?.size ?? 0;
+      // Denominator: pertemuan terisi kelas ini — dipotong sejak tanggal gabung
+      // bila peserta baru masuk di tengah periode (pertemuan sebelum ia
+      // terdaftar tak boleh menggerus persentasenya).
+      const mulaiTanggal = joinDateOf(a);
+      const fset = filledByKelasScope.get(`${kelas.id}|${scope}`);
+      const filled = !fset
+        ? 0
+        : mulaiTanggal
+          ? [...fset].filter((pid) => (pertemuanById.get(pid)?.tanggal ?? '') >= mulaiTanggal).length
+          : fset.size;
       const persen = filled > 0 ? Math.round(((counts.H + counts.T) / filled) * 100) : null;
       // Tidak hadir = pertemuan terisi − (hadir+terlambat). Termasuk sesi yang
       // peserta tak punya catatan sama sekali (bukan hanya izin/sakit/alpa),
@@ -239,6 +292,7 @@ export async function getLaporanMaahir(month: string): Promise<LaporanMaahir> {
         tidakHadir,
         persen,
         keterangan: st ? Array.from(st.catatan).join('; ') : '',
+        mulaiTanggal,
       });
     }
     return out;
@@ -262,7 +316,26 @@ export async function getLaporanMaahir(month: string): Promise<LaporanMaahir> {
       if (x.kelas!.gender !== y.kelas!.gender) return x.kelas!.gender === 'ikhwan' ? -1 : 1;
       return x.a.name.localeCompare(y.a.name);
     })
-    .map((x) => ({ name: x.a.name, gender: x.kelas!.gender, kelasName: x.kelas!.name }));
+    .map((x): SetoranPeserta => {
+      const rows = (setoranByAnggota.get(x.a.id) ?? []).sort((p, q) =>
+        p.tanggal < q.tanggal ? -1 : p.tanggal > q.tanggal ? 1 : 0
+      );
+      const halaman = rows.reduce((s, rw) => s + rw.halaman, 0);
+      return {
+        anggotaId: x.a.id,
+        name: x.a.name,
+        gender: x.kelas!.gender,
+        kelasName: x.kelas!.name,
+        halaman: rows.length ? halaman : null,
+        pertemuanSetor: rows.length,
+        rincian: rows
+          .map((rw) => `${rw.tanggal.slice(8, 10)}/${rw.tanggal.slice(5, 7)}: ${rw.halaman} hal`)
+          .join(' · '),
+      };
+    });
+  const takhSetoranAktual = mean(
+    takhPeserta.filter((p) => p.halaman !== null).map((p) => p.halaman as number)
+  );
 
   // ---- Maahir (non-takhassus, scope kelas_maahir) ----
   const maahirStudents = studentsFor(isMaahir, 'kelas_maahir');
@@ -285,7 +358,7 @@ export async function getLaporanMaahir(month: string): Promise<LaporanMaahir> {
   return {
     month,
     takhassus: {
-      setoran: { benchmark: 80, aktual: null, peserta: takhPeserta },
+      setoran: { benchmark: 80, aktual: takhSetoranAktual, peserta: takhPeserta },
       kehadiran: { avgIkhwan: takhAvgI, avgAkhwat: takhAvgA, aktual: avgOfGenders(takhAvgI, takhAvgA), benchmark: 80 },
       dibawahTarget: { jumlah: takhBawah.length, list: takhBawah },
       kehadiranPengajar: 100,

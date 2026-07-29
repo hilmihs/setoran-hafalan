@@ -190,7 +190,14 @@ function BawahTargetTable({ list }: { list: StudentAtt[] }) {
             const tanpaKet = Math.max(0, s.tidakHadir - (s.counts.I + s.counts.S + s.counts.A));
             return (
               <tr key={s.anggotaId}>
-                <td>{s.name}</td>
+                <td>
+                  {s.name}
+                  {s.mulaiTanggal && (
+                    <div className="t-tiny" style={{ color: 'var(--muted-2)' }}>
+                      gabung {s.mulaiTanggal.slice(8, 10)}/{s.mulaiTanggal.slice(5, 7)}
+                    </div>
+                  )}
+                </td>
                 <td className="t-tiny">{s.kelasName}</td>
                 <td style={{ textAlign: 'center' }}>{pct(s.persen)}</td>
                 <td style={{ textAlign: 'center' }} className="t-tiny">
@@ -218,7 +225,13 @@ function TakhassusBlock({ lap }: { lap: Awaited<ReturnType<typeof getLaporanMaah
       <h2 className="t-h2" style={{ marginBottom: 8 }}>Maahir Takhassus (Ikhwan &amp; Akhwat)</h2>
 
       <ObsTable title="Hal yang diobservasi">
-        <ObsRow no="1" hal="Setoran Al-Qur'an per bulan" aktual={num(t.setoran.aktual)} benchmark={String(t.setoran.benchmark)} />
+        <ObsRow
+          no="1"
+          hal="Setoran Al-Qur'an per bulan (halaman)"
+          aktual={num(t.setoran.aktual)}
+          benchmark={String(t.setoran.benchmark)}
+          notes="Rata-rata halaman per peserta yang mengisi setoran"
+        />
         <ObsRow no="2" hal="Kehadiran peserta per bulan" aktual={pct(t.kehadiran.aktual)} benchmark={`${t.kehadiran.benchmark}%`} />
         <ObsRow no="3" hal="Jumlah peserta dengan absensi di bawah target" aktual={`${t.dibawahTarget.jumlah} orang`} benchmark="" />
         <ObsRow no="4" hal="Kehadiran pengajar per bulan" aktual={`${t.kehadiranPengajar}%`} benchmark="80%" />
@@ -229,15 +242,26 @@ function TakhassusBlock({ lap }: { lap: Awaited<ReturnType<typeof getLaporanMaah
       <div className="table-scroll" style={{ marginBottom: 12 }}>
         <table className="k-table" style={{ width: '100%' }}>
           <thead>
-            <tr><th>Peserta</th><th style={{ width: 60 }}>Gender</th><th style={{ width: 120 }}>Jumlah setoran</th><th>Keterangan</th></tr>
+            <tr>
+              <th>Peserta</th>
+              <th style={{ width: 60 }}>Gender</th>
+              <th style={{ width: 110 }}>Setoran (hal)</th>
+              <th style={{ width: 90 }}>Pertemuan</th>
+              <th>Rincian per pertemuan</th>
+            </tr>
           </thead>
           <tbody>
-            {t.setoran.peserta.map((p, i) => (
-              <tr key={`${p.name}-${i}`}>
+            {t.setoran.peserta.map((p) => (
+              <tr key={p.anggotaId}>
                 <td>{p.name}</td>
                 <td className="t-tiny">{p.gender === 'ikhwan' ? 'Ikhwan' : 'Akhwat'}</td>
-                <td></td>
-                <td></td>
+                <td style={{ textAlign: 'center', fontWeight: p.halaman ? 600 : 400 }}>
+                  {p.halaman ?? '—'}
+                </td>
+                <td style={{ textAlign: 'center' }} className="t-tiny">
+                  {p.pertemuanSetor > 0 ? `${p.pertemuanSetor}×` : '—'}
+                </td>
+                <td className="t-tiny" style={{ color: 'var(--muted-2)' }}>{p.rincian || '—'}</td>
               </tr>
             ))}
           </tbody>
@@ -296,27 +320,7 @@ function AtTibyanBlock({ lap }: { lap: Awaited<ReturnType<typeof getLaporanMaahi
 
       <GenderRata ikhwan={a.kehadiran.avgIkhwan} akhwat={a.kehadiran.avgAkhwat} rata={a.kehadiran.aktual} />
       <div className="t-tiny" style={{ color: 'var(--muted-2)', margin: '4px 0' }}>Peserta di bawah target (&lt; 100%)</div>
-      {a.dibawahTarget.list.length === 0 ? (
-        <p className="t-small" style={{ color: 'var(--muted-2)', marginBottom: 12 }}>Tidak ada peserta di bawah target.</p>
-      ) : (
-        <div className="table-scroll" style={{ marginBottom: 12 }}>
-          <table className="k-table" style={{ width: '100%' }}>
-            <thead>
-              <tr><th>Peserta di bawah target</th><th style={{ width: 90 }}>Tidak hadir</th><th>Kelas</th><th>Keterangan</th></tr>
-            </thead>
-            <tbody>
-              {a.dibawahTarget.list.map((s) => (
-                <tr key={s.anggotaId}>
-                  <td>{s.name}</td>
-                  <td style={{ textAlign: 'center' }}>{s.tidakHadir}x</td>
-                  <td className="t-tiny">{s.kelasName}</td>
-                  <td className="t-tiny" style={{ color: 'var(--muted-2)' }}>{s.keterangan}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+      <BawahTargetTable list={a.dibawahTarget.list} />
     </section>
   );
 }

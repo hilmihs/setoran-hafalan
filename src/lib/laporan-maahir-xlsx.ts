@@ -2,7 +2,7 @@
 // keputusan). Dipisah dari route agar bisa diuji/di-generate mandiri.
 
 import ExcelJS from 'exceljs';
-import type { LaporanMaahir } from '@/lib/laporan-maahir';
+import type { LaporanMaahir, StudentAtt } from '@/lib/laporan-maahir';
 
 const BULAN_ID = [
   'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
@@ -22,7 +22,7 @@ const C = {
   border: 'FFCBD5E1', zebra: 'FFF6FBF8', ok: 'FF15803D', bad: 'FFB91C1C',
   muted: 'FF64748B', white: 'FFFFFFFF', ink: 'FF1F2937',
 };
-const NCOL = 8;
+const NCOL = 12;
 
 export async function buildLaporanMaahirWorkbook(lap: LaporanMaahir, bulan: string) {
   const wb = new ExcelJS.Workbook();
@@ -31,13 +31,16 @@ export async function buildLaporanMaahirWorkbook(lap: LaporanMaahir, bulan: stri
   const ws = wb.addWorksheet(bulanLabel(bulan), {
     views: [{ showGridLines: false }],
     pageSetup: {
-      orientation: 'portrait', fitToPage: true, fitToWidth: 1,
+      orientation: 'landscape', fitToPage: true, fitToWidth: 1,
       margins: { left: 0.4, right: 0.4, top: 0.5, bottom: 0.5, header: 0.3, footer: 0.3 },
     },
   });
+  // 12 kolom: cukup untuk tabel "peserta di bawah target" berformat seragam
+  // (Peserta · Kelas · Kehadiran · Pertemuan · Tidak hadir · I/S/A · Tanpa ket · Keterangan).
   ws.columns = [
-    { width: 6 }, { width: 40 }, { width: 16 }, { width: 14 },
-    { width: 22 }, { width: 12 }, { width: 12 }, { width: 18 },
+    { width: 6 }, { width: 26 }, { width: 12 }, { width: 12 },
+    { width: 11 }, { width: 11 }, { width: 10 }, { width: 7 },
+    { width: 7 }, { width: 7 }, { width: 9 }, { width: 26 },
   ];
 
   const thin = { style: 'thin' as const, color: { argb: C.border } };
@@ -123,46 +126,96 @@ export async function buildLaporanMaahirWorkbook(lap: LaporanMaahir, bulan: stri
   function obsHead() {
     tableHead([
       { text: 'No', from: 1, to: 1 },
-      { text: 'Hal yang diobservasi', from: 2, to: 2, align: 'left' },
-      { text: 'Aktual', from: 3, to: 3 },
-      { text: 'Benchmark', from: 4, to: 4 },
-      { text: 'Notes', from: 5, to: NCOL, align: 'left' },
+      { text: 'Hal yang diobservasi', from: 2, to: 4, align: 'left' },
+      { text: 'Aktual', from: 5, to: 5 },
+      { text: 'Benchmark', from: 6, to: 6 },
+      { text: 'Notes', from: 7, to: NCOL, align: 'left' },
     ]);
   }
   function obsRow(no: number, hal: string, aktual: string, benchmark: string, opts?: { ink?: string; notes?: string }, zebra = false) {
     dataRow([
       { text: no, from: 1, to: 1, ink: C.muted },
-      { text: hal, from: 2, to: 2, align: 'left' },
-      { text: aktual, from: 3, to: 3, bold: true, ink: opts?.ink },
-      { text: benchmark, from: 4, to: 4, ink: C.muted },
-      { text: opts?.notes ?? '', from: 5, to: NCOL, align: 'left', ink: C.muted },
+      { text: hal, from: 2, to: 4, align: 'left' },
+      { text: aktual, from: 5, to: 5, bold: true, ink: opts?.ink },
+      { text: benchmark, from: 6, to: 6, ink: C.muted },
+      { text: opts?.notes ?? '', from: 7, to: NCOL, align: 'left', ink: C.muted },
     ], zebra);
+  }
+
+  /**
+   * Tabel "peserta di bawah target" — format SERAGAM untuk Takhassus, Maahir,
+   * dan At-Tibyan: jumlah pertemuan + rincian alasan tidak hadir + keterangan.
+   */
+  function bawahTargetTable(list: StudentAtt[]) {
+    tableHead([
+      { text: 'Peserta', from: 1, to: 2, align: 'left' },
+      { text: 'Kelas', from: 3, to: 4, align: 'left' },
+      { text: 'Kehadiran', from: 5, to: 5 },
+      { text: 'Pertemuan', from: 6, to: 6 },
+      { text: 'Tidak Hadir', from: 7, to: 7 },
+      { text: 'Izin', from: 8, to: 8 },
+      { text: 'Sakit', from: 9, to: 9 },
+      { text: 'Alpa', from: 10, to: 10 },
+      { text: 'Tanpa Ket.', from: 11, to: 11 },
+      { text: 'Keterangan', from: 12, to: NCOL, align: 'left' },
+    ]);
+    if (list.length === 0) {
+      dataRow([{ text: 'Tidak ada peserta di bawah target.', from: 1, to: NCOL, align: 'left', ink: C.muted }]);
+      return;
+    }
+    list.forEach((st, i) => {
+      const hadir = st.counts.H + st.counts.T;
+      const tanpaKet = Math.max(0, st.tidakHadir - (st.counts.I + st.counts.S + st.counts.A));
+      const nama = st.mulaiTanggal
+        ? `${st.name} (gabung ${st.mulaiTanggal.slice(8, 10)}/${st.mulaiTanggal.slice(5, 7)})`
+        : st.name;
+      dataRow([
+        { text: nama, from: 1, to: 2, align: 'left' },
+        { text: st.kelasName, from: 3, to: 4, align: 'left', ink: C.muted },
+        { text: pct(st.persen), from: 5, to: 5, bold: true, ink: C.bad },
+        { text: `${hadir}/${st.filled}`, from: 6, to: 6, ink: C.muted },
+        { text: `${st.tidakHadir}x`, from: 7, to: 7, bold: true, ink: C.bad },
+        { text: st.counts.I, from: 8, to: 8 },
+        { text: st.counts.S, from: 9, to: 9 },
+        { text: st.counts.A, from: 10, to: 10 },
+        { text: tanpaKet, from: 11, to: 11 },
+        { text: st.keterangan, from: 12, to: NCOL, align: 'left', ink: C.muted },
+      ], i % 2 === 1);
+    });
   }
 
   // ===== TAKHASSUS =====
   const t = lap.takhassus;
   band('MAAHIR TAKHASSUS (IKHWAN & AKHWAT)');
   obsHead();
-  obsRow(1, "Setoran Al-Qur'an per bulan", t.setoran.aktual === null ? '—' : String(t.setoran.aktual), String(t.setoran.benchmark));
+  obsRow(
+    1,
+    "Setoran Al-Qur'an per bulan (halaman)",
+    t.setoran.aktual === null ? '—' : String(t.setoran.aktual),
+    String(t.setoran.benchmark),
+    { notes: 'Rata-rata halaman per peserta yang mengisi setoran' }
+  );
   obsRow(2, 'Kehadiran peserta per bulan', pct(t.kehadiran.aktual), `${t.kehadiran.benchmark}%`, { ink: inkForPct(t.kehadiran.aktual, t.kehadiran.benchmark) }, true);
   obsRow(3, 'Jumlah peserta dengan absensi di bawah target', `${t.dibawahTarget.jumlah} orang`, '');
   obsRow(4, 'Kehadiran pengajar per bulan', `${t.kehadiranPengajar}%`, '80%', { ink: C.ok }, true);
   obsRow(5, 'Jumlah pengajar dengan absensi di bawah target', `${t.pengajarDibawahTarget} orang`, '');
   spacer();
 
-  subBand('Rincian Setoran — Peserta Takhassus');
+  subBand('Rincian Setoran — Peserta Takhassus (halaman per pertemuan)');
   tableHead([
     { text: 'Peserta', from: 1, to: 2, align: 'left' },
     { text: 'Gender', from: 3, to: 3 },
-    { text: 'Jumlah Setoran', from: 4, to: 5 },
-    { text: 'Keterangan', from: 6, to: NCOL, align: 'left' },
+    { text: 'Setoran (hal)', from: 4, to: 5 },
+    { text: 'Pertemuan', from: 6, to: 7 },
+    { text: 'Rincian per Pertemuan', from: 8, to: NCOL, align: 'left' },
   ]);
   t.setoran.peserta.forEach((p, i) => {
     dataRow([
       { text: p.name, from: 1, to: 2, align: 'left' },
       { text: p.gender === 'ikhwan' ? 'Ikhwan' : 'Akhwat', from: 3, to: 3, ink: C.muted },
-      { text: '', from: 4, to: 5 },
-      { text: '', from: 6, to: NCOL, align: 'left' },
+      { text: p.halaman ?? '—', from: 4, to: 5, bold: p.halaman !== null },
+      { text: p.pertemuanSetor > 0 ? `${p.pertemuanSetor}x` : '—', from: 6, to: 7, ink: C.muted },
+      { text: p.rincian || '—', from: 8, to: NCOL, align: 'left', ink: C.muted },
     ], i % 2 === 1);
   });
   spacer();
@@ -181,30 +234,7 @@ export async function buildLaporanMaahirWorkbook(lap: LaporanMaahir, bulan: stri
   spacer();
 
   band('Peserta di Bawah Target (< 80%)', C.danger, C.dangerInk);
-  tableHead([
-    { text: 'Peserta', from: 1, to: 2, align: 'left' },
-    { text: 'Kelas', from: 3, to: 3 },
-    { text: 'Kehadiran', from: 4, to: 4 },
-    { text: 'Hadir', from: 5, to: 5 },
-    { text: 'Izin', from: 6, to: 6 },
-    { text: 'Sakit', from: 7, to: 7 },
-    { text: 'Alpa', from: 8, to: 8 },
-  ]);
-  if (t.dibawahTarget.list.length === 0) {
-    dataRow([{ text: 'Tidak ada peserta di bawah target.', from: 1, to: NCOL, align: 'left', ink: C.muted }]);
-  } else {
-    t.dibawahTarget.list.forEach((st, i) => {
-      dataRow([
-        { text: st.name, from: 1, to: 2, align: 'left' },
-        { text: st.kelasName, from: 3, to: 3, ink: C.muted },
-        { text: pct(st.persen), from: 4, to: 4, bold: true, ink: C.bad },
-        { text: st.counts.H, from: 5, to: 5 },
-        { text: st.counts.I, from: 6, to: 6 },
-        { text: st.counts.S, from: 7, to: 7 },
-        { text: st.counts.A, from: 8, to: 8 },
-      ], i % 2 === 1);
-    });
-  }
+  bawahTargetTable(t.dibawahTarget.list);
   spacer();
   band('CATATAN / POIN MENARIK', C.sub, C.subInk);
   dataRow([{ text: t.catatan ?? '', from: 1, to: NCOL, align: 'left', ink: C.muted }]);
@@ -240,22 +270,7 @@ export async function buildLaporanMaahirWorkbook(lap: LaporanMaahir, bulan: stri
   spacer();
 
   band('Peserta di Bawah Target (< 80%)', C.danger, C.dangerInk);
-  tableHead([
-    { text: 'Peserta', from: 1, to: 3, align: 'left' },
-    { text: 'Kehadiran', from: 4, to: 5 },
-    { text: 'Kelas', from: 6, to: NCOL, align: 'left' },
-  ]);
-  if (m.dibawahTarget.list.length === 0) {
-    dataRow([{ text: 'Tidak ada peserta di bawah target.', from: 1, to: NCOL, align: 'left', ink: C.muted }]);
-  } else {
-    m.dibawahTarget.list.forEach((st, i) => {
-      dataRow([
-        { text: st.name, from: 1, to: 3, align: 'left' },
-        { text: pct(st.persen), from: 4, to: 5, bold: true, ink: C.bad },
-        { text: st.kelasName, from: 6, to: NCOL, align: 'left', ink: C.muted },
-      ], i % 2 === 1);
-    });
-  }
+  bawahTargetTable(m.dibawahTarget.list);
   spacer(); spacer();
 
   // ===== AT-TIBYAN =====
@@ -280,24 +295,7 @@ export async function buildLaporanMaahirWorkbook(lap: LaporanMaahir, bulan: stri
   spacer();
 
   band('Peserta di Bawah Target (< 100%)', C.danger, C.dangerInk);
-  tableHead([
-    { text: 'Peserta', from: 1, to: 2, align: 'left' },
-    { text: 'Tidak Hadir', from: 3, to: 3 },
-    { text: 'Kelas', from: 4, to: 5, align: 'left' },
-    { text: 'Keterangan', from: 6, to: NCOL, align: 'left' },
-  ]);
-  if (a.dibawahTarget.list.length === 0) {
-    dataRow([{ text: 'Tidak ada peserta di bawah target.', from: 1, to: NCOL, align: 'left', ink: C.muted }]);
-  } else {
-    a.dibawahTarget.list.forEach((st, i) => {
-      dataRow([
-        { text: st.name, from: 1, to: 2, align: 'left' },
-        { text: `${st.tidakHadir}x`, from: 3, to: 3, bold: true, ink: C.bad },
-        { text: st.kelasName, from: 4, to: 5, align: 'left', ink: C.muted },
-        { text: st.keterangan, from: 6, to: NCOL, align: 'left', ink: C.muted },
-      ], i % 2 === 1);
-    });
-  }
+  bawahTargetTable(a.dibawahTarget.list);
 
   return wb.xlsx.writeBuffer();
 }
