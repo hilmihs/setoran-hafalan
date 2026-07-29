@@ -1,7 +1,13 @@
+import { Fragment } from 'react';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { requireKoordinatorKetuaKelas } from '@/lib/session';
-import { getDisiplinRanking, getNoDataActionInfo } from '@/lib/hits-ranking';
+import {
+  getDisiplinRanking,
+  getNoDataActionInfo,
+  getInsidenDetailByPengajar,
+  type InsidenDetail,
+} from '@/lib/hits-ranking';
 import { getHitsPengajuan } from '@/lib/hits-pengajuan';
 import { GenderNavSelect } from '@/components/GenderNavSelect';
 import { MonthNavSelect } from '@/components/MonthNavSelect';
@@ -17,6 +23,102 @@ import { Icon } from '@/components/icons';
 export const dynamic = 'force-dynamic';
 
 const ANCHOR_MONTH = '2026-01'; // batch HITS paling awal mulai Jan 2026
+
+const JENIS_LABEL: Record<string, string> = {
+  KMT: 'Kelas Mulai Terlambat',
+  KBLA: 'Kelas Berakhir Lebih Awal',
+  JKG: 'Jadwal Kelas Ganti',
+  BADAL: 'Pengajar digantikan (badal)',
+  TIDAK_LATIHAN: 'Tidak memberikan latihan',
+};
+const JENIS_SHORT: Record<string, string> = {
+  KMT: 'KMT',
+  KBLA: 'KBLA',
+  JKG: 'JKG',
+  BADAL: 'BADAL',
+  TIDAK_LATIHAN: 'TL',
+};
+const STATUS_LABEL: Record<InsidenDetail['status'], string> = {
+  belum_ditabayyun: 'Belum ditabayyun',
+  nunggu_alasan: 'Nunggu alasan pengajar',
+  pending: 'Nunggu putusan koordinator',
+  diputus: 'Sudah diputus',
+};
+
+/** Putusan koordinator ketua kelas: udzur syar'i diterima / ditolak. */
+function putusanText(i: InsidenDetail): string {
+  if (i.status !== 'diputus' || i.isUdzurSyari === null) return STATUS_LABEL[i.status];
+  return i.isUdzurSyari ? '✅ Udzur syar’i diterima' : '❌ Udzur ditolak';
+}
+
+/** Rincian insiden KMT/KBLA/JKG/TL satu pengajar — alasan & putusan. */
+function InsidenDetailRows({ list }: { list: InsidenDetail[] }) {
+  return (
+    <details style={{ background: 'var(--surface-2, var(--surface-3))' }}>
+      <summary
+        className="t-tiny"
+        style={{ cursor: 'pointer', padding: '6px 12px', color: 'var(--muted-2)' }}
+      >
+        Rincian {list.length} insiden — alasan ketua kelas, tabayyun &amp; putusan
+      </summary>
+      <div style={{ padding: '0 12px 12px' }}>
+        <table className="k-table" style={{ width: '100%' }}>
+          <thead>
+            <tr>
+              <th style={{ width: 92 }}>Tanggal</th>
+              <th style={{ width: 40 }}>Prt</th>
+              <th>Halaqah</th>
+              <th style={{ width: 150 }}>Pelanggaran</th>
+              <th>Keterangan ketua</th>
+              <th>Alasan pengajar (tabayyun)</th>
+              <th style={{ width: 150 }}>Putusan koordinator</th>
+            </tr>
+          </thead>
+          <tbody>
+            {list.map((i) => (
+              <tr key={i.keteranganId}>
+                <td className="t-tiny" style={{ whiteSpace: 'nowrap' }}>{i.tanggal}</td>
+                <td className="t-mono t-tiny">{i.pertemuanNo}</td>
+                <td className="t-tiny">{i.halaqahName}</td>
+                <td>
+                  <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+                    {i.pelanggaran.map((p, idx) => (
+                      <span
+                        key={`${p.jenis}-${idx}`}
+                        className="badge"
+                        title={JENIS_LABEL[p.jenis] ?? p.jenis}
+                        style={{
+                          background: p.jenis === 'TIDAK_LATIHAN' ? 'var(--merah-tint)' : 'var(--kuning-tint)',
+                          borderColor: p.jenis === 'TIDAK_LATIHAN' ? 'var(--merah-line)' : 'var(--kuning-line)',
+                          color: p.jenis === 'TIDAK_LATIHAN' ? 'var(--merah-ink)' : 'var(--kuning-ink)',
+                        }}
+                      >
+                        {JENIS_SHORT[p.jenis] ?? p.jenis}
+                        {p.detail ? ` · ${p.detail}` : ''}
+                      </span>
+                    ))}
+                  </div>
+                </td>
+                <td className="t-tiny" style={{ color: 'var(--muted-2)', maxWidth: 220 }}>
+                  {i.catatanKetua?.trim() || '—'}
+                </td>
+                <td className="t-tiny" style={{ color: 'var(--muted-2)', maxWidth: 220 }}>
+                  {i.alasanPengajar?.trim() || '—'}
+                </td>
+                <td className="t-tiny" style={{ maxWidth: 180 }}>
+                  <div>{putusanText(i)}</div>
+                  {i.keputusanCatatan?.trim() ? (
+                    <div style={{ color: 'var(--muted-2)' }}>{i.keputusanCatatan}</div>
+                  ) : null}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </details>
+  );
+}
 
 export default async function HitsKoordinatorPage({
   searchParams,
@@ -64,6 +166,8 @@ export default async function HitsKoordinatorPage({
   }
 
   const rows = await getDisiplinRanking({ start, end, gender: genderFilter });
+  // Rincian alasan tiap insiden (keterangan ketua, tabayyun, putusan koordinator).
+  const insidenByPengajar = await getInsidenDetailByPengajar({ start, end, gender: genderFilter });
   const ranked = rows.filter((r) => r.rank !== null);
   const noData = rows.filter((r) => r.rank === null);
   const noDataAksi = await getNoDataActionInfo(noData);
@@ -253,8 +357,11 @@ export default async function HitsKoordinatorPage({
                       </tr>
                     </thead>
                     <tbody>
-                      {ranked.map((r) => (
-                        <tr key={r.pengajarId}>
+                      {ranked.map((r) => {
+                        const insiden = insidenByPengajar.get(r.pengajarId) ?? [];
+                        return (
+                        <Fragment key={r.pengajarId}>
+                        <tr>
                           <td className="t-mono" style={{ textAlign: 'right', color: 'var(--muted)' }}>
                             {r.rank}
                           </td>
@@ -294,7 +401,16 @@ export default async function HitsKoordinatorPage({
                             {r.halaqahCount}
                           </td>
                         </tr>
-                      ))}
+                        {insiden.length > 0 && (
+                          <tr>
+                            <td colSpan={9} style={{ padding: 0, borderTop: 0 }}>
+                              <InsidenDetailRows list={insiden} />
+                            </td>
+                          </tr>
+                        )}
+                        </Fragment>
+                        );
+                      })}
                     </tbody>
                   </table>
                 </div>

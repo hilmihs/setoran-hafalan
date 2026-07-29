@@ -167,6 +167,179 @@ export async function getDisiplinRanking(opts: {
   return rankFromAggregates(aggs);
 }
 
+// ── Rincian insiden indisipliner per pengajar (KMT/KBLA/JKG/BADAL/TL) ───────
+// Dipakai dashboard ranking: baris angka KMT/KBLA/JKG/TL bisa dibuka untuk
+// melihat alasannya — keterangan ketua kelas, hasil tabayyun (alasan pengajar),
+// serta putusan koordinator ketua kelas (udzur syar'i diterima/ditolak).
+
+export type InsidenTabayyunStatus =
+  | 'belum_ditabayyun'
+  | 'nunggu_alasan'
+  | 'pending'
+  | 'diputus';
+
+export type PelanggaranItem = {
+  jenis: string; // KMT | KBLA | JKG | BADAL | TIDAK_LATIHAN
+  detail: string; // '12 menit', 'Ganti hari', 'Badal: Fulan', ''
+};
+
+export type InsidenDetail = {
+  keteranganId: string;
+  halaqahId: string;
+  halaqahName: string;
+  tanggal: string;
+  pertemuanNo: number;
+  pelanggaran: PelanggaranItem[];
+  catatanKetua: string | null; // keterangan yang ditulis ketua kelas
+  status: InsidenTabayyunStatus;
+  alasanPengajar: string | null; // hasil tabayyun
+  isUdzurSyari: boolean | null; // putusan koordinator KK
+  keputusanCatatan: string | null;
+  decidedAt: string | null;
+};
+
+function pelanggaranDetail(p: {
+  jenis: string;
+  menit: number | null;
+  jkg_opsi: string | null;
+  cicil_n: number | null;
+  badal_nama: string | null;
+}): string {
+  if ((p.jenis === 'KMT' || p.jenis === 'KBLA') && p.menit != null) return `${p.menit} menit`;
+  if (p.jenis === 'JKG' && p.jkg_opsi) {
+    const base = p.jkg_opsi === 'cicil' ? 'dicicil' : 'ganti hari';
+    return p.jkg_opsi === 'cicil' && p.cicil_n ? `${base} ${p.cicil_n}×` : base;
+  }
+  if (p.jenis === 'BADAL' && p.badal_nama) return `badal: ${p.badal_nama}`;
+  return '';
+}
+
+function tabayyunStatusOf(status: string | undefined): InsidenTabayyunStatus {
+  if (!status) return 'belum_ditabayyun';
+  if (status === 'awaiting_reason') return 'nunggu_alasan';
+  if (status === 'pending') return 'pending';
+  return 'diputus';
+}
+
+/**
+ * Rincian insiden per pengajar pada [start,end). Sumber sama dengan hitungan
+ * kolom KMT/KBLA/JKG/TL di ranking (hits_pelanggaran), di-join ke keterangan
+ * harian (catatan ketua) dan hits_tabayyun (alasan pengajar + putusan).
+ */
+export async function getInsidenDetailByPengajar(opts: {
+  start: string;
+  end: string;
+  gender?: Gender;
+}): Promise<Map<string, InsidenDetail[]>> {
+  const result = new Map<string, InsidenDetail[]>();
+
+  let hq = supabaseAdmin
+    .from('hits_halaqah')
+    .select('id, name, pengajar_id')
+    .eq('active', true)
+    .not('pengajar_id', 'is', null);
+  if (opts.gender) hq = hq.eq('gender', opts.gender);
+  const { data: halaqahList } = await hq;
+  const halaqah = (halaqahList ?? []) as Array<{ id: string; name: string; pengajar_id: string }>;
+  if (!halaqah.length) return result;
+
+  const halaqahIds = halaqah.map((h) => h.id);
+  const halaqahById = new Map(halaqah.map((h) => [h.id, h]));
+
+  const ketList = await fetchInChunks<{
+    id: string;
+    halaqah_id: string;
+    pertemuan_no: number;
+    tanggal: string;
+    catatan: string | null;
+  }>(
+    halaqahIds,
+    (chunk) =>
+      supabaseAdmin
+        .from('hits_keterangan_harian')
+        .select('id, halaqah_id, pertemuan_no, tanggal, catatan')
+        .gte('tanggal', opts.start)
+        .lt('tanggal', opts.end)
+        .in('halaqah_id', chunk),
+    40
+  );
+  if (!ketList.length) return result;
+
+  const ketIds = ketList.map((k) => k.id);
+  const [pelList, tabList] = await Promise.all([
+    fetchInChunks<{
+      keterangan_id: string;
+      jenis: string;
+      menit: number | null;
+      jkg_opsi: string | null;
+      cicil_n: number | null;
+      badal_nama: string | null;
+    }>(
+      ketIds,
+      (chunk) =>
+        supabaseAdmin
+          .from('hits_pelanggaran')
+          .select('keterangan_id, jenis, menit, jkg_opsi, cicil_n, badal_nama')
+          .in('keterangan_id', chunk),
+      100
+    ),
+    fetchInChunks<{
+      keterangan_id: string;
+      status: string;
+      alasan_pengajar: string | null;
+      is_udzur_syari: boolean | null;
+      keputusan_catatan: string | null;
+      decided_at: string | null;
+    }>(
+      ketIds,
+      (chunk) =>
+        supabaseAdmin
+          .from('hits_tabayyun')
+          .select('keterangan_id, status, alasan_pengajar, is_udzur_syari, keputusan_catatan, decided_at')
+          .in('keterangan_id', chunk),
+      100
+    ),
+  ]);
+  if (!pelList.length) return result;
+
+  const pelByKet = new Map<string, PelanggaranItem[]>();
+  for (const p of pelList) {
+    const arr = pelByKet.get(p.keterangan_id) ?? [];
+    arr.push({ jenis: p.jenis, detail: pelanggaranDetail(p) });
+    pelByKet.set(p.keterangan_id, arr);
+  }
+  const tabByKet = new Map(tabList.map((t) => [t.keterangan_id, t]));
+
+  for (const k of ketList) {
+    const pelanggaran = pelByKet.get(k.id);
+    if (!pelanggaran?.length) continue;
+    const h = halaqahById.get(k.halaqah_id);
+    if (!h) continue;
+    const t = tabByKet.get(k.id);
+    const item: InsidenDetail = {
+      keteranganId: k.id,
+      halaqahId: k.halaqah_id,
+      halaqahName: h.name,
+      tanggal: k.tanggal,
+      pertemuanNo: k.pertemuan_no,
+      pelanggaran,
+      catatanKetua: k.catatan,
+      status: tabayyunStatusOf(t?.status),
+      alasanPengajar: t?.alasan_pengajar ?? null,
+      isUdzurSyari: t?.is_udzur_syari ?? null,
+      keputusanCatatan: t?.keputusan_catatan ?? null,
+      decidedAt: t?.decided_at ?? null,
+    };
+    const arr = result.get(h.pengajar_id) ?? [];
+    arr.push(item);
+    result.set(h.pengajar_id, arr);
+  }
+  for (const arr of result.values()) {
+    arr.sort((a, b) => (a.tanggal < b.tanggal ? 1 : a.tanggal > b.tanggal ? -1 : 0));
+  }
+  return result;
+}
+
 // ── Info aksi untuk baris "belum ada data" ──────────────────────────────────
 export type HalaqahAksi = {
   halaqahId: string;

@@ -54,7 +54,8 @@ export async function approveHapus(token: string, catatan: string): Promise<Deci
         set_by_id: koorId,
         updated_at: new Date().toISOString(),
       },
-      { onConflict: 'halaqah_id,pertemuan_no' }
+      // Unique constraint tabel: (halaqah_id, level, pertemuan_no).
+      { onConflict: 'halaqah_id,level,pertemuan_no' }
     );
   if (ovErr) return { error: `Gagal menghapus pertemuan: ${ovErr.message}` };
 

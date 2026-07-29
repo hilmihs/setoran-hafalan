@@ -151,6 +151,7 @@ export default async function IndisiplinerRekapPage({
                           <th>Tanggal</th>
                           <th>Prt</th>
                           <th>Pelanggaran</th>
+                          <th>Keterangan ketua</th>
                           <th>Alasan pengajar</th>
                           <th>Status</th>
                           <th>Udzur?</th>
@@ -174,6 +175,7 @@ export default async function IndisiplinerRekapPage({
                                   })}
                                 </div>
                               </td>
+                              <td className="t-small" style={{ color: 'var(--muted-2)', maxWidth: 200 }}>{i.catatan?.trim() || '—'}</td>
                               <td className="t-small" style={{ color: 'var(--muted-2)', maxWidth: 200 }}>{i.alasanPengajar ?? '—'}</td>
                               <td><span className="badge" style={{ background: ss.bg, borderColor: ss.bd, color: ss.ink }}>{STATUS_LABEL[i.status]}</span></td>
                               <td style={{ whiteSpace: 'nowrap' }}>{udzurCell(i)}</td>

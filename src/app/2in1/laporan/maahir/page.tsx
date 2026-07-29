@@ -174,26 +174,37 @@ function BawahTargetTable({ list }: { list: StudentAtt[] }) {
             <th>Peserta di bawah target</th>
             <th style={{ width: 70 }}>Kelas</th>
             <th style={{ width: 70 }}>Kehadiran</th>
-            <th style={{ width: 50 }}>Hadir</th>
+            <th style={{ width: 90 }}>Pertemuan</th>
+            <th style={{ width: 70 }}>Tidak hadir</th>
             <th style={{ width: 50 }}>Izin</th>
             <th style={{ width: 50 }}>Sakit</th>
             <th style={{ width: 50 }}>Alpa</th>
+            <th style={{ width: 70 }}>Tanpa ket.</th>
             <th>Keterangan</th>
           </tr>
         </thead>
         <tbody>
-          {list.map((s) => (
-            <tr key={s.anggotaId}>
-              <td>{s.name}</td>
-              <td className="t-tiny">{s.kelasName}</td>
-              <td style={{ textAlign: 'center' }}>{pct(s.persen)}</td>
-              <td style={{ textAlign: 'center' }}>{s.counts.H}</td>
-              <td style={{ textAlign: 'center' }}>{s.counts.I}</td>
-              <td style={{ textAlign: 'center' }}>{s.counts.S}</td>
-              <td style={{ textAlign: 'center' }}>{s.counts.A}</td>
-              <td className="t-tiny" style={{ color: 'var(--muted-2)' }}>{s.keterangan}</td>
-            </tr>
-          ))}
+          {list.map((s) => {
+            const hadir = s.counts.H + s.counts.T;
+            // Sesi tidak hadir yang tak punya baris status (bukan izin/sakit/alpa).
+            const tanpaKet = Math.max(0, s.tidakHadir - (s.counts.I + s.counts.S + s.counts.A));
+            return (
+              <tr key={s.anggotaId}>
+                <td>{s.name}</td>
+                <td className="t-tiny">{s.kelasName}</td>
+                <td style={{ textAlign: 'center' }}>{pct(s.persen)}</td>
+                <td style={{ textAlign: 'center' }} className="t-tiny">
+                  {hadir}/{s.filled}
+                </td>
+                <td style={{ textAlign: 'center', fontWeight: 600 }}>{s.tidakHadir}x</td>
+                <td style={{ textAlign: 'center' }}>{s.counts.I}</td>
+                <td style={{ textAlign: 'center' }}>{s.counts.S}</td>
+                <td style={{ textAlign: 'center' }}>{s.counts.A}</td>
+                <td style={{ textAlign: 'center' }}>{tanpaKet}</td>
+                <td className="t-tiny" style={{ color: 'var(--muted-2)' }}>{s.keterangan || '—'}</td>
+              </tr>
+            );
+          })}
         </tbody>
       </table>
     </div>
@@ -261,26 +272,7 @@ function MaahirBlock({ lap }: { lap: Awaited<ReturnType<typeof getLaporanMaahir>
 
       <GenderRata ikhwan={m.kehadiran.avgIkhwan} akhwat={m.kehadiran.avgAkhwat} rata={m.kehadiran.aktual} />
       <div className="t-tiny" style={{ color: 'var(--muted-2)', margin: '4px 0' }}>Peserta di bawah target (&lt; 80%)</div>
-      {m.dibawahTarget.list.length === 0 ? (
-        <p className="t-small" style={{ color: 'var(--muted-2)', marginBottom: 12 }}>Tidak ada peserta di bawah target.</p>
-      ) : (
-        <div className="table-scroll" style={{ marginBottom: 12 }}>
-          <table className="k-table" style={{ width: '100%' }}>
-            <thead>
-              <tr><th>Peserta di bawah target</th><th style={{ width: 90 }}>Kehadiran</th><th>Kelas</th></tr>
-            </thead>
-            <tbody>
-              {m.dibawahTarget.list.map((s) => (
-                <tr key={s.anggotaId}>
-                  <td>{s.name}</td>
-                  <td style={{ textAlign: 'center' }}>{pct(s.persen)}</td>
-                  <td className="t-tiny">{s.kelasName}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+      <BawahTargetTable list={m.dibawahTarget.list} />
     </section>
   );
 }
