@@ -213,8 +213,13 @@ export async function submitKeteranganHarian(
   if (match.tanggal > today) return { error: 'Tidak bisa mengisi pertemuan yang belum berlangsung.' };
 
   const latihanDiberikan = isLibur ? null : latihanDiberikanRaw === 'true';
-  const finalStatus = !isLibur && latihanDiberikan && STATUS.includes(statusLatihan) ? statusLatihan : null;
-  const semuaSelesai = !isLibur && latihanDiberikan ? statusLatihan === 'SML' : null;
+  // TAL ("tidak ada latihan") mustahil bareng latihan_diberikan=true — dulu form
+  // menawarkan keduanya dan ketua kelas banyak salah pilih. Client lama/legacy
+  // edit dinormalkan jadi PTML (tugas diberikan, peserta belum mengerjakan).
+  const statusNorm: HitsStatusLatihan =
+    latihanDiberikan && statusLatihan === 'TAL' ? 'PTML' : statusLatihan;
+  const finalStatus = !isLibur && latihanDiberikan && STATUS.includes(statusNorm) ? statusNorm : null;
+  const semuaSelesai = !isLibur && latihanDiberikan ? statusNorm === 'SML' : null;
 
   // Susun daftar jenis final (timing/jadwal + TIDAK_LATIHAN turunan).
   const jenisList: HitsPelanggaranJenis[] = isLibur ? [] : pelIn.map((p) => p.jenis);

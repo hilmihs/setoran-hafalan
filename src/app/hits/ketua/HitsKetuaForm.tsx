@@ -45,6 +45,11 @@ const slotKey = (s: { level: HitsLevel; pertemuanNo: number }) => `${s.level}-${
 // toggle "latihan diberikan").
 const PEL_JENIS: Array<'KMT' | 'KBLA' | 'JKG' | 'BADAL'> = ['KMT', 'KBLA', 'JKG', 'BADAL'];
 
+// Pilihan status latihan saat tugas DIBERIKAN. TAL ("tidak ada latihan") tidak
+// ada di sini karena duplikat dari toggle "Latihan mandiri diberikan? Tidak" —
+// dulu bikin ketua kelas salah pilih. Tetap ditampilkan bila record lama TAL.
+const STATUS_PILIHAN: HitsStatusLatihan[] = ['SML', 'PTML'];
+
 type PelDraft = {
   KMT: { on: boolean; menit: string };
   KBLA: { on: boolean; menit: string };
@@ -491,7 +496,7 @@ export function HitsKetuaForm({ halaqahId, halaqahName, pengajarName, slots: ini
             <div style={{ marginBottom: 14 }}>
               <label className="field-label">Status latihan mandiri</label>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                {(Object.keys(HITS_STATUS_LATIHAN_LABEL) as HitsStatusLatihan[]).map((s) => (
+                {(statusLatihan === 'TAL' ? [...STATUS_PILIHAN, 'TAL' as const] : STATUS_PILIHAN).map((s) => (
                   <label
                     key={s}
                     style={{
@@ -512,6 +517,9 @@ export function HitsKetuaForm({ halaqahId, halaqahName, pengajarName, slots: ini
                   </label>
                 ))}
               </div>
+              <p className="t-small" style={{ marginTop: 6, color: 'var(--muted-2)' }}>
+                PTML tidak menurunkan nilai pengajar — tugas sudah diberikan, pesertanya yang belum mengerjakan.
+              </p>
             </div>
           )}
 

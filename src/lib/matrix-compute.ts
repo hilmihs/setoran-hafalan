@@ -7,7 +7,8 @@
 //   Bobot hard skill: 8 porsi (maahir 3, tibyan 3, bacaan 1, tajwid 1).
 //   Pedagogis  : penilaian_pedagogis (4 aspek, oleh ketua kelompok)
 //   Soft skill : hits_keterangan_harian via hits_halaqah (kedisiplinan = %KBBS,
-//                tanggung jawab = %latihan beres), penilaian_pedagogis.skor_kepatuhan_sop (SOP).
+//                tanggung jawab = %latihan beres — pertemuan PTML tidak dinilai
+//                karena tugas sudah diberikan), penilaian_pedagogis.skor_kepatuhan_sop (SOP).
 //                komitmen_jadwal = rata-rata(Stabilitas Jadwal [jumlah JKG],
 //                Anti-Mangkir [JKG di-tabayyun & bukan udzur syar'i = teguran]).
 
@@ -314,10 +315,15 @@ export async function computeMatrixForMonth(yearMonth: string): Promise<MatrixRo
     if (!DISIPLIN_PEL.some((j) => jenis.has(j))) d.baik += 1;
     disiplinByPengajar.set(pgId, d);
 
-    const l = latihanByPengajar.get(pgId) ?? { done: 0, total: 0 };
-    l.total += 1;
-    if (k.latihan_diberikan && (k.semua_selesai || k.status_latihan === 'SML')) l.done += 1;
-    latihanByPengajar.set(pgId, l);
+    // PTML = pengajar sudah memberi tugas, hanya pesertanya yang belum
+    // mengerjakan. Bukan kelalaian pengajar → pertemuan itu tidak dinilai
+    // (di-skip dari penyebut), bukan dihitung gagal.
+    if (k.status_latihan !== 'PTML') {
+      const l = latihanByPengajar.get(pgId) ?? { done: 0, total: 0 };
+      l.total += 1;
+      if (k.latihan_diberikan && (k.semua_selesai || k.status_latihan === 'SML')) l.done += 1;
+      latihanByPengajar.set(pgId, l);
+    }
 
     // Stabilitas Jadwal: pertemuan dgn pergantian jadwal (JKG) atau badal.
     if (jenis.has('JKG') || jenis.has('BADAL')) jkgByPengajar.set(pgId, (jkgByPengajar.get(pgId) ?? 0) + 1);

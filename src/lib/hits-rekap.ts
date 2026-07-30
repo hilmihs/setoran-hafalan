@@ -183,13 +183,19 @@ export async function getHitsRekap(
     let kbbs = 0;
     let nonLibur = 0;
     let latihanDone = 0;
+    let latihanDinilai = 0;
     let terlambat = 0;
     for (const k of kets) {
       kondisiCount[k.kondisi as HitsKondisi] += 1;
       if (k.kondisi !== 'LIBUR') nonLibur += 1;
       if (k.kondisi === 'KBBS') kbbs += 1;
       if (k.terlambat) terlambat += 1;
-      if (k.latihan_diberikan && (k.semua_selesai || k.status_latihan === 'SML')) latihanDone += 1;
+      // Rumus sama dgn matrix-compute.ts (tanggung jawab): PTML = tugas sudah
+      // diberikan, pesertanya yang belum mengerjakan → pertemuan tak dinilai.
+      if (k.kondisi !== 'LIBUR' && k.status_latihan !== 'PTML') {
+        latihanDinilai += 1;
+        if (k.latihan_diberikan && (k.semua_selesai || k.status_latihan === 'SML')) latihanDone += 1;
+      }
     }
 
     // Ekspektasi pertemuan s/d hari ini (lintas tahap, dari kaldik + jadwal).
@@ -222,7 +228,7 @@ export async function getHitsRekap(
       nonLibur,
       pctKbbs: nonLibur > 0 ? Math.round((kbbs / nonLibur) * 100) : null,
       latihanDone,
-      pctLatihan: nonLibur > 0 ? Math.round((latihanDone / nonLibur) * 100) : null,
+      pctLatihan: latihanDinilai > 0 ? Math.round((latihanDone / latihanDinilai) * 100) : null,
       terlambat,
       kondisiCount,
       hutangSaldo: 0,
