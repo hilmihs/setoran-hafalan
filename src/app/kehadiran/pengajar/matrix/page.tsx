@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { requirePengajar } from '@/lib/session';
 import { supabaseAdmin } from '@/lib/supabase-admin';
 import {
+  INDIKATOR,
   INDIKATOR_BY_KATEGORI,
   KATEGORI_LABEL,
   KATEGORI_STANDAR,
@@ -10,6 +11,7 @@ import {
   scoreColor,
   type Kategori,
 } from '@/lib/matrix-indicators';
+import { MatrixRadarChart } from '@/components/charts/MatrixRadarChart';
 import { MonthNavSelect } from '@/components/MonthNavSelect';
 import { monthOptionsSince } from '@/lib/month';
 import { Icon } from '@/components/icons';
@@ -46,6 +48,19 @@ export default async function PengajarMatrixPage({
   const matrix = m as MatrixRekap | null;
 
   const overall = matrix?.rata_rata_keseluruhan ?? null;
+
+  // Spider chart 12 indikator. MatrixRadarChart menolak render bila indikator
+  // terisi < 5 (bentuknya menyesatkan), jadi hitung juga di sini untuk memilih
+  // teks pengganti daripada membiarkan kartunya kosong.
+  const radarData = INDIKATOR.map((ind) => {
+    const v = matrix?.[ind.key];
+    return {
+      indikator: ind.short,
+      skor: v === null || v === undefined ? null : Number(v),
+      standar: ind.standar,
+    };
+  });
+  const terisi = radarData.filter((d) => d.skor !== null).length;
 
   return (
     <main style={{ minHeight: '100vh' }}>
@@ -89,6 +104,25 @@ export default async function PengajarMatrixPage({
                   <div className="t-tiny" style={{ color: 'var(--merah-ink)', marginTop: 4 }}>
                     Teguran bulan ini: {matrix.total_teguran_bulan} · kumulatif {matrix.total_teguran_kumulatif}
                   </div>
+                )}
+              </div>
+
+              {/* Profil kompetensi — spider chart 12 indikator */}
+              <div className="card-flat" style={{ padding: 16, marginBottom: 16 }}>
+                <div className="t-tiny" style={{ color: 'var(--muted-2)', marginBottom: 8, textAlign: 'center' }}>
+                  Profil Kompetensi
+                </div>
+                {terisi >= 5 ? (
+                  <>
+                    <MatrixRadarChart data={radarData} height={280} />
+                    <p className="t-tiny" style={{ color: 'var(--muted-2)', textAlign: 'center', marginTop: 4 }}>
+                      Garis putus-putus = standar · area = nilai kamu
+                    </p>
+                  </>
+                ) : (
+                  <p className="t-small" style={{ color: 'var(--muted-2)', textAlign: 'center', margin: 0 }}>
+                    Grafik muncul bila minimal 5 indikator sudah dinilai (sekarang {terisi}).
+                  </p>
                 )}
               </div>
 
