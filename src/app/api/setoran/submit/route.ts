@@ -6,6 +6,7 @@ import { currentCycleStart } from '@/lib/week';
 import { buildWaMeUrl, tplPesertaSubmitToMusyrif } from '@/lib/whatsapp';
 import { absUrl } from '@/lib/url';
 import { JENIS_REKAMAN, type JenisRekaman } from '@/types/db';
+import { emitWebhook } from '@/lib/webhooks';
 
 export const runtime = 'nodejs';
 export const maxDuration = 300;
@@ -134,6 +135,15 @@ export async function POST(req: NextRequest) {
         { status: 500 }
       );
     }
+
+    // Push event ke konsumen webhook (best-effort, non-blocking).
+    void emitWebhook('setoran.submitted', {
+      setoran_id: setoranId,
+      peserta_id: pesertaId,
+      peserta_name: peserta.name,
+      kelas_name: kelas.name,
+      week_start: weekStart,
+    });
 
     const cekUrl = absUrl(`/musyrif/cek/${setoranId}`);
     const waText = tplPesertaSubmitToMusyrif({

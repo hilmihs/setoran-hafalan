@@ -8,6 +8,7 @@ import {
   type NilaiRekaman,
 } from '@/types/db';
 import { buildWaMeUrl, tplMusyrifFeedbackToPeserta } from '@/lib/whatsapp';
+import { emitWebhook } from '@/lib/webhooks';
 
 const VALID_NILAI: NilaiRekaman[] = ['hijau', 'kuning', 'merah'];
 
@@ -80,6 +81,15 @@ export async function submitCek(
     })
     .eq('id', setoranId);
   if (sErr) return { error: `Gagal update status: ${sErr.message}` };
+
+  // Push event ke konsumen webhook (best-effort, non-blocking).
+  void emitWebhook('setoran.checked', {
+    setoran_id: setoranId,
+    peserta_id: peserta.id,
+    kelas_name: peserta.kelas.name,
+    checked_by_musyrif_id: musyrifId,
+    nilai_summary: nilaiSummaryParts.join(' | '),
+  });
 
   const waText = tplMusyrifFeedbackToPeserta({
     pesertaName: peserta.name,

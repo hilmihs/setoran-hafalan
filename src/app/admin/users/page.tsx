@@ -50,6 +50,8 @@ export default async function AdminUsersPage({ searchParams }: { searchParams: S
             <div className="wordmark"><span className="mark">M</span> Superadmin — User</div>
             <div style={{ display: 'flex', gap: 8 }}>
               <Link href="/admin/audit" className="btn btn-sm btn-ghost" style={{ height: 30, padding: '0 10px' }}>Log Aktivitas</Link>
+              <Link href="/admin/api-keys" className="btn btn-sm btn-ghost" style={{ height: 30, padding: '0 10px' }}>API Keys</Link>
+              <Link href="/admin/webhooks" className="btn btn-sm btn-ghost" style={{ height: 30, padding: '0 10px' }}>Webhooks</Link>
               <Link href="/" className="btn btn-sm btn-ghost" style={{ height: 30, padding: '0 10px' }}>Dashboard</Link>
               <LogoutButton />
             </div>
