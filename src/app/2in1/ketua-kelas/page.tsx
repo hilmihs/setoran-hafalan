@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { supabaseAdmin } from '@/lib/supabase-admin';
-import { getSessionWa, findKetuaProgramKelas } from '@/lib/program-kelas';
+import { getSessionWa, findKetuaProgramKelas, isTakhassusKelas } from '@/lib/program-kelas';
 import { getUnfilledMaahirDays } from '@/lib/maahir-presensi';
 import { Icon } from '@/components/icons';
 import { SectionHeader } from '@/components/ui/SectionHeader';
@@ -135,28 +135,31 @@ export default async function KetuaKelasPage() {
             <span style={{ color: 'var(--muted-2)' }}>→</span>
           </Link>
 
-          <Link
-            href="/2in1/ketua-kelas/setoran"
-            className="card-flat"
-            style={{
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-              padding: '12px 14px',
-              marginBottom: 12,
-              textDecoration: 'none',
-              color: 'inherit',
-              borderRadius: 10,
-            }}
-          >
-            <div>
-              <div style={{ fontSize: 13, fontWeight: 600 }}>Setoran Hafalan (isi cepat)</div>
-              <div className="t-tiny" style={{ color: 'var(--muted-2)' }}>
-                Isi jumlah halaman per pertemuan — termasuk pertemuan yang sudah lalu
+          {/* Setoran hafalan hanya untuk kelas Takhassus. */}
+          {myKelas.some((k) => isTakhassusKelas(k.name)) && (
+            <Link
+              href="/2in1/ketua-kelas/setoran"
+              className="card-flat"
+              style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                padding: '12px 14px',
+                marginBottom: 12,
+                textDecoration: 'none',
+                color: 'inherit',
+                borderRadius: 10,
+              }}
+            >
+              <div>
+                <div style={{ fontSize: 13, fontWeight: 600 }}>Setoran Hafalan (isi cepat)</div>
+                <div className="t-tiny" style={{ color: 'var(--muted-2)' }}>
+                  Isi jumlah halaman per pertemuan — termasuk pertemuan yang sudah lalu
+                </div>
               </div>
-            </div>
-            <span style={{ color: 'var(--muted-2)' }}>→</span>
-          </Link>
+              <span style={{ color: 'var(--muted-2)' }}>→</span>
+            </Link>
+          )}
 
           <Link
             href="/2in1/ketua-kelas/pertemuan"

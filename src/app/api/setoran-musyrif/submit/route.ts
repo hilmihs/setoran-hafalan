@@ -49,6 +49,9 @@ export async function POST(req: NextRequest) {
       .select('id, name, gender, whatsapp_number')
       .eq('gender', musyrifGender)
       .eq('active', true)
+      .order('penerima_utama', { ascending: false })
+      .order('created_at', { ascending: true })
+      .limit(1)
       .maybeSingle();
     if (syaikhErr || !syaikh) {
       return NextResponse.json(

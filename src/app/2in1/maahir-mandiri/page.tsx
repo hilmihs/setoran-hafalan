@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
-import { getSessionWa, findSelfAttendanceMembership } from '@/lib/program-kelas';
+import { getSessionWa, findSelfAttendanceMembership, isTakhassusKelas } from '@/lib/program-kelas';
 import { getUnfilledDaysForAnggota, PROGRAM_LABEL } from '@/lib/maahir-presensi';
 import { LogoutButton } from '@/components/LogoutButton';
 import { SelfPresensiForm } from './SelfPresensiForm';
@@ -81,7 +81,7 @@ export default async function MaahirMandiriPage() {
   }
 
   const day = unfilled[0];
-  const askSetoran = day.program === 'kelas_maahir';
+  const askSetoran = day.program === 'kelas_maahir' && isTakhassusKelas(kelas.name);
   const tanggalLabel = new Date(day.tanggal + 'T00:00:00').toLocaleDateString('id-ID', {
     weekday: 'long', day: 'numeric', month: 'long', year: 'numeric',
   });

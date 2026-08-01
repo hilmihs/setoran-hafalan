@@ -33,6 +33,19 @@ export async function getSessionWa(): Promise<string | null> {
   return null;
 }
 
+export const TAKHASSUS_IKHWAN = 'Maahir Takhassus Ikhwan';
+export const TAKHASSUS_AKHWAT = 'Maahir Takhassus Akhwat';
+const TAKHASSUS_NAMES = new Set<string>([TAKHASSUS_IKHWAN, TAKHASSUS_AKHWAT]);
+
+/**
+ * Hanya kelas Takhassus yang menyetor hafalan. Dipakai untuk memutuskan apakah
+ * kolom `setoran_halaman` ditanyakan saat presensi — `program === 'kelas_maahir'`
+ * saja terlalu longgar karena semua kelas Maahir ikut lolos.
+ */
+export function isTakhassusKelas(name: string): boolean {
+  return TAKHASSUS_NAMES.has(name);
+}
+
 export type ProgramKelasRow = {
   id: string;
   name: string;
@@ -92,7 +105,8 @@ export async function findSelfAttendanceMembership(
   const { data } = await supabaseAdmin
     .from('program_kelas_anggota')
     .select(`id, name, program_kelas:program_kelas_id(${PK_COLS})`)
-    .eq('whatsapp_number', wa);
+    .eq('whatsapp_number', wa)
+    .eq('active', true);
   for (const a of data ?? []) {
     const k = a.program_kelas as unknown as ProgramKelasRow | null;
     if (k?.self_attendance) return { kelas: k, anggotaId: a.id as string, anggotaName: a.name as string };

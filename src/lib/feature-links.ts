@@ -67,6 +67,13 @@ export const FEATURE_LINKS: FeatureLink[] = [
     match: (a) => a.role === 'pengajar' && a.is_ketua,
   },
   {
+    href: '/2in1/koordinator/nonaktif',
+    title: 'Nonaktifkan Orang',
+    navLabel: 'Nonaktifkan Orang',
+    description: 'Keluarkan seseorang dari daftar setoran, presensi Maahir, rekap, dan laporan',
+    match: (a) => a.role === 'koordinator',
+  },
+  {
     href: '/matrix/koordinator',
     title: 'Matrix Skill Guru',
     navLabel: 'Matrix Guru',

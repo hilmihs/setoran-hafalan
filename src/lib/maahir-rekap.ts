@@ -119,6 +119,7 @@ export async function getMaahirRekap(
     .from('program_kelas_anggota')
     .select('id, program_kelas_id, name, whatsapp_number, is_ketua, is_wakil, created_at')
     .in('program_kelas_id', kelasIds)
+    .eq('active', true)
     .order('name');
 
   // Tanggal gabung (WIB) bila peserta masuk di tengah periode — pertemuan
