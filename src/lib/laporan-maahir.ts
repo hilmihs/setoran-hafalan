@@ -12,6 +12,7 @@ import { getMaahirSP, type SPRekap } from '@/lib/maahir-sp';
 import { getPemutihanMap } from '@/lib/maahir-pemutihan';
 import { getLaporanNotes, type LaporanNote } from '@/lib/laporan-note';
 import { isTakhassusKelas } from '@/lib/program-kelas';
+import { dalamPeriode, mulaiEfektif } from '@/lib/anggota-periode';
 
 export { TAKHASSUS_IKHWAN, TAKHASSUS_AKHWAT } from '@/lib/program-kelas';
 
@@ -180,7 +181,7 @@ export async function getLaporanMaahir(month: string): Promise<LaporanMaahir> {
   // 3. Anggota
   const { data: anggotaRows } = await supabaseAdmin
     .from('program_kelas_anggota')
-    .select('id, program_kelas_id, name, created_at')
+    .select('id, program_kelas_id, name, created_at, mulai_tanggal, selesai_tanggal')
     .in('program_kelas_id', kelasIds)
     .eq('active', true)
     .order('name');
@@ -189,19 +190,14 @@ export async function getLaporanMaahir(month: string): Promise<LaporanMaahir> {
     program_kelas_id: string;
     name: string;
     created_at: string | null;
+    mulai_tanggal: string | null;
+    selesai_tanggal: string | null;
   }>;
 
-  // Tanggal gabung (WIB) — peserta yang masuk di tengah periode tak boleh
-  // dihukum oleh pertemuan sebelum ia terdaftar. Hanya berlaku bila tanggal
-  // gabung ada DI DALAM periode; sebelum periode → denominator penuh.
-  const joinDateOf = (a: { created_at: string | null }): string | null => {
-    if (!a.created_at) return null;
-    const d = new Date(a.created_at).toLocaleDateString('sv-SE', { timeZone: 'Asia/Jakarta' });
-    return d > start && d <= end ? d : null;
-  };
-  const joinByAnggota = new Map<string, string | null>(
-    anggotaList.map((a) => [a.id, joinDateOf(a)])
-  );
+  // Rentang keanggotaan: pertemuan sebelum ia masuk / sesudah ia pindah kelas
+  // tak dihitung, tapi riwayat di dalam rentang tetap utuh.
+  const joinDateOf = (a: (typeof anggotaList)[number]) => mulaiEfektif(a, start, end);
+  const periodeByAnggota = new Map(anggotaList.map((a) => [a.id, a]));
 
   // Pemutihan bulan ini: peserta dianggap hadir penuh (baris presensi tak diubah).
   const pemutihan = await getPemutihanMap(month);
@@ -247,10 +243,11 @@ export async function getLaporanMaahir(month: string): Promise<LaporanMaahir> {
       if (!fset) { fset = new Set(); filledByKelasScope.set(fKey, fset); }
       fset.add(k.pertemuan_id);
 
-      // Sesi sebelum peserta bergabung tak dihitung (denominator juga dipotong
-      // di studentsFor) — mencegah persen >100% atau tergerus sesi pra-gabung.
-      const joined = joinByAnggota.get(k.anggota_id);
-      if (joined && p.tanggal < joined) continue;
+      // Sesi di luar rentang keanggotaan tak dihitung (denominator juga
+      // dipotong di studentsFor) — mencegah persen >100% atau tergerus sesi
+      // pra-gabung / sesi kelas lama setelah pindah.
+      const per = periodeByAnggota.get(k.anggota_id);
+      if (per && !dalamPeriode(per, p.tanggal, start, end)) continue;
 
       // tally per anggota+scope
       const sKey = `${k.anggota_id}|${program}`;
@@ -290,9 +287,9 @@ export async function getLaporanMaahir(month: string): Promise<LaporanMaahir> {
       const fset = filledByKelasScope.get(`${kelas.id}|${scope}`);
       const filled = !fset
         ? 0
-        : mulaiTanggal
-          ? [...fset].filter((pid) => (pertemuanById.get(pid)?.tanggal ?? '') >= mulaiTanggal).length
-          : fset.size;
+        : [...fset].filter((pid) =>
+            dalamPeriode(a, pertemuanById.get(pid)?.tanggal ?? '', start, end)
+          ).length;
       const persenAsli = filled > 0 ? Math.round(((counts.H + counts.T) / filled) * 100) : null;
       // Tidak hadir = pertemuan terisi − (hadir+terlambat). Termasuk sesi yang
       // peserta tak punya catatan sama sekali (bukan hanya izin/sakit/alpa),

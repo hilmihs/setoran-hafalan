@@ -8,9 +8,9 @@ import { findKetuaProgramKelas, getSelfAttendanceKelas, type ProgramKelasRow } f
 import { getLiburDates, getLiburDatesForKelas } from '@/lib/maahir-libur';
 
 export const PRESENSI_ANCHOR = '2026-06-01'; // strict mulai Juni 2026
-export const TIBYAN_HARI = 'Sabtu'; // at_tibyan 08:30–10:00
+export const TIBYAN_HARI = 'Sabtu'; // at_tibyan 08:30–10:30, seragam semua kelas
 
-export const TIBYAN_WAKTU = { mulai: '08:30', selesai: '10:00' };
+export const TIBYAN_WAKTU = { mulai: '08:30', selesai: '10:30' };
 
 export const PROGRAM_LABEL: Record<string, string> = {
   kelas_maahir: 'Kelas Maahir',

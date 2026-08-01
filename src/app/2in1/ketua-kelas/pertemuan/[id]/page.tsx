@@ -34,6 +34,9 @@ export default async function PertemuanDetailPage({ params }: { params: { id: st
     .select('id, name, is_ketua, is_wakil')
     .eq('program_kelas_id', kelas.id)
     .eq('active', true)
+    // Yang sudah pindah kelas tak lagi dipresensi pada tanggal pertemuan ini.
+    .or(`mulai_tanggal.is.null,mulai_tanggal.lte.${pertemuan.tanggal}`)
+    .or(`selesai_tanggal.is.null,selesai_tanggal.gte.${pertemuan.tanggal}`)
     .order('name');
 
   // Kehadiran existing

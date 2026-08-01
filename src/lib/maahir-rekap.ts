@@ -11,6 +11,7 @@ import {
   type MaahirProgram,
 } from '@/lib/maahir-presensi';
 import { getLiburDatesForKelas } from '@/lib/maahir-libur';
+import { dalamPeriode } from '@/lib/anggota-periode';
 import type { ProgramKelasRow } from '@/lib/program-kelas';
 
 export type StatusCode = 'H' | 'I' | 'S' | 'A' | 'T' | '-';
@@ -117,18 +118,12 @@ export async function getMaahirRekap(
   // 3. Anggota
   const { data: anggotaRows } = await supabaseAdmin
     .from('program_kelas_anggota')
-    .select('id, program_kelas_id, name, whatsapp_number, is_ketua, is_wakil, created_at')
+    .select(
+      'id, program_kelas_id, name, whatsapp_number, is_ketua, is_wakil, created_at, mulai_tanggal, selesai_tanggal'
+    )
     .in('program_kelas_id', kelasIds)
     .eq('active', true)
     .order('name');
-
-  // Tanggal gabung (WIB) bila peserta masuk di tengah periode — pertemuan
-  // sebelum ia terdaftar tak boleh menggerus persentasenya.
-  const joinDateOf = (a: { created_at?: string | null }): string | null => {
-    if (!a.created_at) return null;
-    const d = new Date(a.created_at).toLocaleDateString('sv-SE', { timeZone: 'Asia/Jakarta' });
-    return d > start && d <= end ? d : null;
-  };
 
   // 4. Kehadiran (hanya yang sudah disubmit)
   const kehadiranByPertemuan = new Map<string, Map<string, StatusCode>>();
@@ -193,10 +188,10 @@ export async function getMaahirRekap(
     const anggota: RekapAnggota[] = (anggotaByKelas.get(k.id) ?? []).map((a) => {
       const perPertemuan: Record<string, StatusCode> = {};
       const totals = { H: 0, I: 0, S: 0, A: 0, T: 0 };
-      const mulai = joinDateOf(a);
-      let dihitung = 0; // pertemuan sejak peserta bergabung (denominator %)
+      let dihitung = 0; // pertemuan dalam rentang keanggotaan (denominator %)
       for (const p of pertemuan) {
-        if (mulai && p.tanggal < mulai) {
+        // Di luar rentang keanggotaan (belum masuk / sudah pindah kelas).
+        if (!dalamPeriode(a, p.tanggal, start, end)) {
           perPertemuan[p.id] = '-';
           continue;
         }

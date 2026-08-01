@@ -74,10 +74,16 @@ export async function getMaahirSP(opts?: { gender?: Gender }): Promise<SPRekap> 
 
   const { data: anggotaRows } = await supabaseAdmin
     .from('program_kelas_anggota')
-    .select('id, program_kelas_id, name')
+    .select('id, program_kelas_id, name, whatsapp_number, selesai_tanggal')
     .in('program_kelas_id', kelasIds)
     .eq('active', true);
-  const anggotaList = (anggotaRows ?? []) as Array<{ id: string; program_kelas_id: string; name: string }>;
+  const anggotaList = (anggotaRows ?? []) as Array<{
+    id: string;
+    program_kelas_id: string;
+    name: string;
+    whatsapp_number: string | null;
+    selesai_tanggal: string | null;
+  }>;
 
   const kehadiranRows = await fetchAllRows<{
     pertemuan_id: string;
@@ -118,23 +124,61 @@ export async function getMaahirSP(opts?: { gender?: Gender }): Promise<SPRekap> 
     }
   }
 
-  const list: SPPeserta[] = [];
+  // SP melekat pada ORANG, bukan baris keanggotaan. Peserta yang pindah kelas
+  // punya beberapa baris (kelas lama + kelas baru) — tallinya digabung lewat
+  // nomor WA supaya pelanggaran tak terpecah dan lolos ambang SP. Kelas yang
+  // ditampilkan = keanggotaan yang masih berjalan.
+  type Gabung = {
+    anggotaId: string;
+    name: string;
+    kelasName: string;
+    gender: 'ikhwan' | 'akhwat';
+    tally: Tally;
+    aktifSekarang: boolean;
+  };
+  const byOrang = new Map<string, Gabung>();
   for (const a of anggotaList) {
     const kelas = kelasById.get(a.program_kelas_id);
     if (!kelas) continue;
     const t = byAnggota.get(a.id) ?? { H: 0, T: 0, I: 0, S: 0, A: 0 };
-    const sp = spLevel(t.A, t.I);
+    const key = a.whatsapp_number ?? `id:${a.id}`;
+    const masihBerjalan = !a.selesai_tanggal || a.selesai_tanggal >= today;
+    const g = byOrang.get(key);
+    if (!g) {
+      byOrang.set(key, {
+        anggotaId: a.id,
+        name: a.name,
+        kelasName: kelas.name,
+        gender: kelas.gender,
+        tally: { ...t },
+        aktifSekarang: masihBerjalan,
+      });
+      continue;
+    }
+    g.tally.H += t.H; g.tally.T += t.T; g.tally.I += t.I; g.tally.S += t.S; g.tally.A += t.A;
+    // Kelas yang ditampilkan diambil dari keanggotaan yang masih berjalan.
+    if (masihBerjalan && !g.aktifSekarang) {
+      g.anggotaId = a.id;
+      g.kelasName = kelas.name;
+      g.gender = kelas.gender;
+      g.aktifSekarang = true;
+    }
+  }
+
+  const list: SPPeserta[] = [];
+  for (const g of byOrang.values()) {
+    const sp = spLevel(g.tally.A, g.tally.I);
     if (sp === 0) continue;
     list.push({
-      anggotaId: a.id,
-      name: a.name,
-      kelasName: kelas.name,
-      gender: kelas.gender,
-      hadir: t.H,
-      terlambat: t.T,
-      izin: t.I,
-      sakit: t.S,
-      alpa: t.A,
+      anggotaId: g.anggotaId,
+      name: g.name,
+      kelasName: g.kelasName,
+      gender: g.gender,
+      hadir: g.tally.H,
+      terlambat: g.tally.T,
+      izin: g.tally.I,
+      sakit: g.tally.S,
+      alpa: g.tally.A,
       sp,
     });
   }
