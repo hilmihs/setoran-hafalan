@@ -216,7 +216,8 @@ export async function computeMatrixForMonth(yearMonth: string): Promise<MatrixRo
   // 5. Kehadiran 3 program (via program_kelas_anggota match WA)
   const { data: anggotaList } = await supabaseAdmin
     .from('program_kelas_anggota')
-    .select('id, whatsapp_number');
+    .select('id, whatsapp_number')
+    .eq('active', true);
   const anggotaByWa = new Map<string, string[]>(); // wa → anggota_id[]
   for (const a of anggotaList ?? []) {
     if (!a.whatsapp_number) continue;

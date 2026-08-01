@@ -75,7 +75,8 @@ export async function getMaahirSP(opts?: { gender?: Gender }): Promise<SPRekap> 
   const { data: anggotaRows } = await supabaseAdmin
     .from('program_kelas_anggota')
     .select('id, program_kelas_id, name')
-    .in('program_kelas_id', kelasIds);
+    .in('program_kelas_id', kelasIds)
+    .eq('active', true);
   const anggotaList = (anggotaRows ?? []) as Array<{ id: string; program_kelas_id: string; name: string }>;
 
   const kehadiranRows = await fetchAllRows<{

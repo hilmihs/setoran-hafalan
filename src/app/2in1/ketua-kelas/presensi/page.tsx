@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { supabaseAdmin } from '@/lib/supabase-admin';
-import { getSessionWa } from '@/lib/program-kelas';
+import { getSessionWa, isTakhassusKelas } from '@/lib/program-kelas';
 import { getUnfilledMaahirDays, PROGRAM_LABEL, weekRangeLabel } from '@/lib/maahir-presensi';
 import { PresensiWizardForm } from './PresensiWizardForm';
 import { LiburButton } from './LiburButton';
@@ -51,6 +51,7 @@ export default async function PresensiWizardPage() {
     .from('program_kelas_anggota')
     .select('id, name, is_ketua, is_wakil')
     .eq('program_kelas_id', day.program_kelas_id)
+    .eq('active', true)
     .order('name');
 
   const { data: existing } = await supabaseAdmin
@@ -150,7 +151,7 @@ export default async function PresensiWizardPage() {
             pertemuanId={pertemuan.id}
             pesertaList={pesertaRows}
             remaining={total}
-            showSetoran={day.program === 'kelas_maahir'}
+            showSetoran={day.program === 'kelas_maahir' && isTakhassusKelas(day.kelasName)}
           />
 
           {/* Opsi tandai LIBUR (langsung, tanpa ACC). Untuk Takhassus Ikhwan,

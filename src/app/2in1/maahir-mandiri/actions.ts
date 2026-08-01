@@ -23,7 +23,8 @@ export async function remindKetuaLibur(kelasId: string, tanggal: string): Promis
   const { data: rows } = await supabaseAdmin
     .from('program_kelas_anggota')
     .select('name, whatsapp_number, is_ketua')
-    .eq('program_kelas_id', kelasId);
+    .eq('program_kelas_id', kelasId)
+    .eq('active', true);
   const pesertaName = (rows ?? []).find((r) => r.whatsapp_number === wa)?.name ?? 'Peserta';
   const ketuaName = (rows ?? []).find((r) => r.whatsapp_number === kelas.ketua_wa)?.name
     ?? (rows ?? []).find((r) => r.is_ketua)?.name
@@ -73,6 +74,7 @@ export async function submitSelfPresensi(_prev: SelfPresensiResult | undefined, 
     .from('program_kelas_anggota')
     .select('id, peserta_id, program_kelas_id, whatsapp_number')
     .eq('id', anggotaId)
+    .eq('active', true)
     .maybeSingle();
   if (!anggota || anggota.program_kelas_id !== kelasId) return { error: 'Peserta tidak terdaftar di kelas ini.' };
   if (anggota.whatsapp_number !== wa) return { error: 'Hanya bisa mengisi presensi untuk akun sendiri.' };

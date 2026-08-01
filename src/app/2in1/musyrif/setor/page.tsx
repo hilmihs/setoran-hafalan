@@ -38,6 +38,9 @@ export default async function MusyrifSetorPage() {
     .select('id, name, gender, whatsapp_number')
     .eq('gender', musyrifGender)
     .eq('active', true)
+    .order('penerima_utama', { ascending: false })
+    .order('created_at', { ascending: true })
+    .limit(1)
     .maybeSingle();
   const syaikh = syaikhRaw as
     | { id: string; name: string; gender: Gender; whatsapp_number: string }

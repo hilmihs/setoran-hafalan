@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { supabaseAdmin } from '@/lib/supabase-admin';
-import { getSessionWa, findSelfAttendanceMembership } from '@/lib/program-kelas';
+import { getSessionWa, findSelfAttendanceMembership, isTakhassusKelas } from '@/lib/program-kelas';
 import { PROGRAM_LABEL } from '@/lib/maahir-presensi';
 import { Icon } from '@/components/icons';
 import { RiwayatRow } from './RiwayatRow';
@@ -78,7 +78,7 @@ export default async function MaahirMandiriRiwayatPage() {
                 catatan={r.catatan}
                 setoran={r.setoran}
                 mode={r.mode}
-                askSetoran={r.program === 'kelas_maahir'}
+                askSetoran={r.program === 'kelas_maahir' && isTakhassusKelas(kelas.name)}
               />
             ))
           )}

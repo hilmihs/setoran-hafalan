@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { supabaseAdmin } from '@/lib/supabase-admin';
-import { getSessionWa } from '@/lib/program-kelas';
+import { getSessionWa, isTakhassusKelas } from '@/lib/program-kelas';
 import { KehadiranForm } from './KehadiranForm';
 
 export const dynamic = 'force-dynamic';
@@ -33,6 +33,7 @@ export default async function PertemuanDetailPage({ params }: { params: { id: st
     .from('program_kelas_anggota')
     .select('id, name, is_ketua, is_wakil')
     .eq('program_kelas_id', kelas.id)
+    .eq('active', true)
     .order('name');
 
   // Kehadiran existing
@@ -86,7 +87,7 @@ export default async function PertemuanDetailPage({ params }: { params: { id: st
         <KehadiranForm
           pertemuanId={params.id}
           pesertaList={anggotaWithStatus}
-          showSetoran={pertemuan.program === 'kelas_maahir'}
+          showSetoran={pertemuan.program === 'kelas_maahir' && isTakhassusKelas(kelas.name)}
         />
       </div>
     </main>

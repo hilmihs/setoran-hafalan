@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { supabaseAdmin } from '@/lib/supabase-admin';
-import { getSessionWa, findKetuaWakilKelas } from '@/lib/program-kelas';
+import { getSessionWa, findKetuaWakilKelas, isTakhassusKelas } from '@/lib/program-kelas';
 import { MonthNavSelect } from '@/components/MonthNavSelect';
 import { monthOptionsSince } from '@/lib/month';
 import { PRESENSI_ANCHOR } from '@/lib/maahir-presensi';
@@ -33,14 +33,28 @@ export default async function SetoranKetuaPage({
   const wa = await getSessionWa();
   if (!wa) redirect('/');
 
-  const myKelas = await findKetuaWakilKelas(wa);
-  if (myKelas.length === 0) {
+  const semuaKelas = await findKetuaWakilKelas(wa);
+  if (semuaKelas.length === 0) {
     return (
       <main style={{ padding: 24 }}>
         <p className="t-body" style={{ color: 'var(--muted-2)' }}>
           Halaman ini hanya untuk Ketua / Wakil Ketua Kelas.
         </p>
         <Link href="/" className="btn btn-ghost" style={{ marginTop: 16 }}>← Kembali</Link>
+      </main>
+    );
+  }
+
+  // Setoran hafalan hanya untuk kelas Takhassus — kelas Maahir lain tak menyetor.
+  const myKelas = semuaKelas.filter((k) => isTakhassusKelas(k.name));
+  if (myKelas.length === 0) {
+    return (
+      <main style={{ padding: 24 }}>
+        <p className="t-body" style={{ color: 'var(--muted-2)' }}>
+          Kelas ini tidak mengisi setoran hafalan. Setoran hanya untuk Maahir
+          Takhassus Ikhwan &amp; Akhwat.
+        </p>
+        <Link href="/2in1/ketua-kelas" className="btn btn-ghost" style={{ marginTop: 16 }}>← Kembali</Link>
       </main>
     );
   }
@@ -67,6 +81,7 @@ export default async function SetoranKetuaPage({
     .from('program_kelas_anggota')
     .select('id, program_kelas_id, name')
     .in('program_kelas_id', kelasIds)
+    .eq('active', true)
     .order('name');
   const anggotaList = (anggotaRows ?? []) as Array<{
     id: string; program_kelas_id: string; name: string;

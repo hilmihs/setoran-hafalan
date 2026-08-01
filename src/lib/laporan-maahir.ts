@@ -11,10 +11,9 @@ import { todayJakarta } from '@/lib/maahir-presensi';
 import { getMaahirSP, type SPRekap } from '@/lib/maahir-sp';
 import { getPemutihanMap } from '@/lib/maahir-pemutihan';
 import { getLaporanNotes, type LaporanNote } from '@/lib/laporan-note';
+import { isTakhassusKelas } from '@/lib/program-kelas';
 
-export const TAKHASSUS_IKHWAN = 'Maahir Takhassus Ikhwan';
-export const TAKHASSUS_AKHWAT = 'Maahir Takhassus Akhwat';
-const TAKHASSUS_NAMES = new Set([TAKHASSUS_IKHWAN, TAKHASSUS_AKHWAT]);
+export { TAKHASSUS_IKHWAN, TAKHASSUS_AKHWAT } from '@/lib/program-kelas';
 
 type Code = 'H' | 'I' | 'S' | 'A' | 'T';
 const STATUS_TO_CODE: Record<string, Code> = {
@@ -183,6 +182,7 @@ export async function getLaporanMaahir(month: string): Promise<LaporanMaahir> {
     .from('program_kelas_anggota')
     .select('id, program_kelas_id, name, created_at')
     .in('program_kelas_id', kelasIds)
+    .eq('active', true)
     .order('name');
   const anggotaList = (anggotaRows ?? []) as Array<{
     id: string;
@@ -320,8 +320,8 @@ export async function getLaporanMaahir(month: string): Promise<LaporanMaahir> {
     return out;
   }
 
-  const isTakhassus = (name: string) => TAKHASSUS_NAMES.has(name);
-  const isMaahir = (name: string) => !TAKHASSUS_NAMES.has(name);
+  const isTakhassus = (name: string) => isTakhassusKelas(name);
+  const isMaahir = (name: string) => !isTakhassusKelas(name);
 
   // ---- Takhassus (scope kelas_maahir) ----
   const takhStudents = studentsFor(isTakhassus, 'kelas_maahir');

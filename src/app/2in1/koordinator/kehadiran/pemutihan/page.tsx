@@ -34,6 +34,7 @@ export default async function PemutihanPage({
   const { data: anggotaRows } = await supabaseAdmin
     .from('program_kelas_anggota')
     .select('id, name, program_kelas_id')
+    .eq('active', true)
     .order('name');
   const anggota: AnggotaOpt[] = (anggotaRows ?? []).map((a) => ({
     id: a.id as string,
