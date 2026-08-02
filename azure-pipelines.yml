@@ -93,21 +93,41 @@ steps:
         echo "📦 Install dependency Web Maahir"
         nvm exec 24.15.0 npm install
 
-        # Build duluan selagi service lama masih serve traffic — hindari 502
-        # berkepanjangan. rm .next aman walau service jalan: proses standalone
-        # pegang inode file yang sudah terbuka. Kalau build gagal, script exit
-        # sebelum restart sehingga versi lama tetap hidup.
-        echo "🧹 Clean .next lama (file cache runtime standalone bisa owned by root)"
-        sudo rm -rf .next
+        # Service jalan sebagai root dan terus menulis cache runtime ke
+        # .next/standalone/.next selama ia hidup. Kalau build jalan bersamaan,
+        # Next gagal menimpa direktori root-owned itu:
+        #   EACCES: permission denied, rmdir '.next/standalone/.next'
+        # Karena versi lama sudah terhapus, kegagalan itu meninggalkan server
+        # tanpa berkas — aset 500, situs tak terpakai.
+        #
+        # Maka: hentikan service dulu supaya tak ada penulis lain, JANGAN hapus
+        # .next (cukup ambil alih kepemilikannya). Build yang gagal kini
+        # menyisakan build lama utuh, dan trap menghidupkannya kembali.
+        echo "⏸️ Stop service selama build (hindari race root vs user)"
+        sudo systemctl stop next-maahir
 
-        echo "⚙️ Build Web Maahir (service lama tetap jalan)"
+        # Build gagal → hidupkan lagi versi lama yang masih di disk.
+        rollback() {
+          echo "⚠️ Build gagal — menghidupkan kembali build sebelumnya"
+          sudo systemctl start next-maahir || true
+          sudo systemctl status next-maahir --no-pager || true
+        }
+        trap rollback ERR
+
+        echo "🔑 Ambil alih kepemilikan .next (cache runtime bisa root-owned)"
+        sudo mkdir -p .next
+        sudo chown -R "$(id -u):$(id -g)" .next
+
+        echo "⚙️ Build Web Maahir"
         nvm exec 24.15.0 npm run build
 
         echo "📁 Copy static files to standalone folder"
         cp -r .next/static .next/standalone/.next/
 
-        echo "🔄 restart systemd service (downtime ~2 detik)"
-        sudo systemctl restart next-maahir
+        trap - ERR
+
+        echo "▶️ Start systemd service"
+        sudo systemctl start next-maahir
         sudo systemctl status next-maahir --no-pager
 
         echo "✅ Next.js frontend deployment selesai"
