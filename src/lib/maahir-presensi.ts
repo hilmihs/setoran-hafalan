@@ -8,6 +8,18 @@ import { findKetuaProgramKelas, getSelfAttendanceKelas, type ProgramKelasRow } f
 import { getLiburDates, getLiburDatesForKelas } from '@/lib/maahir-libur';
 
 export const PRESENSI_ANCHOR = '2026-06-01'; // strict mulai Juni 2026
+
+/**
+ * Tanggal awal presensi wajib untuk SATU kelas.
+ *
+ * Kelas yang baru dibentuk di tengah jalan (mis. hasil penggabungan) tak boleh
+ * diminta mengisi presensi sejak anchor global — riwayat sebelum kelas itu ada
+ * memang milik kelas lamanya.
+ */
+export function anchorKelas(k: { mulai_tanggal?: string | null }): string {
+  const m = k.mulai_tanggal;
+  return m && m > PRESENSI_ANCHOR ? m : PRESENSI_ANCHOR;
+}
 export const TIBYAN_HARI = 'Sabtu'; // at_tibyan 08:30–10:30, seragam semua kelas
 
 export const TIBYAN_WAKTU = { mulai: '08:30', selesai: '10:30' };
@@ -236,7 +248,7 @@ export async function getUnfilledMaahirDays(wa: string): Promise<UnfilledDay[]> 
   // Kelas self_attendance tak masuk (findKetuaProgramKelas sudah mengecualikan).
   const expected: ExpectedDay[] = [];
   for (const k of myKelas) {
-    expected.push(...expectedDaysInRange(k, PRESENSI_ANCHOR, today, liburByKelas.get(k.id)));
+    expected.push(...expectedDaysInRange(k, anchorKelas(k), today, liburByKelas.get(k.id)));
   }
   if (expected.length === 0) return [];
 
@@ -297,16 +309,17 @@ export async function getUnfilledDaysForAnggota(
   anggotaId: string
 ): Promise<UnfilledDay[]> {
   const today = todayJakarta();
-  const libur = await getLiburDates(kelas.id, PRESENSI_ANCHOR, today);
+  const anchor = anchorKelas(kelas);
+  const libur = await getLiburDates(kelas.id, anchor, today);
   // Peserta mengisi SELURUH presensinya: kelas_maahir & At-Tibyan.
-  const expected = expectedDaysInRange(kelas, PRESENSI_ANCHOR, today, libur);
+  const expected = expectedDaysInRange(kelas, anchor, today, libur);
   if (expected.length === 0) return [];
 
   const { data: pertemuanList } = await supabaseAdmin
     .from('pertemuan_program')
     .select('id, program_kelas_id, program, tanggal')
     .eq('program_kelas_id', kelas.id)
-    .gte('tanggal', PRESENSI_ANCHOR);
+    .gte('tanggal', anchor);
 
   const pertemuanIds = (pertemuanList ?? []).map((p) => p.id);
   const filledPertemuanIds = new Set<string>();

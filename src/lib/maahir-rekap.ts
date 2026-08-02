@@ -5,6 +5,7 @@ import { supabaseAdmin } from '@/lib/supabase-admin';
 import { fetchAllRows } from '@/lib/supabase-page';
 import {
   PROGRAM_LABEL,
+  anchorKelas,
   expectedDaysInRange,
   filledKeyOf,
   todayJakarta,
@@ -216,7 +217,12 @@ export async function getMaahirRekap(
 
     // belumDiisi: hari diharapkan (anchor bulan s/d min(akhir bulan, today)) − pertemuan terisi.
     // matchKey: harian per (program,tanggal); mingguan per pekan.
-    const expectedAll = expectedDaysInRange(k, start, end, liburByKelas.get(k.id));
+    // Kelas yang baru dibentuk di tengah periode tak dianggap "belum diisi"
+    // untuk tanggal sebelum ia berjalan.
+    const mulaiKelas = anchorKelas(k);
+    const expectedStart = mulaiKelas > start ? mulaiKelas : start;
+    const expectedAll =
+      expectedStart > end ? [] : expectedDaysInRange(k, expectedStart, end, liburByKelas.get(k.id));
     // Filter ke program tertentu (mis. hanya At-Tibyan) bila diminta.
     const expected = opts?.program
       ? expectedAll.filter((e) => e.program === opts.program)

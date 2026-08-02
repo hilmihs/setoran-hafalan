@@ -57,9 +57,11 @@ export type ProgramKelasRow = {
   wakil_wa: string | null;
   self_attendance: boolean;
   presensi_sifat: 'harian' | 'mingguan';
+  /** Kelas mulai berjalan; presensi sebelum tanggal ini tak diminta. */
+  mulai_tanggal: string | null;
 };
 
-const PK_COLS = 'id, name, gender, jadwal_hari, waktu_mulai, waktu_selesai, ketua_wa, wakil_wa, self_attendance, presensi_sifat';
+const PK_COLS = 'id, name, gender, jadwal_hari, waktu_mulai, waktu_selesai, ketua_wa, wakil_wa, self_attendance, presensi_sifat, mulai_tanggal';
 
 /**
  * Kelas program di mana WA ini jadi ketua atau wakil.
