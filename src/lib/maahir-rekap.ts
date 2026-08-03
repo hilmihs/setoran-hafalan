@@ -40,7 +40,12 @@ export type RekapAnggota = {
   isWakil: boolean;
   perPertemuan: Record<string, StatusCode>; // pertemuanId → code ('-' jika tak ada data)
   totals: { H: number; I: number; S: number; A: number; T: number };
-  persenHadir: number | null; // (H+T)/jumlah pertemuan terisi; null jika belum ada pertemuan
+  /**
+   * (H+T)/(pertemuan terisi − sakit). Sakit = udzur, tak menggerus persen:
+   * sesinya dikeluarkan dari penyebut. null bila belum ada pertemuan sama sekali;
+   * 100 bila semua pertemuannya sakit (penyebut habis).
+   */
+  persenHadir: number | null;
 };
 
 export type RekapSession = {
@@ -201,8 +206,15 @@ export async function getMaahirRekap(
         perPertemuan[p.id] = code;
         if (code !== '-') totals[code]++;
       }
+      // Sakit tak menghukum persen: sesi sakit dikeluarkan dari penyebut.
+      // Semua sesi sakit → penyebut 0 tapi dianggap hadir penuh (100%).
+      const denom = Math.max(0, dihitung - totals.S);
       const persenHadir =
-        dihitung > 0 ? Math.round(((totals.H + totals.T) / dihitung) * 100) : null;
+        denom > 0
+          ? Math.round(((totals.H + totals.T) / denom) * 100)
+          : dihitung > 0
+            ? 100
+            : null;
       return {
         anggotaId: a.id,
         name: a.name,

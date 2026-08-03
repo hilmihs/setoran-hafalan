@@ -93,6 +93,14 @@ export default async function LaporanMaahirPage({
             Presensi mulai dilacak {monthLabel(ANCHOR_MONTH)}. Bulan sebelumnya kosong.
             Kehadiran peserta Takhassus &amp; Maahir dihitung dari sesi Kelas Maahir; At-Tibyan
             dilaporkan terpisah. Kehadiran pengajar sementara default 100%.
+            <br />
+            <strong>Sakit dianggap udzur</strong> — sesinya dikeluarkan dari penyebut, jadi tidak
+            menurunkan persen. Izin dan alpa tetap menurunkan. Kolom Pertemuan = (hadir+terlambat)
+            dibagi pertemuan terisi setelah sakit dikeluarkan.
+            <br />
+            Angka di sini bisa berbeda dengan halaman <strong>Rekap Kehadiran</strong>: rekap
+            memakai bulan kalender (1–31) dan menggabung sesi Maahir + At-Tibyan jadi satu persen,
+            sedangkan laporan ini memakai periode 28–27 dan memisahkan keduanya.
           </p>
         </div>
       </div>
@@ -190,8 +198,9 @@ function BawahTargetTable({ list }: { list: StudentAtt[] }) {
         <tbody>
           {list.map((s) => {
             const hadir = s.counts.H + s.counts.T;
-            // Sesi tidak hadir yang tak punya baris status (bukan izin/sakit/alpa).
-            const tanpaKet = Math.max(0, s.tidakHadir - (s.counts.I + s.counts.S + s.counts.A));
+            // Sesi tidak hadir yang tak punya baris status (bukan izin/alpa).
+            // Sakit sudah keluar dari penyebut, jadi tak ikut dikurangkan.
+            const tanpaKet = Math.max(0, s.tidakHadir - (s.counts.I + s.counts.A));
             return (
               <tr key={s.anggotaId}>
                 <td>

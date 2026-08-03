@@ -70,6 +70,11 @@ export default async function KoordinatorKehadiranPage({
           <div className="section-row" style={{ marginBottom: 12, alignItems: 'center' }}>
             <p className="t-small" style={{ color: 'var(--muted-2)' }}>
               Rekap kehadiran anggota semua kelas Maahir
+              <br />
+              <span className="t-tiny">
+                Periode <strong>bulan kalender</strong> (tgl 1–akhir bulan) · sesi Maahir &amp;
+                At-Tibyan digabung. Laporan Bulanan memakai periode 28–27 dan memisah keduanya.
+              </span>
             </p>
             <MonthNavSelect options={monthOptions} value={month} />
           </div>

@@ -59,14 +59,15 @@ function pct(hadir: number, terisi: number): number | null {
   return terisi > 0 ? Math.round((hadir / terisi) * 100) : null;
 }
 
-// %hadir level-kelas dari totals per-anggota: (ΣH+ΣT)/Σ(pertemuan terisi).
+// %hadir level-kelas dari totals per-anggota: (ΣH+ΣT)/Σ(pertemuan terisi − sakit).
+// Sakit = udzur, dikeluarkan dari penyebut (konsisten dgn maahir-rekap).
 function kelasStats(k: RekapKelas): { ht: number; filled: number } {
   let ht = 0;
   let filled = 0;
   for (const a of k.anggota) {
     const t = a.totals;
     ht += t.H + t.T;
-    filled += t.H + t.I + t.S + t.A + t.T;
+    filled += t.H + t.I + t.A + t.T;
   }
   return { ht, filled };
 }

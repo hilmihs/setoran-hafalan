@@ -33,6 +33,47 @@ function tanggalShort(t: string): string {
   });
 }
 
+const PROGRAM_SHORT: Record<string, string> = {
+  kelas_maahir: 'Maahir',
+  at_tibyan: 'Tibyan',
+  muallim_najih: 'Najih',
+};
+
+type Tally = { H: number; I: number; S: number; A: number; T: number; nilai: number };
+
+/**
+ * Pecahan per program untuk satu anggota — supaya angka gabungan di kolom
+ * %Hadir bisa dicocokkan dengan Laporan Bulanan yang memisah Maahir/At-Tibyan.
+ * Penyebut = sesi yang tercatat statusnya, dikurangi sakit (sakit = udzur).
+ */
+function perProgram(
+  pertemuan: RekapKelas['pertemuan'],
+  perPertemuan: Record<string, StatusCode>
+): Array<{ program: string; tally: Tally; persen: number | null }> {
+  const map = new Map<string, Tally>();
+  for (const p of pertemuan) {
+    const code = perPertemuan[p.id] ?? '-';
+    if (code === '-') continue; // tak tercatat / di luar rentang keanggotaan
+    let t = map.get(p.program);
+    if (!t) {
+      t = { H: 0, I: 0, S: 0, A: 0, T: 0, nilai: 0 };
+      map.set(p.program, t);
+    }
+    t[code]++;
+    if (code !== 'S') t.nilai++;
+  }
+  return [...map.entries()].map(([program, tally]) => ({
+    program,
+    tally,
+    persen:
+      tally.nilai > 0
+        ? Math.round(((tally.H + tally.T) / tally.nilai) * 100)
+        : tally.S > 0
+          ? 100
+          : null,
+  }));
+}
+
 export function MaahirRekapTable({ kelas }: { kelas: RekapKelas }) {
   const [expanded, setExpanded] = useState<string | null>(null);
 
@@ -110,6 +151,26 @@ export function MaahirRekapTable({ kelas }: { kelas: RekapKelas }) {
                   {isOpen && !noData && (
                     <tr>
                       <td colSpan={7} style={{ background: 'var(--surface-2)', padding: 10 }}>
+                        {/* Pecahan per program — jembatan ke Laporan Bulanan. */}
+                        <div
+                          className="t-tiny"
+                          style={{
+                            color: 'var(--muted-2)',
+                            marginBottom: 8,
+                            display: 'flex',
+                            flexWrap: 'wrap',
+                            gap: 10,
+                          }}
+                        >
+                          {perProgram(kelas.pertemuan, a.perPertemuan).map((g) => (
+                            <span key={g.program}>
+                              <strong>{PROGRAM_SHORT[g.program] ?? g.program}</strong>:{' '}
+                              {g.persen === null ? '–' : `${g.persen}%`}{' '}
+                              ({g.tally.H + g.tally.T}/{g.tally.nilai}
+                              {g.tally.S > 0 ? ` · ${g.tally.S} sakit dikecualikan` : ''})
+                            </span>
+                          ))}
+                        </div>
                         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
                           {kelas.pertemuan.map((p) => (
                             <div
@@ -146,8 +207,15 @@ export function MaahirRekapTable({ kelas }: { kelas: RekapKelas }) {
         </table>
       </div>
 
-      <div className="t-tiny" style={{ color: 'var(--muted-2)', marginTop: 8 }}>
-        H = Hadir · I = Izin · S = Sakit · A = Alpa · T = Terlambat · %Hadir = (H+T)/jml pertemuan
+      <div className="t-tiny" style={{ color: 'var(--muted-2)', marginTop: 8, lineHeight: 1.6 }}>
+        H = Hadir · I = Izin · S = Sakit · A = Alpa · T = Terlambat
+        <br />
+        %Hadir = (H+T) / (jml pertemuan − sakit). <strong>Sakit tidak menurunkan persen</strong>{' '}
+        (dianggap udzur, sesinya dikeluarkan dari penyebut); izin dan alpa tetap menurunkan.
+        <br />
+        Persen di kolom ini <strong>menggabung sesi Maahir + At-Tibyan</strong> dalam bulan
+        kalender. Laporan Bulanan memisah keduanya dan memakai periode 28–27, jadi angkanya
+        wajar berbeda — tap nama anggota untuk melihat pecahan per program.
       </div>
     </div>
   );

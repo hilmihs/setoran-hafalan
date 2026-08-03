@@ -3,14 +3,30 @@
 
 import ExcelJS from 'exceljs';
 import type { LaporanMaahir, StudentAtt } from '@/lib/laporan-maahir';
+import { PRESENSI_ANCHOR } from '@/lib/maahir-presensi';
 
 const BULAN_ID = [
   'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
   'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember',
 ];
+// Nama bulan pendek gaya id-ID — di-hardcode (bukan toLocaleDateString) supaya
+// hasilnya identik dgn halaman walau ICU runtime berbeda.
+const BULAN_ID_PENDEK = [
+  'Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun',
+  'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des',
+];
 export function bulanLabel(month: string): string {
   const [y, m] = month.split('-').map(Number);
   return `${BULAN_ID[m - 1]} ${y}`;
+}
+/** Periode Maahir: 28 bulan lalu s/d 27 bulan ini (sama dgn monthRange di laporan-maahir). */
+function periodeLabel(month: string): string {
+  const [y, m] = month.split('-').map(Number);
+  const start = new Date(Date.UTC(y, m - 2, 28));
+  const end = new Date(Date.UTC(y, m - 1, 27));
+  const f = (d: Date) =>
+    `${d.getUTCDate()} ${BULAN_ID_PENDEK[d.getUTCMonth()]} ${d.getUTCFullYear()}`;
+  return `${f(start)} – ${f(end)}`;
 }
 function pct(v: number | null): string {
   return v === null ? '—' : `${v}%`;
@@ -65,6 +81,15 @@ export async function buildLaporanMaahirWorkbook(lap: LaporanMaahir, bulan: stri
   subt.alignment = { vertical: 'middle', horizontal: 'center' };
   subt.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: C.section } };
   ws.getRow(r).height = 16;
+  r++;
+  // Periode laporan (28 bln lalu – 27 bln ini), sama dgn yang tampil di halaman.
+  merge(r, 1, NCOL);
+  const per = cell(r, 1);
+  per.value = `Periode ${periodeLabel(bulan)}`;
+  per.font = { size: 9, color: { argb: C.white } };
+  per.alignment = { vertical: 'middle', horizontal: 'center' };
+  per.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: C.section } };
+  ws.getRow(r).height = 14;
   r += 2;
 
   function band(text: string, fill = C.section, ink = C.white) {
@@ -167,7 +192,8 @@ export async function buildLaporanMaahirWorkbook(lap: LaporanMaahir, bulan: stri
     }
     list.forEach((st, i) => {
       const hadir = st.counts.H + st.counts.T;
-      const tanpaKet = Math.max(0, st.tidakHadir - (st.counts.I + st.counts.S + st.counts.A));
+      // Sakit sudah keluar dari penyebut → tak ikut dikurangkan di sini.
+      const tanpaKet = Math.max(0, st.tidakHadir - (st.counts.I + st.counts.A));
       const nama = st.mulaiTanggal
         ? `${st.name} (gabung ${st.mulaiTanggal.slice(8, 10)}/${st.mulaiTanggal.slice(5, 7)})`
         : st.name;
@@ -194,8 +220,28 @@ export async function buildLaporanMaahirWorkbook(lap: LaporanMaahir, bulan: stri
     });
   }
 
-  // ===== TAKHASSUS =====
+  // ===== CATATAN =====
+  // Urutan blok mengikuti halaman /2in1/laporan/maahir: catatan lebih dulu,
+  // baru Takhassus → Maahir → At-Tibyan → SP.
   const t = lap.takhassus;
+  band('CATATAN / POIN MENARIK', C.sub, C.subInk);
+  if (lap.notes.length === 0 && !t.catatan) {
+    dataRow([{ text: 'Belum ada catatan.', from: 1, to: NCOL, align: 'left', ink: C.muted }]);
+  } else {
+    if (t.catatan) {
+      dataRow([{ text: t.catatan, from: 1, to: NCOL, align: 'left', ink: C.muted }]);
+    }
+    lap.notes.forEach((n, i) => {
+      dataRow([{ text: `• ${n.teks}`, from: 1, to: NCOL, align: 'left', ink: C.ink }], i % 2 === 1);
+    });
+  }
+  // Baris kosong untuk catatan tulis-tangan saat laporan dicetak.
+  for (let i = 0; i < 3; i++) {
+    dataRow([{ text: '', from: 1, to: NCOL, align: 'left' }]);
+  }
+  spacer();
+
+  // ===== TAKHASSUS =====
   band('MAAHIR TAKHASSUS (IKHWAN & AKHWAT)');
   obsHead();
   obsRow(
@@ -211,7 +257,7 @@ export async function buildLaporanMaahirWorkbook(lap: LaporanMaahir, bulan: stri
   obsRow(5, 'Jumlah pengajar dengan absensi di bawah target', `${t.pengajarDibawahTarget} orang`, '');
   spacer();
 
-  subBand('Rincian Setoran — Peserta Takhassus (halaman per pertemuan)');
+  subBand(`Rincian Setoran — Peserta Takhassus (${t.setoran.peserta.length}) — halaman per pertemuan`);
   tableHead([
     { text: 'Peserta', from: 1, to: 2, align: 'left' },
     { text: 'Gender', from: 3, to: 3 },
@@ -245,22 +291,6 @@ export async function buildLaporanMaahirWorkbook(lap: LaporanMaahir, bulan: stri
 
   band('Peserta di Bawah Target (< 80%)', C.danger, C.dangerInk);
   bawahTargetTable(t.dibawahTarget.list);
-  spacer();
-  band('CATATAN / POIN MENARIK', C.sub, C.subInk);
-  if (lap.notes.length === 0 && !t.catatan) {
-    dataRow([{ text: '', from: 1, to: NCOL, align: 'left', ink: C.muted }]);
-  } else {
-    if (t.catatan) {
-      dataRow([{ text: t.catatan, from: 1, to: NCOL, align: 'left', ink: C.muted }]);
-    }
-    lap.notes.forEach((n, i) => {
-      dataRow([{ text: `• ${n.teks}`, from: 1, to: NCOL, align: 'left', ink: C.ink }], i % 2 === 1);
-    });
-  }
-  // Baris kosong untuk catatan tulis-tangan saat laporan dicetak.
-  for (let i = 0; i < 3; i++) {
-    dataRow([{ text: '', from: 1, to: NCOL, align: 'left' }]);
-  }
   spacer(); spacer();
 
   // ===== MAAHIR =====
@@ -357,6 +387,25 @@ export async function buildLaporanMaahirWorkbook(lap: LaporanMaahir, bulan: stri
       ], i % 2 === 1);
     });
   }
+
+  // Catatan kaki — teks sama dgn yang tampil di bawah halaman laporan.
+  spacer();
+  merge(r, 1, NCOL);
+  const foot = cell(r, 1);
+  foot.value =
+    `Presensi mulai dilacak ${bulanLabel(PRESENSI_ANCHOR.slice(0, 7))}. Bulan sebelumnya kosong. ` +
+    'Kehadiran peserta Takhassus & Maahir dihitung dari sesi Kelas Maahir; At-Tibyan ' +
+    'dilaporkan terpisah. Kehadiran pengajar sementara default 100%.\n' +
+    'Sakit dianggap udzur — sesinya dikeluarkan dari penyebut, jadi tidak menurunkan persen. ' +
+    'Izin dan alpa tetap menurunkan. Kolom Pertemuan = (hadir+terlambat) dibagi pertemuan ' +
+    'terisi setelah sakit dikeluarkan.\n' +
+    'Angka di sini bisa berbeda dengan halaman Rekap Kehadiran: rekap memakai bulan kalender ' +
+    '(1–31) dan menggabung sesi Maahir + At-Tibyan jadi satu persen, sedangkan laporan ini ' +
+    'memakai periode 28–27 dan memisahkan keduanya.';
+  foot.font = { size: 9, italic: true, color: { argb: C.muted } };
+  foot.alignment = { vertical: 'top', horizontal: 'left', wrapText: true, indent: 1 };
+  ws.getRow(r).height = 58;
+  r++;
 
   return wb.xlsx.writeBuffer();
 }

@@ -1,6 +1,7 @@
 // Laporan Bulanan Maahir (keseluruhan) — agregat lintas-program untuk koordinator.
 // Meniru template "Laporan Bulanan Maahir.xlsx": 3 blok (Takhassus, Maahir, At-Tibyan).
-// Persen per peserta ikut konvensi maahir-rekap: (H+T)/pertemuan_terisi_dalam_scope.
+// Persen per peserta ikut konvensi maahir-rekap: (H+T)/(pertemuan_terisi − sakit)
+// dalam scope — sakit dianggap udzur dan tak menggerus persen.
 // Cakupan "Kehadiran peserta" tabel Takhassus & Maahir = sesi kelas_maahir saja;
 // At-Tibyan (sesi at_tibyan, lintas kelas) dilaporkan di bloknya sendiri. DPQ tidak ada.
 
@@ -36,9 +37,13 @@ export type StudentAtt = {
   kelasName: string;
   gender: Gender;
   counts: PctCounts;
-  filled: number; // jumlah pertemuan terisi (denominator) di scope, sejak bergabung
-  tidakHadir: number; // filled - (H+T): sesi tak hadir termasuk yg tak tercatat
-  persen: number | null; // (H+T)/pertemuan terisi * 100; null bila belum ada pertemuan
+  /** Penyebut persen: pertemuan terisi di scope sejak bergabung, DIKURANGI sesi sakit. */
+  filled: number;
+  /** Jumlah pertemuan terisi sebelum sakit dikeluarkan (informasi mentah). */
+  terisi: number;
+  tidakHadir: number; // filled - (H+T): sesi tak hadir (sakit tak dihitung)
+  /** (H+T)/filled * 100; null bila belum ada pertemuan; 100 bila semua sesinya sakit. */
+  persen: number | null;
   keterangan: string; // catatan tergabung (bila ada)
   mulaiTanggal: string | null; // tgl gabung kelas bila di tengah periode (denominator dipotong)
   online: number; // sesi yang dihadiri secara online
@@ -285,19 +290,27 @@ export async function getLaporanMaahir(month: string): Promise<LaporanMaahir> {
       // terdaftar tak boleh menggerus persentasenya).
       const mulaiTanggal = joinDateOf(a);
       const fset = filledByKelasScope.get(`${kelas.id}|${scope}`);
-      const filled = !fset
+      const terisi = !fset
         ? 0
         : [...fset].filter((pid) =>
             dalamPeriode(a, pertemuanById.get(pid)?.tanggal ?? '', start, end)
           ).length;
-      const persenAsli = filled > 0 ? Math.round(((counts.H + counts.T) / filled) * 100) : null;
-      // Tidak hadir = pertemuan terisi − (hadir+terlambat). Termasuk sesi yang
-      // peserta tak punya catatan sama sekali (bukan hanya izin/sakit/alpa),
-      // supaya tak muncul "0x" padahal di bawah target.
+      // Sakit = udzur: sesinya dikeluarkan dari penyebut, jadi tak menggerus
+      // persen. Semua sesi sakit → penyebut habis, dianggap hadir penuh.
+      const filled = Math.max(0, terisi - counts.S);
+      const persenAsli =
+        filled > 0
+          ? Math.round(((counts.H + counts.T) / filled) * 100)
+          : terisi > 0
+            ? 100
+            : null;
+      // Tidak hadir = penyebut − (hadir+terlambat). Termasuk sesi yang peserta
+      // tak punya catatan sama sekali (bukan hanya izin/alpa), supaya tak muncul
+      // "0x" padahal di bawah target. Sakit tak masuk hitungan ini.
       const tidakHadirAsli = Math.max(0, filled - (counts.H + counts.T));
       // Diputihkan → dianggap hadir penuh untuk periode ini.
       const diputihkan = pemutihan.has(a.id) ? (pemutihan.get(a.id) ?? '') : null;
-      const persen = diputihkan !== null && filled > 0 ? 100 : persenAsli;
+      const persen = diputihkan !== null && terisi > 0 ? 100 : persenAsli;
       const tidakHadir = diputihkan !== null ? 0 : tidakHadirAsli;
       out.push({
         anggotaId: a.id,
@@ -306,6 +319,7 @@ export async function getLaporanMaahir(month: string): Promise<LaporanMaahir> {
         gender: kelas.gender,
         counts,
         filled,
+        terisi,
         tidakHadir,
         persen,
         keterangan: st ? Array.from(st.catatan).join('; ') : '',
