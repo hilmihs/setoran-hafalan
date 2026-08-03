@@ -4,7 +4,7 @@ import { getSession } from '@/lib/session';
 import { supabaseAdmin } from '@/lib/supabase-admin';
 import { INDIKATOR } from '@/lib/matrix-indicators';
 
-const KAT_SHORT: Record<string, string> = { hard: 'Hard Skill', pedagogis: 'Pedagogis', soft: 'Soft Skill' };
+const KAT_SHORT: Record<string, string> = { hard: 'Hard Skill', inspeksi: 'Inspeksi', soft: 'Soft Skill' };
 const XLSX_MIME = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
 
 export const runtime = 'nodejs';
@@ -88,7 +88,7 @@ export async function GET(req: NextRequest) {
       const adaSelainSop = kosong.some((i) => i.key !== 'skor_kepatuhan_sop');
       const byKat: Record<string, string[]> = {};
       for (const ind of kosong) (byKat[ind.kategori] ??= []).push(ind.label);
-      const detail = (['hard', 'pedagogis', 'soft'] as const)
+      const detail = (['hard', 'inspeksi', 'soft'] as const)
         .filter((k) => byKat[k]?.length)
         .map((k) => `${KAT_SHORT[k]}: ${byKat[k].join(', ')}`)
         .join('   •   ');
@@ -223,11 +223,10 @@ export async function GET(req: NextRequest) {
     { header: 'Kehadiran Maahir', key: 'kehadiran_maahir', width: 16 },
     { header: 'Kehadiran At-Tibyan', key: 'kehadiran_tibyan', width: 18 },
     { header: 'Rata² Hard', key: 'hard', width: 10 },
-    { header: 'Metode Pengajaran', key: 'metode', width: 18 },
     { header: 'Kepatuhan Silabus', key: 'silabus', width: 18 },
     { header: 'Manajemen Halaqah', key: 'manajemen', width: 18 },
     { header: 'Kepatuhan SOP', key: 'sop', width: 14 },
-    { header: 'Rata² Pedagogis', key: 'pedagogis', width: 14 },
+    { header: 'Rata² Inspeksi', key: 'pedagogis', width: 14 },
     { header: 'Disiplin Waktu', key: 'disiplin', width: 14 },
     { header: 'Komitmen Jadwal', key: 'komitmen', width: 16 },
     { header: 'Tanggung Jawab', key: 'tanggungjawab', width: 16 },
@@ -253,7 +252,6 @@ export async function GET(req: NextRequest) {
       kehadiran_maahir: m?.skor_kehadiran_maahir ?? '',
       kehadiran_tibyan: m?.skor_kehadiran_tibyan ?? '',
       hard: m?.rata_rata_hard_skill ?? '',
-      metode: m?.skor_metode_pengajaran ?? '',
       silabus: m?.skor_kepatuhan_silabus ?? '',
       manajemen: m?.skor_manajemen_halaqah ?? '',
       evaluasi: m?.skor_evaluasi_penguasaan ?? '',
@@ -278,7 +276,6 @@ export async function GET(req: NextRequest) {
     tajwid: '≥2',
     kehadiran_maahir: '≥4',
     kehadiran_tibyan: '≥4',
-    metode: '≥4',
     silabus: '≥4',
     manajemen: '≥4',
     evaluasi: '≥4',

@@ -20,7 +20,7 @@ import type { MatrixRekap } from '@/types/db';
 export const dynamic = 'force-dynamic';
 
 const ANCHOR_MONTH = '2026-01';
-const KATEGORI_ORDER: Kategori[] = ['hard', 'pedagogis', 'soft'];
+const KATEGORI_ORDER: Kategori[] = ['hard', 'inspeksi', 'soft'];
 
 function fmt(v: number | null | undefined): string {
   return v === null || v === undefined ? '—' : v.toFixed(1);

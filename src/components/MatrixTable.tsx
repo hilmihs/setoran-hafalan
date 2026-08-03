@@ -34,11 +34,11 @@ function fmt(n: number | null | undefined): string {
   return n.toFixed(2);
 }
 
-const KAT_ORDER: Kategori[] = ['hard', 'pedagogis', 'soft'];
-const KAT_SHORT: Record<Kategori, string> = { hard: 'Hard Skill', pedagogis: 'Pedagogis', soft: 'Soft Skill' };
+const KAT_ORDER: Kategori[] = ['hard', 'inspeksi', 'soft'];
+const KAT_SHORT: Record<Kategori, string> = { hard: 'Hard Skill', inspeksi: 'Inspeksi', soft: 'Soft Skill' };
 const KAT_ACCENT: Record<Kategori, string> = {
   hard: 'var(--accent)',
-  pedagogis: 'oklch(0.58 0.12 280)',
+  inspeksi: 'oklch(0.58 0.12 280)',
   soft: 'oklch(0.62 0.11 25)',
 };
 
@@ -136,7 +136,7 @@ export function MatrixTable({ rows, month, gender }: { rows: MatrixTableRow[]; m
                     : (
                       <>
                         <td className="mg-num" data-label="Hard" style={{ color: scoreColor(r.hard, KATEGORI_STANDAR.hard) }}>{fmt(r.hard)}</td>
-                        <td className="mg-num" data-label="Pedagogis" style={{ color: scoreColor(r.pedagogis, KATEGORI_STANDAR.pedagogis) }}>{fmt(r.pedagogis)}</td>
+                        <td className="mg-num" data-label="Inspeksi" style={{ color: scoreColor(r.pedagogis, KATEGORI_STANDAR.inspeksi) }}>{fmt(r.pedagogis)}</td>
                         <td className="mg-num" data-label="Soft" style={{ color: scoreColor(r.soft, KATEGORI_STANDAR.soft) }}>{fmt(r.soft)}</td>
                       </>
                     )}

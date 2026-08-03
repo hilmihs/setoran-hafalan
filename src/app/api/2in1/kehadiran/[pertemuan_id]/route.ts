@@ -6,6 +6,8 @@ export const runtime = 'nodejs';
 
 const VALID_STATUS = ['hadir', 'izin', 'terlambat', 'sakit', 'tidak_ada_keterangan'] as const;
 type Status = typeof VALID_STATUS[number];
+/** Status tidak-hadir yang wajib disertai alasan. */
+const BUTUH_ALASAN = ['izin', 'sakit', 'tidak_ada_keterangan'] as const;
 
 export async function GET(
   _req: NextRequest,
@@ -54,6 +56,20 @@ export async function PUT(
 
     if (!Array.isArray(rows) || rows.length === 0) {
       return NextResponse.json({ error: 'rows wajib diisi.' }, { status: 400 });
+    }
+
+    // Tidak hadir wajib beralasan — kolom Keterangan di rekap kehadiran dan
+    // laporan bulanan mengandalkan catatan ini. Divalidasi di server juga,
+    // bukan hanya di form, supaya tak bisa dilewati.
+    const tanpaAlasan = rows.filter(
+      (r) => BUTUH_ALASAN.includes(r.status as (typeof BUTUH_ALASAN)[number])
+        && String(r.catatan ?? '').trim() === ''
+    );
+    if (tanpaAlasan.length > 0) {
+      return NextResponse.json(
+        { error: `Alasan wajib diisi untuk ${tanpaAlasan.length} peserta yang tidak hadir (izin/sakit/alpa).` },
+        { status: 400 }
+      );
     }
 
     // Map anggota → peserta_id (nullable) untuk kolom legacy

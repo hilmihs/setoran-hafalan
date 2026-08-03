@@ -178,9 +178,12 @@ export default async function PengajarDetailPage({
     | undefined;
   const keteranganOf: Partial<Record<IndikatorKey, string | null>> = {
     skor_bacaan: masyaikhSel?.keterangan_bacaan ?? null,
-    skor_metode_pengajaran: pedagogisSel?.keterangan_metode ?? null,
     skor_kepatuhan_silabus: pedagogisSel?.keterangan_silabus ?? null,
-    skor_manajemen_halaqah: pedagogisSel?.keterangan_halaqah ?? null,
+    // Manajemen Halaqah kini gabungan metode + halaqah → keterangannya juga
+    // digabung supaya catatan lama tak hilang dari tampilan.
+    skor_manajemen_halaqah: [pedagogisSel?.keterangan_halaqah, pedagogisSel?.keterangan_metode]
+      .filter((t): t is string => typeof t === 'string' && t.trim() !== '')
+      .join(' · ') || null,
     skor_evaluasi_penguasaan: pedagogisSel?.keterangan_evaluasi ?? null,
     skor_kepatuhan_sop: pedagogisSel?.keterangan_sop ?? null,
   };

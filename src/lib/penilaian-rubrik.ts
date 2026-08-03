@@ -39,7 +39,7 @@ export const KRITERIA_HAFALAN = [
   'Menghafal 5 juz (prasyarat masuk Maahir).',
 ];
 
-// ── Panduan Kompetensi Pedagogis (Metodologi) ───────────────────────────────
+// ── Panduan Inspeksi (dulu "Kompetensi Pedagogis / Metodologi") ─────────────
 // Sumber: sheet "Referensi" Matrix Guru.xlsx — B. Kompetensi Pedagogis.
 // Pola skala 0–4 = jumlah teguran Koordinator: 4 teguran→0, 3→1, 2→2, 1→3,
 // patuh (tanpa teguran)→4 (Standar). Standar tiap aspek = skala 4.
@@ -67,17 +67,6 @@ const teguranSkala = (patuhTeks: string, langgarTeks: string): RubrikSkala[] => 
 
 export const RUBRIK_PEDAGOGIS: RubrikPedagogis[] = [
   {
-    key: 'skor_metode_pengajaran',
-    judul: 'Metode Pengajaran Modul',
-    kriteria: [
-      'Menjelaskan materi sesuai dengan panduan dan modul pengajaran yang disusun Koordinator.',
-    ],
-    skala: teguranSkala(
-      'Hasil inspeksi menunjukkan pengajar mengikuti panduan modul',
-      'Hasil inspeksi menunjukkan pengajar tidak mengikuti panduan'
-    ),
-  },
-  {
     key: 'skor_kepatuhan_silabus',
     judul: 'Kepatuhan Silabus',
     kriteria: [
@@ -93,12 +82,13 @@ export const RUBRIK_PEDAGOGIS: RubrikPedagogis[] = [
     key: 'skor_manajemen_halaqah',
     judul: 'Manajemen Halaqah',
     kriteria: [
+      'Menjelaskan materi sesuai dengan panduan dan modul pengajaran yang disusun Koordinator.',
       'Interaktif (2 arah): kelas tidak satu arah; pengajar memancing partisipasi aktif murid dan mengoreksi langsung.',
       'Keramahan: Senyum, Sapa, Salam; memanggil peserta dengan panggilan baik (mis. Mas/Mba + Nama).',
     ],
     skala: teguranSkala(
-      'Hasil inspeksi menunjukkan pengajar memberikan koreksi langsung dan halaqah berjalan interaktif',
-      'Hasil inspeksi menunjukkan pengajar tidak memberikan koreksi langsung atau halaqah tidak interaktif'
+      'Hasil inspeksi menunjukkan pengajar mengikuti panduan modul, memberikan koreksi langsung, dan halaqah berjalan interaktif',
+      'Hasil inspeksi menunjukkan pengajar tidak mengikuti panduan modul, tidak memberikan koreksi langsung, atau halaqah tidak interaktif'
     ),
   },
   {

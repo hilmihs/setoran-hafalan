@@ -12,7 +12,8 @@ import type { Gender } from '@/types/db';
 export const dynamic = 'force-dynamic';
 
 const PEDAGOGIS_START = '2026-06';
-const PED_FIELDS = ['skor_metode_pengajaran', 'skor_kepatuhan_silabus', 'skor_manajemen_halaqah', 'skor_evaluasi_penguasaan'] as const;
+// skor_metode_pengajaran dilebur ke skor_manajemen_halaqah (lihat matrix-compute).
+const PED_FIELDS = ['skor_kepatuhan_silabus', 'skor_manajemen_halaqah', 'skor_evaluasi_penguasaan'] as const;
 
 function currentYearMonth(): string {
   return new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Jakarta' }).slice(0, 7);
@@ -69,7 +70,13 @@ export default async function KoordinatorPedagogisPage({ searchParams }: { searc
   const scoresByPengajar = new Map<string, Record<string, string | number | null>>();
   for (const p of penilaianRaw ?? []) {
     scoresByPengajar.set(p.pengajar_id, p as Record<string, string | number | null>);
-    const scores = PED_FIELDS.map((f) => (p as Record<string, number | null>)[f]).filter((x): x is number => x !== null && x !== undefined);
+    const raw = p as Record<string, number | null>;
+    const scores = PED_FIELDS.map((f) =>
+      // Manajemen Halaqah dinilai sebagai gabungan metode lama + halaqah.
+      f === 'skor_manajemen_halaqah'
+        ? mergeHalaqah(raw.skor_metode_pengajaran ?? null, raw.skor_manajemen_halaqah ?? null)
+        : raw[f]
+    ).filter((x): x is number => x !== null && x !== undefined);
     avgByPengajar.set(p.pengajar_id, scores.length ? Math.round((scores.reduce((a, b) => a + b, 0) / scores.length) * 10) / 10 : null);
   }
 
@@ -141,9 +148,8 @@ export default async function KoordinatorPedagogisPage({ searchParams }: { searc
               <thead>
                 <tr>
                   <th style={{ minWidth: 130 }}>Pengajar</th>
-                  <th style={{ textAlign: 'center' }}>Metode</th>
                   <th style={{ textAlign: 'center' }}>Silabus</th>
-                  <th style={{ textAlign: 'center' }}>Halaqah</th>
+                  <th style={{ textAlign: 'center' }}>Manajemen Halaqah</th>
                   <th style={{ textAlign: 'center' }}>Evaluasi</th>
                   <th style={{ textAlign: 'center', color: 'var(--muted-2)' }}>SOP</th>
                   <th style={{ textAlign: 'center' }}>Rata²</th>
@@ -154,6 +160,8 @@ export default async function KoordinatorPedagogisPage({ searchParams }: { searc
                   const sc = scoresByPengajar.get(p.id);
                   const avg = avgByPengajar.get(p.id);
                   const num = (k: string) => (sc?.[k] as number | null) ?? null;
+                  // Manajemen Halaqah = rata-rata nilai metode lama + halaqah.
+                  const halaqah = mergeHalaqah(num('skor_metode_pengajaran'), num('skor_manajemen_halaqah'));
                   const catatan = (sc?.catatan_umum as string | null) ?? null;
                   return (
                     <Fragment key={p.id}>
@@ -164,9 +172,8 @@ export default async function KoordinatorPedagogisPage({ searchParams }: { searc
                             <span style={{ fontSize: 13, fontWeight: 600 }}>{p.name}</span>
                           </div>
                         </td>
-                        <ScoreCell v={num('skor_metode_pengajaran')} label="Metode" />
                         <ScoreCell v={num('skor_kepatuhan_silabus')} label="Silabus" />
-                        <ScoreCell v={num('skor_manajemen_halaqah')} label="Halaqah" />
+                        <ScoreCell v={halaqah} label="Manajemen Halaqah" />
                         <ScoreCell v={num('skor_evaluasi_penguasaan')} label="Evaluasi" />
                         <ScoreCell v={num('skor_kepatuhan_sop')} muted label="SOP" />
                         <td data-label="Rata²" style={{ textAlign: 'center' }}>
@@ -203,9 +210,8 @@ export default async function KoordinatorPedagogisPage({ searchParams }: { searc
             <tr>
               <th style={{ minWidth: 130 }}>Ketua Kelompok</th>
               <th style={{ minWidth: 110 }}>Kelompok</th>
-              <th style={{ textAlign: 'center' }}>Metode</th>
               <th style={{ textAlign: 'center' }}>Silabus</th>
-              <th style={{ textAlign: 'center' }}>Halaqah</th>
+              <th style={{ textAlign: 'center' }}>Manajemen Halaqah</th>
               <th style={{ textAlign: 'center' }}>Evaluasi</th>
               <th style={{ textAlign: 'center', color: 'var(--muted-2)' }}>SOP</th>
               <th style={{ textAlign: 'center' }}>Rata²</th>
@@ -216,6 +222,8 @@ export default async function KoordinatorPedagogisPage({ searchParams }: { searc
               const sc = scoresByPengajar.get(p.id);
               const avg = avgByPengajar.get(p.id);
               const num = (k: string) => (sc?.[k] as number | null) ?? null;
+              // Manajemen Halaqah = rata-rata nilai metode lama + halaqah.
+              const halaqah = mergeHalaqah(num('skor_metode_pengajaran'), num('skor_manajemen_halaqah'));
               const catatan = (sc?.catatan_umum as string | null) ?? null;
               return (
                 <Fragment key={p.id}>
@@ -227,9 +235,8 @@ export default async function KoordinatorPedagogisPage({ searchParams }: { searc
                       </div>
                     </td>
                     <td data-label="Kelompok" className="t-small" style={{ color: 'var(--muted)' }}>{kelompokName}</td>
-                    <ScoreCell v={num('skor_metode_pengajaran')} label="Metode" />
                     <ScoreCell v={num('skor_kepatuhan_silabus')} label="Silabus" />
-                    <ScoreCell v={num('skor_manajemen_halaqah')} label="Halaqah" />
+                    <ScoreCell v={halaqah} label="Manajemen Halaqah" />
                     <ScoreCell v={num('skor_evaluasi_penguasaan')} label="Evaluasi" />
                     <ScoreCell v={num('skor_kepatuhan_sop')} muted label="SOP" />
                     <td data-label="Rata²" style={{ textAlign: 'center' }}>
@@ -262,7 +269,7 @@ export default async function KoordinatorPedagogisPage({ searchParams }: { searc
         <div className="grp">
           <Link href="/2in1/koordinator" className="wordmark"><span className="mark">M</span>Maahir</Link>
           <span style={{ width: 1, height: 16, background: 'var(--line-2)' }} />
-          <span className="t-small" style={{ color: 'var(--ink-2)', fontWeight: 500 }}>Pedagogis Guru</span>
+          <span className="t-small" style={{ color: 'var(--ink-2)', fontWeight: 500 }}>Inspeksi Guru</span>
         </div>
         <div className="grp">
           <Link href="/2in1/koordinator" className="btn btn-sm btn-ghost" style={{ height: 32, padding: '0 12px', textDecoration: 'none' }}>← Dashboard</Link>
@@ -273,7 +280,7 @@ export default async function KoordinatorPedagogisPage({ searchParams }: { searc
       <div className="dash-body" style={{ maxWidth: 900 }}>
         <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
           <div>
-            <h1 className="t-h1" style={{ fontSize: 22, marginBottom: 4 }}>Kompetensi Pedagogis — {monthLabelOf(ym)}</h1>
+            <h1 className="t-h1" style={{ fontSize: 22, marginBottom: 4 }}>Inspeksi — {monthLabelOf(ym)}</h1>
             <p className="t-small">Pantau pengisian penilaian oleh ketua kelompok · {totalDinilai}/{totalAnggotaAll} pengajar dinilai</p>
           </div>
           <MonthNavSelect options={monthOptions()} value={ym} />
@@ -330,6 +337,15 @@ export default async function KoordinatorPedagogisPage({ searchParams }: { searc
       </div>
     </main>
   );
+}
+
+/** Gabungan "Metode Pengajaran Modul" + "Manajemen Halaqah" — rata-rata nilai
+ *  yang ada; null diabaikan supaya baris lama yang cuma punya salah satu tetap
+ *  tampil apa adanya. Sama dengan perhitungan di matrix-compute. */
+function mergeHalaqah(metode: number | null, halaqah: number | null): number | null {
+  const ada = [metode, halaqah].filter((v): v is number => v !== null);
+  if (ada.length === 0) return null;
+  return ada.reduce((a, b) => a + b, 0) / ada.length;
 }
 
 function ScoreCell({ v, muted, label }: { v: number | null; muted?: boolean; label?: string }) {

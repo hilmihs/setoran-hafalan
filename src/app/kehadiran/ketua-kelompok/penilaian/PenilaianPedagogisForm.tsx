@@ -12,15 +12,17 @@ const PEDAGOGIS_TITLES: Record<string, string[]> = Object.fromEntries(
   ])
 );
 
+// "Metode Pengajaran Modul" dilebur ke "Manajemen Halaqah" — satu aspek saja.
+// Kolom skor_metode_pengajaran tetap ada di DB untuk data lama, tapi tidak
+// diisi lagi dari form ini.
 const PEDAGOGIS = [
-  { skorField: 'skor_metode_pengajaran', ketField: 'keterangan_metode', label: 'Metode Pengajaran Modul' },
-  { skorField: 'skor_kepatuhan_silabus', ketField: 'keterangan_silabus', label: 'Kepatuhan Silabus' },
   { skorField: 'skor_manajemen_halaqah', ketField: 'keterangan_halaqah', label: 'Manajemen Halaqah' },
+  { skorField: 'skor_kepatuhan_silabus', ketField: 'keterangan_silabus', label: 'Kepatuhan Silabus' },
   { skorField: 'skor_evaluasi_penguasaan', ketField: 'keterangan_evaluasi', label: 'Evaluasi & Penguasaan' },
 ] as const;
 
-// Kepatuhan SOP Teknis (soft skill) TIDAK dinilai manual di sini — datanya
-// otomatis dari sistem observasi ketua kelas HITS.
+// Kepatuhan SOP Teknis (kategori Inspeksi) TIDAK dinilai manual di sini —
+// datanya dari inspeksi/observasi kelas.
 const ALL = PEDAGOGIS;
 
 type PenilaianData = {

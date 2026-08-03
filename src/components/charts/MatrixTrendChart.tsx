@@ -29,7 +29,7 @@ export function MatrixTrendChart({ data, height = 240 }: Props) {
   const chartData = sorted.map((d) => ({
     bulan: d.year_month,
     Hard: d.rata_rata_hard_skill != null ? Number(d.rata_rata_hard_skill) : null,
-    Pedagogis: d.rata_rata_pedagogis != null ? Number(d.rata_rata_pedagogis) : null,
+    Inspeksi: d.rata_rata_pedagogis != null ? Number(d.rata_rata_pedagogis) : null,
     Soft: d.rata_rata_soft_skill != null ? Number(d.rata_rata_soft_skill) : null,
     'Rata-rata': d.rata_rata_keseluruhan != null ? Number(d.rata_rata_keseluruhan) : null,
   }));
@@ -51,7 +51,7 @@ export function MatrixTrendChart({ data, height = 240 }: Props) {
           />
           <Legend wrapperStyle={{ fontSize: 11 }} />
           <Line type="monotone" dataKey="Hard" stroke="oklch(0.62 0.11 150)" strokeWidth={2} dot={{ r: 3 }} />
-          <Line type="monotone" dataKey="Pedagogis" stroke="oklch(0.78 0.13 85)" strokeWidth={2} dot={{ r: 3 }} />
+          <Line type="monotone" dataKey="Inspeksi" stroke="oklch(0.78 0.13 85)" strokeWidth={2} dot={{ r: 3 }} />
           <Line type="monotone" dataKey="Soft" stroke="oklch(0.58 0.09 165)" strokeWidth={2} dot={{ r: 3 }} />
           <Line type="monotone" dataKey="Rata-rata" stroke="var(--ink)" strokeWidth={2.5} dot={{ r: 4 }} />
         </LineChart>

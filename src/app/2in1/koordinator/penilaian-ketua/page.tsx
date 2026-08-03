@@ -104,7 +104,7 @@ export default async function PenilaianKetuaKelompokPage({
         <div className="page" style={{ paddingTop: 12 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12, flexWrap: 'wrap' }}>
             <div style={{ flex: 1 }}>
-              <h1 className="t-h1" style={{ margin: 0 }}>Penilaian Pedagogis — Ketua Kelompok</h1>
+              <h1 className="t-h1" style={{ margin: 0 }}>Penilaian Inspeksi — Ketua Kelompok</h1>
               <p className="t-small" style={{ margin: 0, color: 'var(--muted-2)' }}>
                 Skala 0–4 · auto-simpan · dinilai oleh koordinator ·{' '}
                 <strong style={{ color: belum ? 'var(--merah-ink)' : 'var(--hijau-ink)' }}>

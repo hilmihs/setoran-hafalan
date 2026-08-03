@@ -5,15 +5,18 @@
 
 import type { MatrixRow } from '@/lib/matrix-compute';
 
-export type Kategori = 'hard' | 'pedagogis' | 'soft';
+// 'inspeksi' dulu bernama 'pedagogis'. Kolom DB tetap rata_rata_pedagogis
+// (lihat KATEGORI_RATA_KEY) supaya data historis tak perlu dimigrasi.
+export type Kategori = 'hard' | 'inspeksi' | 'soft';
 
 // key = nama kolom skor_* di matrix_rekap / MatrixRow.
+// skor_metode_pengajaran tidak lagi jadi indikator tersendiri — nilainya
+// dilebur ke skor_manajemen_halaqah (rata-rata keduanya), lihat matrix-compute.
 export type IndikatorKey =
   | 'skor_bacaan'
   | 'skor_tajwid'
   | 'skor_kehadiran_maahir'
   | 'skor_kehadiran_tibyan'
-  | 'skor_metode_pengajaran'
   | 'skor_kepatuhan_silabus'
   | 'skor_manajemen_halaqah'
   | 'skor_evaluasi_penguasaan'
@@ -36,20 +39,20 @@ export interface Indikator {
 
 export const KATEGORI_LABEL: Record<Kategori, string> = {
   hard: 'Kompetensi Al-Qur’an (Hard Skill)',
-  pedagogis: 'Kompetensi Pedagogis (Metodologi)',
+  inspeksi: 'Inspeksi',
   soft: 'Kompetensi Profesionalisme (Soft Skill)',
 };
 
 export const KATEGORI_RATA_KEY: Record<Kategori, keyof MatrixRow> = {
   hard: 'rata_rata_hard_skill',
-  pedagogis: 'rata_rata_pedagogis',
+  inspeksi: 'rata_rata_pedagogis',
   soft: 'rata_rata_soft_skill',
 };
 
 // Standar rata-rata per kategori (untuk pewarnaan agregat).
 export const KATEGORI_STANDAR: Record<Kategori, number> = {
   hard: 3,
-  pedagogis: 4,
+  inspeksi: 4,
   soft: 4,
 };
 
@@ -103,46 +106,48 @@ export const INDIKATOR: Indikator[] = [
     deskripsi: 'Kehadiran di Kajian At-Tibyan 80–100%.',
     sumber: 'Kehadiran Pengembangan',
   },
-  // B. Pedagogis (Metodologi)
+  // B. Inspeksi
   {
-    key: 'skor_metode_pengajaran',
-    label: 'Metode Pengajaran Modul',
-    short: 'Metode',
-    kategori: 'pedagogis',
+    key: 'skor_manajemen_halaqah',
+    label: 'Manajemen Halaqah',
+    short: 'Manajemen',
+    kategori: 'inspeksi',
     standar: 4,
-    deskripsi: 'Hasil inspeksi menunjukkan pengajar mengikuti panduan modul.',
-    keteranganKey: 'keterangan_metode',
+    deskripsi:
+      'Pengajar mengikuti panduan modul, memberikan koreksi langsung, dan halaqah berjalan interaktif. ' +
+      '(Gabungan dari “Metode Pengajaran Modul” + “Manajemen Halaqah” lama — nilainya rata-rata keduanya.)',
+    keteranganKey: 'keterangan_halaqah',
     sumber: 'Penilaian Pedagogis',
   },
   {
     key: 'skor_kepatuhan_silabus',
     label: 'Kepatuhan Silabus',
     short: 'Silabus',
-    kategori: 'pedagogis',
+    kategori: 'inspeksi',
     standar: 4,
     deskripsi: 'Hasil inspeksi menunjukkan pengajar mengikuti silabus.',
     keteranganKey: 'keterangan_silabus',
     sumber: 'Penilaian Pedagogis',
   },
   {
-    key: 'skor_manajemen_halaqah',
-    label: 'Manajemen Halaqah',
-    short: 'Manajemen',
-    kategori: 'pedagogis',
-    standar: 4,
-    deskripsi: 'Pengajar memberikan koreksi langsung dan halaqah berjalan interaktif.',
-    keteranganKey: 'keterangan_halaqah',
-    sumber: 'Penilaian Pedagogis',
-  },
-  {
     key: 'skor_evaluasi_penguasaan',
     label: 'Evaluasi & Penguasaan',
     short: 'Evaluasi',
-    kategori: 'pedagogis',
+    kategori: 'inspeksi',
     standar: 4,
-    deskripsi: 'Laporan observasi ketua kelas menunjukkan pengajar memberikan tugas latihan.',
+    deskripsi: 'Pengajar memberikan tugas latihan dan mengevaluasi penguasaan peserta.',
     keteranganKey: 'keterangan_evaluasi',
-    sumber: 'Penilaian Pedagogis',
+    sumber: 'Penilaian Pedagogis (ketua kelompok)',
+  },
+  {
+    key: 'skor_kepatuhan_sop',
+    label: 'Kepatuhan SOP Teknis',
+    short: 'SOP Teknis',
+    kategori: 'inspeksi',
+    standar: 4,
+    deskripsi: 'Hasil inspeksi menunjukkan pengajar on-cam ketika KBM berlangsung.',
+    keteranganKey: 'keterangan_sop',
+    sumber: 'Inspeksi / Observasi Kelas',
   },
   // C. Soft Skill (Profesionalisme)
   {
@@ -172,21 +177,11 @@ export const INDIKATOR: Indikator[] = [
     deskripsi: 'Pengajar mengganti jadwal dan memastikan semua murid hadir atau mendapat sesi privat.',
     sumber: 'Laporan Ketua Kelas',
   },
-  {
-    key: 'skor_kepatuhan_sop',
-    label: 'Kepatuhan SOP Teknis',
-    short: 'SOP Teknis',
-    kategori: 'soft',
-    standar: 4,
-    deskripsi: 'Hasil inspeksi menunjukkan pengajar on-cam ketika KBM berlangsung.',
-    keteranganKey: 'keterangan_sop',
-    sumber: 'Observasi Ketua Kelas',
-  },
 ];
 
 export const INDIKATOR_BY_KATEGORI: Record<Kategori, Indikator[]> = {
   hard: INDIKATOR.filter((i) => i.kategori === 'hard'),
-  pedagogis: INDIKATOR.filter((i) => i.kategori === 'pedagogis'),
+  inspeksi: INDIKATOR.filter((i) => i.kategori === 'inspeksi'),
   soft: INDIKATOR.filter((i) => i.kategori === 'soft'),
 };
 

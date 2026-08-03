@@ -16,17 +16,16 @@ const INDIKATOR: Array<{
   field: string;
   label: string;
   short: string;
-  kategori: 'Hard Skill' | 'Pedagogis' | 'Soft Skill';
+  kategori: 'Hard Skill' | 'Inspeksi' | 'Soft Skill';
   standar: number;
 }> = [
   { field: 'skor_bacaan',            label: 'Kualitas Bacaan',       short: 'Bacaan',    kategori: 'Hard Skill', standar: 3 },
   { field: 'skor_tajwid',            label: 'Tajwid (nilai rekaman)', short: 'Tajwid',    kategori: 'Hard Skill', standar: 2 },
   { field: 'skor_kehadiran_maahir',  label: 'Kehadiran Kelas Maahir',short: 'Hdr Maahir',kategori: 'Hard Skill', standar: 4 },
   { field: 'skor_kehadiran_tibyan',  label: 'Kehadiran At-Tibyan',   short: 'At-Tibyan', kategori: 'Hard Skill', standar: 4 },
-  { field: 'skor_metode_pengajaran', label: 'Metode Pengajaran',     short: 'Metode',    kategori: 'Pedagogis',  standar: 4 },
-  { field: 'skor_kepatuhan_silabus', label: 'Kepatuhan Silabus',     short: 'Silabus',   kategori: 'Pedagogis',  standar: 4 },
-  { field: 'skor_manajemen_halaqah', label: 'Manajemen Halaqah',     short: 'Halaqah',   kategori: 'Pedagogis',  standar: 4 },
-  { field: 'skor_kepatuhan_sop',     label: 'Kepatuhan SOP Teknis',  short: 'SOP',       kategori: 'Pedagogis',  standar: 4 },
+  { field: 'skor_kepatuhan_silabus', label: 'Kepatuhan Silabus',     short: 'Silabus',   kategori: 'Inspeksi',  standar: 4 },
+  { field: 'skor_manajemen_halaqah', label: 'Manajemen Halaqah',     short: 'Halaqah',   kategori: 'Inspeksi',  standar: 4 },
+  { field: 'skor_kepatuhan_sop',     label: 'Kepatuhan SOP Teknis',  short: 'SOP',       kategori: 'Inspeksi',  standar: 4 },
   { field: 'skor_kedisiplinan_waktu',label: 'Kedisiplinan Waktu',    short: 'Disiplin',  kategori: 'Soft Skill', standar: 4 },
   { field: 'skor_komitmen_jadwal',   label: 'Komitmen Jadwal',       short: 'Komitmen',  kategori: 'Soft Skill', standar: 4 },
   { field: 'skor_tanggung_jawab',    label: 'Tanggung Jawab',        short: 'Tanggung J',kategori: 'Soft Skill', standar: 4 },
@@ -35,19 +34,19 @@ const INDIKATOR: Array<{
 
 const KATEGORI_COLOR: Record<string, string> = {
   'Hard Skill': 'var(--hijau)',
-  'Pedagogis':  'var(--kuning)',
+  'Inspeksi':   'var(--kuning)',
   'Soft Skill': 'var(--accent)',
 };
 
 const KATEGORI_TINT: Record<string, string> = {
   'Hard Skill': 'var(--hijau-tint)',
-  'Pedagogis':  'var(--kuning-tint)',
+  'Inspeksi':   'var(--kuning-tint)',
   'Soft Skill': 'var(--accent-tint)',
 };
 
 const KATEGORI_INK: Record<string, string> = {
   'Hard Skill': 'var(--hijau-ink)',
-  'Pedagogis':  'var(--kuning-ink)',
+  'Inspeksi':   'var(--kuning-ink)',
   'Soft Skill': 'var(--accent-2)',
 };
 
@@ -135,10 +134,10 @@ export default async function MatrixDetailPage({
     standar: ind.standar,
   }));
 
-  const kategoris: Array<'Hard Skill' | 'Pedagogis' | 'Soft Skill'> = ['Hard Skill', 'Pedagogis', 'Soft Skill'];
+  const kategoris: Array<'Hard Skill' | 'Inspeksi' | 'Soft Skill'> = ['Hard Skill', 'Inspeksi', 'Soft Skill'];
   const rataField: Record<string, string> = {
     'Hard Skill': 'rata_rata_hard_skill',
-    'Pedagogis':  'rata_rata_pedagogis',
+    'Inspeksi':   'rata_rata_pedagogis',
     'Soft Skill': 'rata_rata_soft_skill',
   };
 

@@ -5,10 +5,13 @@
 //   Hard skill : penilaian_masyaikh (bacaan), rekaman setoran (tajwid),
 //                kehadiran_peserta via program_kelas_anggota (2 program: maahir, tibyan)
 //   Bobot hard skill: 8 porsi (maahir 3, tibyan 3, bacaan 1, tajwid 1).
-//   Pedagogis  : penilaian_pedagogis (4 aspek, oleh ketua kelompok)
+//   Inspeksi   : penilaian_pedagogis — Manajemen Halaqah (rata-rata kolom
+//                skor_metode_pengajaran + skor_manajemen_halaqah yang kini
+//                dilebur jadi satu indikator), Kepatuhan Silabus, Evaluasi &
+//                Penguasaan (ketua kelompok), Kepatuhan SOP Teknis.
 //   Soft skill : hits_keterangan_harian via hits_halaqah (kedisiplinan = %KBBS,
 //                tanggung jawab = %latihan beres — pertemuan PTML tidak dinilai
-//                karena tugas sudah diberikan), penilaian_pedagogis.skor_kepatuhan_sop (SOP).
+//                karena tugas sudah diberikan).
 //                komitmen_jadwal = rata-rata(Stabilitas Jadwal [jumlah JKG],
 //                Anti-Mangkir [JKG di-tabayyun & bukan udzur syar'i = teguran]).
 
@@ -402,21 +405,27 @@ export async function computeMatrixForMonth(yearMonth: string): Promise<MatrixRo
       skor_kehadiran_maahir: kehadiranSkor('kelas_maahir'),
       skor_kehadiran_tibyan: kehadiranSkor('at_tibyan'),
     };
-    const pedagogis = {
-      skor_metode_pengajaran: ped?.skor_metode_pengajaran ?? null,
+    // "Metode Pengajaran Modul" dilebur ke "Manajemen Halaqah": skornya
+    // rata-rata dari kedua nilai lama (null diabaikan, jadi baris yang cuma
+    // punya salah satu tetap terpakai apa adanya).
+    const manajemenGabung = avg([
+      ped?.skor_metode_pengajaran ?? null,
+      ped?.skor_manajemen_halaqah ?? null,
+    ]);
+    // Kategori Inspeksi (dulu "Pedagogis"). Kepatuhan SOP masuk sini karena
+    // sumbernya inspeksi kelas, bukan penilaian soft skill.
+    const inspeksi = {
+      skor_manajemen_halaqah: manajemenGabung,
       skor_kepatuhan_silabus: ped?.skor_kepatuhan_silabus ?? null,
-      skor_manajemen_halaqah: ped?.skor_manajemen_halaqah ?? null,
       // Ketua kelompok isi manual → pakai itu. Belum diisi → sinkron dari
       // performa latihan mandiri (report ketua kelas).
       skor_evaluasi_penguasaan: ped?.skor_evaluasi_penguasaan ?? skorLatihan,
+      skor_kepatuhan_sop: ped?.skor_kepatuhan_sop ?? null,
     };
     const soft = {
       skor_kedisiplinan_waktu: skorKedisiplinan,
       skor_komitmen_jadwal: skorKomitmen,
       skor_tanggung_jawab: skorTanggungJawab,
-      // Sekarang otomatis dari sistem observasi ketua kelas HITS, bukan
-      // input manual ketua kelompok — lihat penilaian-pedagogis/upsert.
-      skor_kepatuhan_sop: ped?.skor_kepatuhan_sop ?? null,
     };
 
     // Hard skill berbobot 8 porsi: kehadiran maahir 3, kehadiran tibyan 3,
@@ -427,17 +436,22 @@ export async function computeMatrixForMonth(yearMonth: string): Promise<MatrixRo
       { v: hard.skor_bacaan, w: 1 },
       { v: hard.skor_tajwid, w: 1 },
     ]);
-    const rataPedagogis = avg(Object.values(pedagogis));
+    const rataInspeksi = avg(Object.values(inspeksi));
     const rataSoft = avg(Object.values(soft));
-    const rataAll = avg([rataHard, rataPedagogis, rataSoft]);
+    const rataAll = avg([rataHard, rataInspeksi, rataSoft]);
 
     return {
       pengajar_id: pg.id,
       year_month: yearMonth,
       ...hard,
       rata_rata_hard_skill: rataHard,
-      ...pedagogis,
-      rata_rata_pedagogis: rataPedagogis,
+      ...inspeksi,
+      // Kolom DB tetap bernama rata_rata_pedagogis (data historis tak dimigrasi);
+      // labelnya saja yang kini "Inspeksi".
+      rata_rata_pedagogis: rataInspeksi,
+      // Nilai mentah metode disimpan apa adanya untuk jejak audit, walau tak
+      // lagi tampil sebagai indikator tersendiri.
+      skor_metode_pengajaran: ped?.skor_metode_pengajaran ?? null,
       ...soft,
       rata_rata_soft_skill: rataSoft,
       rata_rata_keseluruhan: rataAll,

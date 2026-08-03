@@ -8,10 +8,10 @@ import {
 } from '@/lib/matrix-indicators';
 import type { MatrixTableRow } from '@/components/MatrixTable';
 
-const KAT_ORDER: Kategori[] = ['hard', 'pedagogis', 'soft'];
+const KAT_ORDER: Kategori[] = ['hard', 'inspeksi', 'soft'];
 const KAT_ACCENT: Record<Kategori, string> = {
   hard: 'var(--accent)',
-  pedagogis: 'oklch(0.58 0.12 280)',
+  inspeksi: 'oklch(0.58 0.12 280)',
   soft: 'oklch(0.62 0.11 25)',
 };
 
