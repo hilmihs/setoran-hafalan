@@ -1,6 +1,12 @@
 // Leaderboard disiplin pengajar (F5): agregat %KBBS + hutang menit per pengajar,
 // lalu ranking. Terpisah dari hits-rekap.ts (yang month-coupled).
 import { supabaseAdmin } from '@/lib/supabase-admin';
+import {
+  isKeteranganDinilai,
+  todayJakartaISO,
+  KETERANGAN_NILAI_COLS,
+  type KeteranganNilaiFields,
+} from '@/lib/hits-observasi';
 import { fetchInChunks } from '@/lib/hits-rekap';
 import { computeHutangForHalaqahList } from '@/lib/hits-hutang';
 import type { Gender } from '@/types/db';
@@ -90,16 +96,23 @@ export async function getDisiplinRanking(opts: {
   // (bukan default 80): mode bulanan bisa ~13 pertemuan/halaqah → 80×13≈1040
   // > cap 1000 baris PostgREST → data terpotong (nonLibur/kbbs understated).
   // 40×13≈520 aman. Ambil `id` juga untuk join pelanggaran per-jenis.
-  const ketList = await fetchInChunks(
+  const ketAllRank = await fetchInChunks(
     halaqahIds,
     (chunk) =>
       supabaseAdmin
         .from('hits_keterangan_harian')
-        .select('id, halaqah_id, kondisi')
+        .select(`id, halaqah_id, kondisi, ${KETERANGAN_NILAI_COLS}`)
         .gte('tanggal', opts.start)
         .lt('tanggal', opts.end)
         .in('halaqah_id', chunk),
     40
+  );
+  // Pertemuan yang belum terjadi & baris pra-generate impor tidak dinilai —
+  // lihat hits-observasi.ts. Tanpa ini, nilai bawaan impor tampil sebagai
+  // pelanggaran TL walau ketua kelas belum mengobservasi apa pun.
+  const hariIniRank = todayJakartaISO();
+  const ketList = ketAllRank.filter((k) =>
+    isKeteranganDinilai(k as unknown as KeteranganNilaiFields, hariIniRank)
   );
   const agg = new Map<
     string,
@@ -246,22 +259,28 @@ export async function getInsidenDetailByPengajar(opts: {
   const halaqahIds = halaqah.map((h) => h.id);
   const halaqahById = new Map(halaqah.map((h) => [h.id, h]));
 
-  const ketList = await fetchInChunks<{
+  const ketAllInsiden = await fetchInChunks<{
     id: string;
     halaqah_id: string;
     pertemuan_no: number;
     tanggal: string;
     catatan: string | null;
+    diisi_by_role: string | null;
+    created_at: string | null;
   }>(
     halaqahIds,
     (chunk) =>
       supabaseAdmin
         .from('hits_keterangan_harian')
-        .select('id, halaqah_id, pertemuan_no, tanggal, catatan')
+        .select(`id, halaqah_id, pertemuan_no, tanggal, catatan, diisi_by_role, created_at`)
         .gte('tanggal', opts.start)
         .lt('tanggal', opts.end)
         .in('halaqah_id', chunk),
     40
+  );
+  const hariIniInsiden = todayJakartaISO();
+  const ketList = ketAllInsiden.filter((k) =>
+    isKeteranganDinilai(k as unknown as KeteranganNilaiFields, hariIniInsiden)
   );
   if (!ketList.length) return result;
 

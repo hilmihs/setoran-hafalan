@@ -15,6 +15,7 @@ import {
   type Kategori,
   type IndikatorKey,
 } from '@/lib/matrix-indicators';
+import { todayJakartaISO } from '@/lib/hits-observasi';
 import type { Gender } from '@/types/db';
 
 interface NoteRow {
@@ -146,6 +147,9 @@ export default async function PengajarDetailPage({
           .from('hits_keterangan_harian')
           .select('id, halaqah_id, tanggal, kondisi, catatan')
           .in('halaqah_id', kelasIds)
+          // Baris pra-generate untuk pertemuan yang belum terjadi jangan
+          // menyembul di puncak daftar (urut tanggal desc).
+          .lte('tanggal', todayJakartaISO())
           .order('tanggal', { ascending: false })
           .limit(20)
       : Promise.resolve({ data: [] as Array<{ id: string; halaqah_id: string; tanggal: string; kondisi: string; catatan: string | null }> }),
