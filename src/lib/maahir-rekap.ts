@@ -39,6 +39,8 @@ export type RekapAnggota = {
   isKetua: boolean;
   isWakil: boolean;
   perPertemuan: Record<string, StatusCode>; // pertemuanId → code ('-' jika tak ada data)
+  /** Catatan/alasan yang tercatat pada sesi-sesi bulan ini (unik, digabung '; '). */
+  keterangan: string;
   totals: { H: number; I: number; S: number; A: number; T: number };
   /**
    * (H+T)/(pertemuan terisi − sakit). Sakit = udzur, tak menggerus persen:
@@ -83,12 +85,19 @@ function monthRange(month: string): { start: string; end: string } {
  * @param month 'YYYY-MM'
  * @param opts.kelasIds batasi ke kelas tertentu (ketua); kosong = semua.
  * @param opts.gender filter gender (koordinator).
+ * @param opts.range ganti rentang bulan kalender dgn rentang lain (mis. periode
+ *   laporan bulanan 28–27) supaya angkanya sebanding dengan laporan.
  */
 export async function getMaahirRekap(
   month: string,
-  opts?: { kelasIds?: string[]; gender?: 'ikhwan' | 'akhwat'; program?: MaahirProgram }
+  opts?: {
+    kelasIds?: string[];
+    gender?: 'ikhwan' | 'akhwat';
+    program?: MaahirProgram;
+    range?: { start: string; end: string };
+  }
 ): Promise<RekapKelas[]> {
-  const { start, end } = monthRange(month);
+  const { start, end } = opts?.range ?? monthRange(month);
   // Bulan di masa depan (start > today) → tak ada data.
   if (start > todayJakarta()) return [];
 
@@ -133,6 +142,7 @@ export async function getMaahirRekap(
 
   // 4. Kehadiran (hanya yang sudah disubmit)
   const kehadiranByPertemuan = new Map<string, Map<string, StatusCode>>();
+  const catatanByAnggota = new Map<string, Set<string>>();
   const filledPertemuan = new Set<string>();
   if (pertemuanIds.length > 0) {
     // Paginasi: rekap semua-kelas sebulan bisa >1000 baris (limit PostgREST).
@@ -140,11 +150,12 @@ export async function getMaahirRekap(
       pertemuan_id: string;
       anggota_id: string | null;
       status: string;
+      catatan: string | null;
       diisi_at: string | null;
     }>((from, to) =>
       supabaseAdmin
         .from('kehadiran_peserta')
-        .select('pertemuan_id, anggota_id, status, diisi_at')
+        .select('pertemuan_id, anggota_id, status, catatan, diisi_at')
         .in('pertemuan_id', pertemuanIds)
         .not('diisi_at', 'is', null)
         .order('id')
@@ -159,6 +170,12 @@ export async function getMaahirRekap(
         kehadiranByPertemuan.set(k.pertemuan_id, m);
       }
       m.set(k.anggota_id, STATUS_TO_CODE[k.status] ?? 'A');
+      const c = typeof k.catatan === 'string' ? k.catatan.trim() : '';
+      if (c) {
+        let set = catatanByAnggota.get(k.anggota_id);
+        if (!set) { set = new Set(); catatanByAnggota.set(k.anggota_id, set); }
+        set.add(c);
+      }
     }
   }
 
@@ -222,6 +239,7 @@ export async function getMaahirRekap(
         isKetua: a.is_ketua,
         isWakil: a.is_wakil,
         perPertemuan,
+        keterangan: Array.from(catatanByAnggota.get(a.id) ?? []).join('; '),
         totals,
         persenHadir,
       };

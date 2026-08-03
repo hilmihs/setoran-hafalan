@@ -91,7 +91,8 @@ export type LaporanMaahir = {
   notes: LaporanNote[];
 };
 
-function monthRange(month: string): { start: string; end: string } {
+/** Rentang periode laporan bulanan Maahir: tgl 28 bulan lalu s/d 27 bulan ini. */
+export function monthRange(month: string): { start: string; end: string } {
   const [y, m] = month.split('-').map(Number);
   // Periode Maahir bukan kalender penuh: tgl 28 bulan LALU s/d tgl 27 bulan ini.
   // mis. month=2026-06 → 2026-05-28 .. 2026-06-27.

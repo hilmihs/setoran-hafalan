@@ -54,6 +54,7 @@ export default async function LaporanMaahirPage({
   const lap = await getLaporanMaahir(month);
   const monthOptions = monthOptionsSince(ANCHOR_MONTH);
   const downloadUrl = `/api/laporan/maahir/download?bulan=${month}`;
+  const kehadiranUrl = `/api/laporan/maahir/kehadiran/download?bulan=${month}`;
 
   return (
     <main style={{ minHeight: '100vh' }}>
@@ -77,11 +78,18 @@ export default async function LaporanMaahirPage({
             <MonthNavSelect options={monthOptions} value={month} />
           </div>
 
-          <div style={{ display: 'flex', gap: 8, marginBottom: 20, flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', gap: 8, marginBottom: 6, flexWrap: 'wrap' }}>
             <a href={downloadUrl} className="btn btn-sm btn-primary" download style={{ textDecoration: 'none' }}>
               Export Excel — {monthLabel(month)}
             </a>
+            <a href={kehadiranUrl} className="btn btn-sm btn-ghost" download style={{ textDecoration: 'none' }}>
+              Export Data Kehadiran — {monthLabel(month)}
+            </a>
           </div>
+          <p className="t-tiny" style={{ color: 'var(--muted-2)', marginBottom: 20 }}>
+            Export Data Kehadiran = matriks peserta × tanggal per kelas (H/I/S/A/T tiap pertemuan,
+            ringkasan, dan keterangan), memakai periode yang sama dengan laporan ini.
+          </p>
 
           <NotesEditor month={month} notes={lap.notes} />
           <TakhassusBlock lap={lap} />

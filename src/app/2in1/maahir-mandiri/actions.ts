@@ -38,6 +38,8 @@ export async function remindKetuaLibur(kelasId: string, tanggal: string): Promis
 }
 
 const VALID_STATUS = ['hadir', 'izin', 'terlambat', 'sakit', 'tidak_ada_keterangan'] as const;
+/** Status tidak-hadir yang wajib disertai alasan. */
+export const BUTUH_ALASAN = ['izin', 'sakit', 'tidak_ada_keterangan'] as const;
 
 /**
  * Peserta menandai kehadiran DIRINYA pada kelas presensi-mandiri, lewat akun
@@ -57,6 +59,13 @@ export async function submitSelfPresensi(_prev: SelfPresensiResult | undefined, 
   const modeRaw = String(fd.get('mode') ?? '').trim();
   if (!kelasId || !anggotaId || !tanggal || !program) return { error: 'Data tidak lengkap.' };
   if (!VALID_STATUS.includes(status as (typeof VALID_STATUS)[number])) return { error: 'Status tidak valid.' };
+
+  // Tidak hadir wajib beralasan — kolom Keterangan di laporan bulanan &
+  // rekap kehadiran mengandalkan catatan ini. Divalidasi di server juga,
+  // bukan cuma di form, supaya tak bisa dilewati.
+  if (BUTUH_ALASAN.includes(status as (typeof BUTUH_ALASAN)[number]) && catatan === '') {
+    return { error: 'Alasan wajib diisi untuk Izin / Sakit / Tidak hadir.' };
+  }
 
   // Setoran halaman hanya relevan untuk sesi Kelas Maahir. Kosong/hadir=null.
   let setoranHalaman: number | null = null;

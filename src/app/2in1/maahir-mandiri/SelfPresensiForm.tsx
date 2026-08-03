@@ -53,7 +53,15 @@ export function SelfPresensiForm({
   // Setoran hafalan hanya untuk sesi Kelas Maahir & saat hadir/terlambat.
   const showSetoran = askSetoran && program === 'kelas_maahir' && (status === 'hadir' || status === 'terlambat');
 
+  // Tidak hadir wajib beralasan (dicek ulang di server action).
+  const butuhAlasan = status === 'izin' || status === 'sakit' || status === 'tidak_ada_keterangan';
+  const alasanKosong = butuhAlasan && catatan.trim() === '';
+
   function save() {
+    if (alasanKosong) {
+      setError('Alasan wajib diisi untuk Izin / Sakit / Tidak hadir.');
+      return;
+    }
     setError(null);
     start(async () => {
       const fd = new FormData();
@@ -134,22 +142,35 @@ export function SelfPresensiForm({
         </div>
       )}
 
-      {(status === 'izin' || status === 'sakit' || status === 'tidak_ada_keterangan') && (
-        <input
-          type="text"
-          value={catatan}
-          onChange={(e) => setCatatan(e.target.value)}
-          placeholder="Catatan (opsional)…"
-          className="input"
-          style={{ width: '100%', marginTop: 10 }}
-        />
+      {butuhAlasan && (
+        <div style={{ marginTop: 10 }}>
+          <label className="field-label">
+            Alasan tidak hadir <span style={{ color: 'var(--merah, #dc2626)' }}>*</span>
+          </label>
+          <input
+            type="text"
+            value={catatan}
+            onChange={(e) => setCatatan(e.target.value)}
+            placeholder="mis. sakit demam, mudik, ada acara keluarga…"
+            className="input"
+            style={{ width: '100%' }}
+            aria-required
+          />
+          <p className="t-tiny" style={{ color: 'var(--muted-2)', marginTop: 4 }}>
+            Wajib diisi — alasan ini yang muncul di rekap kehadiran & laporan bulanan.
+          </p>
+        </div>
       )}
 
       {error && <p className="t-small" style={{ color: 'var(--danger)', marginTop: 10 }}>{error}</p>}
 
-      <button type="button" onClick={save} disabled={pending}
-        className={`btn btn-block ${pending ? 'btn-soft' : 'btn-primary'}`} style={{ marginTop: 16 }}>
-        {pending ? 'Menyimpan…' : submitLabel ?? (remaining > 1 ? 'Simpan & Lanjut →' : 'Simpan & Selesai')}
+      <button type="button" onClick={save} disabled={pending || alasanKosong}
+        className={`btn btn-block ${pending || alasanKosong ? 'btn-soft' : 'btn-primary'}`} style={{ marginTop: 16 }}>
+        {pending
+          ? 'Menyimpan…'
+          : alasanKosong
+            ? 'Isi alasan dulu'
+            : submitLabel ?? (remaining > 1 ? 'Simpan & Lanjut →' : 'Simpan & Selesai')}
       </button>
     </div>
   );
