@@ -5,6 +5,12 @@ import { supabaseAdmin } from '@/lib/supabase-admin';
 import { computeHutangForHalaqahList } from '@/lib/hits-hutang';
 import { deriveHalaqahProgram, PROGRAM_STAGES, programKaldikLevels, type KaldikHariLite, type PertemuanOverride } from '@/lib/hits-pertemuan';
 import { todayJakarta } from '@/lib/maahir-presensi';
+import {
+  isKeteranganDinilai,
+  todayJakartaISO,
+  KETERANGAN_NILAI_COLS,
+  type KeteranganNilaiFields,
+} from '@/lib/hits-observasi';
 import type { Gender, HitsKondisi, HitsLevel } from '@/types/db';
 
 export type HitsRekapRow = {
@@ -359,20 +365,26 @@ export async function getIndisiplinerRekap(
     terlambat: boolean;
     latihan_diberikan: boolean | null;
     catatan: string | null;
+    diisi_by_role: string | null;
+    created_at: string | null;
   }>(halaqahIds, (ids) =>
     supabaseAdmin
       .from('hits_keterangan_harian')
-      .select('id, halaqah_id, pertemuan_no, tanggal, kondisi, terlambat, latihan_diberikan, catatan')
+      .select(`id, halaqah_id, pertemuan_no, tanggal, kondisi, terlambat, latihan_diberikan, catatan, ${KETERANGAN_NILAI_COLS}`)
       .in('halaqah_id', ids)
       .gte('tanggal', start)
       .lt('tanggal', nextMonth)
   );
+  // Pertemuan yang belum terjadi & baris pra-generate impor bukan pelanggaran —
+  // nilai bawaannya (latihan_diberikan=false) dulu memunculkan badge TL palsu.
+  const hariIniObs = todayJakartaISO();
   const ket = ketAll.filter(
     (k) =>
-      k.kondisi === 'KMT' ||
-      k.kondisi === 'KBLA' ||
-      k.kondisi === 'JKG' ||
-      k.latihan_diberikan === false
+      isKeteranganDinilai(k as unknown as KeteranganNilaiFields, hariIniObs) &&
+      (k.kondisi === 'KMT' ||
+        k.kondisi === 'KBLA' ||
+        k.kondisi === 'JKG' ||
+        k.latihan_diberikan === false)
   );
   if (!ket.length) return emptyIndisiplinerRekap();
 

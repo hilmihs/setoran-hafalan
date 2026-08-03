@@ -9,6 +9,11 @@ import {
   type InsidenDetail,
 } from '@/lib/hits-ranking';
 import { getHitsPengajuan } from '@/lib/hits-pengajuan';
+import {
+  getCakupanObservasi,
+  type CakupanPengajar,
+  type PertemuanObservasi,
+} from '@/lib/hits-observasi-cakupan';
 import { GenderNavSelect } from '@/components/GenderNavSelect';
 import { MonthNavSelect } from '@/components/MonthNavSelect';
 import { WeekNavSelect } from '@/components/WeekNavSelect';
@@ -49,6 +54,77 @@ const STATUS_LABEL: Record<InsidenDetail['status'], string> = {
 function putusanText(i: InsidenDetail): string {
   if (i.status !== 'diputus' || i.isUdzurSyari === null) return STATUS_LABEL[i.status];
   return i.isUdzurSyari ? '✅ Udzur syar’i diterima' : '❌ Udzur ditolak';
+}
+
+const TGL_PENDEK = (t: string) => {
+  const [, m, d] = t.split('-').map(Number);
+  return `${d}/${m}`;
+};
+
+/**
+ * Cakupan observasi ketua kelas: pertemuan mana pada periode ini yang sudah
+ * diobservasi dan mana yang belum. "Belum" mencakup baris pra-generate impor —
+ * baris itu ada di DB tapi bukan hasil observasi siapa pun.
+ */
+function CakupanObservasiRows({ c }: { c: CakupanPengajar }) {
+  const perHalaqah = new Map<string, PertemuanObservasi[]>();
+  for (const p of c.pertemuan) {
+    const arr = perHalaqah.get(p.halaqahName) ?? [];
+    arr.push(p);
+    perHalaqah.set(p.halaqahName, arr);
+  }
+  return (
+    <details style={{ background: 'var(--surface-2, var(--surface-3))' }}>
+      <summary className="t-tiny" style={{ cursor: 'pointer', padding: '6px 12px', color: 'var(--muted-2)' }}>
+        ▸ Observasi ketua kelas — <strong>{c.sudah}/{c.total}</strong> pertemuan terisi
+        {c.belum > 0 && (
+          <span style={{ color: 'var(--merah-ink)' }}> · {c.belum} belum diobservasi</span>
+        )}
+      </summary>
+      <div style={{ padding: '8px 12px 12px' }}>
+        {[...perHalaqah.entries()].map(([nama, list]) => (
+          <div key={nama} style={{ marginBottom: 8 }}>
+            <div className="t-tiny" style={{ color: 'var(--muted-2)', marginBottom: 4 }}>{nama}</div>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+              {list.map((p) => {
+                const sudah = p.status === 'sudah';
+                return (
+                  <span
+                    key={`${p.halaqahId}-${p.tanggal}`}
+                    title={
+                      sudah
+                        ? `${p.tanggal} — sudah diobservasi${p.libur ? ' (libur)' : ''}`
+                        : p.status === 'pragenerate'
+                          ? `${p.tanggal} — baris pra-generate impor, ketua kelas belum mengisi`
+                          : `${p.tanggal} — belum diisi ketua kelas`
+                    }
+                    style={{
+                      fontSize: 11,
+                      padding: '2px 6px',
+                      borderRadius: 5,
+                      border: '1px solid',
+                      borderColor: sudah ? 'var(--hijau-line)' : 'var(--merah-line)',
+                      background: sudah ? 'var(--hijau-tint)' : 'var(--merah-tint)',
+                      color: sudah ? 'var(--hijau-ink)' : 'var(--merah-ink)',
+                      opacity: p.libur ? 0.65 : 1,
+                    }}
+                  >
+                    {sudah ? '✓' : '○'} {TGL_PENDEK(p.tanggal)}
+                    {p.pertemuanNo ? ` (${p.pertemuanNo})` : ''}
+                  </span>
+                );
+              })}
+            </div>
+          </div>
+        ))}
+        <p className="t-tiny" style={{ color: 'var(--muted-2)', marginTop: 6 }}>
+          ✓ hijau = ketua kelas sudah mengisi keterangan · ○ merah = belum.
+          Pelanggaran (TL/KMT/KBLA/JKG) hanya dihitung dari pertemuan yang sudah diobservasi
+          dan tanggalnya sudah lewat.
+        </p>
+      </div>
+    </details>
+  );
 }
 
 /** Rincian insiden KMT/KBLA/JKG/TL satu pengajar — alasan & putusan. */
@@ -168,6 +244,8 @@ export default async function HitsKoordinatorPage({
   const rows = await getDisiplinRanking({ start, end, gender: genderFilter });
   // Rincian alasan tiap insiden (keterangan ketua, tabayyun, putusan koordinator).
   const insidenByPengajar = await getInsidenDetailByPengajar({ start, end, gender: genderFilter });
+  // Cakupan observasi ketua kelas: pertemuan mana yang sudah/belum diisi.
+  const cakupanByPengajar = await getCakupanObservasi({ start, end, gender: genderFilter });
   const ranked = rows.filter((r) => r.rank !== null);
   const noData = rows.filter((r) => r.rank === null);
   const noDataAksi = await getNoDataActionInfo(noData);
@@ -359,6 +437,7 @@ export default async function HitsKoordinatorPage({
                     <tbody>
                       {ranked.map((r) => {
                         const insiden = insidenByPengajar.get(r.pengajarId) ?? [];
+                        const cakupan = cakupanByPengajar.get(r.pengajarId);
                         return (
                         <Fragment key={r.pengajarId}>
                         <tr>
@@ -401,6 +480,13 @@ export default async function HitsKoordinatorPage({
                             {r.halaqahCount}
                           </td>
                         </tr>
+                        {cakupan && cakupan.total > 0 && (
+                          <tr>
+                            <td colSpan={9} style={{ padding: 0, borderTop: 0 }}>
+                              <CakupanObservasiRows c={cakupan} />
+                            </td>
+                          </tr>
+                        )}
                         {insiden.length > 0 && (
                           <tr>
                             <td colSpan={9} style={{ padding: 0, borderTop: 0 }}>

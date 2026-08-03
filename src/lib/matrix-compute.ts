@@ -17,6 +17,12 @@
 
 import { supabaseAdmin } from '@/lib/supabase-admin';
 import { fetchInChunks } from '@/lib/hits-rekap';
+import {
+  isKeteranganDinilai,
+  todayJakartaISO,
+  KETERANGAN_NILAI_COLS,
+  type KeteranganNilaiFields,
+} from '@/lib/hits-observasi';
 import { cyclesOfMonth } from '@/lib/week';
 import { JENIS_REKAMAN } from '@/types/db';
 
@@ -275,14 +281,20 @@ export async function computeMatrixForMonth(yearMonth: string): Promise<MatrixRo
   const halaqahIds = (halaqahList ?? []).map((h) => h.id as string);
   // Chunked: 421 halaqah dalam satu .in() → URL ~16KB → gagal gateway (414) →
   // data null → soft skill kosong. Lihat fetchInChunks (hits-rekap.ts).
-  const keteranganList = await fetchInChunks(halaqahIds, (chunk) =>
+  const keteranganAll = await fetchInChunks(halaqahIds, (chunk) =>
     supabaseAdmin
       .from('hits_keterangan_harian')
-      .select('id, halaqah_id, kondisi, latihan_diberikan, semua_selesai, status_latihan')
+      .select(`id, halaqah_id, kondisi, latihan_diberikan, semua_selesai, status_latihan, ${KETERANGAN_NILAI_COLS}`)
       .gte('tanggal', monthStart)
       .lt('tanggal', nextMonth)
       .in('halaqah_id', chunk)
       .neq('kondisi', 'LIBUR')
+  );
+  // Buang pertemuan yang belum terjadi & baris pra-generate impor — kalau tidak,
+  // pengajar dihukum untuk kelas yang belum berlangsung / belum diobservasi.
+  const hariIni = todayJakartaISO();
+  const keteranganList = (keteranganAll ?? []).filter((k) =>
+    isKeteranganDinilai(k as unknown as KeteranganNilaiFields, hariIni)
   );
 
   // Pelanggaran multi (sumber kebenaran F1): kedisiplinan & stabilitas jadwal
