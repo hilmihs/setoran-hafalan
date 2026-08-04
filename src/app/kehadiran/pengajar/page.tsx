@@ -1,5 +1,6 @@
 import { requirePengajar } from '@/lib/session';
 import { getProgramsForDate, getUnfilledDates } from '@/lib/attendance';
+import { getKelompokDinilaiIds } from '@/lib/penilai-ketua';
 import { supabaseAdmin } from '@/lib/supabase-admin';
 import { LogoutButton } from '@/components/LogoutButton';
 import { Icon } from '@/components/icons';
@@ -21,6 +22,8 @@ export default async function KehadiranPengajarPage() {
 
   const todayPrograms = await getProgramsForDate(session.pengajar_id, today);
   const unfilled = await getUnfilledDates(session.pengajar_id, 5);
+  // Penilai ketua kelompok — jumlah ketua yang jadi jatah penilaiannya.
+  const jatahPenilaian = (await getKelompokDinilaiIds(session.pengajar_id)).length;
 
   const allDates = [...unfilled, ...todayPrograms];
 
@@ -166,6 +169,28 @@ export default async function KehadiranPengajarPage() {
               </div>
               <div className="t-small" style={{ color: 'var(--muted-2)' }}>
                 Lihat & kelola pengajuan alasan anggota kelompok Anda
+              </div>
+            </a>
+          )}
+
+          {jatahPenilaian > 0 && (
+            <a
+              href="/kehadiran/ketua-kelompok/penilaian-ketua"
+              className="card-flat"
+              style={{
+                display: 'block',
+                padding: '12px 16px',
+                marginBottom: 16,
+                textDecoration: 'none',
+                color: 'inherit',
+                borderLeft: '3px solid var(--kuning)',
+              }}
+            >
+              <div style={{ fontWeight: 600, marginBottom: 2 }}>
+                Penilaian Ketua Kelompok
+              </div>
+              <div className="t-small" style={{ color: 'var(--muted-2)' }}>
+                Nilai {jatahPenilaian} ketua kelompok yang jadi jatah Anda
               </div>
             </a>
           )}

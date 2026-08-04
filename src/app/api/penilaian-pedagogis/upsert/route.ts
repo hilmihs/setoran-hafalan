@@ -1,23 +1,26 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase-admin';
 import { getSession } from '@/lib/session';
+import { getKelompokDinilaiIds } from '@/lib/penilai-ketua';
 
 export const runtime = 'nodejs';
 
 export async function POST(req: NextRequest) {
   try {
-    // Dua penilai:
-    //  - Ketua kelompok → menilai ANGGOTA kelompoknya (existing).
-    //  - Koordinator    → menilai KETUA KELOMPOK segendernya (baru).
+    // Tiga penilai:
+    //  - Ketua kelompok         → menilai ANGGOTA kelompoknya.
+    //  - Penilai yang ditugaskan → menilai KETUA kelompok yang jadi jatahnya
+    //    (tabel penilai_ketua_kelompok).
+    //  - Koordinator            → menilai KETUA KELOMPOK segendernya.
     const s = await getSession();
     const accesses = s.accesses ?? (s.session ? [s.session] : []);
-    const ketuaKelompok = accesses.find(
-      (a) => a.role === 'pengajar' && a.is_ketua
-    ) as { role: 'pengajar'; pengajar_id: string; kelompok_id: string | null; gender: string } | undefined;
+    const pengajar = accesses.find((a) => a.role === 'pengajar') as
+      | { role: 'pengajar'; pengajar_id: string; kelompok_id: string | null; is_ketua: boolean; gender: string }
+      | undefined;
     const koordinator = accesses.find((a) => a.role === 'koordinator') as
       | { role: 'koordinator'; koordinator_id: string; gender: string }
       | undefined;
-    if (!ketuaKelompok && !koordinator) {
+    if (!pengajar && !koordinator) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -67,9 +70,20 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Pengajar tidak ditemukan.' }, { status: 404 });
     }
 
-    // Otorisasi + atribusi (assessed_by):
+    // Otorisasi + atribusi (assessed_by). Jalur pengajar dicoba dulu supaya
+    // seseorang yang merangkap koordinator tetap bisa menilai kelompoknya.
     let assessedBy: string | null;
-    if (koordinator) {
+    const bolehSebagaiKetua =
+      !!pengajar && pengajar.is_ketua && target.kelompok_id === pengajar.kelompok_id;
+    const bolehSebagaiPenilaiKetua =
+      !!pengajar &&
+      !!target.is_ketua &&
+      !!target.kelompok_id &&
+      (await getKelompokDinilaiIds(pengajar.pengajar_id)).includes(target.kelompok_id);
+
+    if (bolehSebagaiKetua || bolehSebagaiPenilaiKetua) {
+      assessedBy = pengajar!.pengajar_id;
+    } else if (koordinator) {
       // Koordinator hanya boleh menilai KETUA KELOMPOK segendernya.
       if (!target.is_ketua || target.gender !== koordinator.gender) {
         return NextResponse.json(
@@ -79,11 +93,10 @@ export async function POST(req: NextRequest) {
       }
       assessedBy = null; // penilai koordinator (bukan pengajar) → atribusi kosong
     } else {
-      // Ketua kelompok → target harus anggota kelompoknya.
-      if (target.kelompok_id !== ketuaKelompok!.kelompok_id) {
-        return NextResponse.json({ error: 'Pengajar bukan anggota kelompok Anda.' }, { status: 403 });
-      }
-      assessedBy = ketuaKelompok!.pengajar_id;
+      return NextResponse.json(
+        { error: 'Pengajar ini bukan anggota kelompok Anda dan bukan jatah penilaian Anda.' },
+        { status: 403 }
+      );
     }
 
     const { error } = await supabaseAdmin
