@@ -257,7 +257,8 @@ export function SetoranGrid({
 
       <div className="t-tiny" style={{ color: 'var(--muted-2)', margin: '8px 2px' }}>
         Enter / ↓ = peserta berikutnya · ← → = pindah pertemuan · tersimpan otomatis.
-        Sel abu = presensi pertemuan itu belum diisi. Sel kuning = peserta tidak hadir.
+        Sel abu = presensi pertemuan itu belum diisi (isi dulu lewat{' '}
+        <a href="/2in1/ketua-kelas/pertemuan">Riwayat Pertemuan</a>). Sel kuning = peserta tidak hadir.
       </div>
 
       <button

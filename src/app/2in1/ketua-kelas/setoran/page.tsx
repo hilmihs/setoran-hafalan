@@ -12,10 +12,17 @@ export const dynamic = 'force-dynamic';
 
 const ANCHOR_MONTH = PRESENSI_ANCHOR.slice(0, 7);
 
-/** Periode laporan Maahir: 28 bulan lalu s/d 27 bulan ini. */
+/**
+ * Rentang pengisian setoran. Periode laporan Maahir = 28 bulan lalu s/d 27
+ * bulan ini; halaman ini sengaja membuka DUA periode (periode berjalan +
+ * periode sebelumnya) supaya pertemuan sebelum tanggal 28 masih bisa disusulkan
+ * tanpa harus tahu cara mengganti bulan di dropdown.
+ */
+const PERIODE_DIBUKA = 2;
+
 function periodeRange(month: string): { start: string; end: string; label: string } {
   const [y, m] = month.split('-').map(Number);
-  const startD = new Date(Date.UTC(y, m - 2, 28));
+  const startD = new Date(Date.UTC(y, m - 1 - PERIODE_DIBUKA, 28));
   const start = startD.toISOString().slice(0, 10);
   const end = `${y}-${String(m).padStart(2, '0')}-27`;
   const f = (iso: string) =>
@@ -148,7 +155,8 @@ export default async function SetoranKetuaPage({
             <div>
               <h1 className="t-h2" style={{ marginBottom: 2 }}>Isi setoran pertemuan yang lalu</h1>
               <p className="t-small" style={{ color: 'var(--muted-2)' }}>
-                Periode {label} · isi jumlah halaman tiap peserta per pertemuan.
+                {label} · isi jumlah halaman tiap peserta per pertemuan. Pertemuan
+                lebih lama lagi: ganti bulan lewat dropdown di kanan.
               </p>
             </div>
             <MonthNavSelect options={monthOptionsSince(ANCHOR_MONTH)} value={month} />
