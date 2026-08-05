@@ -281,9 +281,29 @@ export async function getUnfilledMaahirDays(wa: string): Promise<UnfilledDay[]> 
     filledKeys.add(`${p.program_kelas_id}|${filledKeyOf(k, p.program, p.tanggal)}`);
   }
 
+  // Anggota + rentang keanggotaannya. Tanggal yang sudah lewat masa semua
+  // anggotanya (mis. kelas selesai, semua diberi selesai_tanggal) tak boleh
+  // diminta lagi ke ketua: formnya akan tampil dengan daftar kosong (0/0).
+  const { data: anggotaRows } = await supabaseAdmin
+    .from('program_kelas_anggota')
+    .select('program_kelas_id, mulai_tanggal, selesai_tanggal')
+    .in('program_kelas_id', kelasIds)
+    .eq('active', true);
+  const anggotaByKelas = new Map<string, Array<{ mulai: string | null; selesai: string | null }>>();
+  for (const a of anggotaRows ?? []) {
+    const arr = anggotaByKelas.get(a.program_kelas_id) ?? [];
+    arr.push({ mulai: a.mulai_tanggal ?? null, selesai: a.selesai_tanggal ?? null });
+    anggotaByKelas.set(a.program_kelas_id, arr);
+  }
+  const adaAnggotaPada = (kelasId: string, tanggal: string): boolean =>
+    (anggotaByKelas.get(kelasId) ?? []).some(
+      (a) => (!a.mulai || a.mulai <= tanggal) && (!a.selesai || a.selesai >= tanggal)
+    );
+
   const unfilled = expected.filter((e) => {
     const k = kelasById.get(e.program_kelas_id);
     if (!k) return true;
+    if (!adaAnggotaPada(e.program_kelas_id, e.tanggal)) return false;
     return !filledKeys.has(`${e.program_kelas_id}|${filledKeyOf(k, e.program, e.tanggal)}`);
   });
 
@@ -312,8 +332,24 @@ export async function getUnfilledDaysForAnggota(
   const anchor = anchorKelas(kelas);
   const libur = await getLiburDates(kelas.id, anchor, today);
   // Peserta mengisi SELURUH presensinya: kelas_maahir & At-Tibyan.
-  const expected = expectedDaysInRange(kelas, anchor, today, libur);
+  let expected = expectedDaysInRange(kelas, anchor, today, libur);
   if (expected.length === 0) return [];
+
+  // Batasi ke masa keanggotaannya: sebelum ia masuk / sesudah ia keluar tak
+  // perlu diisi (sejalan dgn penyaring di presensi ketua kelas).
+  const { data: anggota } = await supabaseAdmin
+    .from('program_kelas_anggota')
+    .select('mulai_tanggal, selesai_tanggal')
+    .eq('id', anggotaId)
+    .maybeSingle();
+  const mulai = (anggota as { mulai_tanggal?: string | null } | null)?.mulai_tanggal ?? null;
+  const selesai = (anggota as { selesai_tanggal?: string | null } | null)?.selesai_tanggal ?? null;
+  if (mulai || selesai) {
+    expected = expected.filter(
+      (e) => (!mulai || e.tanggal >= mulai) && (!selesai || e.tanggal <= selesai)
+    );
+    if (expected.length === 0) return [];
+  }
 
   const { data: pertemuanList } = await supabaseAdmin
     .from('pertemuan_program')

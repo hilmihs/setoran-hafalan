@@ -57,6 +57,40 @@ export default async function PresensiWizardPage() {
     .or(`selesai_tanggal.is.null,selesai_tanggal.gte.${day.tanggal}`)
     .order('name');
 
+  // Tak ada anggota yang masih terdaftar pada tanggal ini (mis. kelas sudah
+  // selesai dan semua anggota diberi selesai_tanggal). Form presensi kosong
+  // tak bisa disimpan, jadi jelaskan penyebabnya daripada menampilkan 0/0.
+  if ((anggotaList ?? []).length === 0) {
+    return (
+      <main style={{ minHeight: '100vh' }}>
+        <div style={{ maxWidth: 480, margin: '0 auto' }}>
+          <div className="topbar">
+            <div className="wordmark"><span className="mark">M</span> Presensi Wajib</div>
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+              <Link href="/2in1/ketua-kelas" className="btn btn-sm btn-ghost">← Menu Utama</Link>
+              <LogoutButton />
+            </div>
+          </div>
+          <div className="page">
+            <div className="banner banner-error">
+              <div>
+                <div className="title">Tidak ada anggota pada tanggal ini</div>
+                <div className="desc">
+                  {day.kelasName} — {day.tanggal}: semua anggota sudah di luar masa keanggotaan
+                  (kelas selesai atau anggota pindah). Presensi tanggal ini tidak perlu diisi.
+                  Bila ini keliru, hubungi koordinator agar masa keanggotaan diperbaiki.
+                </div>
+              </div>
+            </div>
+            <Link href="/2in1/ketua-kelas" className="btn btn-ghost btn-block" style={{ marginTop: 16 }}>
+              ← Menu Utama
+            </Link>
+          </div>
+        </div>
+      </main>
+    );
+  }
+
   const { data: existing } = await supabaseAdmin
     .from('kehadiran_peserta')
     .select('anggota_id, status, catatan, setoran_halaman, mode')
