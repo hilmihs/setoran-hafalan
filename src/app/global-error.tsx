@@ -2,6 +2,7 @@
 
 import { useEffect } from 'react';
 import { maybeRecoverFromChunkError } from '@/lib/chunk-reload';
+import { recordErrorDiag } from '@/lib/error-diag';
 
 export default function GlobalError({
   error,
@@ -11,6 +12,7 @@ export default function GlobalError({
   reset: () => void;
 }) {
   useEffect(() => {
+    recordErrorDiag(error);
     if (maybeRecoverFromChunkError(error)) return;
     console.error('Global error:', error);
   }, [error]);

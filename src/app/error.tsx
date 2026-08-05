@@ -2,6 +2,7 @@
 
 import { useEffect } from 'react';
 import { maybeRecoverFromChunkError } from '@/lib/chunk-reload';
+import { recordErrorDiag } from '@/lib/error-diag';
 
 export default function Error({
   error,
@@ -11,6 +12,8 @@ export default function Error({
   reset: () => void;
 }) {
   useEffect(() => {
+    // Dicatat lebih dulu supaya "Laporkan Kendala" bisa menyertakannya.
+    recordErrorDiag(error);
     // ChunkLoadError (deploy skew) → auto-reload sekali ambil chunk terbaru.
     if (maybeRecoverFromChunkError(error)) return;
     console.error('App error:', error);

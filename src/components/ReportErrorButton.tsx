@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { ADMIN_WA } from '@/lib/constants';
+import { readLastErrorDiag } from '@/lib/error-diag';
 
 interface UserInfo {
   name: string;
@@ -72,6 +73,11 @@ export function ReportErrorButton({ user }: { user?: UserInfo | null }) {
     }
 
     lines.push(`Halaman: ${pageUrl}`);
+    // Digest error boundary terakhir (kalau ada) — inilah kunci untuk mencari
+    // stack trace di log server; tanpa ini laporan "halaman gagal dimuat"
+    // tidak bisa ditelusuri.
+    const diag = readLastErrorDiag();
+    if (diag) lines.push(`Kode error: ${diag}`);
     lines.push('');
     lines.push('*Keluhan:*');
     lines.push(keluhan.trim());
