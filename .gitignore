@@ -32,6 +32,17 @@ db-migration/maahir_full_dump.sql
 
 # Arsip handoff DB (data sensitif). JANGAN commit.
 maahir-db-handoff.tar.gz
+# Hasil ekstrak arsip handoff (termasuk salinan "maahir-db-handoff (2)").
+maahir-db-handoff*/
+
+# Ekspor HITS mentah (nomor WA peserta/pengajar) — hasil kerja lokal, bukan kode.
+HITS_*.json
+HITS_*.csv
+Jadwal_HITS_*.md
+
+# Materi & dump yang ditaruh di docs/ untuk keperluan lokal.
+docs/*.mp3
+docs/dump-*.sql
 
 # Data export (PII: WA, password_hash) — never commit
 maahir-export/
