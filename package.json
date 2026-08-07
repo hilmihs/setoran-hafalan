@@ -42,7 +42,8 @@
     "import-hits-observasi": "tsx --env-file=.env.local scripts/import-hits-observasi.ts",
     "seed-hits-demo-flow": "tsx --env-file=.env.local scripts/seed-hits-demo-flow.ts",
     "db": "tsx --env-file=.env.local scripts/db.ts",
-    "test-sp": "tsx scripts/test-sp-pemutihan.ts"
+    "test-sp": "tsx scripts/test-sp-pemutihan.ts",
+    "test-hits-xlsx": "tsx scripts/test-hits-xlsx.ts"
   },
   "dependencies": {
     "@supabase/ssr": "^0.5.0",

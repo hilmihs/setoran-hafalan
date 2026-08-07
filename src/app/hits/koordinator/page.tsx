@@ -2,18 +2,10 @@ import { Fragment } from 'react';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { requireKoordinatorKetuaKelas } from '@/lib/session';
-import {
-  getDisiplinRanking,
-  getNoDataActionInfo,
-  getInsidenDetailByPengajar,
-  type InsidenDetail,
-} from '@/lib/hits-ranking';
+import { getNoDataActionInfo, type InsidenDetail } from '@/lib/hits-ranking';
+import { getHitsKoordinatorRekap, type HitsMode } from '@/lib/hits-koordinator-rekap';
 import { getHitsPengajuan } from '@/lib/hits-pengajuan';
-import {
-  getCakupanObservasi,
-  type CakupanPengajar,
-  type PertemuanObservasi,
-} from '@/lib/hits-observasi-cakupan';
+import type { CakupanPengajar, PertemuanObservasi } from '@/lib/hits-observasi-cakupan';
 import { GenderNavSelect } from '@/components/GenderNavSelect';
 import { MonthNavSelect } from '@/components/MonthNavSelect';
 import { WeekNavSelect } from '@/components/WeekNavSelect';
@@ -21,7 +13,7 @@ import { NoteQuickAdd } from '@/components/NoteQuickAdd';
 import { buildWaMeUrl, tplReminderIsiKeterangan, tplReminderPengajarIsiData } from '@/lib/whatsapp';
 import { absUrl } from '@/lib/url';
 import { monthOptionsSince } from '@/lib/month';
-import { weekStartMonday, weekBounds, formatWeekRangeShort, recentMondays } from '@/lib/week';
+import { weekStartMonday, formatWeekRangeShort, recentMondays } from '@/lib/week';
 import type { Gender } from '@/types/db';
 import { Icon } from '@/components/icons';
 
@@ -228,26 +220,14 @@ export default async function HitsKoordinatorPage({
       ? searchParams.gender
       : undefined;
 
-  let start: string;
-  let end: string;
-  let periodeLabel: string;
-  if (mode === 'minggu') {
-    ({ start, end } = weekBounds(week));
-    periodeLabel = formatWeekRangeShort(week);
-  } else {
-    const [y, m] = month.split('-').map(Number);
-    start = `${month}-01`;
-    end = m === 12 ? `${y + 1}-01-01` : `${y}-${String(m + 1).padStart(2, '0')}-01`;
-    periodeLabel = month;
-  }
-
-  const rows = await getDisiplinRanking({ start, end, gender: genderFilter });
-  // Rincian alasan tiap insiden (keterangan ketua, tabayyun, putusan koordinator).
-  const insidenByPengajar = await getInsidenDetailByPengajar({ start, end, gender: genderFilter });
-  // Cakupan observasi ketua kelas: pertemuan mana yang sudah/belum diisi.
-  const cakupanByPengajar = await getCakupanObservasi({ start, end, gender: genderFilter });
-  const ranked = rows.filter((r) => r.rank !== null);
-  const noData = rows.filter((r) => r.rank === null);
+  // Satu loader dipakai bersama halaman ini, export XLSX, dan halaman cetak —
+  // supaya angka di layar dan di file tak mungkin berbeda.
+  const rekap = await getHitsKoordinatorRekap({ mode, month, week, gender: genderFilter });
+  const periodeLabel = rekap.periodeLabel;
+  const insidenByPengajar = rekap.insidenByPengajar;
+  const cakupanByPengajar = rekap.cakupanByPengajar;
+  const ranked = [...rekap.ranked];
+  const noData = rekap.noData;
   const noDataAksi = await getNoDataActionInfo(noData);
 
   // Sortir kolom (tinggi→rendah default). Tanpa sort → urutan ranking asli (%KBBS).
@@ -343,6 +323,21 @@ export default async function HitsKoordinatorPage({
               style={{ height: 32, padding: '0 12px', gap: 6, textDecoration: 'none', border: '1px solid var(--line)' }}
             >
               {Icon.shield(13)} Validasi & Sumber Data
+            </Link>
+            {/* Export mengikuti filter yang sedang aktif (sortBase = periode + gender). */}
+            <a
+              href={`/api/hits/koordinator/download${sortBase}`}
+              className="btn btn-sm btn-ghost"
+              style={{ height: 32, padding: '0 12px', gap: 6, textDecoration: 'none', border: '1px solid var(--line)' }}
+            >
+              ⬇ Unduh XLSX
+            </a>
+            <Link
+              href={`/hits/koordinator/cetak${sortBase}`}
+              className="btn btn-sm btn-ghost"
+              style={{ height: 32, padding: '0 12px', gap: 6, textDecoration: 'none', border: '1px solid var(--line)' }}
+            >
+              🖨 Cetak / PDF
             </Link>
           </div>
         </div>

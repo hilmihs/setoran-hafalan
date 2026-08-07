@@ -869,3 +869,52 @@ dialog[open] {
   /* tap target lebih besar di layar sentuh */
   .btn-xs { min-height: 32px; }
 }
+
+/* ============================================================
+   Cetak — dipakai halaman "cetak" (Ctrl+P → Save as PDF).
+   Repo ini tak punya generator PDF di server (output standalone +
+   RAM VPS terbatas), jadi PDF dihasilkan lewat dialog cetak browser.
+   ============================================================ */
+@media print {
+  /* Warna latar/teks WAJIB ikut tercetak — tanpa ini merah/kuning/hijau
+     luruh jadi putih dan seluruh gunanya hilang. */
+  * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  @page { size: A4 landscape; margin: 10mm; }
+
+  html, body {
+    background: #fff !important;
+    color: #111 !important;
+    font-size: 10pt;
+  }
+
+  /* Kontrol layar tak ada gunanya di kertas. */
+  .no-print, .topbar, .btn, nav, .chip-select { display: none !important; }
+
+  .cetak { max-width: none !important; margin: 0 !important; padding: 0 !important; }
+
+  .cetak table { width: 100%; border-collapse: collapse; page-break-inside: auto; }
+  /* Header tabel berulang di tiap halaman — tabel ranking bisa >1 halaman. */
+  .cetak thead { display: table-header-group; }
+  .cetak tfoot { display: table-footer-group; }
+  .cetak tr { page-break-inside: avoid; }
+  .cetak th, .cetak td {
+    border: 1px solid #cbd5e1 !important;
+    padding: 3px 6px !important;
+    font-size: 9pt;
+  }
+  .cetak th { background: #dcfce7 !important; color: #14532d !important; }
+
+  /* Tiap blok mulai di halaman baru supaya tak terpotong di tengah. */
+  .cetak .blok { page-break-before: always; }
+  .cetak .blok:first-of-type { page-break-before: auto; }
+
+  .cetak details { display: block !important; }
+  .cetak details > summary { display: none !important; }
+
+  a { color: inherit !important; text-decoration: none !important; }
+  a[href]::after { content: none !important; }
+}
