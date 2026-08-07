@@ -146,7 +146,7 @@ export async function getLaporanMaahir(month: string): Promise<LaporanMaahir> {
       kehadiran: empty(100),
       dibawahTarget: { ikhwan: 0, akhwat: 0, total: 0, list: [] },
     },
-    sp: { list: [], summary: { total: 0, sp1: 0, sp2: 0, sp3: 0 } },
+    sp: { list: [], summary: { total: 0, sp1: 0, sp2: 0, sp3: 0 }, cutoff: todayJakarta() },
     notes: [],
   };
 

@@ -20,7 +20,9 @@ export function MonthNavSelect({
 
   function onChange(e: React.ChangeEvent<HTMLSelectElement>) {
     const params = new URLSearchParams(sp.toString());
-    params.set('month', e.target.value);
+    // Value kosong = opsi "semua periode" (dipakai halaman SP) → buang paramnya.
+    if (e.target.value) params.set('month', e.target.value);
+    else params.delete('month');
     router.push(`?${params.toString()}${hash ? `#${hash}` : ''}`);
   }
 

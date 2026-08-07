@@ -1,12 +1,32 @@
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { getSession } from '@/lib/session';
-import { getMaahirSP, type SPLevel } from '@/lib/maahir-sp';
+import { getMaahirSP, getMaahirPeriodeMonths, type SPLevel } from '@/lib/maahir-sp';
 import { GenderNavSelect } from '@/components/GenderNavSelect';
+import { MonthNavSelect } from '@/components/MonthNavSelect';
 import { Icon } from '@/components/icons';
 import type { Gender } from '@/types/db';
 
 export const dynamic = 'force-dynamic';
+
+function monthLabel(ym: string) {
+  const [y, m] = ym.split('-').map(Number);
+  return new Date(Date.UTC(y, m - 1, 1)).toLocaleDateString('id-ID', {
+    month: 'long',
+    year: 'numeric',
+    timeZone: 'UTC',
+  });
+}
+
+function tanggalLabel(iso: string) {
+  const [y, m, d] = iso.split('-').map(Number);
+  return new Date(Date.UTC(y, m - 1, d)).toLocaleDateString('id-ID', {
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+    timeZone: 'UTC',
+  });
+}
 
 function spStyle(sp: SPLevel) {
   if (sp >= 3) return { bg: 'var(--merah-tint)', bd: 'var(--merah-line)', ink: 'var(--merah-ink)' };
@@ -17,7 +37,7 @@ function spStyle(sp: SPLevel) {
 export default async function PendataanSPPage({
   searchParams,
 }: {
-  searchParams: { gender?: string };
+  searchParams: { gender?: string; month?: string };
 }) {
   const { accesses } = await getSession();
   if (!accesses?.some((a) => a.role === 'koordinator' || a.role === 'koordinator_kehadiran')) {
@@ -29,7 +49,23 @@ export default async function PendataanSPPage({
       ? searchParams.gender
       : undefined;
 
-  const { list, summary } = await getMaahirSP({ gender: genderFilter });
+  // Filter periode: SP tetap kumulatif, hanya dipotong di akhir periode bulan
+  // terpilih (window 28–27) supaya bisa dilihat "per akhir bulan itu, siapa
+  // sudah kena SP berapa". Kosong = s/d hari ini.
+  const periodeMonths = await getMaahirPeriodeMonths();
+  const monthOptions = [
+    { value: '', label: 'Semua (s/d sekarang)' },
+    ...periodeMonths.map((m) => ({ value: m, label: monthLabel(m) })),
+  ];
+  const monthFilter =
+    searchParams.month && monthOptions.some((o) => o.value && o.value === searchParams.month)
+      ? searchParams.month
+      : '';
+
+  const { list, summary, cutoff } = await getMaahirSP({
+    gender: genderFilter,
+    sampaiBulan: monthFilter || undefined,
+  });
 
   return (
     <main style={{ minHeight: '100vh' }}>
@@ -46,8 +82,15 @@ export default async function PendataanSPPage({
               <p className="t-small" style={{ color: 'var(--muted-2)' }}>
                 Disiplin kehadiran Maahir (kumulatif). Alpa 1/2/≥3 → SP 1/2/3 · Izin 2/3/≥4 → SP 1/2/3.
               </p>
+              <p className="t-tiny" style={{ color: 'var(--muted-2)', marginTop: 2 }}>
+                Dihitung s/d {tanggalLabel(cutoff)}
+                {monthFilter ? ' (akhir periode bulan terpilih)' : ''}.
+              </p>
             </div>
-            <GenderNavSelect value={genderFilter ?? ''} />
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+              <MonthNavSelect options={monthOptions} value={monthFilter} />
+              <GenderNavSelect value={genderFilter ?? ''} />
+            </div>
           </div>
 
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, marginBottom: 16 }}>
@@ -105,7 +148,9 @@ export default async function PendataanSPPage({
 
           <p className="t-tiny" style={{ color: 'var(--muted-2)', marginTop: 12 }}>
             SP 3 = melebihi batas → kandidat diberhentikan dari program Maahir. Angka kumulatif sejak
-            program mulai, tanggal libur tak dihitung.
+            program mulai s/d {tanggalLabel(cutoff)}, tanggal libur tak dihitung. Filter bulan
+            memotong perhitungan di akhir periode bulan itu (window tanggal 28–27), bukan menghitung
+            bulan itu saja.
           </p>
         </div>
       </div>

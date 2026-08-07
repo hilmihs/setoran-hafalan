@@ -12,7 +12,7 @@ import { getPemutihanKeys, periodeMonthOf } from '@/lib/maahir-pemutihan';
 import type { Gender } from '@/types/db';
 
 // Anchor rentang libur (program Maahir mulai ~awal 2026).
-const PROGRAM_START = '2026-01-01';
+export const PROGRAM_START = '2026-01-01';
 
 export type SPLevel = 0 | 1 | 2 | 3;
 
@@ -39,20 +39,54 @@ export type SPPeserta = {
 export type SPRekap = {
   list: SPPeserta[]; // sp >= 1, urut sp desc
   summary: { total: number; sp1: number; sp2: number; sp3: number };
+  /** Tanggal terakhir yang ikut dihitung (YYYY-MM-DD). */
+  cutoff: string;
 };
 
-function emptySP(): SPRekap {
-  return { list: [], summary: { total: 0, sp1: 0, sp2: 0, sp3: 0 } };
+function emptySP(cutoff: string): SPRekap {
+  return { list: [], summary: { total: 0, sp1: 0, sp2: 0, sp3: 0 }, cutoff };
 }
 
-export async function getMaahirSP(opts?: { gender?: Gender }): Promise<SPRekap> {
+/**
+ * Batas akhir periode laporan sebuah bulan 'YYYY-MM' — window 28–27, jadi
+ * periode '2026-07' berakhir 2026-07-27 (kebalikan dari `periodeMonthOf`).
+ */
+export function periodeEndDate(month: string): string {
+  return `${month}-27`;
+}
+
+/**
+ * Periode (YYYY-MM) yang benar-benar punya pertemuan Maahir, terbaru dulu —
+ * dipakai untuk mengisi dropdown filter bulan supaya tak ada bulan kosong.
+ */
+export async function getMaahirPeriodeMonths(): Promise<string[]> {
   const today = new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Jakarta' });
+  const { data } = await supabaseAdmin
+    .from('pertemuan_program')
+    .select('tanggal')
+    .eq('program', 'kelas_maahir')
+    .lte('tanggal', today);
+  const set = new Set((data ?? []).map((r) => periodeMonthOf(r.tanggal as string)));
+  return [...set].sort().reverse();
+}
+
+/**
+ * SP kumulatif sejak program mulai. `sampaiBulan` ('YYYY-MM') memotong
+ * perhitungan di akhir periode bulan tsb — dipakai untuk melihat "per akhir
+ * bulan ini, siapa sudah kena SP berapa". Tanpa opsi itu = s/d hari ini.
+ */
+export async function getMaahirSP(opts?: { gender?: Gender; sampaiBulan?: string }): Promise<SPRekap> {
+  const hariIni = new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Jakarta' });
+  const batas = opts?.sampaiBulan ? periodeEndDate(opts.sampaiBulan) : hariIni;
+  // Bulan berjalan belum selesai — jangan mengklaim data s/d tanggal 27 kalau
+  // hari ini masih tanggal 10.
+  const today = batas < hariIni ? batas : hariIni;
 
   let kq = supabaseAdmin.from('program_kelas').select('id, name, gender');
   if (opts?.gender) kq = kq.eq('gender', opts.gender);
   const { data: kelasRows } = await kq;
   const kelasList = (kelasRows ?? []) as Array<{ id: string; name: string; gender: Gender }>;
-  if (!kelasList.length) return emptySP();
+  if (!kelasList.length) return emptySP(today);
   const kelasById = new Map(kelasList.map((k) => [k.id, k]));
   const kelasIds = kelasList.map((k) => k.id);
 
@@ -60,7 +94,8 @@ export async function getMaahirSP(opts?: { gender?: Gender }): Promise<SPRekap> 
     .from('pertemuan_program')
     .select('id, program_kelas_id, program, tanggal')
     .in('program_kelas_id', kelasIds)
-    .eq('program', 'kelas_maahir');
+    .eq('program', 'kelas_maahir')
+    .lte('tanggal', today);
   const pertById = new Map(
     (pertRows ?? []).map((p) => [
       p.id as string,
@@ -68,7 +103,7 @@ export async function getMaahirSP(opts?: { gender?: Gender }): Promise<SPRekap> 
     ])
   );
   const pertIds = (pertRows ?? []).map((p) => p.id as string);
-  if (!pertIds.length) return emptySP();
+  if (!pertIds.length) return emptySP(today);
 
   const liburByKelas = await getLiburDatesForKelas(kelasIds, PROGRAM_START, today);
 
@@ -188,6 +223,7 @@ export async function getMaahirSP(opts?: { gender?: Gender }): Promise<SPRekap> 
 
   return {
     list,
+    cutoff: today,
     summary: {
       total: list.length,
       sp1: list.filter((p) => p.sp === 1).length,
