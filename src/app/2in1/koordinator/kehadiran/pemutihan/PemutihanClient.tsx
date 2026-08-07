@@ -3,7 +3,18 @@
 import { useMemo, useState } from 'react';
 import { putihkan, batalkanPemutihan } from './actions';
 
-export type PemutihanRow = { id: string; anggotaId: string; alasan: string | null };
+export type PemutihanRow = {
+  id: string;
+  anggotaId: string;
+  alasan: string | null;
+  /** 'Sebulan penuh' atau tanggalnya. */
+  periode: string;
+  oleh: string | null;
+  pada: string;
+  dibatalkan: { oleh: string | null; pada: string } | null;
+  /** true = pemutihan sebulan-penuh yang masih aktif. */
+  kunciSebulan: boolean;
+};
 export type AnggotaOpt = { id: string; name: string; kelasName: string };
 
 /** Kelola pemutihan absensi satu bulan: cari peserta → putihkan / batalkan. */
@@ -22,7 +33,12 @@ export function PemutihanClient({
   const [error, setError] = useState<string | null>(null);
 
   const byId = useMemo(() => new Map(anggota.map((a) => [a.id, a])), [anggota]);
-  const sudah = useMemo(() => new Set(rows.map((r) => r.anggotaId)), [rows]);
+  // Hanya pemutihan sebulan-penuh yang aktif yang menyembunyikan seseorang dari
+  // pencarian — yang per-tanggal masih boleh diputihkan sebulan penuh.
+  const sudah = useMemo(
+    () => new Set(rows.filter((r) => r.kunciSebulan).map((r) => r.anggotaId)),
+    [rows]
+  );
   const query = q.trim().toLowerCase();
   const hasil = useMemo(
     () =>
@@ -114,7 +130,7 @@ export function PemutihanClient({
       </div>
 
       <div className="t-tiny" style={{ color: 'var(--muted-2)', marginBottom: 6, fontWeight: 600 }}>
-        DIPUTIHKAN BULAN INI ({rows.length})
+        RIWAYAT PEMUTIHAN BULAN INI ({rows.length})
       </div>
       {rows.length === 0 ? (
         <p className="t-small" style={{ color: 'var(--muted-2)' }}>Belum ada peserta yang diputihkan.</p>
@@ -122,25 +138,44 @@ export function PemutihanClient({
         <div className="table-scroll">
           <table className="k-table" style={{ width: '100%' }}>
             <thead>
-              <tr><th>Peserta</th><th>Kelas</th><th>Alasan</th><th style={{ width: 90 }}></th></tr>
+              <tr>
+                <th>Peserta</th>
+                <th>Kelas</th>
+                <th>Periode</th>
+                <th>Alasan</th>
+                <th>Oleh</th>
+                <th>Kapan</th>
+                <th style={{ width: 90 }}></th>
+              </tr>
             </thead>
             <tbody>
               {rows.map((r) => {
                 const a = byId.get(r.anggotaId);
                 return (
-                  <tr key={r.id}>
-                    <td>{a?.name ?? '—'}</td>
+                  <tr key={r.id} style={r.dibatalkan ? { opacity: 0.55 } : undefined}>
+                    <td style={r.dibatalkan ? { textDecoration: 'line-through' } : undefined}>
+                      {a?.name ?? '—'}
+                    </td>
                     <td className="t-tiny">{a?.kelasName ?? '—'}</td>
+                    <td className="t-tiny">{r.periode}</td>
                     <td className="t-tiny" style={{ color: 'var(--muted-2)' }}>{r.alasan || '—'}</td>
+                    <td className="t-tiny">{r.oleh || '—'}</td>
+                    <td className="t-tiny" style={{ color: 'var(--muted-2)' }}>{r.pada}</td>
                     <td>
-                      <button
-                        type="button"
-                        className="btn btn-xs btn-ghost"
-                        disabled={busy}
-                        onClick={() => onBatal(r.id)}
-                      >
-                        Batalkan
-                      </button>
+                      {r.dibatalkan ? (
+                        <span className="t-tiny" style={{ color: 'var(--muted-2)' }}>
+                          dibatalkan {r.dibatalkan.oleh ? `oleh ${r.dibatalkan.oleh}` : ''} {r.dibatalkan.pada}
+                        </span>
+                      ) : (
+                        <button
+                          type="button"
+                          className="btn btn-xs btn-ghost"
+                          disabled={busy}
+                          onClick={() => onBatal(r.id)}
+                        >
+                          Batalkan
+                        </button>
+                      )}
                     </td>
                   </tr>
                 );

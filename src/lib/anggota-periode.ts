@@ -16,6 +16,24 @@ function tanggalWib(iso: string): string {
   return new Date(iso).toLocaleDateString('sv-SE', { timeZone: 'Asia/Jakarta' });
 }
 
+/** Hari ini (Asia/Jakarta) sebagai 'YYYY-MM-DD'. */
+export function todayJakarta(): string {
+  return new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Jakarta' });
+}
+
+/**
+ * true bila ia terdaftar pada `tanggal` — batas mulai/selesai apa adanya.
+ *
+ * Beda dari `dalamPeriode`: di sini tak ada rentang laporan dan tak ada
+ * fallback `created_at`. Dipakai untuk pertanyaan "hari ini masih anggota?",
+ * mis. memutuskan sebuah kelas sudah kosong atau belum.
+ */
+export function anggotaAktifPada(a: AnggotaPeriode, tanggal: string): boolean {
+  const mulai = a.mulai_tanggal ?? null;
+  const selesai = a.selesai_tanggal ?? null;
+  return (!mulai || mulai <= tanggal) && (!selesai || selesai >= tanggal);
+}
+
 /**
  * Tanggal mulai efektif di dalam periode [start, end].
  * null = sudah jadi anggota sejak sebelum periode (denominator penuh).

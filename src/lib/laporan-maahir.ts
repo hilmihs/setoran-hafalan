@@ -10,7 +10,7 @@ import { fetchAllRows } from '@/lib/supabase-page';
 import { getLiburDatesForKelas } from '@/lib/maahir-libur';
 import { todayJakarta } from '@/lib/maahir-presensi';
 import { getMaahirSP, type SPRekap } from '@/lib/maahir-sp';
-import { getPemutihanMap } from '@/lib/maahir-pemutihan';
+import { getPemutihan } from '@/lib/maahir-pemutihan';
 import { getLaporanNotes, type LaporanNote } from '@/lib/laporan-note';
 import { isTakhassusKelas } from '@/lib/program-kelas';
 import { dalamPeriode, mulaiEfektif } from '@/lib/anggota-periode';
@@ -146,7 +146,11 @@ export async function getLaporanMaahir(month: string): Promise<LaporanMaahir> {
       kehadiran: empty(100),
       dibawahTarget: { ikhwan: 0, akhwat: 0, total: 0, list: [] },
     },
-    sp: { list: [], summary: { total: 0, sp1: 0, sp2: 0, sp3: 0 }, cutoff: todayJakarta() },
+    sp: {
+      list: [],
+      summary: { total: 0, sp1: 0, sp2: 0, sp3: 0, diputihkan: 0 },
+      cutoff: todayJakarta(),
+    },
     notes: [],
   };
 
@@ -205,8 +209,16 @@ export async function getLaporanMaahir(month: string): Promise<LaporanMaahir> {
   const joinDateOf = (a: (typeof anggotaList)[number]) => mulaiEfektif(a, start, end);
   const periodeByAnggota = new Map(anggotaList.map((a) => [a.id, a]));
 
-  // Pemutihan bulan ini: peserta dianggap hadir penuh (baris presensi tak diubah).
-  const pemutihan = await getPemutihanMap(month);
+  // Pemutihan bulan ini (baris presensi tak diubah), dua bentuk:
+  // - sebulan penuh → peserta dianggap hadir penuh (persen dipaksa 100);
+  // - per-tanggal   → sesi tanggal itu dikeluarkan dari penyebut, seperti sakit.
+  const pemutihanRows = await getPemutihan(month);
+  const pemutihan = new Map(
+    pemutihanRows.filter((r) => r.tanggal === null).map((r) => [r.anggotaId, r.alasan])
+  );
+  const pemutihanTanggal = new Set(
+    pemutihanRows.filter((r) => r.tanggal).map((r) => `${r.anggotaId}|${r.tanggal}`)
+  );
 
   // 4. Kehadiran terisi
   type Stat = { H: number; I: number; S: number; A: number; T: number; online: number; catatan: Set<string> };
@@ -254,6 +266,9 @@ export async function getLaporanMaahir(month: string): Promise<LaporanMaahir> {
       // pra-gabung / sesi kelas lama setelah pindah.
       const per = periodeByAnggota.get(k.anggota_id);
       if (per && !dalamPeriode(per, p.tanggal, start, end)) continue;
+      // Tanggal yang diputihkan untuk peserta ini: tak dihitung sama sekali
+      // (penyebutnya juga dipotong di studentsFor).
+      if (pemutihanTanggal.has(`${k.anggota_id}|${p.tanggal}`)) continue;
 
       // tally per anggota+scope
       const sKey = `${k.anggota_id}|${program}`;
@@ -293,9 +308,11 @@ export async function getLaporanMaahir(month: string): Promise<LaporanMaahir> {
       const fset = filledByKelasScope.get(`${kelas.id}|${scope}`);
       const terisi = !fset
         ? 0
-        : [...fset].filter((pid) =>
-            dalamPeriode(a, pertemuanById.get(pid)?.tanggal ?? '', start, end)
-          ).length;
+        : [...fset].filter((pid) => {
+            const tgl = pertemuanById.get(pid)?.tanggal ?? '';
+            if (!dalamPeriode(a, tgl, start, end)) return false;
+            return !pemutihanTanggal.has(`${a.id}|${tgl}`);
+          }).length;
       // Sakit = udzur: sesinya dikeluarkan dari penyebut, jadi tak menggerus
       // persen. Semua sesi sakit → penyebut habis, dianggap hadir penuh.
       const filled = Math.max(0, terisi - counts.S);

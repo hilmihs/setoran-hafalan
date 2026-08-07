@@ -20,6 +20,7 @@ import {
   formatCycleRange,
 } from '@/lib/week';
 import { formatCycleRangeShort } from '@/lib/week';
+import { findKetuaWakilKelas } from '@/lib/program-kelas';
 import { buildWaMeUrl, musyrifTitle, tplPesertaSubmitToMusyrif } from '@/lib/whatsapp';
 import { absUrl } from '@/lib/url';
 import { signedAudioUrl } from '@/lib/storage';
@@ -48,17 +49,16 @@ export default async function PesertaPage() {
   let isKetua = false;
   let pertemuanHariIni: { id: string; nama_kegiatan: string } | null = null;
   if (me?.whatsapp_number) {
-    const { data: myProgramKelas } = await supabaseAdmin
-      .from('program_kelas')
-      .select('id')
-      .or(`ketua_wa.eq.${me.whatsapp_number},wakil_wa.eq.${me.whatsapp_number}`);
-    isKetua = (myProgramKelas ?? []).length > 0;
+    // Kelas yang sudah bubar disaring di findKetuaWakilKelas — banner ketua tak
+    // boleh muncul lagi untuk kelas yang seluruh anggotanya sudah selesai.
+    const myProgramKelas = await findKetuaWakilKelas(me.whatsapp_number);
+    isKetua = myProgramKelas.length > 0;
     if (isKetua) {
       const todayStr = new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Jakarta' });
       const { data: todayPertemuan } = await supabaseAdmin
         .from('pertemuan_program')
         .select('id, nama_kegiatan')
-        .in('program_kelas_id', (myProgramKelas ?? []).map((k) => k.id))
+        .in('program_kelas_id', myProgramKelas.map((k) => k.id))
         .eq('tanggal', todayStr)
         .limit(1)
         .maybeSingle();

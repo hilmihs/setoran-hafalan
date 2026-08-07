@@ -6,6 +6,7 @@
 import { supabaseAdmin } from '@/lib/supabase-admin';
 import { findKetuaProgramKelas, getSelfAttendanceKelas, type ProgramKelasRow } from '@/lib/program-kelas';
 import { getLiburDates, getLiburDatesForKelas } from '@/lib/maahir-libur';
+import { anggotaAktifPada, todayJakarta } from '@/lib/anggota-periode';
 
 export const PRESENSI_ANCHOR = '2026-06-01'; // strict mulai Juni 2026
 
@@ -114,10 +115,7 @@ export function filledKeyOf(
   return `${program}|${tanggal}`;
 }
 
-/** Hari ini (Asia/Jakarta) sebagai 'YYYY-MM-DD'. */
-export function todayJakarta(): string {
-  return new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Jakarta' });
-}
+export { todayJakarta };
 
 /** Semua tanggal dalam rentang [start, end] (inklusif), urut menaik. 'YYYY-MM-DD'. */
 export function datesInRange(start: string, end: string): string[] {
@@ -289,16 +287,17 @@ export async function getUnfilledMaahirDays(wa: string): Promise<UnfilledDay[]> 
     .select('program_kelas_id, mulai_tanggal, selesai_tanggal')
     .in('program_kelas_id', kelasIds)
     .eq('active', true);
-  const anggotaByKelas = new Map<string, Array<{ mulai: string | null; selesai: string | null }>>();
+  const anggotaByKelas = new Map<
+    string,
+    Array<{ mulai_tanggal: string | null; selesai_tanggal: string | null }>
+  >();
   for (const a of anggotaRows ?? []) {
     const arr = anggotaByKelas.get(a.program_kelas_id) ?? [];
-    arr.push({ mulai: a.mulai_tanggal ?? null, selesai: a.selesai_tanggal ?? null });
+    arr.push({ mulai_tanggal: a.mulai_tanggal ?? null, selesai_tanggal: a.selesai_tanggal ?? null });
     anggotaByKelas.set(a.program_kelas_id, arr);
   }
   const adaAnggotaPada = (kelasId: string, tanggal: string): boolean =>
-    (anggotaByKelas.get(kelasId) ?? []).some(
-      (a) => (!a.mulai || a.mulai <= tanggal) && (!a.selesai || a.selesai >= tanggal)
-    );
+    (anggotaByKelas.get(kelasId) ?? []).some((a) => anggotaAktifPada(a, tanggal));
 
   const unfilled = expected.filter((e) => {
     const k = kelasById.get(e.program_kelas_id);

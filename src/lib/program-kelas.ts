@@ -3,6 +3,7 @@
 
 import { supabaseAdmin } from '@/lib/supabase-admin';
 import { getSession } from '@/lib/session';
+import { anggotaAktifPada, todayJakarta } from '@/lib/anggota-periode';
 import type { RoleAccess } from '@/types/db';
 
 const ROLE_TABLE: Record<string, { table: string; idField: string }> = {
@@ -64,6 +65,36 @@ export type ProgramKelasRow = {
 const PK_COLS = 'id, name, gender, jadwal_hari, waktu_mulai, waktu_selesai, ketua_wa, wakil_wa, self_attendance, presensi_sifat, mulai_tanggal';
 
 /**
+ * Buang kelas yang sudah pensiun dari daftar milik ketua/wakil.
+ *
+ * `program_kelas` tak punya kolom aktif/selesai, dan menghapus barisnya akan
+ * meng-CASCADE seluruh pertemuan & kehadirannya — riwayat yang masih dipakai
+ * laporan bulanan dan SP. Jadi kelas dipensiunkan dengan memberi
+ * `selesai_tanggal` pada semua anggotanya; kelas tanpa anggota aktif hari ini
+ * dianggap sudah bubar dan tak perlu lagi tampil di layar ketua. Sisi
+ * koordinator (rekap, laporan, SP) sengaja tidak disaring supaya riwayatnya
+ * tetap terbaca.
+ */
+async function saringKelasBubar(rows: ProgramKelasRow[]): Promise<ProgramKelasRow[]> {
+  if (rows.length === 0) return rows;
+  const hariIni = todayJakarta();
+  const { data } = await supabaseAdmin
+    .from('program_kelas_anggota')
+    .select('program_kelas_id, mulai_tanggal, selesai_tanggal')
+    .in('program_kelas_id', rows.map((r) => r.id))
+    .eq('active', true);
+  const berjalan = new Set<string>();
+  for (const a of (data ?? []) as Array<{
+    program_kelas_id: string;
+    mulai_tanggal: string | null;
+    selesai_tanggal: string | null;
+  }>) {
+    if (anggotaAktifPada(a, hariIni)) berjalan.add(a.program_kelas_id);
+  }
+  return rows.filter((r) => berjalan.has(r.id));
+}
+
+/**
  * Kelas program di mana WA ini jadi ketua atau wakil.
  * Kelas self_attendance DIKECUALIKAN — seluruh presensinya (kelas_maahir &
  * At-Tibyan) diisi tiap peserta sendiri, jadi ketua tak mengisi apa pun.
@@ -74,7 +105,7 @@ export async function findKetuaProgramKelas(wa: string): Promise<ProgramKelasRow
     .select(PK_COLS)
     .eq('self_attendance', false)
     .or(`ketua_wa.eq.${wa},wakil_wa.eq.${wa}`);
-  return (data ?? []) as ProgramKelasRow[];
+  return saringKelasBubar((data ?? []) as ProgramKelasRow[]);
 }
 
 /**
@@ -86,7 +117,7 @@ export async function findKetuaWakilKelas(wa: string): Promise<ProgramKelasRow[]
     .from('program_kelas')
     .select(PK_COLS)
     .or(`ketua_wa.eq.${wa},wakil_wa.eq.${wa}`);
-  return (data ?? []) as ProgramKelasRow[];
+  return saringKelasBubar((data ?? []) as ProgramKelasRow[]);
 }
 
 /** Ambil satu kelas presensi-mandiri by id. null bila bukan self_attendance. */

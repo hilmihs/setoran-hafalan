@@ -1,7 +1,12 @@
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { getSession } from '@/lib/session';
-import { getMaahirSP, getMaahirPeriodeMonths, type SPLevel } from '@/lib/maahir-sp';
+import {
+  getMaahirSP,
+  getMaahirPeriodeMonths,
+  type PemutihanRingkas,
+  type SPLevel,
+} from '@/lib/maahir-sp';
 import { GenderNavSelect } from '@/components/GenderNavSelect';
 import { MonthNavSelect } from '@/components/MonthNavSelect';
 import { Icon } from '@/components/icons';
@@ -24,6 +29,36 @@ function tanggalLabel(iso: string) {
     day: 'numeric',
     month: 'long',
     year: 'numeric',
+    timeZone: 'UTC',
+  });
+}
+
+/** Ringkas daftar pemutihan jadi satu label sel tabel. */
+function pemutihanLabel(rows: PemutihanRingkas[]): string {
+  if (rows.length === 0) return '—';
+  const sebulan = rows.filter((r) => r.tanggal === null);
+  const harian = rows.filter((r) => r.tanggal !== null);
+  const bagian: string[] = [];
+  if (harian.length === 1) bagian.push(tanggalPendek(harian[0].tanggal as string));
+  else if (harian.length > 1) bagian.push(`${harian.length} tanggal`);
+  if (sebulan.length === 1) bagian.push(`${bulanPendek(sebulan[0].month)} (sebulan)`);
+  else if (sebulan.length > 1) bagian.push(`${sebulan.length} bulan penuh`);
+  return bagian.join(' · ');
+}
+
+function tanggalPendek(iso: string) {
+  const [y, m, d] = iso.split('-').map(Number);
+  return new Date(Date.UTC(y, m - 1, d)).toLocaleDateString('id-ID', {
+    day: 'numeric',
+    month: 'short',
+    timeZone: 'UTC',
+  });
+}
+
+function bulanPendek(ym: string) {
+  const [y, m] = ym.split('-').map(Number);
+  return new Date(Date.UTC(y, m - 1, 1)).toLocaleDateString('id-ID', {
+    month: 'short',
     timeZone: 'UTC',
   });
 }
@@ -98,6 +133,7 @@ export default async function PendataanSPPage({
             <Stat label="SP 1" value={summary.sp1} />
             <Stat label="SP 2" value={summary.sp2} tone="warn" />
             <Stat label="SP 3 (diberhentikan)" value={summary.sp3} tone="bad" />
+            <Stat label="Pernah diputihkan" value={summary.diputihkan} />
           </div>
 
           {list.length === 0 ? (
@@ -119,23 +155,51 @@ export default async function PendataanSPPage({
                       <th style={{ textAlign: 'right' }}>Telat</th>
                       <th style={{ textAlign: 'right' }} title="Hadir">Hadir</th>
                       <th style={{ textAlign: 'center' }}>SP</th>
+                      <th>Diputihkan</th>
                     </tr>
                   </thead>
                   <tbody>
                     {list.map((p) => {
                       const ss = spStyle(p.sp);
+                      const adaPemutihan = p.diputihkan.length > 0;
+                      // Baris bank data: SP-nya sudah luruh, tapi namanya tetap
+                      // disimpan supaya perubahannya bisa ditelusuri.
+                      const bankData = p.sp === 0;
                       return (
-                        <tr key={p.anggotaId}>
-                          <td style={{ fontWeight: 600 }}>{p.name}</td>
+                        <tr key={p.anggotaId} style={bankData ? { opacity: 0.6 } : undefined}>
+                          <td style={{ fontWeight: 600 }}>
+                            <Link
+                              href={`/2in1/koordinator/kehadiran/sp/${p.anggotaId}`}
+                              style={{ color: 'inherit' }}
+                            >
+                              {p.name}
+                            </Link>
+                          </td>
                           <td className="t-small" style={{ color: 'var(--muted-2)' }}>{p.kelasName}</td>
                           <td style={{ textAlign: 'right', fontWeight: 700, color: p.alpa > 0 ? 'var(--merah-ink)' : undefined }}>{p.alpa}</td>
                           <td style={{ textAlign: 'right' }}>{p.izin}</td>
                           <td style={{ textAlign: 'right', color: 'var(--muted-2)' }}>{p.terlambat}</td>
                           <td style={{ textAlign: 'right', color: 'var(--muted-2)' }}>{p.hadir}</td>
-                          <td style={{ textAlign: 'center' }}>
+                          <td style={{ textAlign: 'center', whiteSpace: 'nowrap' }}>
+                            {p.spKotor !== p.sp && (
+                              <span
+                                className="t-tiny"
+                                style={{ color: 'var(--muted-2)', textDecoration: 'line-through', marginRight: 6 }}
+                                title="SP sebelum pemutihan"
+                              >
+                                SP {p.spKotor}
+                              </span>
+                            )}
                             <span className="badge" style={{ background: ss.bg, borderColor: ss.bd, color: ss.ink }}>
                               SP {p.sp}{p.sp >= 3 ? ' ⚠' : ''}
                             </span>
+                          </td>
+                          <td
+                            className="t-small"
+                            style={{ color: adaPemutihan ? 'var(--ink)' : 'var(--muted-2)' }}
+                            title={p.diputihkan.map((r) => r.alasan ?? 'tanpa alasan').join(' · ')}
+                          >
+                            {pemutihanLabel(p.diputihkan)}
                           </td>
                         </tr>
                       );
