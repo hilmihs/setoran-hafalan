@@ -1,6 +1,7 @@
 import { requireOneOfRoles } from '@/lib/session';
 import { supabaseAdmin } from '@/lib/supabase-admin';
 import { LogoutButton } from '@/components/LogoutButton';
+import { PrintButton } from '@/components/PrintButton';
 import { Icon } from '@/components/icons';
 import { FeatureNav } from '@/components/FeatureNav';
 import { StatCard } from '@/components/ui/StatCard';
@@ -170,7 +171,9 @@ export default async function MatrixKoordinatorPage({
   };
 
   return (
-    <main style={{ minHeight: '100vh' }}>
+    // `cetak` mengaktifkan blok @media print di globals.css — halaman ini
+    // dicetak apa adanya (Ctrl+P → Save as PDF); tak ada generator PDF di server.
+    <main className="cetak" style={{ minHeight: '100vh' }}>
       <div style={{ maxWidth: 1200, margin: '0 auto' }}>
         <div className="page" style={{ paddingTop: 20 }}>
           <div className="topbar">
@@ -181,11 +184,12 @@ export default async function MatrixKoordinatorPage({
               <Link href={backHref} className="btn btn-sm btn-ghost" style={{ height: 30, padding: '0 10px' }}>
                 {Icon.back(12)} Dashboard
               </Link>
+              <PrintButton label="Cetak / PDF" />
               <LogoutButton />
             </div>
           </div>
 
-          <FeatureNav current="/matrix/koordinator" />
+          <div className="no-print"><FeatureNav current="/matrix/koordinator" /></div>
 
           {/* Hero header */}
           <div
@@ -237,7 +241,7 @@ export default async function MatrixKoordinatorPage({
           </div>
 
           {/* Filter bar */}
-          <form method="get" className="card-flat" style={{ padding: 12, marginBottom: 16, display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'flex-end' }}>
+          <form method="get" className="card-flat no-print" style={{ padding: 12, marginBottom: 16, display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'flex-end' }}>
             <input type="hidden" name="gender" value={gender} />
             <div style={{ flex: '1 1 150px', minWidth: 130 }}>
               <label className="t-tiny" htmlFor="matrix_bulan" style={{ display: 'block', marginBottom: 4 }}>Bulan</label>

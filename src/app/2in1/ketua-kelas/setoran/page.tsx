@@ -13,12 +13,16 @@ export const dynamic = 'force-dynamic';
 const ANCHOR_MONTH = PRESENSI_ANCHOR.slice(0, 7);
 
 /**
- * Rentang pengisian setoran. Periode laporan Maahir = 28 bulan lalu s/d 27
- * bulan ini; halaman ini sengaja membuka DUA periode (periode berjalan +
- * periode sebelumnya) supaya pertemuan sebelum tanggal 28 masih bisa disusulkan
- * tanpa harus tahu cara mengganti bulan di dropdown.
+ * Rentang pengisian setoran = periode laporan berjalan saja (28 bulan lalu s/d
+ * 27 bulan ini).
+ *
+ * Dulu DUA periode dibuka supaya pertemuan sebelum tanggal 28 masih bisa
+ * disusulkan. Kebijakan rapat Agustus 2026 meniadakan alasan itu: begitu
+ * tanggal 28 lewat, periode lama terkunci di semua jalur tulis (lihat
+ * presensiTerbuka di periode-laporan.ts). Membuka dua periode di sini hanya
+ * akan menampilkan pertemuan yang tombol simpannya pasti ditolak server.
  */
-const PERIODE_DIBUKA = 2;
+const PERIODE_DIBUKA = 1;
 
 function periodeRange(month: string): { start: string; end: string; label: string } {
   const [y, m] = month.split('-').map(Number);

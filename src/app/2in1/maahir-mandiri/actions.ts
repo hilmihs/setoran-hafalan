@@ -4,6 +4,7 @@ import { supabaseAdmin } from '@/lib/supabase-admin';
 import { getSessionWa, getSelfAttendanceKelas } from '@/lib/program-kelas';
 import { PRESENSI_ANCHOR, todayJakarta, expectedDaysInRange } from '@/lib/maahir-presensi';
 import { getLiburDates } from '@/lib/maahir-libur';
+import { pesanTerkunci, presensiTerbuka } from '@/lib/periode-laporan';
 import { buildWaMeUrl, tplReminderLiburToKetua } from '@/lib/whatsapp';
 
 export type SelfPresensiResult = { ok?: boolean; error?: string };
@@ -94,6 +95,8 @@ export async function submitSelfPresensi(_prev: SelfPresensiResult | undefined, 
   const day = expectedDaysInRange(kelas, PRESENSI_ANCHOR, today, libur)
     .find((d) => d.tanggal === tanggal && d.program === program);
   if (!day) return { error: 'Hari/sesi tidak valid atau sedang libur.' };
+  // Periode yang sudah dilaporkan terkunci — berlaku juga untuk presensi mandiri.
+  if (!presensiTerbuka(day.tanggal)) return { error: pesanTerkunci(day.tanggal) };
 
   const { data: pertemuan, error: pErr } = await supabaseAdmin
     .from('pertemuan_program')

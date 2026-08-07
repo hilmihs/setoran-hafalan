@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase-admin';
 import { getSessionWa } from '@/lib/program-kelas';
+import { pesanTerkunci, presensiTerbuka } from '@/lib/periode-laporan';
 
 export const runtime = 'nodejs';
 
@@ -38,6 +39,11 @@ export async function POST(req: NextRequest) {
       .maybeSingle();
     if (!kelas || (kelas.ketua_wa !== wa && kelas.wakil_wa !== wa)) {
       return NextResponse.json({ error: 'Hanya ketua/wakil kelas yang bisa membuat pertemuan.' }, { status: 403 });
+    }
+    // Tak boleh membuat pertemuan di periode yang sudah ditutup — kalau boleh,
+    // kunci pengisian kehadiran gampang ditembus lewat pintu ini.
+    if (!presensiTerbuka(tanggal)) {
+      return NextResponse.json({ error: pesanTerkunci(tanggal) }, { status: 403 });
     }
 
     const { data: inserted, error } = await supabaseAdmin

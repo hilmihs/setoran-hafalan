@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase-admin';
 import { getSessionWa } from '@/lib/program-kelas';
+import { pesanTerkunci, presensiTerbuka } from '@/lib/periode-laporan';
 
 export const runtime = 'nodejs';
 
@@ -46,8 +47,18 @@ export async function POST(req: NextRequest) {
     const pertemuanIds = [...new Set(clean.map((i) => i.pertemuan_id))];
     const { data: pertemuanRows } = await supabaseAdmin
       .from('pertemuan_program')
-      .select('id, program, program_kelas_id')
+      .select('id, program, program_kelas_id, tanggal')
       .in('id', pertemuanIds);
+
+    // Angka setoran ikut masuk laporan bulanan Takhassus, jadi terkunci bersama
+    // presensi begitu periodenya ditutup.
+    const terkunci = (pertemuanRows ?? []).find((p) => !presensiTerbuka(p.tanggal as string));
+    if (terkunci) {
+      return NextResponse.json(
+        { error: pesanTerkunci(terkunci.tanggal as string) },
+        { status: 403 }
+      );
+    }
     const kelasIds = [...new Set((pertemuanRows ?? []).map((p) => p.program_kelas_id as string))];
     const { data: kelasRows } = await supabaseAdmin
       .from('program_kelas')

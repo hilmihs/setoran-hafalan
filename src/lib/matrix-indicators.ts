@@ -108,18 +108,6 @@ export const INDIKATOR: Indikator[] = [
   },
   // B. Inspeksi
   {
-    key: 'skor_manajemen_halaqah',
-    label: 'Manajemen Halaqah',
-    short: 'Manajemen',
-    kategori: 'inspeksi',
-    standar: 4,
-    deskripsi:
-      'Pengajar mengikuti panduan modul, memberikan koreksi langsung, dan halaqah berjalan interaktif. ' +
-      '(Gabungan dari “Metode Pengajaran Modul” + “Manajemen Halaqah” lama — nilainya rata-rata keduanya.)',
-    keteranganKey: 'keterangan_halaqah',
-    sumber: 'Penilaian Pedagogis',
-  },
-  {
     key: 'skor_kepatuhan_silabus',
     label: 'Kepatuhan Silabus',
     short: 'Silabus',
@@ -139,17 +127,29 @@ export const INDIKATOR: Indikator[] = [
     keteranganKey: 'keterangan_evaluasi',
     sumber: 'Penilaian Pedagogis (ketua kelompok)',
   },
+  // C. Soft Skill (Profesionalisme)
+  {
+    key: 'skor_manajemen_halaqah',
+    label: 'Manajemen Halaqah',
+    short: 'Manajemen',
+    kategori: 'soft',
+    standar: 4,
+    deskripsi:
+      'Pengajar mengikuti panduan modul, memberikan koreksi langsung, dan halaqah berjalan interaktif. ' +
+      '(Gabungan dari “Metode Pengajaran Modul” + “Manajemen Halaqah” lama — nilainya rata-rata keduanya.)',
+    keteranganKey: 'keterangan_halaqah',
+    sumber: 'Penilaian Pedagogis',
+  },
   {
     key: 'skor_kepatuhan_sop',
     label: 'Kepatuhan SOP Teknis',
     short: 'SOP Teknis',
-    kategori: 'inspeksi',
+    kategori: 'soft',
     standar: 4,
     deskripsi: 'Hasil inspeksi menunjukkan pengajar on-cam ketika KBM berlangsung.',
     keteranganKey: 'keterangan_sop',
     sumber: 'Inspeksi / Observasi Kelas',
   },
-  // C. Soft Skill (Profesionalisme)
   {
     key: 'skor_kedisiplinan_waktu',
     label: 'Kedisiplinan Waktu (On-Time)',

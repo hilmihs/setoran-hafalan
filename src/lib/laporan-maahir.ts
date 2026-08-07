@@ -8,11 +8,11 @@
 import { supabaseAdmin } from '@/lib/supabase-admin';
 import { fetchAllRows } from '@/lib/supabase-page';
 import { getLiburDatesForKelas } from '@/lib/maahir-libur';
-import { todayJakarta } from '@/lib/maahir-presensi';
+import { anchorKelas, expectedDaysInRange, filledKeyOf, todayJakarta } from '@/lib/maahir-presensi';
 import { getMaahirSP, type SPRekap } from '@/lib/maahir-sp';
 import { getPemutihan } from '@/lib/maahir-pemutihan';
 import { getLaporanNotes, type LaporanNote } from '@/lib/laporan-note';
-import { isTakhassusKelas } from '@/lib/program-kelas';
+import { isTakhassusKelas, type ProgramKelasRow } from '@/lib/program-kelas';
 import { dalamPeriode, mulaiEfektif } from '@/lib/anggota-periode';
 
 export { TAKHASSUS_IKHWAN, TAKHASSUS_AKHWAT } from '@/lib/program-kelas';
@@ -85,6 +85,17 @@ export type LaporanMaahir = {
     kehadiran: { avgIkhwan: number | null; avgAkhwat: number | null; aktual: number | null; benchmark: number };
     dibawahTarget: { ikhwan: number; akhwat: number; total: number; list: StudentAtt[] }; // < 100%
   };
+  /**
+   * Sesi yang lewat tanpa presensi terisi. Peserta TIDAK dirugikan (tak ada
+   * yang kena alpa gara-gara ketuanya lalai) — angka ini murni jejak kelalaian
+   * pengisian, supaya koordinator tetap bisa menegur.
+   */
+  presensiTakTerisi: Array<{
+    kelasName: string;
+    gender: Gender;
+    jumlah: number;
+    tanggal: string[]; // 'YYYY-MM-DD Program'
+  }>;
   /** Pendataan SP disiplin kehadiran (kumulatif sejak program berjalan). */
   sp: SPRekap;
   /** Catatan bebas koordinator untuk bulan ini. */
@@ -146,6 +157,7 @@ export async function getLaporanMaahir(month: string): Promise<LaporanMaahir> {
       kehadiran: empty(100),
       dibawahTarget: { ikhwan: 0, akhwat: 0, total: 0, list: [] },
     },
+    presensiTakTerisi: [],
     sp: {
       list: [],
       summary: { total: 0, sp1: 0, sp2: 0, sp3: 0, diputihkan: 0 },
@@ -160,10 +172,12 @@ export async function getLaporanMaahir(month: string): Promise<LaporanMaahir> {
   // 1. Kelas
   const { data: kelasRows } = await supabaseAdmin
     .from('program_kelas')
-    .select('id, name, gender')
+    .select(
+      'id, name, gender, jadwal_hari, waktu_mulai, waktu_selesai, ketua_wa, wakil_wa, self_attendance, presensi_sifat, mulai_tanggal'
+    )
     .order('gender')
     .order('name');
-  const kelasList = (kelasRows ?? []) as Array<{ id: string; name: string; gender: Gender }>;
+  const kelasList = (kelasRows ?? []) as unknown as Array<ProgramKelasRow>;
   if (kelasList.length === 0) return emptyResult;
 
   const kelasById = new Map(kelasList.map((k) => [k.id, k]));
@@ -406,6 +420,37 @@ export async function getLaporanMaahir(month: string): Promise<LaporanMaahir> {
   const tibyanBawahI = tibyanBawah.filter((s) => s.gender === 'ikhwan').length;
   const tibyanBawahA = tibyanBawah.filter((s) => s.gender === 'akhwat').length;
 
+  // ---- Sesi yang lewat tanpa presensi terisi ----
+  // Sejak periode dikunci tiap tanggal 28, sesi begini tak bisa disusulkan lagi.
+  // Peserta sengaja tak dirugikan (tak ada alpa otomatis); yang dicatat hanya
+  // kelalaian pengisiannya, per kelas, supaya koordinator bisa menindak.
+  const terisiKeys = new Set<string>();
+  for (const [key, set] of filledByKelasScope) {
+    const [kelasId, program] = key.split('|');
+    const kelas = kelasById.get(kelasId);
+    if (!kelas) continue;
+    for (const pid of set) {
+      const tgl = pertemuanById.get(pid)?.tanggal;
+      if (tgl) terisiKeys.add(`${kelasId}|${filledKeyOf(kelas, program, tgl)}`);
+    }
+  }
+  const presensiTakTerisi: LaporanMaahir['presensiTakTerisi'] = [];
+  for (const kelas of kelasList) {
+    const mulai = anchorKelas(kelas);
+    const dari = mulai > start ? mulai : start;
+    if (dari > end) continue;
+    const hilang = expectedDaysInRange(kelas, dari, end, liburByKelas.get(kelas.id))
+      .filter((d) => !terisiKeys.has(`${kelas.id}|${filledKeyOf(kelas, d.program, d.tanggal)}`));
+    if (hilang.length === 0) continue;
+    presensiTakTerisi.push({
+      kelasName: kelas.name,
+      gender: kelas.gender,
+      jumlah: hilang.length,
+      tanggal: hilang.map((d) => `${d.tanggal} ${d.namaKegiatan}`),
+    });
+  }
+  presensiTakTerisi.sort((a, b) => b.jumlah - a.jumlah || a.kelasName.localeCompare(b.kelasName));
+
   // Pendataan SP (kumulatif, sumber sama dengan halaman SP koordinator) +
   // catatan bebas koordinator untuk bulan ini.
   const [sp, notes] = await Promise.all([getMaahirSP(), getLaporanNotes(month)]);
@@ -430,6 +475,7 @@ export async function getLaporanMaahir(month: string): Promise<LaporanMaahir> {
       kehadiran: { avgIkhwan: tibyanAvgI, avgAkhwat: tibyanAvgA, aktual: avgOfGenders(tibyanAvgI, tibyanAvgA), benchmark: 100 },
       dibawahTarget: { ikhwan: tibyanBawahI, akhwat: tibyanBawahA, total: tibyanBawah.length, list: tibyanBawah },
     },
+    presensiTakTerisi,
     sp,
     notes,
   };

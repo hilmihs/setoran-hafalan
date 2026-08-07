@@ -7,6 +7,7 @@ import { supabaseAdmin } from '@/lib/supabase-admin';
 import { findKetuaProgramKelas, getSelfAttendanceKelas, type ProgramKelasRow } from '@/lib/program-kelas';
 import { getLiburDates, getLiburDatesForKelas } from '@/lib/maahir-libur';
 import { anggotaAktifPada, todayJakarta } from '@/lib/anggota-periode';
+import { batasAwalPengisian } from '@/lib/periode-laporan';
 
 export const PRESENSI_ANCHOR = '2026-06-01'; // strict mulai Juni 2026
 
@@ -20,6 +21,19 @@ export const PRESENSI_ANCHOR = '2026-06-01'; // strict mulai Juni 2026
 export function anchorKelas(k: { mulai_tanggal?: string | null }): string {
   const m = k.mulai_tanggal;
   return m && m > PRESENSI_ANCHOR ? m : PRESENSI_ANCHOR;
+}
+
+/**
+ * Awal rentang yang masih boleh DITAGIH ke ketua/peserta.
+ *
+ * Sejak kebijakan kunci tanggal 28, periode lama tak bisa diisi lagi — menagih
+ * tanggalnya hanya menghasilkan angka "belum diisi" yang mustahil dinolkan.
+ * Jadi tagihan dipotong di awal periode berjalan, bukan di anchor kelas.
+ */
+export function awalTagihan(k: { mulai_tanggal?: string | null }): string {
+  const a = anchorKelas(k);
+  const batas = batasAwalPengisian();
+  return a > batas ? a : batas;
 }
 export const TIBYAN_HARI = 'Sabtu'; // at_tibyan 08:30–10:30, seragam semua kelas
 
@@ -246,7 +260,7 @@ export async function getUnfilledMaahirDays(wa: string): Promise<UnfilledDay[]> 
   // Kelas self_attendance tak masuk (findKetuaProgramKelas sudah mengecualikan).
   const expected: ExpectedDay[] = [];
   for (const k of myKelas) {
-    expected.push(...expectedDaysInRange(k, anchorKelas(k), today, liburByKelas.get(k.id)));
+    expected.push(...expectedDaysInRange(k, awalTagihan(k), today, liburByKelas.get(k.id)));
   }
   if (expected.length === 0) return [];
 
@@ -328,7 +342,8 @@ export async function getUnfilledDaysForAnggota(
   anggotaId: string
 ): Promise<UnfilledDay[]> {
   const today = todayJakarta();
-  const anchor = anchorKelas(kelas);
+  // Sama seperti tagihan ketua: periode yang sudah terkunci tak ditagih lagi.
+  const anchor = awalTagihan(kelas);
   const libur = await getLiburDates(kelas.id, anchor, today);
   // Peserta mengisi SELURUH presensinya: kelas_maahir & At-Tibyan.
   let expected = expectedDaysInRange(kelas, anchor, today, libur);

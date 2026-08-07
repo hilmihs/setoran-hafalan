@@ -11,6 +11,7 @@
 // siapa, dan kapan.
 
 import { supabaseAdmin } from '@/lib/supabase-admin';
+import { periodeMonthOf } from '@/lib/periode-laporan';
 
 export type Pemutihan = {
   id: string;
@@ -42,17 +43,10 @@ function mapRow(r: Record<string, unknown>): Pemutihan {
   };
 }
 
-/**
- * Periode laporan Maahir memakai window 28–27, jadi tanggal 28 ke atas sudah
- * masuk bulan berikutnya. mis. 2026-06-29 → '2026-07'.
- */
-export function periodeMonthOf(tanggal: string): string {
-  const [y, m, d] = tanggal.split('-').map(Number);
-  if (d < 28) return `${y}-${String(m).padStart(2, '0')}`;
-  const ny = m === 12 ? y + 1 : y;
-  const nm = m === 12 ? 1 : m + 1;
-  return `${ny}-${String(nm).padStart(2, '0')}`;
-}
+// Window 28–27 kini tinggal di modul murni supaya bisa dipakai tanpa menyeret
+// akses DB. Di-ekspor ulang di sini karena banyak pemanggil lama mengimpornya
+// dari modul pemutihan.
+export { periodeMonthOf } from '@/lib/periode-laporan';
 
 /** Pemutihan yang masih berlaku (opsional difilter bulan). */
 export async function getPemutihan(month?: string): Promise<Pemutihan[]> {

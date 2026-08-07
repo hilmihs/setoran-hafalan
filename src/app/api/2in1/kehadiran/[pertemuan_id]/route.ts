@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase-admin';
 import { getSessionWa } from '@/lib/program-kelas';
+import { pesanTerkunci, presensiTerbuka } from '@/lib/periode-laporan';
 
 export const runtime = 'nodejs';
 
@@ -34,7 +35,7 @@ export async function PUT(
     // Verify pertemuan + caller is ketua/wakil of the program_kelas
     const { data: pertemuan } = await supabaseAdmin
       .from('pertemuan_program')
-      .select('id, program_kelas_id, program, program_kelas:program_kelas_id(ketua_wa, wakil_wa)')
+      .select('id, program_kelas_id, program, tanggal, program_kelas:program_kelas_id(ketua_wa, wakil_wa)')
       .eq('id', params.pertemuan_id)
       .single();
     if (!pertemuan || !pertemuan.program_kelas_id) {
@@ -43,6 +44,11 @@ export async function PUT(
     const pk = pertemuan.program_kelas as unknown as { ketua_wa: string | null; wakil_wa: string | null };
     if (pk.ketua_wa !== wa && pk.wakil_wa !== wa) {
       return NextResponse.json({ error: 'Hanya ketua/wakil kelas yang bisa mengisi kehadiran.' }, { status: 403 });
+    }
+    // Periode yang sudah dilaporkan tak boleh berubah di belakang.
+    const tanggal = pertemuan.tanggal as string;
+    if (!presensiTerbuka(tanggal)) {
+      return NextResponse.json({ error: pesanTerkunci(tanggal) }, { status: 403 });
     }
 
     const body = await req.json();

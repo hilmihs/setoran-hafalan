@@ -4,7 +4,7 @@ import { getSession } from '@/lib/session';
 import { getHitsKoordinatorRekap, type HitsMode } from '@/lib/hits-koordinator-rekap';
 import { weekStartMonday } from '@/lib/week';
 import type { Gender } from '@/types/db';
-import { PrintButton } from './PrintButton';
+import { PrintButton } from '@/components/PrintButton';
 
 export const dynamic = 'force-dynamic';
 

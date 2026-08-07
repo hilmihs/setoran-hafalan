@@ -424,17 +424,19 @@ export async function computeMatrixForMonth(yearMonth: string): Promise<MatrixRo
       ped?.skor_metode_pengajaran ?? null,
       ped?.skor_manajemen_halaqah ?? null,
     ]);
-    // Kategori Inspeksi (dulu "Pedagogis"). Kepatuhan SOP masuk sini karena
-    // sumbernya inspeksi kelas, bukan penilaian soft skill.
+    // Kategori Inspeksi (dulu "Pedagogis").
     const inspeksi = {
-      skor_manajemen_halaqah: manajemenGabung,
       skor_kepatuhan_silabus: ped?.skor_kepatuhan_silabus ?? null,
       // Ketua kelompok isi manual → pakai itu. Belum diisi → sinkron dari
       // performa latihan mandiri (report ketua kelas).
       skor_evaluasi_penguasaan: ped?.skor_evaluasi_penguasaan ?? skorLatihan,
-      skor_kepatuhan_sop: ped?.skor_kepatuhan_sop ?? null,
     };
+    // Manajemen Halaqah & Kepatuhan SOP dipindah ke Soft Skill per keputusan
+    // rapat Agustus 2026 — sumber datanya tetap Penilaian Pedagogis / inspeksi
+    // kelas, yang berubah hanya pengelompokan & rata-rata kategorinya.
     const soft = {
+      skor_manajemen_halaqah: manajemenGabung,
+      skor_kepatuhan_sop: ped?.skor_kepatuhan_sop ?? null,
       skor_kedisiplinan_waktu: skorKedisiplinan,
       skor_komitmen_jadwal: skorKomitmen,
       skor_tanggung_jawab: skorTanggungJawab,

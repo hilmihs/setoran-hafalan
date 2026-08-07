@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { requireOneOfRoles } from '@/lib/session';
 import { getLaporanMaahir, type StudentAtt } from '@/lib/laporan-maahir';
 import { PRESENSI_ANCHOR } from '@/lib/maahir-presensi';
+import { periodeBerjalan } from '@/lib/periode-laporan';
 import { monthOptionsSince } from '@/lib/month';
 import { MonthNavSelect } from '@/components/MonthNavSelect';
 import { Icon } from '@/components/icons';
@@ -95,6 +96,7 @@ export default async function LaporanMaahirPage({
           <TakhassusBlock lap={lap} />
           <MaahirBlock lap={lap} />
           <AtTibyanBlock lap={lap} />
+          <PresensiTakTerisiBlock lap={lap} />
           <SPBlock lap={lap} />
 
           <p className="t-tiny" style={{ color: 'var(--muted-2)', marginTop: 20 }}>
@@ -326,6 +328,53 @@ function MaahirBlock({ lap }: { lap: Awaited<ReturnType<typeof getLaporanMaahir>
       <GenderRata ikhwan={m.kehadiran.avgIkhwan} akhwat={m.kehadiran.avgAkhwat} rata={m.kehadiran.aktual} />
       <div className="t-tiny" style={{ color: 'var(--muted-2)', margin: '4px 0' }}>Peserta di bawah target (&lt; 80%)</div>
       <BawahTargetTable list={m.dibawahTarget.list} />
+    </section>
+  );
+}
+
+/**
+ * Sesi yang lewat tanpa presensi terisi — jejak kelalaian ketua kelas.
+ * Sengaja tak menghukum peserta: tak ada alpa otomatis dari sesi ini.
+ */
+function PresensiTakTerisiBlock({ lap }: { lap: Awaited<ReturnType<typeof getLaporanMaahir>> }) {
+  const list = lap.presensiTakTerisi;
+  if (list.length === 0) return null;
+  const terkunci = periodeBerjalan() !== lap.month;
+  const total = list.reduce((n, k) => n + k.jumlah, 0);
+  return (
+    <section style={{ marginBottom: 28 }}>
+      <h2 className="t-h2" style={{ marginBottom: 8 }}>Presensi Tak Terisi</h2>
+      <p className="t-tiny" style={{ color: 'var(--muted-2)', marginBottom: 8 }}>
+        {total} sesi lewat tanpa presensi di {list.length} kelas.{' '}
+        {terkunci
+          ? 'Periode ini sudah terkunci — sesi tersebut tak bisa disusulkan lagi.'
+          : 'Periode ini masih terbuka — masih bisa disusulkan sampai tanggal 28.'}{' '}
+        Kehadiran peserta tak terpengaruh: tak ada yang dihitung alpa karenanya.
+      </p>
+      <div className="table-scroll">
+        <table className="k-table" style={{ width: '100%' }}>
+          <thead>
+            <tr>
+              <th style={{ textAlign: 'left' }}>Kelas</th>
+              <th style={{ width: 70 }}>Sesi</th>
+              <th style={{ textAlign: 'left' }}>Tanggal</th>
+            </tr>
+          </thead>
+          <tbody>
+            {list.map((k) => (
+              <tr key={k.kelasName}>
+                <td>{k.kelasName}</td>
+                <td style={{ textAlign: 'center', fontWeight: 700, color: 'var(--merah-ink)' }}>
+                  {k.jumlah}
+                </td>
+                <td className="t-tiny" style={{ color: 'var(--muted-2)' }}>
+                  {k.tanggal.join(' · ')}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </section>
   );
 }
