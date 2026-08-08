@@ -18,6 +18,16 @@ Wildatun Uyun 02-08) masih berbentuk sebulan-penuh. Kalau maksud aslinya hanya
 satu-dua tanggal, ketiganya perlu dibatalkan lalu diputihkan ulang per-tanggal —
 tapi itu mengubah angka laporan Juli yang sudah beredar, jadi menunggu perintah.
 
+**Selesai 2026-08-08.** Recca & Saad dikonversi ke per-tanggal — pemutihan
+sebulan ikut menghapus 10 dan 5 kehadiran mereka; kini hanya sesi izin/alpa yang
+dianulir, dan baris sebulannya ditandai dibatalkan sebagai jejak. Tasmiah
+**dibiarkan sebulan penuh**: seluruh 9 sesinya izin dengan alasan "ibu sakit",
+jadi bentuk sebulan memang yang tepat. SP ketiganya tak berubah.
+
+Matrix juga sudah dihitung ulang untuk Jun–Agu lewat
+`POST /api/admin/recompute-matrix` (token sama dengan /api/admin/db) — ternyata
+tak perlu koordinator membuka halaman, berbeda dari dugaan awal.
+
 ---
 
 ## 2. Export XLSX + halaman cetak — `/hits/koordinator?mode=bulan`
