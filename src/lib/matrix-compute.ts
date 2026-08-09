@@ -9,14 +9,18 @@
 //                skor_metode_pengajaran + skor_manajemen_halaqah yang kini
 //                dilebur jadi satu indikator), Kepatuhan Silabus, Evaluasi &
 //                Penguasaan (ketua kelompok), Kepatuhan SOP Teknis.
-//   Soft skill : hits_keterangan_harian via hits_halaqah (kedisiplinan = %KBBS,
+//   Soft skill : hits_keterangan_harian via hits_halaqah.
+//                kedisiplinan_waktu = %pertemuan on-time (KMT/KBLA saja),
 //                tanggung jawab = %latihan beres — pertemuan PTML tidak dinilai
-//                karena tugas sudah diberikan).
-//                komitmen_jadwal = rata-rata(Stabilitas Jadwal [jumlah JKG],
+//                karena tugas sudah diberikan.
+//                komitmen_jadwal = rata-rata(Stabilitas Jadwal [jumlah JKG/BADAL],
 //                Anti-Mangkir [JKG di-tabayyun & bukan udzur syar'i = teguran]).
+//                Kedisiplinan Waktu & Komitmen Jadwal TIDAK boleh berbagi jenis
+//                pelanggaran — lihat isPelanggaranOnTime().
 
 import { supabaseAdmin } from '@/lib/supabase-admin';
 import { fetchInChunks } from '@/lib/hits-rekap';
+import { TOLERANSI_KMT } from '@/lib/hits-hutang';
 import {
   isKeteranganDinilai,
   todayJakartaISO,
@@ -59,6 +63,25 @@ export async function syncMatrixIfStale(yearMonth: string, force = false): Promi
     }
   }
   await computeMatrixForMonth(yearMonth);
+}
+
+/**
+ * Pelanggaran yang masuk indikator **Kedisiplinan Waktu (On-Time)** — hanya soal
+ * jam kelas, bukan soal kelas ada/tidak:
+ *   - KMT  = mulai terlambat. Toleransi 5 menit (sama dgn hutang menit).
+ *   - KBLA = kelas diakhiri lebih awal. Tanpa toleransi, tapi 0 menit = tak awal.
+ * JKG/BADAL sengaja TIDAK di sini — itu ranah Komitmen Jadwal & Kehadiran
+ * (Stabilitas Jadwal / Anti-Mangkir). Kalau ikut dihitung, satu pertemuan JKG
+ * menurunkan dua indikator sekaligus.
+ *
+ * `menit` kosong = tetap pelanggaran: ketua kelas sudah menandai pertemuan itu
+ * KMT/KBLA, menitnya saja yang tak tercatat (banyak di data impor F1). Beda dari
+ * hutangMenit() yang memang tak bisa menagih menit yang tak diketahui.
+ */
+export function isPelanggaranOnTime(p: { jenis: string; menit: number | null }): boolean {
+  if (p.jenis === 'KMT') return p.menit == null || p.menit > TOLERANSI_KMT;
+  if (p.jenis === 'KBLA') return p.menit == null || p.menit > 0;
+  return false;
 }
 
 function pctTo4(pct: number): number {
@@ -297,39 +320,55 @@ export async function computeMatrixForMonth(yearMonth: string): Promise<MatrixRo
     isKeteranganDinilai(k as unknown as KeteranganNilaiFields, hariIni)
   );
 
-  // Pelanggaran multi (sumber kebenaran F1): kedisiplinan & stabilitas jadwal
-  // dihitung dari hits_pelanggaran, bukan lagi kolom kondisi tunggal.
-  //   - disiplin (KBBS) = pertemuan TANPA KMT/KBLA/JKG/BADAL (TIDAK_LATIHAN tak
-  //     memengaruhi disiplin — masuk ke tanggung jawab via latihan_diberikan).
-  //   - Stabilitas Jadwal (JKG-count) = pertemuan dgn JKG atau BADAL (guru asli
-  //     dihitung JKG saat digantikan → nambah beban anti-mangkir).
+  // Pelanggaran multi (sumber kebenaran F1): kedisiplinan waktu & stabilitas
+  // jadwal dihitung dari hits_pelanggaran, bukan lagi kolom kondisi tunggal.
+  // Pembagian tegas antar-indikator (rapat Agustus 2026) — satu jenis pelanggaran
+  // hanya boleh memengaruhi SATU indikator:
+  //   - Kedisiplinan Waktu = %pertemuan tanpa KMT (>5 menit) & tanpa KBLA.
+  //     Pertemuan JKG/BADAL keluar dari penyebut: kelasnya pindah hari / dibawakan
+  //     badal, jadi jam mulai-selesai pengajar asli tak bisa dinilai.
+  //   - Komitmen Jadwal = Stabilitas Jadwal (pertemuan JKG/BADAL) + Anti-Mangkir
+  //     (tabayyun bukan udzur syar'i).
+  //   - TIDAK_LATIHAN tak memengaruhi keduanya — masuk Tanggung Jawab via
+  //     latihan_diberikan.
   const ketIds = (keteranganList ?? []).map((k) => k.id as string);
   const pelList = await fetchInChunks(ketIds, (chunk) =>
     supabaseAdmin
       .from('hits_pelanggaran')
-      .select('keterangan_id, jenis')
+      .select('keterangan_id, jenis, menit')
       .in('keterangan_id', chunk)
   );
   const jenisByKet = new Map<string, Set<string>>();
+  // Menit ikut disimpan karena toleransi KMT 5 menit butuh nilainya.
+  const pelByKet = new Map<string, { jenis: string; menit: number | null }[]>();
   for (const p of pelList ?? []) {
     const set = jenisByKet.get(p.keterangan_id) ?? new Set<string>();
     set.add(p.jenis as string);
     jenisByKet.set(p.keterangan_id, set);
+    const arr = pelByKet.get(p.keterangan_id) ?? [];
+    arr.push({ jenis: p.jenis as string, menit: (p.menit as number | null) ?? null });
+    pelByKet.set(p.keterangan_id, arr);
   }
-  const DISIPLIN_PEL = ['KMT', 'KBLA', 'JKG', 'BADAL'];
 
   const disiplinByPengajar = new Map<string, { baik: number; total: number }>();
   const latihanByPengajar = new Map<string, { done: number; total: number }>();
   const jkgByPengajar = new Map<string, number>(); // pengajar_id → jumlah pertemuan JKG/BADAL
+  // Punya ≥1 keterangan non-libur = pengajar ini terdata di HITS. Dipakai sebagai
+  // syarat penilaian Komitmen Jadwal, karena penyebut disiplin waktu kini bisa 0
+  // (mis. semua pertemuannya JKG/BADAL) tanpa berarti datanya kosong.
+  const hitsDataByPengajar = new Map<string, number>();
   for (const k of keteranganList ?? []) {
     const pgId = pengajarOfHalaqah.get(k.halaqah_id);
     if (!pgId) continue;
     const jenis = jenisByKet.get(k.id as string) ?? new Set<string>();
+    hitsDataByPengajar.set(pgId, (hitsDataByPengajar.get(pgId) ?? 0) + 1);
 
-    const d = disiplinByPengajar.get(pgId) ?? { baik: 0, total: 0 };
-    d.total += 1;
-    if (!DISIPLIN_PEL.some((j) => jenis.has(j))) d.baik += 1;
-    disiplinByPengajar.set(pgId, d);
+    if (!jenis.has('JKG') && !jenis.has('BADAL')) {
+      const d = disiplinByPengajar.get(pgId) ?? { baik: 0, total: 0 };
+      d.total += 1;
+      if (!(pelByKet.get(k.id as string) ?? []).some(isPelanggaranOnTime)) d.baik += 1;
+      disiplinByPengajar.set(pgId, d);
+    }
 
     // PTML = pengajar sudah memberi tugas, hanya pesertanya yang belum
     // mengerjakan. Bukan kelalaian pengajar → pertemuan itu tidak dinilai
@@ -406,8 +445,11 @@ export async function computeMatrixForMonth(yearMonth: string): Promise<MatrixRo
 
     // Komitmen Jadwal = rata-rata(Stabilitas Jadwal, Anti-Mangkir). Hanya dinilai
     // bila pengajar punya data HITS (≥1 keterangan non-libur), selain itu null.
+    // Pakai hitsDataByPengajar, BUKAN penyebut disiplin waktu — pengajar yang
+    // semua pertemuannya JKG/BADAL punya penyebut disiplin 0 tapi tetap wajib
+    // dinilai komitmennya (justru di situ pelanggarannya).
     const skorKomitmen =
-      disp && disp.total > 0
+      (hitsDataByPengajar.get(pg.id) ?? 0) > 0
         ? avg([jkgTo4(jkgByPengajar.get(pg.id) ?? 0), tegTo4(mangkirByPengajar.get(pg.id) ?? 0)])
         : null;
 

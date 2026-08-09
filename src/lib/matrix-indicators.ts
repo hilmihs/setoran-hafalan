@@ -156,7 +156,11 @@ export const INDIKATOR: Indikator[] = [
     short: 'Disiplin',
     kategori: 'soft',
     standar: 4,
-    deskripsi: 'Laporan observasi ketua kelas menunjukkan pengajar memulai kelas tepat waktu.',
+    deskripsi:
+      'Hanya soal jam kelas: (1) Mulai Tepat Waktu — kelas dimulai sesuai jadwal, ' +
+      'toleransi keterlambatan maksimal 5 menit (KMT); (2) Durasi Sesuai — kelas ' +
+      'tidak diakhiri lebih awal (KBLA). Pertemuan yang diagendakan ulang (JKG) atau ' +
+      'dibawakan badal tidak dinilai di sini — itu masuk Komitmen Jadwal & Kehadiran.',
     sumber: 'Laporan Ketua Kelas',
   },
   {
@@ -165,7 +169,11 @@ export const INDIKATOR: Indikator[] = [
     short: 'Komitmen',
     kategori: 'soft',
     standar: 4,
-    deskripsi: 'Rata-rata stabilitas jadwal (sedikit pergantian JKG) & anti-mangkir (JKG bukan udzur syar\'i setelah tabayyun).',
+    deskripsi:
+      'Soal kelas ada atau tidak: (1) Anti-Mangkir — kelas tidak diadakan tanpa ' +
+      'pemberitahuan, dinilai dari tabayyun yang diputus BUKAN udzur syar\'i; ' +
+      '(2) Stabilitas Jadwal — meminimalisir perubahan hari (JKG "diagendakan di hari ' +
+      'lain") & pengalihan ke badal, agar ritme belajar murid terjaga.',
     sumber: 'HITS Keterangan Harian & Tabayyun',
   },
   {

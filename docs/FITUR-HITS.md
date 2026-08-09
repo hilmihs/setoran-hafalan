@@ -289,11 +289,30 @@ Ketika kondisi **bukan KBBS**:
 | Tanggung Jawab & Keadilan | Penggantian kelas untuk peserta | 4 |
 | Kepatuhan SOP Teknis | On-cam + latihan mandiri | 4 |
 
-**Skala Kedisiplinan** (berdasarkan jumlah KMT/KBLA):
-- 0 kejadian → Skala 4 | 1 → Skala 3 | 2 → Skala 2 | 3 → Skala 1 | 4+ → Skala 0
+**Batas tegas antar dua indikator** (ditetapkan Agustus 2026 — jangan dicampur):
 
-**Skala Komitmen Jadwal** (berdasarkan jumlah pindah jadwal):
-- 1–4 pindah → Skala 4 | 5–6 → Skala 3 | 7–8 → Skala 2 | 9–10 → Skala 1 | 11+ → Skala 0
+| | Kedisiplinan Waktu (On-Time) | Komitmen Jadwal & Kehadiran |
+|---|---|---|
+| Pertanyaannya | Kelasnya **tepat jam**? | Kelasnya **ada**? |
+| Butir | Mulai Tepat Waktu (toleransi 5 menit) · Durasi Sesuai (tak diakhiri lebih awal) | Anti-Mangkir (tak meniadakan kelas tanpa pemberitahuan) · Stabilitas Jadwal (tak sering pindah hari) |
+| Pelanggaran | KMT, KBLA | JKG, BADAL, tabayyun non-udzur |
+
+Satu jenis pelanggaran hanya memengaruhi SATU indikator. Sampai Agustus 2026
+`skor_kedisiplinan_waktu` ikut menghitung JKG & BADAL, sehingga satu pertemuan
+yang dipindah hari menurunkan dua indikator sekaligus — sudah diperbaiki di
+`matrix-compute.ts` (`isPelanggaranOnTime`).
+
+**Skala Kedisiplinan Waktu** = `%pertemuan on-time` → `pctTo4` (≥90% → 4, ≥75% → 3, ≥50% → 2, ≥25% → 1, sisanya 0):
+- Pembilang: pertemuan tanpa KMT (>5 menit) dan tanpa KBLA (>0 menit).
+- Penyebut: pertemuan non-libur yang dinilai, **minus** pertemuan JKG/BADAL —
+  kelas yang pindah hari atau dibawakan badal tak bisa dinilai jam-nya. Semua
+  pertemuan JKG/BADAL → indikator ini `null` (tak dinilai), bukan 0.
+- `menit` kosong tetap dihitung pelanggaran (ketua kelas sudah menandainya);
+  toleransi 5 menit hanya berlaku bila menitnya tercatat.
+
+**Skala Komitmen Jadwal** = rata-rata(Stabilitas Jadwal, Anti-Mangkir):
+- Stabilitas Jadwal (jumlah pertemuan JKG/BADAL): 0–4 → 4 | 5–6 → 3 | 7–8 → 2 | 9–10 → 1 | 11+ → 0
+- Anti-Mangkir (tabayyun diputus BUKAN udzur syar'i): 0 → 4 | 1 → 3 | 2 → 2 | 3 → 1 | 4+ → 0
 
 ---
 

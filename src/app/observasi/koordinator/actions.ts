@@ -62,7 +62,9 @@ type TegTab = {
 /**
  * Terbitkan teguran non-udzur untuk sebuah tabayyun (idempoten per tabayyun).
  * Dipakai decideTabayyun (keputusan manual) & escalateTabayyunGhosting (auto 72h).
- * Kategori: KMT→kedisiplinan_waktu, JKG/BADAL→komitmen_jadwal, lain→tanggung_jawab.
+ * Kategori: KMT/KBLA→kedisiplinan_waktu (jam kelas), JKG/BADAL→komitmen_jadwal
+ * (kelas ada/tidak), lain→tanggung_jawab. Pembagian ini sengaja sama dengan
+ * matrix-compute.ts agar satu pelanggaran tak menghukum dua indikator.
  */
 async function issueTeguranForTabayyun(
   tab: TegTab,
@@ -72,7 +74,7 @@ async function issueTeguranForTabayyun(
   if (!pengajarId) return;
   const ym = (tab.keterangan?.tanggal ?? jakartaToday()).slice(0, 7);
   const category =
-    tab.kondisi === 'KMT'
+    tab.kondisi === 'KMT' || tab.kondisi === 'KBLA'
       ? 'kedisiplinan_waktu'
       : tab.kondisi === 'JKG' || tab.kondisi === 'BADAL'
         ? 'komitmen_jadwal'
