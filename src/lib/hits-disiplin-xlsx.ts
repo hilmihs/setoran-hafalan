@@ -108,7 +108,9 @@ export async function buildHitsDisiplinWorkbook(rekap: HitsKoordinatorRekap) {
     const ws = wb.addWorksheet('Ranking', {
       pageSetup: { orientation: 'landscape', fitToPage: true, fitToWidth: 1, fitToHeight: 0 },
     });
-    const KOLOM = ['#', 'Pengajar', 'Gender', 'Halaqah', '%KBBS', 'KBBS', 'Non-libur', 'KMT', 'KBLA', 'JKG', 'TL', 'Hutang (menit)'];
+    // %On-Time & %Stabil dipisah (rapat Agustus 2026) — dulu satu kolom %KBBS
+    // yang meleburkan telat, durasi, pindah hari, dan badal jadi satu angka.
+    const KOLOM = ['#', 'Pengajar', 'Gender', 'Halaqah', '%On-Time', 'On-time', 'Dinilai on-time', '%Stabil', 'Non-libur', 'KMT', 'KBLA', 'JKG', 'TL', 'Hutang (menit)'];
     judul(ws, 'Ranking Disiplin Pengajar', sub, KOLOM.length);
     headerRow(ws, 4, KOLOM);
 
@@ -120,8 +122,10 @@ export async function buildHitsDisiplinWorkbook(rekap: HitsKoordinatorRekap) {
         r.pengajarNama,
         r.gender ?? '—',
         r.halaqahCount,
-        r.pctKbbs === null ? null : r.pctKbbs / 100,
-        r.kbbs,
+        r.pctOnTime === null ? null : r.pctOnTime / 100,
+        r.onTimeBaik,
+        r.onTimeTotal,
+        r.pctStabil === null ? null : r.pctStabil / 100,
         r.nonLibur,
         r.kmt,
         r.kbla,
@@ -129,20 +133,22 @@ export async function buildHitsDisiplinWorkbook(rekap: HitsKoordinatorRekap) {
         r.tidakLatihan,
         r.hutangSaldo,
       ];
-      const pct = row.getCell(5);
-      pct.numFmt = '0%';
-      if (r.pctKbbs !== null) {
-        const band = pctBand(r.pctKbbs);
-        pct.font = { bold: true, color: { argb: band.ink } };
-        pct.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: band.fill } };
+      for (const [col, nilai] of [[5, r.pctOnTime], [8, r.pctStabil]] as const) {
+        const pct = row.getCell(col);
+        pct.numFmt = '0%';
+        if (nilai !== null) {
+          const band = pctBand(nilai);
+          pct.font = { bold: true, color: { argb: band.ink } };
+          pct.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: band.fill } };
+        }
       }
       // Pelanggaran: 0 dibiarkan kosong supaya yang bermasalah menonjol.
-      for (const col of [8, 9, 10, 11]) {
+      for (const col of [10, 11, 12, 13]) {
         const c = row.getCell(col);
         if (c.value === 0) c.value = null;
         else c.font = { bold: true, color: { argb: C.bad } };
       }
-      if (r.hutangSaldo > 0) row.getCell(12).font = { color: { argb: C.warn } };
+      if (r.hutangSaldo > 0) row.getCell(14).font = { color: { argb: C.warn } };
       garis(ws, baris, KOLOM.length, idx % 2 === 1);
       baris++;
     });
@@ -163,7 +169,8 @@ export async function buildHitsDisiplinWorkbook(rekap: HitsKoordinatorRekap) {
     }
 
     ws.columns.forEach((col, i) => {
-      col.width = i === 1 ? 30 : i === 0 ? 5 : 12;
+      // i=6 = "Dinilai on-time", judulnya panjang → beri ruang lebih.
+      col.width = i === 1 ? 30 : i === 0 ? 5 : i === 6 ? 16 : 12;
       col.alignment = { vertical: 'middle', horizontal: i === 1 ? 'left' : 'center' };
     });
   }

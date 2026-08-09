@@ -5,9 +5,12 @@
 //   BADAL, TIDAK_LATIHAN -> 0
 // Credit (pembayaran) disimpan di hits_hutang_bayar; saldo = debit - bayar.
 import { supabaseAdmin } from '@/lib/supabase-admin';
+import { TOLERANSI_KMT } from '@/lib/hits-pelanggaran-kategori';
 import type { HitsPelanggaran } from '@/types/db';
 
-export const TOLERANSI_KMT = 5;
+// Sumbernya di hits-pelanggaran-kategori.ts (modul murni, dipakai matrix &
+// ranking juga). Di-re-export supaya pemanggil lama tak perlu diubah.
+export { TOLERANSI_KMT } from '@/lib/hits-pelanggaran-kategori';
 export const JKG_MENIT = 90;
 // Hutang menit hanya dihitung untuk pertemuan pada/sesudah tanggal ini. Pelanggaran
 // lama (termasuk 163 JKG hasil backfill F1 tanpa menit riil) TAK jadi hutang.

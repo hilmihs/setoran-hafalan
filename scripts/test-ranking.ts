@@ -31,27 +31,55 @@ eq(rm[0], weekStartMonday(), 'recentMondays[0] = minggu ini');
 }
 
 // --- rankFromAggregates ---
-const A = (id: string, nama: string, kbbs: number, nonLibur: number, hutang: number): DisiplinAgg =>
+// onTimeBaik/onTimeTotal = ketepatan jam (penyebut TANPA pertemuan JKG/BADAL),
+// stabilBaik/stabilTotal = pertemuan yang tak dipindah, atas semua pertemuan.
+const A = (
+  id: string, nama: string,
+  onTimeBaik: number, onTimeTotal: number,
+  stabilBaik: number, stabilTotal: number,
+  hutang: number
+): DisiplinAgg =>
   ({ pengajarId: id, pengajarNama: nama, gender: null, halaqahCount: 1, halaqahIds: [id],
-     kbbs, nonLibur, kmt: 0, kbla: 0, jkg: 0, tidakLatihan: 0, hutangSaldo: hutang });
+     kbbs: onTimeBaik, nonLibur: stabilTotal, kmt: 0, kbla: 0, jkg: 0, tidakLatihan: 0,
+     onTimeBaik, onTimeTotal, stabilBaik, stabilTotal, hutangSaldo: hutang });
 
-// A 100%, B 95% h0, C 95% h30 (seri KBBS, hutang > B -> di bawah B), D no-data
+// A 100%, B 95% h0, C 95% h30 (seri on-time & stabil, hutang > B -> di bawah B), D no-data
 const ranked = rankFromAggregates([
-  A('c', 'C', 19, 20, 30),
-  A('a', 'A', 10, 10, 0),
-  A('d', 'D', 0, 0, 0),
-  A('b', 'B', 19, 20, 0),
+  A('c', 'C', 19, 20, 20, 20, 30),
+  A('a', 'A', 10, 10, 10, 10, 0),
+  A('d', 'D', 0, 0, 0, 0, 0),
+  A('b', 'B', 19, 20, 20, 20, 0),
 ]);
-eq(ranked.map((r) => [r.pengajarId, r.pctKbbs, r.rank]),
+eq(ranked.map((r) => [r.pengajarId, r.pctOnTime, r.rank]),
    [['a', 100, 1], ['b', 95, 2], ['c', 95, 3], ['d', null, null]],
-   'rank: %KBBS desc, hutang tiebreak, no-data tanpa rank');
+   'rank: %on-time desc, hutang tiebreak, no-data tanpa rank');
+
+// %on-time seri -> %stabilitas yang membedakan (X sering pindah jadwal)
+const stabil = rankFromAggregates([
+  A('x', 'X', 10, 10, 12, 20, 0), // on-time 100%, stabil 60%
+  A('w', 'W', 10, 10, 19, 20, 0), // on-time 100%, stabil 95%
+]);
+eq(stabil.map((r) => [r.pengajarId, r.pctStabil, r.rank]),
+   [['w', 95, 1], ['x', 60, 2]],
+   'seri %on-time -> %stabilitas jadi pemecah');
+
+// Semua pertemuan dipindah: on-time tak bisa dinilai (null) tapi datanya ADA.
+// Harus tetap dapat rank, di bawah yang ber-data, di atas yang tanpa data.
+const semuaDipindah = rankFromAggregates([
+  A('p', 'P', 0, 0, 0, 3, 0),  // 3 pertemuan, semua JKG/BADAL
+  A('q', 'Q', 5, 10, 10, 10, 0), // on-time 50%
+  A('r', 'R', 0, 0, 0, 0, 0),  // benar-benar tanpa data
+]);
+eq(semuaDipindah.map((r) => [r.pengajarId, r.pctOnTime, r.pctStabil, r.rank]),
+   [['q', 50, 100, 1], ['p', null, 0, 2], ['r', null, null, null]],
+   'semua pertemuan dipindah -> tetap dapat rank, di bawah yang ber-data');
 
 // tiebreak nama: dua identik (%+hutang) -> alfabet
-const tie = rankFromAggregates([A('z', 'Zaid', 8, 10, 0), A('y', 'Amir', 8, 10, 0)]);
+const tie = rankFromAggregates([A('z', 'Zaid', 8, 10, 10, 10, 0), A('y', 'Amir', 8, 10, 10, 10, 0)]);
 eq(tie.map((r) => r.pengajarNama), ['Amir', 'Zaid'], 'seri penuh -> urut nama');
 
 // agregat: fungsi murni terima nilai sudah dijumlah (uji pembagian pct)
-eq(rankFromAggregates([A('x', 'X', 17, 20, 0)])[0].pctKbbs, 85, 'pctKbbs 17/20 -> 85 (dibulatkan)');
+eq(rankFromAggregates([A('x', 'X', 17, 20, 20, 20, 0)])[0].pctOnTime, 85, 'pctOnTime 17/20 -> 85 (dibulatkan)');
 
 if (failed) { console.error(`\n${failed} test GAGAL`); process.exit(1); }
 console.log('\nSemua test lolos');

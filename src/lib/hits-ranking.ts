@@ -8,6 +8,11 @@ import {
   type KeteranganNilaiFields,
 } from '@/lib/hits-observasi';
 import { fetchInChunks } from '@/lib/hits-rekap';
+import {
+  isPelanggaranOnTime,
+  isPelanggaranStabilitas,
+  type PelanggaranRingkas,
+} from '@/lib/hits-pelanggaran-kategori';
 import { computeHutangForHalaqahList } from '@/lib/hits-hutang';
 import type { Gender } from '@/types/db';
 
@@ -24,34 +29,56 @@ export type DisiplinAgg = {
   kbla: number;
   jkg: number;
   tidakLatihan: number;
+  // Dua rasio per-pertemuan, dipisah sesuai definisi indikator matrix.
+  onTimeBaik: number;  // pertemuan tanpa KMT(>5 menit)/KBLA
+  onTimeTotal: number; // penyebut on-time: pertemuan non-libur MINUS JKG/BADAL
+  stabilBaik: number;  // pertemuan tanpa JKG/BADAL
+  stabilTotal: number; // semua pertemuan non-libur
   hutangSaldo: number; // menit, kumulatif (bukan per-periode)
 };
 
 export type DisiplinRankRow = DisiplinAgg & {
-  pctKbbs: number | null; // 0..100, null bila nonLibur=0
-  rank: number | null;    // null bila pctKbbs null
+  pctOnTime: number | null; // 0..100, null bila onTimeTotal=0
+  pctStabil: number | null; // 0..100, null bila stabilTotal=0
+  pctKbbs: number | null;   // 0..100, null bila nonLibur=0 — gabungan lama
+  rank: number | null;      // null bila tak ada data sama sekali
 };
 
 /**
- * Urut: %KBBS turun (null di bawah) → hutang menit naik → nama. Rank 1..N
- * hanya untuk baris ber-data (pctKbbs != null). Fungsi murni — mudah diuji.
+ * Urut: %On-Time turun → %Stabilitas turun → hutang menit naik → nama.
+ *
+ * Kunci utamanya %On-Time (ketepatan jam), bukan lagi %KBBS gabungan: JKG jauh
+ * lebih sering daripada KMT+KBLA, jadi "Ranking Disiplin" yang diurut %KBBS
+ * sebenarnya mengurutkan siapa yang paling sering pindah jadwal. %Stabilitas
+ * tetap jadi kunci kedua supaya perilaku itu tak hilang dari ranking.
+ *
+ * Baris tanpa data apa pun (stabilTotal=0) turun ke bawah & tak dapat rank.
+ * Fungsi murni — mudah diuji.
  */
 export function rankFromAggregates(aggs: DisiplinAgg[]): DisiplinRankRow[] {
   const rows: DisiplinRankRow[] = aggs.map((a) => ({
     ...a,
+    pctOnTime: a.onTimeTotal > 0 ? Math.round((a.onTimeBaik / a.onTimeTotal) * 100) : null,
+    pctStabil: a.stabilTotal > 0 ? Math.round((a.stabilBaik / a.stabilTotal) * 100) : null,
     pctKbbs: a.nonLibur > 0 ? Math.round((a.kbbs / a.nonLibur) * 100) : null,
     rank: null,
   }));
+  // Pengajar yang SEMUA pertemuannya dipindah/dibadalkan punya pctOnTime null
+  // padahal datanya ada. Jangan buang ke bawah — nilai on-time-nya diperlakukan
+  // paling rendah, lalu %Stabilitas yang membedakan.
+  const keyOnTime = (r: DisiplinRankRow) =>
+    r.stabilTotal === 0 ? -1 : r.pctOnTime ?? 0;
   rows.sort((x, y) => {
-    const rx = x.nonLibur > 0 ? x.kbbs / x.nonLibur : -1;
-    const ry = y.nonLibur > 0 ? y.kbbs / y.nonLibur : -1;
-    if (rx !== ry) return ry - rx; // pct desc, null(-1) terakhir
+    const ox = keyOnTime(x), oy = keyOnTime(y);
+    if (ox !== oy) return oy - ox; // desc, tanpa-data terakhir
+    const sx = x.pctStabil ?? -1, sy = y.pctStabil ?? -1;
+    if (sx !== sy) return sy - sx; // desc
     if (x.hutangSaldo !== y.hutangSaldo) return x.hutangSaldo - y.hutangSaldo; // hutang asc
     return x.pengajarNama.localeCompare(y.pengajarNama);
   });
   let r = 0;
   for (const row of rows) {
-    if (row.pctKbbs !== null) { r += 1; row.rank = r; }
+    if (row.stabilTotal > 0) { r += 1; row.rank = r; }
   }
   return rows;
 }
@@ -116,9 +143,15 @@ export async function getDisiplinRanking(opts: {
   );
   const agg = new Map<
     string,
-    { kbbs: number; nonLibur: number; kmt: number; kbla: number; jkg: number; tidakLatihan: number }
+    {
+      kbbs: number; nonLibur: number; kmt: number; kbla: number; jkg: number; tidakLatihan: number;
+      onTimeBaik: number; onTimeTotal: number; stabilBaik: number; stabilTotal: number;
+    }
   >();
-  const zero = () => ({ kbbs: 0, nonLibur: 0, kmt: 0, kbla: 0, jkg: 0, tidakLatihan: 0 });
+  const zero = () => ({
+    kbbs: 0, nonLibur: 0, kmt: 0, kbla: 0, jkg: 0, tidakLatihan: 0,
+    onTimeBaik: 0, onTimeTotal: 0, stabilBaik: 0, stabilTotal: 0,
+  });
   // keterangan_id → pengajar_id (untuk atribusi pelanggaran ke pengajar)
   const ketToPengajar = new Map<string, string>();
   for (const k of ketList) {
@@ -139,12 +172,19 @@ export async function getDisiplinRanking(opts: {
     (chunk) =>
       supabaseAdmin
         .from('hits_pelanggaran')
-        .select('keterangan_id, jenis')
+        .select('keterangan_id, jenis, menit')
         .in('keterangan_id', chunk),
     100
   );
+  // Kolom angka KMT/KBLA/JKG/TL = jumlah INSIDEN (bisa >1 per pertemuan).
+  const pelByKet = new Map<string, PelanggaranRingkas[]>();
   for (const p of pelList) {
-    const pid = ketToPengajar.get(p.keterangan_id as string);
+    const ketId = p.keterangan_id as string;
+    const arr = pelByKet.get(ketId) ?? [];
+    arr.push({ jenis: p.jenis as string, menit: (p.menit as number | null) ?? null });
+    pelByKet.set(ketId, arr);
+
+    const pid = ketToPengajar.get(ketId);
     if (!pid) continue;
     const a = agg.get(pid) ?? zero();
     switch (p.jenis) {
@@ -152,6 +192,30 @@ export async function getDisiplinRanking(opts: {
       case 'KBLA': a.kbla += 1; break;
       case 'JKG': a.jkg += 1; break;
       case 'TIDAK_LATIHAN': a.tidakLatihan += 1; break;
+    }
+    agg.set(pid, a);
+  }
+
+  // Dua rasio PER-PERTEMUAN, definisinya sama dengan matrix (rapat Agustus 2026):
+  //   %On-Time    = pertemuan tanpa KMT(>5 menit)/KBLA. Pertemuan yang dipindah
+  //                 hari atau dibadalkan KELUAR dari penyebut — jam mulai-selesai
+  //                 pengajar aslinya tak bisa dinilai di situ.
+  //   %Stabilitas = pertemuan yang TIDAK dipindah/dibadalkan, atas semua pertemuan.
+  // Dulu keduanya dilebur jadi satu %KBBS, sehingga pengajar yang selalu tepat
+  // waktu tapi sering pindah hari tak bisa dibedakan dari yang sering telat.
+  for (const k of ketList) {
+    if (k.kondisi === 'LIBUR') continue;
+    const pid = halaqahToPengajar.get(k.halaqah_id as string);
+    if (!pid) continue;
+    const a = agg.get(pid) ?? zero();
+    const pel = pelByKet.get(k.id as string) ?? [];
+    const dipindah = pel.some((p) => isPelanggaranStabilitas(p.jenis));
+
+    a.stabilTotal += 1;
+    if (!dipindah) {
+      a.stabilBaik += 1;
+      a.onTimeTotal += 1;
+      if (!pel.some(isPelanggaranOnTime)) a.onTimeBaik += 1;
     }
     agg.set(pid, a);
   }
@@ -174,6 +238,10 @@ export async function getDisiplinRanking(opts: {
       kbla: a.kbla,
       jkg: a.jkg,
       tidakLatihan: a.tidakLatihan,
+      onTimeBaik: a.onTimeBaik,
+      onTimeTotal: a.onTimeTotal,
+      stabilBaik: a.stabilBaik,
+      stabilTotal: a.stabilTotal,
       hutangSaldo: hutang,
     };
   });

@@ -13,14 +13,14 @@
 //                kedisiplinan_waktu = %pertemuan on-time (KMT/KBLA saja),
 //                tanggung jawab = %latihan beres — pertemuan PTML tidak dinilai
 //                karena tugas sudah diberikan.
-//                komitmen_jadwal = rata-rata(Stabilitas Jadwal [jumlah JKG/BADAL],
+//                komitmen_jadwal = rata-rata(Stabilitas Jadwal [%pertemuan tanpa JKG/BADAL],
 //                Anti-Mangkir [JKG di-tabayyun & bukan udzur syar'i = teguran]).
 //                Kedisiplinan Waktu & Komitmen Jadwal TIDAK boleh berbagi jenis
 //                pelanggaran — lihat isPelanggaranOnTime().
 
 import { supabaseAdmin } from '@/lib/supabase-admin';
 import { fetchInChunks } from '@/lib/hits-rekap';
-import { TOLERANSI_KMT } from '@/lib/hits-hutang';
+import { isPelanggaranOnTime, isPelanggaranStabilitas } from '@/lib/hits-pelanggaran-kategori';
 import {
   isKeteranganDinilai,
   todayJakartaISO,
@@ -65,25 +65,6 @@ export async function syncMatrixIfStale(yearMonth: string, force = false): Promi
   await computeMatrixForMonth(yearMonth);
 }
 
-/**
- * Pelanggaran yang masuk indikator **Kedisiplinan Waktu (On-Time)** — hanya soal
- * jam kelas, bukan soal kelas ada/tidak:
- *   - KMT  = mulai terlambat. Toleransi 5 menit (sama dgn hutang menit).
- *   - KBLA = kelas diakhiri lebih awal. Tanpa toleransi, tapi 0 menit = tak awal.
- * JKG/BADAL sengaja TIDAK di sini — itu ranah Komitmen Jadwal & Kehadiran
- * (Stabilitas Jadwal / Anti-Mangkir). Kalau ikut dihitung, satu pertemuan JKG
- * menurunkan dua indikator sekaligus.
- *
- * `menit` kosong = tetap pelanggaran: ketua kelas sudah menandai pertemuan itu
- * KMT/KBLA, menitnya saja yang tak tercatat (banyak di data impor F1). Beda dari
- * hutangMenit() yang memang tak bisa menagih menit yang tak diketahui.
- */
-export function isPelanggaranOnTime(p: { jenis: string; menit: number | null }): boolean {
-  if (p.jenis === 'KMT') return p.menit == null || p.menit > TOLERANSI_KMT;
-  if (p.jenis === 'KBLA') return p.menit == null || p.menit > 0;
-  return false;
-}
-
 function pctTo4(pct: number): number {
   if (pct >= 0.9) return 4;
   if (pct >= 0.75) return 3;
@@ -92,13 +73,29 @@ function pctTo4(pct: number): number {
   return 0;
 }
 
-// Komitmen — Stabilitas Jadwal: skor turun makin banyak pergantian jadwal (JKG).
-function jkgTo4(n: number): number {
-  if (n <= 4) return 4;
-  if (n <= 6) return 3;
-  if (n <= 8) return 2;
-  if (n <= 10) return 1;
-  return 0;
+/**
+ * Pertemuan minimum sebelum Stabilitas Jadwal boleh dinilai. Di bawah ini
+ * rasionya cuma derau: 1 pertemuan yang dibadalkan = 0%, padahal itu satu
+ * kejadian, bukan pola.
+ */
+export const STABILITAS_MIN_PERTEMUAN = 4;
+
+/**
+ * Komitmen — Stabilitas Jadwal: proporsi pertemuan yang TIDAK dipindah hari
+ * (JKG) atau dialihkan ke badal.
+ *
+ * Rasio, bukan hitungan absolut. Ambang absolut lama (0–4 JKG → 4) salah di dua
+ * arah: pengajar 1 pertemuan yang membadalkan semuanya tetap dapat 4, sementara
+ * pengajar 37 pertemuan dengan 7 JKG (19%) dapat 2 — makin rajin mengajar makin
+ * besar peluang menabrak ambang. Skalanya kini sama dengan indikator lain
+ * (pctTo4), jadi 4 berarti hal yang sama di seluruh matrix.
+ *
+ * null = belum cukup data untuk dinilai, BUKAN nilai 0. avg() melewatkan null,
+ * jadi Komitmen bulan itu ditentukan Anti-Mangkir saja.
+ */
+function stabilitasTo4(totalPertemuan: number, jkgBadal: number): number | null {
+  if (totalPertemuan < STABILITAS_MIN_PERTEMUAN) return null;
+  return pctTo4((totalPertemuan - jkgBadal) / totalPertemuan);
 }
 
 // Komitmen — Anti-Mangkir: skor turun per pelanggaran (JKG di-tabayyun & BUKAN
@@ -361,9 +358,10 @@ export async function computeMatrixForMonth(yearMonth: string): Promise<MatrixRo
     const pgId = pengajarOfHalaqah.get(k.halaqah_id);
     if (!pgId) continue;
     const jenis = jenisByKet.get(k.id as string) ?? new Set<string>();
+    const dipindah = [...jenis].some(isPelanggaranStabilitas);
     hitsDataByPengajar.set(pgId, (hitsDataByPengajar.get(pgId) ?? 0) + 1);
 
-    if (!jenis.has('JKG') && !jenis.has('BADAL')) {
+    if (!dipindah) {
       const d = disiplinByPengajar.get(pgId) ?? { baik: 0, total: 0 };
       d.total += 1;
       if (!(pelByKet.get(k.id as string) ?? []).some(isPelanggaranOnTime)) d.baik += 1;
@@ -381,7 +379,7 @@ export async function computeMatrixForMonth(yearMonth: string): Promise<MatrixRo
     }
 
     // Stabilitas Jadwal: pertemuan dgn pergantian jadwal (JKG) atau badal.
-    if (jenis.has('JKG') || jenis.has('BADAL')) jkgByPengajar.set(pgId, (jkgByPengajar.get(pgId) ?? 0) + 1);
+    if (dipindah) jkgByPengajar.set(pgId, (jkgByPengajar.get(pgId) ?? 0) + 1);
   }
 
   // 8. Komitmen — Anti-Mangkir: JKG yang di-tabayyun & diputus BUKAN udzur syar'i
@@ -448,9 +446,13 @@ export async function computeMatrixForMonth(yearMonth: string): Promise<MatrixRo
     // Pakai hitsDataByPengajar, BUKAN penyebut disiplin waktu — pengajar yang
     // semua pertemuannya JKG/BADAL punya penyebut disiplin 0 tapi tetap wajib
     // dinilai komitmennya (justru di situ pelanggarannya).
+    const totalPertemuanHits = hitsDataByPengajar.get(pg.id) ?? 0;
     const skorKomitmen =
-      (hitsDataByPengajar.get(pg.id) ?? 0) > 0
-        ? avg([jkgTo4(jkgByPengajar.get(pg.id) ?? 0), tegTo4(mangkirByPengajar.get(pg.id) ?? 0)])
+      totalPertemuanHits > 0
+        ? avg([
+            stabilitasTo4(totalPertemuanHits, jkgByPengajar.get(pg.id) ?? 0),
+            tegTo4(mangkirByPengajar.get(pg.id) ?? 0),
+          ])
         : null;
 
     const hard = {

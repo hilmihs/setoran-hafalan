@@ -311,7 +311,15 @@ yang dipindah hari menurunkan dua indikator sekaligus — sudah diperbaiki di
   toleransi 5 menit hanya berlaku bila menitnya tercatat.
 
 **Skala Komitmen Jadwal** = rata-rata(Stabilitas Jadwal, Anti-Mangkir):
-- Stabilitas Jadwal (jumlah pertemuan JKG/BADAL): 0–4 → 4 | 5–6 → 3 | 7–8 → 2 | 9–10 → 1 | 11+ → 0
+- Stabilitas Jadwal = `%pertemuan tanpa JKG/BADAL` → `pctTo4`. **Rasio, bukan
+  jumlah absolut** (diubah Agustus 2026). Ambang lama "0–4 JKG → 4" salah dua
+  arah: pengajar 1 pertemuan yang membadalkannya tetap dapat 4, sementara
+  pengajar 37 pertemuan dengan 7 JKG (19%) dapat 2 — makin rajin mengajar makin
+  besar peluang menabrak ambang.
+- Minimal `STABILITAS_MIN_PERTEMUAN` = 4 pertemuan. Di bawah itu Stabilitas
+  `null` (tak dinilai), bukan 0 — rasio dari 1–3 titik data cuma derau. Komitmen
+  bulan itu lalu ditentukan Anti-Mangkir saja. Konsekuensinya di awal bulan
+  indikator ini memang kosong untuk sebagian besar pengajar.
 - Anti-Mangkir (tabayyun diputus BUKAN udzur syar'i): 0 → 4 | 1 → 3 | 2 → 2 | 3 → 1 | 4+ → 0
 
 ---
@@ -431,7 +439,7 @@ Script akan membuat:
 - [x] Dashboard ketua kelompok (`/kehadiran/ketua-kelompok`)
 - [x] Dashboard koordinator HITS kehadiran (`/kehadiran/koordinator`)
 - [x] Presensi Kajian Adab ketua (F4): check-in, alur alpa, dashboard koordinator KK
-- [x] Leaderboard disiplin pengajar F5 (`/hits/koordinator`): ranking %KBBS + hutang menit, toggle bulanan/mingguan (7-hari)
+- [x] Leaderboard disiplin pengajar F5 (`/hits/koordinator`): ranking **%On-Time** (kunci utama) → **%Stabil** → hutang menit, toggle bulanan/mingguan (7-hari). Sejak Agustus 2026 dua kolom itu memakai definisi yang sama dengan matrix; sebelumnya satu kolom %KBBS yang meleburkan telat, durasi, pindah hari, dan badal — jadi ranking "disiplin" sebetulnya lebih banyak mengurutkan siapa yang sering pindah jadwal (JKG 121 insiden vs KMT+KBLA 48 pada 1 Jul–9 Agu 2026). Catatan: `%KBBS` per-halaqah di `hits-rekap.ts` (layar ketua kelas & `HitsKoordinatorTable`) masih memakai gabungan lama — metrik halaqah, bukan pengajar.
 - [x] Attendance library (derive status, backfill, scale calculation)
 - [x] Scale calculation library (15 fungsi konversi)
 - [x] 16 template WhatsApp baru (termasuk tplReminderKajianAdab)

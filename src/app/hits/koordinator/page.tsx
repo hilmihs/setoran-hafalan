@@ -230,8 +230,9 @@ export default async function HitsKoordinatorPage({
   const noData = rekap.noData;
   const noDataAksi = await getNoDataActionInfo(noData);
 
-  // Sortir kolom (tinggi→rendah default). Tanpa sort → urutan ranking asli (%KBBS).
-  const SORT_KEYS = ['pctKbbs', 'kmt', 'kbla', 'jkg', 'tidakLatihan', 'hutangSaldo', 'halaqahCount', 'pengajarNama'] as const;
+  // Sortir kolom (tinggi→rendah default). Tanpa sort → urutan ranking asli
+  // (%on-time, lalu %stabilitas).
+  const SORT_KEYS = ['pctOnTime', 'pctStabil', 'kmt', 'kbla', 'jkg', 'tidakLatihan', 'hutangSaldo', 'halaqahCount', 'pengajarNama'] as const;
   type SortKey = (typeof SORT_KEYS)[number];
   const sortKey = (SORT_KEYS as readonly string[]).includes(searchParams.sort ?? '') ? (searchParams.sort as SortKey) : null;
   const dir: 'asc' | 'desc' = searchParams.dir === 'asc' ? 'asc' : 'desc';
@@ -263,6 +264,12 @@ export default async function HitsKoordinatorPage({
   const g = genderFilter ? `&gender=${genderFilter}` : '';
   const pctColor = (p: number) =>
     p >= 90 ? 'var(--hijau-ink)' : p >= 75 ? 'var(--kuning-ink)' : 'var(--merah-ink)';
+  // null = tak bisa dinilai (mis. semua pertemuannya dipindah/dibadalkan, jadi
+  // tak ada pertemuan yang jam-nya bisa dinilai). Bukan 0 — jangan diwarnai merah.
+  const pctCell = (p: number | null) =>
+    p === null
+      ? { text: '—', color: 'var(--muted)' }
+      : { text: `${p}%`, color: pctColor(p) };
   const detailHref = (r: { pengajarId: string; gender: Gender | null }) =>
     `/matrix/koordinator/pengajar/${r.pengajarId}${r.gender ? `?gender=${r.gender}` : ''}`;
   const cnt = (n: number) => ({
@@ -360,7 +367,8 @@ export default async function HitsKoordinatorPage({
                   Ranking Disiplin Pengajar
                 </h1>
                 <p className="t-small" style={{ color: 'var(--ink-2)', maxWidth: 560 }}>
-                  Urut <strong>%KBBS</strong> (disiplin periode) · pemecah seri{' '}
+                  Urut <strong>%On-Time</strong> (kelas tepat jam: tanpa KMT/KBLA) · pemecah seri{' '}
+                  <strong>%Stabil</strong> (kelas tak dipindah/dibadalkan), lalu{' '}
                   <strong>hutang menit</strong> (saldo tertunggak). Lintas-batch, per pengajar.
                 </p>
                 <p className="t-tiny" style={{ color: 'var(--muted)', marginTop: 8 }}>
@@ -420,7 +428,8 @@ export default async function HitsKoordinatorPage({
                       <tr>
                         <th style={{ width: 44, textAlign: 'right' }}>#</th>
                         <th><a href={sortHref('pengajarNama')} style={{ color: 'inherit', textDecoration: 'none', cursor: 'pointer', whiteSpace: 'nowrap' }}>Pengajar{arrow('pengajarNama')}</a></th>
-                        <th style={{ textAlign: 'right' }}><a href={sortHref('pctKbbs')} style={{ color: 'inherit', textDecoration: 'none', cursor: 'pointer', whiteSpace: 'nowrap' }}>%KBBS{arrow('pctKbbs')}</a></th>
+                        <th style={{ textAlign: 'right' }} title="Persen pertemuan tepat jam — tanpa KMT (>5 menit) / KBLA. Pertemuan yang dipindah hari atau dibadalkan tidak dihitung di sini."><a href={sortHref('pctOnTime')} style={{ color: 'inherit', textDecoration: 'none', cursor: 'pointer', whiteSpace: 'nowrap' }}>%On-Time{arrow('pctOnTime')}</a></th>
+                        <th style={{ textAlign: 'right' }} title="Persen pertemuan yang berjalan sesuai jadwal — tanpa JKG (pindah hari) / BADAL (dialihkan ke pengganti)."><a href={sortHref('pctStabil')} style={{ color: 'inherit', textDecoration: 'none', cursor: 'pointer', whiteSpace: 'nowrap' }}>%Stabil{arrow('pctStabil')}</a></th>
                         <th style={{ textAlign: 'right' }} title="Kelas Mulai Terlambat"><a href={sortHref('kmt')} style={{ color: 'inherit', textDecoration: 'none', cursor: 'pointer', whiteSpace: 'nowrap' }}>KMT{arrow('kmt')}</a></th>
                         <th style={{ textAlign: 'right' }} title="Kelas Berakhir Lebih Awal"><a href={sortHref('kbla')} style={{ color: 'inherit', textDecoration: 'none', cursor: 'pointer', whiteSpace: 'nowrap' }}>KBLA{arrow('kbla')}</a></th>
                         <th style={{ textAlign: 'right' }} title="Jadwal Kelas Ganti"><a href={sortHref('jkg')} style={{ color: 'inherit', textDecoration: 'none', cursor: 'pointer', whiteSpace: 'nowrap' }}>JKG{arrow('jkg')}</a></th>
@@ -449,9 +458,15 @@ export default async function HitsKoordinatorPage({
                           </td>
                           <td
                             className="t-mono"
-                            style={{ textAlign: 'right', fontWeight: 700, color: pctColor(r.pctKbbs!) }}
+                            style={{ textAlign: 'right', fontWeight: 700, color: pctCell(r.pctOnTime).color }}
                           >
-                            {r.pctKbbs}%
+                            {pctCell(r.pctOnTime).text}
+                          </td>
+                          <td
+                            className="t-mono"
+                            style={{ textAlign: 'right', fontWeight: 700, color: pctCell(r.pctStabil).color }}
+                          >
+                            {pctCell(r.pctStabil).text}
                           </td>
                           <td className="t-mono" style={{ textAlign: 'right', color: cnt(r.kmt).color }}>
                             {cnt(r.kmt).text}
@@ -477,14 +492,14 @@ export default async function HitsKoordinatorPage({
                         </tr>
                         {cakupan && cakupan.total > 0 && (
                           <tr>
-                            <td colSpan={9} style={{ padding: 0, borderTop: 0 }}>
+                            <td colSpan={10} style={{ padding: 0, borderTop: 0 }}>
                               <CakupanObservasiRows c={cakupan} />
                             </td>
                           </tr>
                         )}
                         {insiden.length > 0 && (
                           <tr>
-                            <td colSpan={9} style={{ padding: 0, borderTop: 0 }}>
+                            <td colSpan={10} style={{ padding: 0, borderTop: 0 }}>
                               <InsidenDetailRows list={insiden} />
                             </td>
                           </tr>

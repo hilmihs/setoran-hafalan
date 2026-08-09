@@ -96,7 +96,8 @@ export default async function CetakHitsKoordinatorPage({
             <th>#</th>
             <th style={{ textAlign: 'left' }}>Pengajar</th>
             <th>Halaqah</th>
-            <th>%KBBS</th>
+            <th title="Persen pertemuan tepat jam — tanpa KMT (>5 menit) / KBLA">%On-Time</th>
+            <th title="Persen pertemuan sesuai jadwal — tanpa JKG / BADAL">%Stabil</th>
             <th title="Kelas Mulai Terlambat">KMT</th>
             <th title="Kelas Berakhir Lebih Awal">KBLA</th>
             <th title="Jadwal Kelas Ganti">JKG</th>
@@ -110,8 +111,11 @@ export default async function CetakHitsKoordinatorPage({
               <td style={{ textAlign: 'center' }}>{p.rank}</td>
               <td style={{ fontWeight: 600 }}>{p.pengajarNama}</td>
               <td style={{ textAlign: 'center' }}>{p.halaqahCount}</td>
-              <td style={{ textAlign: 'center', fontWeight: 700, color: pctInk(p.pctKbbs) }}>
-                {p.pctKbbs === null ? '—' : `${p.pctKbbs}%`}
+              <td style={{ textAlign: 'center', fontWeight: 700, color: pctInk(p.pctOnTime) }}>
+                {p.pctOnTime === null ? '—' : `${p.pctOnTime}%`}
+              </td>
+              <td style={{ textAlign: 'center', fontWeight: 700, color: pctInk(p.pctStabil) }}>
+                {p.pctStabil === null ? '—' : `${p.pctStabil}%`}
               </td>
               {[p.kmt, p.kbla, p.jkg, p.tidakLatihan].map((n, i) => (
                 <td
@@ -135,7 +139,7 @@ export default async function CetakHitsKoordinatorPage({
               <td style={{ textAlign: 'center' }}>—</td>
               <td>{p.pengajarNama}</td>
               <td style={{ textAlign: 'center' }}>{p.halaqahCount}</td>
-              <td colSpan={6} className="t-tiny" style={{ color: 'var(--muted-2)' }}>
+              <td colSpan={7} className="t-tiny" style={{ color: 'var(--muted-2)' }}>
                 Belum ada data pertemuan pada periode ini
               </td>
             </tr>
