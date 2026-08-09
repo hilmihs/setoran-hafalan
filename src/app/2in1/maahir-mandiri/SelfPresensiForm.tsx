@@ -3,8 +3,9 @@
 import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { submitSelfPresensi } from './actions';
+import { butuhAlasan, type StatusKehadiran } from '@/lib/kehadiran-status';
 
-type Status = 'hadir' | 'izin' | 'terlambat' | 'sakit' | 'tidak_ada_keterangan';
+type Status = StatusKehadiran;
 
 const STATUS_OPTIONS: { value: Status; label: string; color: string }[] = [
   { value: 'hadir', label: 'Hadir', color: 'var(--hijau)' },
@@ -54,8 +55,8 @@ export function SelfPresensiForm({
   const showSetoran = askSetoran && program === 'kelas_maahir' && (status === 'hadir' || status === 'terlambat');
 
   // Tidak hadir wajib beralasan (dicek ulang di server action).
-  const butuhAlasan = status === 'izin' || status === 'sakit' || status === 'tidak_ada_keterangan';
-  const alasanKosong = butuhAlasan && catatan.trim() === '';
+  const perluAlasan = butuhAlasan(status);
+  const alasanKosong = perluAlasan && catatan.trim() === '';
 
   function save() {
     if (alasanKosong) {
@@ -142,7 +143,7 @@ export function SelfPresensiForm({
         </div>
       )}
 
-      {butuhAlasan && (
+      {perluAlasan && (
         <div style={{ marginTop: 10 }}>
           <label className="field-label">
             Alasan tidak hadir <span style={{ color: 'var(--merah, #dc2626)' }}>*</span>

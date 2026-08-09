@@ -6,6 +6,9 @@ import { PRESENSI_ANCHOR, todayJakarta, expectedDaysInRange } from '@/lib/maahir
 import { getLiburDates } from '@/lib/maahir-libur';
 import { pesanTerkunci, presensiTerbuka } from '@/lib/periode-laporan';
 import { buildWaMeUrl, tplReminderLiburToKetua } from '@/lib/whatsapp';
+// Konstanta status TIDAK boleh tinggal di berkas ini: 'use server' hanya
+// mengizinkan ekspor async function. Lihat lib/kehadiran-status.ts.
+import { butuhAlasan, isStatusValid } from '@/lib/kehadiran-status';
 
 export type SelfPresensiResult = { ok?: boolean; error?: string };
 export type RemindResult = { ok?: boolean; error?: string; waUrl?: string };
@@ -38,9 +41,6 @@ export async function remindKetuaLibur(kelasId: string, tanggal: string): Promis
   return { ok: true, waUrl: buildWaMeUrl(kelas.ketua_wa, msg) };
 }
 
-const VALID_STATUS = ['hadir', 'izin', 'terlambat', 'sakit', 'tidak_ada_keterangan'] as const;
-/** Status tidak-hadir yang wajib disertai alasan. */
-export const BUTUH_ALASAN = ['izin', 'sakit', 'tidak_ada_keterangan'] as const;
 
 /**
  * Peserta menandai kehadiran DIRINYA pada kelas presensi-mandiri, lewat akun
@@ -59,12 +59,12 @@ export async function submitSelfPresensi(_prev: SelfPresensiResult | undefined, 
   const setoranRaw = String(fd.get('setoran_halaman') ?? '').trim();
   const modeRaw = String(fd.get('mode') ?? '').trim();
   if (!kelasId || !anggotaId || !tanggal || !program) return { error: 'Data tidak lengkap.' };
-  if (!VALID_STATUS.includes(status as (typeof VALID_STATUS)[number])) return { error: 'Status tidak valid.' };
+  if (!isStatusValid(status)) return { error: 'Status tidak valid.' };
 
   // Tidak hadir wajib beralasan — kolom Keterangan di laporan bulanan &
   // rekap kehadiran mengandalkan catatan ini. Divalidasi di server juga,
   // bukan cuma di form, supaya tak bisa dilewati.
-  if (BUTUH_ALASAN.includes(status as (typeof BUTUH_ALASAN)[number]) && catatan === '') {
+  if (butuhAlasan(status) && catatan === '') {
     return { error: 'Alasan wajib diisi untuk Izin / Sakit / Tidak hadir.' };
   }
 

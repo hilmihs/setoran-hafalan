@@ -2,13 +2,11 @@ import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase-admin';
 import { getSessionWa } from '@/lib/program-kelas';
 import { pesanTerkunci, presensiTerbuka } from '@/lib/periode-laporan';
+import { butuhAlasan, isStatusValid, type StatusKehadiran } from '@/lib/kehadiran-status';
 
 export const runtime = 'nodejs';
 
-const VALID_STATUS = ['hadir', 'izin', 'terlambat', 'sakit', 'tidak_ada_keterangan'] as const;
-type Status = typeof VALID_STATUS[number];
-/** Status tidak-hadir yang wajib disertai alasan. */
-const BUTUH_ALASAN = ['izin', 'sakit', 'tidak_ada_keterangan'] as const;
+type Status = StatusKehadiran;
 
 export async function GET(
   _req: NextRequest,
@@ -68,8 +66,7 @@ export async function PUT(
     // laporan bulanan mengandalkan catatan ini. Divalidasi di server juga,
     // bukan hanya di form, supaya tak bisa dilewati.
     const tanpaAlasan = rows.filter(
-      (r) => BUTUH_ALASAN.includes(r.status as (typeof BUTUH_ALASAN)[number])
-        && String(r.catatan ?? '').trim() === ''
+      (r) => butuhAlasan(r.status) && String(r.catatan ?? '').trim() === ''
     );
     if (tanpaAlasan.length > 0) {
       return NextResponse.json(
@@ -110,7 +107,7 @@ export async function PUT(
       pertemuan_id: params.pertemuan_id,
       anggota_id: r.anggota_id,
       peserta_id: pesertaByAnggota.get(r.anggota_id) ?? null,
-      status: VALID_STATUS.includes(r.status) ? r.status : 'tidak_ada_keterangan',
+      status: isStatusValid(r.status) ? r.status : 'tidak_ada_keterangan',
       catatan: r.catatan || null,
       setoran_halaman: parseSetoran(r),
       // Hadir online/offline; default offline bila tak dikirim klien.

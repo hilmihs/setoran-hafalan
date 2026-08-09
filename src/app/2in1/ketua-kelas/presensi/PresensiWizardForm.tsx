@@ -2,8 +2,9 @@
 
 import { useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { butuhAlasan, type StatusKehadiran } from '@/lib/kehadiran-status';
 
-type Status = 'hadir' | 'izin' | 'terlambat' | 'sakit' | 'tidak_ada_keterangan';
+type Status = StatusKehadiran;
 
 // H / I / S / A / T sesuai keterangan kehadiran peserta.
 const STATUS_OPTIONS: { value: Status; code: string; label: string; color: string }[] = [
@@ -13,11 +14,6 @@ const STATUS_OPTIONS: { value: Status; code: string; label: string; color: strin
   { value: 'tidak_ada_keterangan', code: 'A', label: 'Alpa', color: 'var(--merah)' },
   { value: 'terlambat', code: 'T', label: 'Terlambat', color: 'var(--kuning)' },
 ];
-
-/** Status tidak-hadir yang wajib disertai alasan (sama dgn presensi mandiri). */
-function butuhAlasan(status: Status): boolean {
-  return status === 'izin' || status === 'sakit' || status === 'tidak_ada_keterangan';
-}
 
 type PesertaRow = {
   id: string;
