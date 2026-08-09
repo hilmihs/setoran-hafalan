@@ -349,7 +349,7 @@ All handlers under `src/app/api/**/route.ts` (19). Auth shorthand: **Bearer** = 
 
 | Path | Method | Auth | Purpose | Tables |
 |---|---|---|---|---|
-| `/api/2in1/kehadiran/[pertemuan_id]` | GET | **Public (no guard)** ⚠️ | Read attendance for a meeting | `kehadiran_peserta` |
+| `/api/2in1/kehadiran/[pertemuan_id]` | GET | Cookie + must be ketua/wakil of the meeting's class | Read attendance for a meeting | `kehadiran_peserta` |
 | `/api/2in1/kehadiran/[pertemuan_id]` | PUT | Cookie + must be ketua/wakil of the meeting's class | Upsert member attendance | `kehadiran_peserta` (w), reads `pertemuan_program`/`program_kelas`/`program_kelas_anggota` |
 | `/api/2in1/laporan/download` | GET | Cookie, `koordinator`/`syaikh` | Monthly XLSX report | setoran/rekaman/peserta via `generateMonthlyReport()` |
 | `/api/2in1/penilaian/upsert` | POST | Cookie, `koordinator`/`syaikh` | Upsert monthly peserta assessment | `penilaian_peserta` |
@@ -372,7 +372,7 @@ All handlers under `src/app/api/**/route.ts` (19). Auth shorthand: **Bearer** = 
 
 Notes:
 - "2in1" routes are near-duplicates of the base `laporan`/`setoran`/`setoran-musyrif` routes but point WA-notification links at `/2in1/...` pages — both sets are live.
-- ⚠️ `/api/2in1/kehadiran/[pertemuan_id]` **GET has no auth** — anyone with a `pertemuan_id` UUID can read attendance. Flag for review.
+- ✅ `/api/2in1/kehadiran/[pertemuan_id]` GET was public until Agustus 2026 (anyone with a `pertemuan_id` UUID could read attendance, including the `catatan` column that holds absence reasons). Now behind `otorisasiPertemuan()`, the same ketua/wakil check PUT uses. No in-app caller ever used GET — both forms only PUT — so nothing in the UI changed.
 - All non-GET writes go through `supabaseAdmin` (service-role); authorization is enforced in handlers, not Postgres RLS.
 
 ### Admin SQL API (`/api/admin/db`)

@@ -8,10 +8,62 @@ export const runtime = 'nodejs';
 
 type Status = StatusKehadiran;
 
+type PertemuanTerotorisasi = {
+  id: string;
+  program_kelas_id: string;
+  program: string;
+  tanggal: string;
+};
+
+/**
+ * Pastikan pemanggil adalah ketua/wakil kelas pemilik pertemuan ini.
+ *
+ * Dipakai GET maupun PUT: isi kehadiran memuat kolom `catatan` yang berisi
+ * alasan tidak hadir (kadang keterangan kesehatan), jadi membacanya butuh izin
+ * yang sama dengan menulisnya. Sebelum Agustus 2026 GET tanpa gerbang sama
+ * sekali — siapa pun yang tahu satu pertemuan_id bisa membacanya.
+ */
+async function otorisasiPertemuan(
+  pertemuanId: string
+): Promise<{ pertemuan: PertemuanTerotorisasi } | { gagal: NextResponse }> {
+  const wa = await getSessionWa();
+  if (!wa) {
+    return { gagal: NextResponse.json({ error: 'Login diperlukan.' }, { status: 401 }) };
+  }
+  const { data: pertemuan } = await supabaseAdmin
+    .from('pertemuan_program')
+    .select('id, program_kelas_id, program, tanggal, program_kelas:program_kelas_id(ketua_wa, wakil_wa)')
+    .eq('id', pertemuanId)
+    .single();
+  if (!pertemuan || !pertemuan.program_kelas_id) {
+    return { gagal: NextResponse.json({ error: 'Pertemuan tidak ditemukan.' }, { status: 404 }) };
+  }
+  const pk = pertemuan.program_kelas as unknown as { ketua_wa: string | null; wakil_wa: string | null };
+  if (pk.ketua_wa !== wa && pk.wakil_wa !== wa) {
+    return {
+      gagal: NextResponse.json(
+        { error: 'Hanya ketua/wakil kelas yang bisa mengakses kehadiran kelas ini.' },
+        { status: 403 }
+      ),
+    };
+  }
+  return {
+    pertemuan: {
+      id: pertemuan.id as string,
+      program_kelas_id: pertemuan.program_kelas_id as string,
+      program: pertemuan.program as string,
+      tanggal: pertemuan.tanggal as string,
+    },
+  };
+}
+
 export async function GET(
   _req: NextRequest,
   { params }: { params: { pertemuan_id: string } }
 ) {
+  const auth = await otorisasiPertemuan(params.pertemuan_id);
+  if ('gagal' in auth) return auth.gagal;
+
   const { data, error } = await supabaseAdmin
     .from('kehadiran_peserta')
     .select('anggota_id, status, catatan, setoran_halaman, mode, diisi_at')
@@ -25,26 +77,12 @@ export async function PUT(
   { params }: { params: { pertemuan_id: string } }
 ) {
   try {
-    const wa = await getSessionWa();
-    if (!wa) {
-      return NextResponse.json({ error: 'Login diperlukan.' }, { status: 401 });
-    }
+    const auth = await otorisasiPertemuan(params.pertemuan_id);
+    if ('gagal' in auth) return auth.gagal;
+    const pertemuan = auth.pertemuan;
 
-    // Verify pertemuan + caller is ketua/wakil of the program_kelas
-    const { data: pertemuan } = await supabaseAdmin
-      .from('pertemuan_program')
-      .select('id, program_kelas_id, program, tanggal, program_kelas:program_kelas_id(ketua_wa, wakil_wa)')
-      .eq('id', params.pertemuan_id)
-      .single();
-    if (!pertemuan || !pertemuan.program_kelas_id) {
-      return NextResponse.json({ error: 'Pertemuan tidak ditemukan.' }, { status: 404 });
-    }
-    const pk = pertemuan.program_kelas as unknown as { ketua_wa: string | null; wakil_wa: string | null };
-    if (pk.ketua_wa !== wa && pk.wakil_wa !== wa) {
-      return NextResponse.json({ error: 'Hanya ketua/wakil kelas yang bisa mengisi kehadiran.' }, { status: 403 });
-    }
     // Periode yang sudah dilaporkan tak boleh berubah di belakang.
-    const tanggal = pertemuan.tanggal as string;
+    const tanggal = pertemuan.tanggal;
     if (!presensiTerbuka(tanggal)) {
       return NextResponse.json({ error: pesanTerkunci(tanggal) }, { status: 403 });
     }
