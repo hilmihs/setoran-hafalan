@@ -3,6 +3,8 @@ import { redirect } from 'next/navigation';
 import { getSession } from '@/lib/session';
 import { getMaahirRekap } from '@/lib/maahir-rekap';
 import { PRESENSI_ANCHOR, weekRangeLabel } from '@/lib/maahir-presensi';
+import { periodeBerjalan, periodeStartDate, periodeEndDate } from '@/lib/periode-laporan';
+import { todayJakarta } from '@/lib/anggota-periode';
 import { MaahirRekapTable } from '@/components/MaahirRekapTable';
 import { MonthNavSelect } from '@/components/MonthNavSelect';
 import { monthOptionsSince } from '@/lib/month';
@@ -15,14 +17,21 @@ import { absUrl } from '@/lib/url';
 export const dynamic = 'force-dynamic';
 
 const ANCHOR_MONTH = PRESENSI_ANCHOR.slice(0, 7);
+const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
-type SP = { month?: string; gender?: string };
+type SP = { month?: string; gender?: string; start?: string; end?: string };
 
 const GENDER_TABS: Array<{ key: string; label: string }> = [
   { key: 'semua', label: 'Semua' },
   { key: 'ikhwan', label: 'Ikhwan' },
   { key: 'akhwat', label: 'Akhwat' },
 ];
+
+function tanggalLabel(d: string): string {
+  return new Date(d + 'T00:00:00').toLocaleDateString('id-ID', {
+    day: 'numeric', month: 'short', year: 'numeric',
+  });
+}
 
 export default async function KoordinatorKehadiranPage({
   searchParams,
@@ -38,18 +47,37 @@ export default async function KoordinatorKehadiranPage({
     redirect('/2in1/koordinator/login');
   }
 
-  const nowMonth = new Date()
-    .toLocaleDateString('sv-SE', { timeZone: 'Asia/Jakarta' })
-    .slice(0, 7);
   const month =
     searchParams.month && /^\d{4}-\d{2}$/.test(searchParams.month)
       ? searchParams.month
-      : nowMonth;
+      : periodeBerjalan();
   const genderParam = searchParams.gender === 'ikhwan' || searchParams.gender === 'akhwat'
     ? searchParams.gender
     : undefined;
 
-  const rekap = await getMaahirRekap(month, { gender: genderParam });
+  // Default = periode laporan 28–27 (tgl 28 bulan lalu s/d tgl 27 bulan ini),
+  // sama dengan Laporan Bulanan supaya angkanya sebanding. Koordinator boleh
+  // menggantinya lewat dua input tanggal di bawah.
+  const defStart = periodeStartDate(month);
+  const defEnd = periodeEndDate(month);
+  const startParam = searchParams.start && DATE_RE.test(searchParams.start) ? searchParams.start : null;
+  const endParam = searchParams.end && DATE_RE.test(searchParams.end) ? searchParams.end : null;
+  const start = startParam ?? defStart;
+  const endPilihan = endParam ?? defEnd;
+  // Rentang terbalik tak bisa dihitung — jatuhkan ke default & beri tahu.
+  const rangeTerbalik = start > endPilihan;
+  const rangeStart = rangeTerbalik ? defStart : start;
+  const rangeEndPilihan = rangeTerbalik ? defEnd : endPilihan;
+  // Hitungan dipotong di hari ini: pertemuan yang belum terjadi bukan "belum diisi".
+  const today = todayJakarta();
+  const rangeEnd = rangeEndPilihan > today ? today : rangeEndPilihan;
+  const dipotongHariIni = rangeEndPilihan > today;
+  const rangeCustom = rangeStart !== defStart || rangeEndPilihan !== defEnd;
+
+  const rekap = await getMaahirRekap(month, {
+    gender: genderParam,
+    range: { start: rangeStart, end: rangeEnd },
+  });
   const monthOptions = monthOptionsSince(ANCHOR_MONTH);
 
   const totalBelum = rekap.reduce((sum, k) => sum + k.belumDiisi, 0);
@@ -72,12 +100,77 @@ export default async function KoordinatorKehadiranPage({
               Rekap kehadiran anggota semua kelas Maahir
               <br />
               <span className="t-tiny">
-                Periode <strong>bulan kalender</strong> (tgl 1–akhir bulan) · sesi Maahir &amp;
-                At-Tibyan digabung. Laporan Bulanan memakai periode 28–27 dan memisah keduanya.
+                Rentang <strong>{tanggalLabel(rangeStart)} – {tanggalLabel(rangeEndPilihan)}</strong>
+                {rangeCustom ? ' (disetel manual)' : ' — periode 28–27, sama dengan Laporan Bulanan'} ·
+                sesi Maahir &amp; At-Tibyan digabung.
+                {dipotongHariIni && (
+                  <> Dihitung s/d hari ini ({tanggalLabel(today)}); sisanya belum berjalan.</>
+                )}
               </span>
             </p>
-            <MonthNavSelect options={monthOptions} value={month} />
+            <MonthNavSelect options={monthOptions} value={month} clear={['start', 'end']} />
           </div>
+
+          {/* Rentang tanggal — default periode 28–27, bisa diubah */}
+          <form
+            method="get"
+            className="card-flat"
+            style={{ padding: 12, marginBottom: 12, display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'flex-end' }}
+          >
+            <input type="hidden" name="month" value={month} />
+            {genderParam && <input type="hidden" name="gender" value={genderParam} />}
+            <div style={{ flex: '1 1 150px' }}>
+              <label className="t-tiny" htmlFor="rekap_start" style={{ display: 'block', marginBottom: 4 }}>
+                Dari tanggal
+              </label>
+              <input
+                id="rekap_start"
+                type="date"
+                name="start"
+                defaultValue={rangeStart}
+                min={PRESENSI_ANCHOR}
+                className="input"
+                style={{ height: 38 }}
+              />
+            </div>
+            <div style={{ flex: '1 1 150px' }}>
+              <label className="t-tiny" htmlFor="rekap_end" style={{ display: 'block', marginBottom: 4 }}>
+                Sampai tanggal
+              </label>
+              <input
+                id="rekap_end"
+                type="date"
+                name="end"
+                defaultValue={rangeEndPilihan}
+                min={PRESENSI_ANCHOR}
+                className="input"
+                style={{ height: 38 }}
+              />
+            </div>
+            <button type="submit" className="btn btn-ghost btn-sm" style={{ height: 38 }}>
+              Terapkan
+            </button>
+            {rangeCustom && (
+              <Link
+                href={`?${new URLSearchParams({
+                  month,
+                  ...(genderParam ? { gender: genderParam } : {}),
+                }).toString()}`}
+                className="btn btn-soft btn-sm"
+                style={{ height: 38, textDecoration: 'none', display: 'inline-flex', alignItems: 'center' }}
+              >
+                Reset 28–27
+              </Link>
+            )}
+          </form>
+
+          {rangeTerbalik && (
+            <div className="banner banner-error" style={{ marginBottom: 12 }}>
+              <div className="desc">
+                Tanggal awal melewati tanggal akhir — rentang dikembalikan ke default periode 28–27.
+              </div>
+            </div>
+          )}
 
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 16 }}>
             <Link
@@ -111,6 +204,11 @@ export default async function KoordinatorKehadiranPage({
               const params = new URLSearchParams();
               params.set('month', month);
               if (t.key !== 'semua') params.set('gender', t.key);
+              // Pertahankan rentang manual supaya ganti gender tak mereset filter tanggal.
+              if (rangeCustom) {
+                params.set('start', rangeStart);
+                params.set('end', rangeEndPilihan);
+              }
               return (
                 <Link
                   key={t.key}
@@ -127,7 +225,7 @@ export default async function KoordinatorKehadiranPage({
           {totalBelum > 0 && (
             <details className="banner banner-error" style={{ marginBottom: 16 }}>
               <summary className="desc" style={{ cursor: 'pointer', userSelect: 'none' }}>
-                <strong>{totalBelum} presensi belum diisi</strong> oleh ketua kelas pada bulan ini.
+                <strong>{totalBelum} presensi belum diisi</strong> oleh ketua kelas pada rentang ini.
                 <span className="t-tiny" style={{ color: 'var(--muted-2)' }}> — tap untuk rincian</span>
               </summary>
               <div style={{ marginTop: 10, display: 'grid', gap: 8 }}>
