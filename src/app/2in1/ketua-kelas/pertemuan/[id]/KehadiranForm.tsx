@@ -1,6 +1,7 @@
 'use client';
 
 import { useRef, useState } from 'react';
+import { butuhAlasan } from '@/lib/kehadiran-status';
 
 type Status = 'hadir' | 'izin' | 'terlambat' | 'sakit' | 'tidak_ada_keterangan';
 
@@ -58,6 +59,20 @@ export function KehadiranForm({
   }
 
   async function saveAll(current: PesertaRow[]) {
+    // Tidak hadir (izin/sakit/TKK) wajib beralasan — API menolak dengan 400.
+    // Dicegat di sini supaya autosave tak berulang kali menabrak server dan
+    // ketua tahu SIAPA yang alasannya masih kosong, bukan cuma "✗ Gagal".
+    const belumBeralasan = current.filter(
+      (r) => butuhAlasan(r.status) && r.catatan.trim() === ''
+    );
+    if (belumBeralasan.length > 0) {
+      setError(
+        `Alasan wajib diisi untuk ${belumBeralasan.length} peserta yang tidak hadir: ` +
+          belumBeralasan.map((r) => r.name).join(', ')
+      );
+      setGlobalStatus('error');
+      return;
+    }
     setGlobalStatus('saving');
     setError(null);
     try {
@@ -198,19 +213,23 @@ export function KehadiranForm({
                 <span className="t-tiny" style={{ color: 'var(--muted-2)' }}>halaman</span>
               </div>
             )}
-            {(p.status === 'izin' || p.status === 'sakit' || p.catatan) && (
+            {(butuhAlasan(p.status) || p.catatan) && (
               <input
                 type="text"
                 value={p.catatan}
                 onChange={(e) => updateRow(p.id, { catatan: e.target.value })}
-                placeholder="catatan..."
+                placeholder={butuhAlasan(p.status) ? 'alasan tidak hadir (wajib)…' : 'catatan...'}
                 style={{
                   marginTop: 6,
                   width: '100%',
                   fontSize: 11,
                   padding: '4px 8px',
                   borderRadius: 6,
-                  border: '1px solid var(--border)',
+                  // Tandai merah selagi alasan wajib masih kosong.
+                  border:
+                    butuhAlasan(p.status) && p.catatan.trim() === ''
+                      ? '1px solid var(--merah, #dc2626)'
+                      : '1px solid var(--border)',
                   background: 'var(--bg-input, #f5f5f5)',
                 }}
               />
