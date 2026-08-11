@@ -13,13 +13,17 @@ dan diolah di website lain.
 | Autentikasi | API key per konsumen, `Authorization: Bearer`, disimpan di env |
 | Bentuk data | Dua lapis: entitas mentah (registry) + rekap turunan (bungkus lib yang sudah ada) |
 | Data pribadi | Nama + UUID keluar; **nomor WA tidak** |
-| Tempat key | Env var di variable group `Maahir-Prod` (bukan tabel DB) |
+| Tempat key | Tabel `api_client` + halaman `/admin/api-keys` (revisi 2026-08-11 — awalnya env var, diubah supaya bikin/cabut key tidak perlu deploy) |
 | Cara panggil | Server-to-server saja; tanpa CORS |
 | Struktur kode | Campuran: catch-all + registry untuk entitas, file route eksplisit untuk rekap |
 | Cache & mitigasi beban | Masuk sejak versi pertama, bukan ditunda |
-| `kehadiran_peserta.catatan` | Ditahan sepenuhnya di v1 |
+| `kehadiran_peserta.catatan` | **Ikut keluar** (keputusan user 2026-08-11) |
+| `rekaman.masukan`, tabel request/pengajuan | Tidak dibuka (keputusan user 2026-08-11) |
 
-Tanpa perubahan skema DB. Satu-satunya langkah non-kode saat rilis: menambah env var.
+Satu tabel baru (`api_client`), di-apply sekali ke prod lewat `npm run db -- --confirm`
+sebelum deploy — tanpa SSH, karena dari laptop memang tidak ada jalur SSH ke VPS
+(`docs/HANDOVER-MAAHIR.md`). Sesudah itu pengelolaan key sepenuhnya lewat halaman admin,
+tanpa deploy dan tanpa terminal.
 
 ---
 
@@ -36,8 +40,6 @@ bukan semua kolom. Yang tidak pernah keluar dari `/api/v1/*`:
 - `password_reset_requests.new_password_plaintext` — password polos.
 - Kolom `token` di semua tabel request (koreksi, hapus pertemuan, pindah halaqah,
   dualrole, libur) — token persetujuan magic-link.
-- `kehadiran_peserta.catatan` — alasan tidak hadir. Kolom ini baru ditutup dari GET
-  publik Agustus 2026 (`a82a944`); membukanya lewat API berarti membalik keputusan itu.
 - Komentar bebas penilai tentang orang: `ket_bacaan`, `ket_hafalan`, `catatan_umum`,
   `masukan`.
 - `audio_url` — file audio dilayani lewat URL bertanda tangan HMAC berbatas waktu
@@ -46,6 +48,30 @@ bukan semua kolom. Yang tidak pernah keluar dari `/api/v1/*`:
   statistik mutu bacaan tetap bisa dihitung tanpa audionya.
 
 Penegakannya struktural, bukan konvensi — lihat §3.
+
+### Yang ikut keluar meski sensitif: `kehadiran_peserta.catatan`
+
+User memutuskan (2026-08-11) alasan tidak hadir **ikut keluar**. Perlu dicatat terbuka
+apa artinya, karena ini membalik sebagian keputusan `a82a944` (Agustus 2026) yang menutup
+`GET /api/2in1/kehadiran/[pertemuan_id]` justru karena kolom ini.
+
+Bedanya dengan keadaan sebelum `a82a944`: dulu siapa pun yang menebak/memiliki satu UUID
+pertemuan bisa membacanya tanpa kredensial apa pun. Sekarang aksesnya butuh API key
+ber-scope yang bisa dikedaluwarsakan, hanya dari server ke server, dan tercatat di log
+per konsumen. Jadi kolomnya terbuka bagi pemegang key, bukan terbuka bagi internet.
+
+Konsekuensi yang menempel pada keputusan ini:
+
+- Isinya sering berupa **informasi kesehatan dan urusan keluarga** ("demam", "ibu
+  sakit"). Website penerima jadi ikut memegang data itu, dan pengamanan di sisi mereka
+  di luar kendali aplikasi ini.
+- Karena `catatan` keluar, `keterangan` di payload rekap (gabungan `catatan` — lihat §5)
+  **tidak lagi dibersihkan**. Konsistensinya perlu, kalau tidak konsumen menerima kolom
+  yang sama di satu route dan tidak di route lain.
+- `docs/API-PUBLIC.md` wajib menyebut kolom ini sebagai data sensitif dengan permintaan
+  eksplisit: jangan ditayangkan di halaman publik, jangan diindeks mesin pencari.
+- Kalau nanti berubah pikiran, menutupnya kembali **memecah kontrak** konsumen yang sudah
+  memakainya — beda arah dengan membuka kolom baru yang selalu aman dilakukan.
 
 ## 2. Sumber skema yang sah
 
@@ -75,12 +101,17 @@ Registry dikunci hanya setelah diverifikasi ke sumber 3 (lihat §9 penjaga regis
 src/app/api/v1/[...path]/route.ts     catch-all entitas mentah
 src/app/api/v1/rekap/<nama>/route.ts  6 route rekap eksplisit
 src/lib/api-public/
-  auth.ts      parse API_CLIENTS, verifikasi Bearer, cek scope, masa berlaku
+  auth.ts      hash Bearer → cari api_client, cek active/expires/scope, cache 30s,
+               flush last_used_at & request_count tiap 60s
   registry.ts  deklarasi entitas: tabel, kolom, filter, urutan, scope
   respond.ts   envelope sukses/error, ETag, kode status, penangkap error
   query.ts     terjemah query-string → panggilan pg-shim
   sanitize.ts  buang kunci terlarang rekursif, Map → objek
   cache.ts     cache respons di memori + pembatas request berjalan
+
+src/app/admin/api-keys/           halaman kelola key (requireAdmin)
+  page.tsx, actions.ts
+scripts/sql/2026-08-11-api-client.sql   migrasi manual, apply lewat npm run db
 ```
 
 Next.js mengutamakan segmen statis di atas catch-all, jadi `/api/v1/rekap/sp` tidak
@@ -159,16 +190,84 @@ rata-rata salah.
    semua path), jadi saat maintenance API ikut terkunci. Tidak perlu kode tambahan;
    masuk dokumentasi supaya konsumen menyiapkan retry.
 
-### Saklar induk & masa berlaku key
+### Saklar induk
 
-- `PUBLIC_API` harus persis `"on"`; kalau tidak, seluruh `/api/v1/*` balas
-  `404 not_found` — pola yang sudah dipakai `ADMIN_DB_API`. Gagal-tertutup: salah
-  pasang env berarti API mati, bukan terbuka.
-- Format: `API_CLIENTS="key:nama:scope1,scope2[:YYYY-MM-DD]"`, baris per konsumen.
-  Ruas keempat opsional = tanggal kedaluwarsa; lewat tanggal → `401`. Key yang
-  diberikan ke pihak lain jadi punya batas hidup walau lupa dicabut.
-- Verifikasi key dengan `timingSafeEqual` (pola `src/app/api/health/route.ts`).
-- Env cacat (scope tak dikenal, key duplikat, key < 24 karakter) → gagal saat start.
+`PUBLIC_API` harus persis `"on"`; kalau tidak, seluruh `/api/v1/*` balas
+`404 not_found` — pola yang sudah dipakai `ADMIN_DB_API`. Gagal-tertutup: salah pasang
+env berarti API mati, bukan terbuka. Ini satu-satunya env yang wajib; sisanya opsional
+(`PUBLIC_API_CACHE_TTL`, `PUBLIC_API_MAX_INFLIGHT`).
+
+### Tabel `api_client`
+
+Satu tabel baru. Di-apply sekali ke prod lewat `npm run db -- --confirm`, berkasnya
+disimpan sebagai `scripts/sql/2026-08-11-api-client.sql` mengikuti kebiasaan repo.
+
+```sql
+create table api_client (
+  id            uuid primary key default gen_random_uuid(),
+  nama          text not null unique,        -- nama konsumen, mis. 'dashboard-yayasan'
+  token_hash    text not null unique,        -- sha256 hex dari key mentah
+  token_prefix  text not null,               -- 12 karakter awal, untuk dikenali di UI & log
+  scopes        text[] not null,
+  active        boolean not null default true,
+  expires_at    date,                        -- null = tanpa batas
+  keterangan    text,
+  created_at    timestamptz not null default now(),
+  created_by    text,                        -- WA superadmin pembuat
+  revoked_at    timestamptz,
+  revoked_by    text,
+  last_used_at  timestamptz,
+  request_count bigint not null default 0
+);
+create index api_client_token_hash_idx on api_client (token_hash);
+```
+
+Keputusan yang menempel pada tabel ini:
+
+- **Hanya hash yang disimpan** (SHA-256 hex, bukan bcrypt — key ini acak 256-bit, bukan
+  password yang bisa ditebak, jadi hash cepat justru yang benar: verifikasi terjadi di
+  setiap request). Dump DB yang bocor tidak memberi key yang bisa dipakai.
+- Konsekuensinya **key hanya bisa dilihat sekali** saat dibuat. Hilang = bikin baru,
+  bukan dilihat ulang.
+- Key mentah = `k_live_` + 32 byte acak base64url (`crypto.randomBytes`).
+- Verifikasi = hash header lalu cari `token_hash`. Tidak ada perbandingan rahasia
+  berbasis byte, jadi tidak butuh `timingSafeEqual` di jalur ini.
+- `401` bila: tidak ada barisnya, `active=false`, atau `expires_at < hari ini`.
+
+### Cache autentikasi & jejak pemakaian
+
+Query DB tiap request untuk autentikasi itu mahal dan mudah dihindari, tapi caching
+menunda pencabutan. Keseimbangannya:
+
+- Hasil verifikasi (hash → `{id, nama, scopes}`) disimpan di memori **30 detik**. Artinya
+  **pencabutan berlaku paling lambat 30 detik**, bukan seketika. Ini masih jauh lebih
+  cepat dari pilihan env-var (yang butuh deploy), dan angkanya bisa diturunkan lewat env
+  kalau ternyata terasa lama.
+- `last_used_at` dan `request_count` **tidak** ditulis per request — dihitung di memori
+  lalu di-flush satu `UPDATE` per key setiap 60 detik. Tanpa ini, satu request read
+  berubah jadi satu write, dan API read-only justru membebani DB dengan tulisan.
+- Konsekuensi yang harus diterima: hitungan yang belum ter-flush hilang kalau proses
+  restart. Untuk keperluan "key ini masih dipakai atau tidak", itu tidak masalah.
+
+### Halaman `/admin/api-keys`
+
+Dijaga `requireAdmin()` (`src/lib/admin-guard.ts`, cocokkan WA ke
+`ADMIN_WA`/`SUPERADMIN_WAS`) — pola yang sama dengan `/admin/db` dan `/admin/users`.
+
+- Daftar key: nama, `token_prefix`, scope, status (aktif/dicabut/kedaluwarsa),
+  `last_used_at`, `request_count`.
+- Buat key: isi nama, pilih scope (centang `maahir`/`hits`/`penilaian`), tanggal
+  kedaluwarsa opsional, keterangan. Key mentah ditampilkan **sekali** dengan peringatan
+  jelas bahwa tidak bisa dilihat lagi.
+- Cabut: satu tombol → `active=false` + `revoked_at`/`revoked_by`. Baris tidak dihapus,
+  supaya jejaknya tetap ada.
+- Setiap pembuatan dan pencabutan dicatat lewat `logAudit()` (`src/lib/audit.ts`, sudah
+  ada) — `action: 'api_key_create' | 'api_key_revoke'`, tanpa memuat key atau hash-nya.
+- Key mentah **tidak pernah** ditulis ke log, audit, atau pesan error.
+
+Penyerahan key ke website penerima ada di luar aplikasi: salin dari halaman ini, kirim
+lewat kanal yang berbeda dari kanal berisi URL API, jangan di grup, dan beri
+`expires_at` supaya ada batas hidup walau lupa dicabut.
 
 ### Scope
 
@@ -186,7 +285,7 @@ scope `rekap` terpisah.
 | `program-kelas` | `program_kelas` | id, name, gender, jadwal_hari, waktu_mulai, waktu_selesai, self_attendance, presensi_sifat, created_at | ketua_wa, wakil_wa |
 | `anggota` | `program_kelas_anggota` | id, program_kelas_id, peserta_id, name, is_ketua, is_wakil, mulai_tanggal, created_at | whatsapp_number |
 | `pertemuan` | `pertemuan_program` | id, program_kelas_id, kelas_id, program, tanggal, nama_kegiatan, waktu_mulai, waktu_selesai, keterangan, created_at | — |
-| `kehadiran` | `kehadiran_peserta` | id, pertemuan_id, anggota_id, peserta_id, status, mode, setoran_halaman, diisi_at, updated_at, created_at | **catatan** |
+| `kehadiran` | `kehadiran_peserta` | id, pertemuan_id, anggota_id, peserta_id, status, mode, setoran_halaman, **catatan**, diisi_at, updated_at, created_at | — |
 | `libur` | `program_kelas_libur` | id, program_kelas_id, tanggal_mulai, tanggal_selesai, keterangan, created_at | — |
 | `pemutihan` | `maahir_pemutihan` | id, anggota_id, month, tanggal, alasan, dibuat_oleh, dibatalkan_pada, created_at | — |
 | `laporan-note` | `laporan_maahir_note` | id, month, teks, urutan, created_at, updated_at | — |
@@ -268,16 +367,18 @@ Tiga temuan dari lib yang dipakai ulang. Route rekap **tidak boleh**
    butuh; API tidak boleh mengeluarkannya. Menyerahkan hasil lib apa adanya membocorkan
    keputusan "tanpa WA" lewat pintu belakang.
 2. `keterangan` di `RekapAnggota` dan `StudentAtt` adalah gabungan
-   `kehadiran_peserta.catatan` — kolom yang ditahan di §1. Harus dibersihkan di sisi
-   rekap juga, bukan hanya di entitas mentah.
+   `kehadiran_peserta.catatan`. Karena `catatan` ikut keluar (§1), kolom ini **tidak**
+   dibersihkan — dibiarkan lewat supaya konsisten dengan entitas `kehadiran`. Tetap
+   dicatat di sini agar jelas bahwa itu keputusan, bukan kelalaian.
 3. `HitsKoordinatorRekap.insidenByPengajar` dan `.cakupanByPengajar` bertipe `Map`.
    `JSON.stringify(new Map())` menghasilkan `{}` — bukan error, tapi **datanya hilang
    tanpa suara**. Harus dikonversi eksplisit jadi objek biasa.
 
 `sanitize.ts`: satu fungsi rekursif yang membuang kunci terlarang dalam bentuk
 snake_case **dan** camelCase (`whatsapp_number`/`whatsappNumber`, `ketua_wa`/`ketuaWa`,
-`password_hash`, `magic_token`, `keterangan`, `catatan`, `masukan`, …) dan mengubah
-`Map` jadi objek. Semua route rekap wajib melewatinya.
+`password_hash`, `magic_token`, `masukan`, `ket_bacaan`, `catatan_umum`, …) dan mengubah
+`Map` jadi objek. Semua route rekap wajib melewatinya. `catatan`/`keterangan` **tidak**
+masuk daftar ini — lihat §1.
 
 ### Daftar route
 
@@ -392,19 +493,19 @@ lambat, tapi API yang membuat aplikasi kerja harian tidak bisa dipakai.
 - Semua error tak terduga ditangkap di satu tempat (`respond.ts`) → `500
   {error:{code:'internal'}}`; detail asli ke `console.error` + `recordErrorDiag()`
   (`src/lib/error-diag.ts`, sudah ada).
-- Setiap request satu baris log: nama konsumen (dari `API_CLIENTS`, **bukan key-nya**),
+- Setiap request satu baris log: nama konsumen dan `token_prefix` (**bukan key-nya**),
   route, jumlah baris, durasi, `dari_cache`. Cukup untuk menjawab "kenapa VPS berat jam
-  3 pagi" tanpa menyimpan apa pun di DB.
-- Jejak pemakaian per key di memori — `nama → {request, terakhir_dipakai, gagal_401}` —
-  dibuka lewat `/api/health?probe=<ADMIN_API_TOKEN>` yang mekanismenya sudah ada. Kalau
-  key bocor dan dipakai orang lain, lonjakannya kelihatan tanpa tabel audit. Hilang saat
-  restart; ini alat lihat cepat, bukan pengganti audit permanen.
+  3 pagi".
+- Kegagalan `401` juga dicatat dengan `token_prefix` percobaan. Rentetan 401 dari prefix
+  yang tak dikenal = ada yang menebak-nebak key; itu sinyal yang perlu terlihat.
+- `last_used_at` + `request_count` per key tersimpan di tabel (di-flush tiap 60 detik),
+  jadi "key ini masih dipakai atau sudah bisa dicabut" bisa dijawab dari halaman admin
+  tanpa membaca log server.
 
-**Pencabutan seketika tidak mungkin tanpa tabel DB** — konsekuensi pilihan env-var.
-Yang tersedia: hapus baris di variable group lalu deploy (beberapa menit),
-`PUBLIC_API=off` (juga deploy), atau `MAINTENANCE_MODE` sebagai penghenti darurat
-seluruh aplikasi. Masih wajar untuk 1–3 konsumen; kalau konsumen bertambah banyak,
-tabel `api_client` jadi langkah lanjut yang jelas.
+**Pencabutan**: lewat `/admin/api-keys`, berlaku paling lambat 30 detik (cache
+autentikasi). Tanpa deploy, tanpa terminal, tanpa SSH. Penghenti darurat yang lebih luas
+tetap tersedia: `PUBLIC_API=off` (perlu deploy) atau `MAINTENANCE_MODE` untuk seluruh
+aplikasi.
 
 ---
 
@@ -431,11 +532,14 @@ berkas `scripts/test-api-public.ts`, alias `npm run test-api`. Semuanya luring.
 
 | Yang diuji | Kenapa |
 |---|---|
-| `parseApiClients()`: env benar, kosong, cacat (scope tak dikenal, key duplikat, key < 24 karakter, tanggal kedaluwarsa cacat) | env cacat harus gagal keras saat start, bukan meloloskan key kosong yang cocok dengan header kosong |
-| Verifikasi key: benar, salah, panjang beda, tanpa `Bearer`, header kosong, key kedaluwarsa | jalur autentikasi satu-satunya pembatas data ini |
+| Pembuatan key: panjang & bentuk `k_live_…`, `token_prefix` konsisten dengan key, hash cocok, dua pembuatan tak pernah menghasilkan key sama | key lemah/kembar = seluruh pembatas ini tak berarti |
+| Verifikasi key (baris palsu di memori, tanpa DB): benar, salah, header tanpa `Bearer`, header kosong, `active=false`, `expires_at` kemarin/hari ini/besok | jalur autentikasi satu-satunya pembatas data ini; batas tanggal harus jelas inklusif/eksklusifnya |
+| Cache autentikasi: hit dalam 30 detik, miss sesudahnya, dan **baris yang dicabut berhenti berlaku setelah TTL habis** | menahan janji "pencabutan berlaku ≤30 detik" |
+| Flush `last_used_at`/`request_count`: hitungan terkumpul benar, satu `UPDATE` per key per siklus, hitungan direset sesudah flush | mencegah API read-only berubah jadi satu write per request |
 | Cek scope: key `maahir` menembak entitas `hits` → 403 | pemisahan scope harus nyata, bukan dokumentasi |
 | Audit registry: setiap entitas vs daftar kolom terlarang | menjaga janji "tanpa WA" saat entitas baru ditambah orang lain nanti |
 | `sanitize()`: objek bersarang, array, `Map`, kunci camelCase & snake_case di berbagai kedalaman | lubang paling mungkin, karena lib rekap internal memang membawa kolom itu |
+| `sanitize()` **tidak** membuang `keterangan`/`catatan`, tapi tetap membuang `whatsappNumber` pada objek yang sama | mencegah "sekalian dibersihkan semua" saat kode disunting orang lain, dan sebaliknya |
 | Parse filter: nama tak dikenal → 400; `limit` 0/501/`abc` → 400; tanggal `2026-8-1` → 400; `minggu` bukan Senin → 400 | filter yang diabaikan diam-diam menghasilkan data yang salah dipercaya |
 | Rate limit di batas (120 lolos, 121 kena) | — |
 | Cache: hit/miss, kadaluwarsa TTL, kunci beda karena scope beda, entri > 1 MB dilewati, pembuangan saat 32 MB penuh | cache yang salah kunci = data satu konsumen terlihat konsumen lain |
@@ -456,6 +560,9 @@ aturan bisnisnya.
 - Base URL, cara pakai header Bearer, contoh `fetch` server-side yang bisa disalin.
 - Tabel 42 route: path, scope, filter sah, contoh respons ringkas.
 - Daftar kolom yang **tidak akan pernah** keluar, supaya tidak ditunggu-tunggu.
+- Peringatan khusus `catatan` / `keterangan`: berisi alasan tidak hadir, sering menyangkut
+  kesehatan dan urusan keluarga. Jangan ditayangkan di halaman publik, jangan diindeks
+  mesin pencari, batasi ke pengguna yang memang berhak di sisi mereka.
 - Perilaku cache (60 detik / 5 menit), `ETag`/`If-None-Match`, arti 429 dan 503.
 - Aturan bisnis yang gampang salah dihitung ulang di sisi konsumen, ditulis eksplisit:
   periode laporan 28–27; `hits-disiplin` mode bulan justru kalender penuh; sakit tidak
@@ -477,24 +584,31 @@ sekalian dibetulkan.
 
 ## 12. Urutan kerja
 
-1. **Fondasi** — `auth.ts`, `respond.ts`, `query.ts`, `sanitize.ts`, `cache.ts`,
-   `registry.ts` (kerangka + daftar kolom terlarang + audit saat modul dimuat),
-   `scripts/test-api-public.ts`. Belum ada route; tes hijau dulu.
-2. **Catch-all entitas + scope `maahir`** — `src/app/api/v1/[...path]/route.ts` + 13
+1. **Skema** — `scripts/sql/2026-08-11-api-client.sql`, di-apply ke prod lewat
+   `npm run db -- --confirm`. Didahulukan karena pipeline tidak menjalankan migrasi:
+   kode yang bergantung tabel ini tidak boleh di-deploy sebelum tabelnya ada.
+2. **Fondasi** — `auth.ts` (hash, cari baris, cache 30 detik, flush pemakaian),
+   `respond.ts`, `query.ts`, `sanitize.ts`, `cache.ts`, `registry.ts` (kerangka + daftar
+   kolom terlarang + audit saat modul dimuat), `scripts/test-api-public.ts`. Belum ada
+   route; tes hijau dulu.
+3. **Halaman `/admin/api-keys`** — daftar, buat (tampil sekali), cabut, `logAudit()`.
+   Didahulukan sebelum route data supaya key uji bisa dibuat lewat jalur yang sebenarnya,
+   bukan lewat SQL tangan yang nanti tak terpakai.
+4. **Catch-all entitas + scope `maahir`** — `src/app/api/v1/[...path]/route.ts` + 13
    entitas. Sekaligus verifikasi kolom nyata di prod
    (`npm run db "select column_name from information_schema.columns where table_name='...'"`),
    karena `schema.sql` parsial (§2).
-3. **Registry `hits` + `penilaian` + referensi orang** — 13 + 5 + 4 entitas, termasuk
+5. **Registry `hits` + `penilaian` + referensi orang** — 14 + 5 + 4 entitas, termasuk
    kasus khusus `hits/kajian-presensi`.
-4. **Enam route rekap** — masing-masing membungkus lib yang sudah ada, semua lewat
+6. **Enam route rekap** — masing-masing membungkus lib yang sudah ada, semua lewat
    `sanitize()`.
-5. **Penjaga registry** — `scripts/check-api-registry.ts`, jalankan terhadap prod.
-6. **Dokumentasi** — `docs/API-PUBLIC.md` + perbaikan tabel `HANDOVER-MAAHIR.md`.
-7. **Rilis** — bikin key (`openssl rand -base64 32`, prefix `k_live_`), pasang
-   `ENV_PUBLIC_API=on`, `ENV_API_CLIENTS`, dan opsional
-   `ENV_PUBLIC_API_MAX_INFLIGHT`/`ENV_PUBLIC_API_CACHE_TTL` di variable group
-   `Maahir-Prod` (pipeline mengekspor `ENV_*`), deploy, lalu uji `curl` dan bandingkan
-   dengan angka di layar.
+7. **Penjaga registry** — `scripts/check-api-registry.ts`, jalankan terhadap prod.
+8. **Dokumentasi** — `docs/API-PUBLIC.md` + perbaikan tabel `HANDOVER-MAAHIR.md`.
+9. **Rilis** — pasang `ENV_PUBLIC_API=on` (dan opsional
+   `ENV_PUBLIC_API_MAX_INFLIGHT`/`ENV_PUBLIC_API_CACHE_TTL`) di variable group
+   `Maahir-Prod` (pipeline mengekspor `ENV_*`), deploy, buat key lewat
+   `/admin/api-keys`, lalu uji `curl` dan bandingkan dengan angka di layar. Key
+   berikutnya tidak perlu deploy lagi.
 
 ---
 
@@ -503,8 +617,10 @@ sekalian dibetulkan.
 | Risiko | Status |
 |---|---|
 | Beban VPS dari 42 route read di proses yang sama | dimitigasi: cache 60/300 detik, `ETag`→304, `limit` maks 500, rate limit 120/menit, maks 4 request berjalan, tanpa join dinamis |
-| Key bocor | dimitigasi sebagian: scope per key, masa berlaku per key, saklar induk `PUBLIC_API`, jejak pemakaian di `/api/health`. **Pencabutan seketika tetap perlu deploy** |
+| Key bocor | dimitigasi: hanya hash yang tersimpan, scope & `expires_at` per key, pencabutan lewat `/admin/api-keys` berlaku ≤30 detik tanpa deploy, `last_used_at`/`request_count` + log 401 per prefix untuk mendeteksi pemakaian asing |
+| Halaman admin jadi permukaan serang baru (pembuat key = pemegang seluruh data) | dijaga `requireAdmin()` yang sama dengan `/admin/db`; setiap buat/cabut masuk `audit_log`. Tidak menambah kelemahan baru selama akun superadmin aman — tapi memang menaikkan nilai akun itu |
 | Snapshot `matrix_rekap` basi | dimitigasi: `meta.snapshot_terakhir` + `meta.basi`; API tidak memicu recompute |
 | Kolom prod tanpa berkas migrasi | dimitigasi: `npm run check-api` sebelum deploy, melaporkan juga kolom baru yang belum dikenal registry |
+| Alasan tidak hadir (`catatan`) keluar ke sistem lain | diterima user secara sadar; dibatasi API key ber-scope + kedaluwarsa + server-to-server + log per konsumen. Pengamanan di sisi website penerima di luar kendali aplikasi ini |
 | Data tertinggal ≤ 60 detik (rekap ≤ 5 menit) karena cache | diterima; terlihat lewat `meta.dari_cache`/`meta.umur_detik`, ditulis di dokumentasi konsumen |
 | Konsumen menghitung ulang aturan bisnis dan hasilnya beda dari layar koordinator | dimitigasi: lapis rekap + aturan ditulis eksplisit di `docs/API-PUBLIC.md`. Tidak bisa dicegah teknis kalau mereka tetap memilih hitung sendiri |
