@@ -1,7 +1,7 @@
 # Maahir / HITS — Technical Handover
 
 > **Audience:** an engineer/team taking over maintenance & operations of this app with no prior context.
-> **Last updated:** 2026-07-23. Generated from the codebase (`db-migration/schema.sql`, `src/app`, `src/lib`, `scripts`, `azure-pipelines.yml`). If schema/routes change, regenerate.
+> **Last updated:** 2026-08-12. Generated from the codebase (`db-migration/schema.sql`, `src/app`, `src/lib`, `scripts`, `azure-pipelines.yml`). If schema/routes change, regenerate.
 
 The app is a **Quran hafalan & tahsin management system** for the Muhajir Project, covering two program families:
 - **2in1 / Maahir** — santri (`peserta`) submit weekly recitation recordings (`setoran`), checked by `musyrif` then `syaikh`; class attendance (`program_kelas` / presensi) tracked by ketua kelas.
@@ -345,7 +345,7 @@ The non-prefixed `kondisi_kelas`/`status_latihan`/`status_tabayyun` back the **o
 
 ## HTTP API Endpoints
 
-All handlers under `src/app/api/**/route.ts` (19). Auth shorthand: **Bearer** = `Authorization: Bearer <token>`; **Cookie** = iron-session via `getSession()`/`getSessionWa()`; **Public** = no check.
+All handlers under `src/app/api/**/route.ts` (23 internal + the `/api/v1/*` public API, below). Auth shorthand: **Bearer** = `Authorization: Bearer <token>`; **Cookie** = iron-session via `getSession()`/`getSessionWa()`; **Public** = no check.
 
 | Path | Method | Auth | Purpose | Tables |
 |---|---|---|---|---|
@@ -355,15 +355,19 @@ All handlers under `src/app/api/**/route.ts` (19). Auth shorthand: **Bearer** = 
 | `/api/2in1/penilaian/upsert` | POST | Cookie, `koordinator`/`syaikh` | Upsert monthly peserta assessment | `penilaian_peserta` |
 | `/api/2in1/pertemuan` | POST | Cookie + ketua/wakil of `program_kelas_id` | Create/upsert a meeting | `pertemuan_program` (w), reads `program_kelas` |
 | `/api/2in1/rekaman/submit-single` | POST | Cookie, `peserta` | Upload one recording for cycle | `setoran`/`rekaman` (w), reads `peserta` |
+| `/api/2in1/setoran-kelas` | POST | Cookie + ketua/wakil of the meeting's `program_kelas` | Ketua/wakil batch-fills `setoran_halaman` for past `kelas_maahir` meetings (attendance untouched); 403 once the report period is locked | `kehadiran_peserta` (w), reads `pertemuan_program`/`program_kelas` |
 | `/api/2in1/setoran-musyrif/submit` | POST | Cookie, `musyrif` | Submit 3 recordings (notifies syaikh at `/2in1/...`) | `setoran_musyrif`/`rekaman_musyrif` (w) |
 | `/api/2in1/setoran/submit` | POST | Cookie, `peserta` | Submit 3 recordings (notifies musyrif at `/2in1/...`) | `setoran`/`rekaman` (w) |
 | `/api/admin/db` | POST | **Bearer `ADMIN_API_TOKEN`** (feature-gated) | Run arbitrary SQL on prod — see below | any |
+| `/api/admin/recompute-matrix` | POST | **Bearer `ADMIN_API_TOKEN`** (same gate as `/api/admin/db`) | Recompute `matrix_rekap` for `{months:[YYYY-MM]}` (server-side twin of `npm run recompute-matrix`, no SSH); skips historic months < anchor | `matrix_rekap` (w) via `computeMatrixForMonth` |
 | `/api/audio/[...seg]` | GET | Signed URL (HMAC `sig`+`exp`, `SESSION_SECRET`) | Serve local audio file | filesystem (`STORAGE_DIR`) |
 | `/api/auth/logout` | POST | Cookie (best-effort) | Destroy session, log logout | session log |
 | `/api/auth/magic-link` | GET | `?token=` vs `ketua_kelas.magic_token` (confirm interstitial on identity switch) | Passwordless Ketua Kelas login | `ketua_kelas` (r + `last_login_at`) |
 | `/api/health` | GET | Public; `?probe=<ADMIN_API_TOKEN>` gates a storage self-test | Liveness/diagnostic (env presence, not values) | none |
+| `/api/hits/koordinator/download` | GET | Cookie, `koordinator_ketua_kelas`/`koordinator`/`syaikh` (any access) | Export HITS Ranking Disiplin Pengajar XLSX for the open period (`?mode=bulan\|minggu&month=&week=&gender=`) | `getHitsKoordinatorRekap()` |
 | `/api/laporan/download` | GET | Cookie, `koordinator`/`syaikh` | Monthly XLSX (non-2in1) | `generateMonthlyReport()` |
 | `/api/laporan/maahir/download` | GET | Cookie, any `koordinator`/`syaikh` access | Laporan Maahir XLSX | `getLaporanMaahir()` |
+| `/api/laporan/maahir/kehadiran/download` | GET | Cookie, any `koordinator`/`syaikh` access | Export Maahir attendance matrix (peserta × tanggal per class) XLSX for the report-month window (`?bulan=YYYY-MM`) | `getMaahirRekap()` |
 | `/api/matrix/download` | GET | Cookie, `koordinator` | Export teacher skill matrix XLSX (`?incomplete=1` mode) | `kelompok_pengajar`/`pengajar`/`matrix_rekap`/`hits_halaqah` |
 | `/api/penilaian-masyaikh/upsert` | POST | Cookie, `koordinator`/`syaikh` | Upsert masyaikh assessment | `penilaian_masyaikh` |
 | `/api/penilaian-pedagogis/upsert` | POST | Cookie; ketua-kelompok (own kelompok) or koordinator (own gender) | Upsert pedagogical assessment | `penilaian_pedagogis`, reads `pengajar` |
@@ -374,6 +378,15 @@ Notes:
 - "2in1" routes are near-duplicates of the base `laporan`/`setoran`/`setoran-musyrif` routes but point WA-notification links at `/2in1/...` pages — both sets are live.
 - ✅ `/api/2in1/kehadiran/[pertemuan_id]` GET was public until Agustus 2026 (anyone with a `pertemuan_id` UUID could read attendance, including the `catatan` column that holds absence reasons). Now behind `otorisasiPertemuan()`, the same ketua/wakil check PUT uses. No in-app caller ever used GET — both forms only PUT — so nothing in the UI changed.
 - All non-GET writes go through `supabaseAdmin` (service-role); authorization is enforced in handlers, not Postgres RLS.
+
+### Public API (`/api/v1/*`)
+
+A separate **read-only, `GET`-only** API for other websites to consume Maahir data server-to-server. Full consumer contract: **[`docs/API-PUBLIC.md`](./API-PUBLIC.md)** — this is just the operator summary.
+
+- **Auth**: per-consumer API keys, `Authorization: Bearer k_live_...`. Keys are stored **hashed** in the `api_client` table (row also carries scope, active flag, request counter) — the plaintext key is shown once at creation and never again. Managed from the superadmin page **`/admin/api-keys`**. Verification/usage logic: `src/lib/api-public/auth.ts` (`verifyBearer`).
+- **Master switch**: env `PUBLIC_API` must literally equal `"on"`; otherwise every `/api/v1/*` returns `404 not_found` (indistinguishable from a missing route). Optional tuning: `PUBLIC_API_MAX_INFLIGHT` (max concurrent v1 requests, default 4), `PUBLIC_API_CACHE_TTL` (cache TTL override), `PUBLIC_API_AUTH_TTL` (key-cache TTL, default 30s).
+- **Surface**: **36 raw entities** served by the catch-all `src/app/api/v1/[...path]/route.ts`, plus **6 rekap routes** under `src/app/api/v1/rekap/*` (`laporan-maahir`, `sp`, `kehadiran`, `tibyan`, `hits-disiplin`, `matrix-guru`). Three scopes gate access — `maahir`, `hits`, `penilaian`; the 4 reference-person entities (`musyrif`/`koordinator`/`syaikh`/`koordinator-ketua-kelas`) are readable by any valid key. Sensitive columns (WA numbers, password hashes, tokens, `audio_url`) are structurally excluded; the entity/column registry lives under `src/lib/api-public/`.
+- **Before deploy**: (1) run the guard script **`npm run check-api`** (`scripts/check-api-registry.ts`) which diffs the entity/column registry against the live prod schema — fail = fix before shipping; (2) apply migration **`scripts/sql/2026-08-11-api-client.sql`** to prod via `npm run db -- --confirm` (creates the `api_client` table) before deploying code that reads it.
 
 ### Admin SQL API (`/api/admin/db`)
 
