@@ -379,9 +379,9 @@ function PresensiTakTerisiBlock({ lap }: { lap: Awaited<ReturnType<typeof getLap
   );
 }
 
-/** Pendataan SP disiplin kehadiran peserta — kumulatif sejak program berjalan. */
+/** Pendataan SP disiplin kehadiran peserta — periode bulan laporan ini saja. */
 function SPBlock({ lap }: { lap: Awaited<ReturnType<typeof getLaporanMaahir>> }) {
-  const { list, summary } = lap.sp;
+  const { list, summary, mulai, cutoff } = lap.sp;
   const spBadge = (n: number) =>
     n >= 3
       ? { bg: 'var(--merah-tint)', bd: 'var(--merah-line)', ink: 'var(--merah-ink)' }
@@ -392,7 +392,7 @@ function SPBlock({ lap }: { lap: Awaited<ReturnType<typeof getLaporanMaahir>> })
     <section style={{ marginBottom: 28 }}>
       <h2 className="t-h2" style={{ marginBottom: 8 }}>Pendataan SP (Surat Peringatan)</h2>
       <p className="t-tiny" style={{ color: 'var(--muted-2)', marginBottom: 8 }}>
-        Kumulatif sejak program berjalan, dari presensi yang diinput ketua kelas.
+        Periode {mulai} s/d {cutoff} (bulan ini saja), dari presensi yang diinput ketua kelas.
         Alpa 1×/2×/≥3× → SP1/SP2/SP3 · Izin 2×/3×/≥4× → SP1/SP2/SP3 (diambil yang tertinggi).
         Total {summary.total} peserta — SP1 {summary.sp1} · SP2 {summary.sp2} · SP3 {summary.sp3}.
       </p>

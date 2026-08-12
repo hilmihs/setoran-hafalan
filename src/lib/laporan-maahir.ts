@@ -9,7 +9,7 @@ import { supabaseAdmin } from '@/lib/supabase-admin';
 import { fetchAllRows } from '@/lib/supabase-page';
 import { getLiburDatesForKelas } from '@/lib/maahir-libur';
 import { anchorKelas, expectedDaysInRange, filledKeyOf, todayJakarta } from '@/lib/maahir-presensi';
-import { getMaahirSP, type SPRekap } from '@/lib/maahir-sp';
+import { getMaahirSP, periodeStartDate, type SPRekap } from '@/lib/maahir-sp';
 import { getPemutihan } from '@/lib/maahir-pemutihan';
 import { getLaporanNotes, type LaporanNote } from '@/lib/laporan-note';
 import { isTakhassusKelas, type ProgramKelasRow } from '@/lib/program-kelas';
@@ -162,6 +162,8 @@ export async function getLaporanMaahir(month: string): Promise<LaporanMaahir> {
       list: [],
       summary: { total: 0, sp1: 0, sp2: 0, sp3: 0, diputihkan: 0 },
       cutoff: todayJakarta(),
+      mulai: periodeStartDate(month),
+      perBulan: true,
     },
     notes: [],
   };
@@ -451,9 +453,10 @@ export async function getLaporanMaahir(month: string): Promise<LaporanMaahir> {
   }
   presensiTakTerisi.sort((a, b) => b.jumlah - a.jumlah || a.kelasName.localeCompare(b.kelasName));
 
-  // Pendataan SP (kumulatif, sumber sama dengan halaman SP koordinator) +
-  // catatan bebas koordinator untuk bulan ini.
-  const [sp, notes] = await Promise.all([getMaahirSP(), getLaporanNotes(month)]);
+  // Pendataan SP periode bulan ini saja — laporan bulanan menggambarkan disiplin
+  // bulan berjalan; angka kumulatif sejak program berjalan tetap tersedia di
+  // halaman SP koordinator. Plus catatan bebas koordinator untuk bulan ini.
+  const [sp, notes] = await Promise.all([getMaahirSP({ bulan: month }), getLaporanNotes(month)]);
 
   return {
     month,

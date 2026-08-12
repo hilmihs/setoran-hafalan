@@ -357,7 +357,7 @@ export async function buildLaporanMaahirWorkbook(lap: LaporanMaahir, bulan: stri
   dataRow([
     {
       text:
-        `Kumulatif sejak program berjalan · Total ${sp.summary.total} peserta — ` +
+        `Periode ${sp.mulai} s/d ${sp.cutoff} (bulan ini saja) · Total ${sp.summary.total} peserta — ` +
         `SP1 ${sp.summary.sp1} · SP2 ${sp.summary.sp2} · SP3 ${sp.summary.sp3}. ` +
         `Alpa 1x/2x/>=3x → SP1/SP2/SP3 · Izin 2x/3x/>=4x → SP1/SP2/SP3.`,
       from: 1, to: NCOL, align: 'left', ink: C.muted,

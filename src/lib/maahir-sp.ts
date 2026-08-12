@@ -67,10 +67,14 @@ export type SPRekap = {
   summary: { total: number; sp1: number; sp2: number; sp3: number; diputihkan: number };
   /** Tanggal terakhir yang ikut dihitung (YYYY-MM-DD). */
   cutoff: string;
+  /** Tanggal pertama yang ikut dihitung — PROGRAM_START bila kumulatif. */
+  mulai: string;
+  /** true = hanya satu periode bulan, bukan kumulatif sejak program berjalan. */
+  perBulan: boolean;
 };
 
-function emptySP(cutoff: string): SPRekap {
-  return { list: [], summary: { total: 0, sp1: 0, sp2: 0, sp3: 0, diputihkan: 0 }, cutoff };
+function emptySP(cutoff: string, mulai = PROGRAM_START, perBulan = false): SPRekap {
+  return { list: [], summary: { total: 0, sp1: 0, sp2: 0, sp3: 0, diputihkan: 0 }, cutoff, mulai, perBulan };
 }
 
 /**
@@ -79,6 +83,17 @@ function emptySP(cutoff: string): SPRekap {
  */
 export function periodeEndDate(month: string): string {
   return `${month}-27`;
+}
+
+/**
+ * Awal periode laporan sebuah bulan 'YYYY-MM' — tanggal 28 bulan sebelumnya,
+ * pasangan dari `periodeEndDate`. Dipakai saat SP dihitung untuk satu bulan saja.
+ */
+export function periodeStartDate(month: string): string {
+  const [y, m] = month.split('-').map(Number);
+  const prevY = m === 1 ? y - 1 : y;
+  const prevM = m === 1 ? 12 : m - 1;
+  return `${prevY}-${String(prevM).padStart(2, '0')}-28`;
 }
 
 /**
@@ -100,19 +115,32 @@ export async function getMaahirPeriodeMonths(): Promise<string[]> {
  * SP kumulatif sejak program mulai. `sampaiBulan` ('YYYY-MM') memotong
  * perhitungan di akhir periode bulan tsb — dipakai untuk melihat "per akhir
  * bulan ini, siapa sudah kena SP berapa". Tanpa opsi itu = s/d hari ini.
+ *
+ * `bulan` ('YYYY-MM') mengunci perhitungan pada SATU periode saja (28–27),
+ * bukan kumulatif — itulah yang dipakai laporan bulanan Maahir: SP di sana
+ * menggambarkan disiplin bulan itu, bukan tumpukan sejak program dimulai.
  */
-export async function getMaahirSP(opts?: { gender?: Gender; sampaiBulan?: string }): Promise<SPRekap> {
+export async function getMaahirSP(opts?: {
+  gender?: Gender;
+  sampaiBulan?: string;
+  bulan?: string;
+}): Promise<SPRekap> {
   const hariIni = new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Jakarta' });
-  const batas = opts?.sampaiBulan ? periodeEndDate(opts.sampaiBulan) : hariIni;
+  const batas = opts?.bulan
+    ? periodeEndDate(opts.bulan)
+    : opts?.sampaiBulan
+      ? periodeEndDate(opts.sampaiBulan)
+      : hariIni;
   // Bulan berjalan belum selesai — jangan mengklaim data s/d tanggal 27 kalau
   // hari ini masih tanggal 10.
   const today = batas < hariIni ? batas : hariIni;
+  const mulai = opts?.bulan ? periodeStartDate(opts.bulan) : PROGRAM_START;
 
   let kq = supabaseAdmin.from('program_kelas').select('id, name, gender');
   if (opts?.gender) kq = kq.eq('gender', opts.gender);
   const { data: kelasRows } = await kq;
   const kelasList = (kelasRows ?? []) as Array<{ id: string; name: string; gender: Gender }>;
-  if (!kelasList.length) return emptySP(today);
+  if (!kelasList.length) return emptySP(today, mulai, !!opts?.bulan);
   const kelasById = new Map(kelasList.map((k) => [k.id, k]));
   const kelasIds = kelasList.map((k) => k.id);
 
@@ -121,6 +149,7 @@ export async function getMaahirSP(opts?: { gender?: Gender; sampaiBulan?: string
     .select('id, program_kelas_id, program, tanggal')
     .in('program_kelas_id', kelasIds)
     .eq('program', 'kelas_maahir')
+    .gte('tanggal', mulai)
     .lte('tanggal', today);
   const pertById = new Map(
     (pertRows ?? []).map((p) => [
@@ -129,9 +158,9 @@ export async function getMaahirSP(opts?: { gender?: Gender; sampaiBulan?: string
     ])
   );
   const pertIds = (pertRows ?? []).map((p) => p.id as string);
-  if (!pertIds.length) return emptySP(today);
+  if (!pertIds.length) return emptySP(today, mulai, !!opts?.bulan);
 
-  const liburByKelas = await getLiburDatesForKelas(kelasIds, PROGRAM_START, today);
+  const liburByKelas = await getLiburDatesForKelas(kelasIds, mulai, today);
 
   const { data: anggotaRows } = await supabaseAdmin
     .from('program_kelas_anggota')
@@ -302,6 +331,8 @@ export async function getMaahirSP(opts?: { gender?: Gender; sampaiBulan?: string
   return {
     list,
     cutoff: today,
+    mulai,
+    perBulan: !!opts?.bulan,
     summary: {
       // Ringkasan menghitung SP EFEKTIF saja — baris bank data tak ikut.
       total: list.filter((p) => p.sp >= 1).length,
