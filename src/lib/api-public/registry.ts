@@ -3,7 +3,7 @@ import type { EntityDef } from './types';
 
 export const FORBIDDEN_COLUMNS: string[] = [
   'password_hash',
-  'whatsapp_number', 'ketua_wa', 'wakil_wa',
+  'whatsapp_number', 'ketua_wa', 'wakil_wa', 'pengajar_wa',
   'magic_token',
   'new_password_plaintext',
   'token',
@@ -205,7 +205,7 @@ export const ENTITIES: Record<string, EntityDef> = {
   },
   'hits/keterangan-harian': {
     route: 'hits/keterangan-harian', table: 'hits_keterangan_harian', scope: 'hits',
-    columns: ['id', 'halaqah_id', 'level', 'pertemuan_no', 'tanggal', 'kondisi', 'status_latihan', 'source', 'created_at'],
+    columns: ['id', 'halaqah_id', 'level', 'pertemuan_no', 'tanggal', 'kondisi', 'status_latihan', 'created_at'],
     filters: [
       { param: 'halaqah_id', column: 'halaqah_id', kind: 'eq' },
       { param: 'level', column: 'level', kind: 'eq' },
@@ -248,7 +248,7 @@ export const ENTITIES: Record<string, EntityDef> = {
   },
   'hits/tabayyun': {
     route: 'hits/tabayyun', table: 'hits_tabayyun', scope: 'hits',
-    columns: ['id', 'keterangan_id', 'pengajar_id', 'status', 'kondisi', 'alasan', 'deadline_at', 'created_at'],
+    columns: ['id', 'keterangan_id', 'pengajar_id', 'status', 'kondisi', 'deadline_at', 'created_at'],
     filters: [
       { param: 'pengajar_id', column: 'pengajar_id', kind: 'eq' },
       { param: 'status', column: 'status', kind: 'eq' },
@@ -258,9 +258,8 @@ export const ENTITIES: Record<string, EntityDef> = {
   },
   'hits/kajian-presensi': {
     route: 'hits/kajian-presensi', table: 'hits_kajian_presensi', scope: 'hits',
-    columns: ['id', 'halaqah_id', 'tanggal', 'status', 'created_at'],
+    columns: ['id', 'tanggal', 'status', 'created_at'],
     filters: [
-      { param: 'halaqah_id', column: 'halaqah_id', kind: 'eq' },
       { param: 'status', column: 'status', kind: 'eq' },
       { param: 'tanggal_dari', column: 'tanggal', kind: 'date_from' },
       { param: 'tanggal_sampai', column: 'tanggal', kind: 'date_to' },

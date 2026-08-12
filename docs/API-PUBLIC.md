@@ -201,7 +201,7 @@ Kolom yang keluar per entitas:
 | `hits/hutang-bayar` | `halaqah_id`, `pengajar_id`, `tanggal_dari`, `tanggal_sampai` |
 | `hits/teguran` | `pengajar_id`, `category`, `year_month` |
 | `hits/tabayyun` | `pengajar_id`, `status`, `keterangan_id` |
-| `hits/kajian-presensi` | `halaqah_id`, `status`, `tanggal_dari`, `tanggal_sampai` |
+| `hits/kajian-presensi` | `status`, `tanggal_dari`, `tanggal_sampai` |
 | `hits/kajian-libur` | `tanggal_dari`, `tanggal_sampai` |
 | `hits/pengajar` | `gender`, `active`, `kelompok_id` |
 | `hits/kelompok-pengajar` | `gender` |
@@ -213,12 +213,12 @@ Kolom yang keluar per entitas:
 - **`hits/halaqah-peserta`**: `id`, `halaqah_id`, `murid_id`, `nama`, `is_ketua`, `created_at`
 - **`hits/kaldik-hari`**: `id`, `batch_id`, `level`, `tanggal`, `pekan`, `is_libur`
 - **`hits/kaldik-pertemuan`**: `id`, `halaqah_id`, `level`, `pertemuan_no`, `tanggal`, `is_skipped`, `note`
-- **`hits/keterangan-harian`**: `id`, `halaqah_id`, `level`, `pertemuan_no`, `tanggal`, `kondisi`, `status_latihan`, `source`, `created_at`
+- **`hits/keterangan-harian`**: `id`, `halaqah_id`, `level`, `pertemuan_no`, `tanggal`, `kondisi`, `status_latihan`, `created_at`
 - **`hits/pelanggaran`**: `id`, `keterangan_id`, `jenis`, `menit`
 - **`hits/hutang-bayar`**: `id`, `halaqah_id`, `pengajar_id`, `keterangan_id`, `menit`, `tanggal`, `created_at`
 - **`hits/teguran`**: `id`, `pengajar_id`, `category`, `year_month`, `nomor_teguran`, `created_at`
-- **`hits/tabayyun`**: `id`, `keterangan_id`, `pengajar_id`, `status`, `kondisi`, `alasan`, `deadline_at`, `created_at`
-- **`hits/kajian-presensi`**: `id`, `halaqah_id`, `tanggal`, `status`, `created_at`, **`ketua_nama`** *(lihat catatan di bawah)*
+- **`hits/tabayyun`**: `id`, `keterangan_id`, `pengajar_id`, `status`, `kondisi`, `deadline_at`, `created_at`
+- **`hits/kajian-presensi`**: `id`, `tanggal`, `status`, `created_at`, **`ketua_nama`** *(lihat catatan di bawah)*
 - **`hits/kajian-libur`**: `id`, `tanggal`
 - **`hits/pengajar`**: `id`, `name`, `gender`, `kelompok_id`, `is_ketua`, `matrix_exclude`, `active`, `created_at`
 - **`hits/kelompok-pengajar`**: `id`, `name`, `gender`, `created_at`
