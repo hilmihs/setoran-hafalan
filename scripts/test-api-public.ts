@@ -3,6 +3,7 @@
  */
 import { sanitize } from '../src/lib/api-public/sanitize';
 import { generateKey, hashKey, __verifyRow, recordUsage, __drainUsage, __resetAuthCache } from '../src/lib/api-public/auth';
+import { getCached, setCached, __resetCache, checkRateLimit, __resetRate, acquireInflight } from '../src/lib/api-public/cache';
 
 let passed = 0, failed = 0;
 function check(name: string, cond: boolean, extra = '') {
@@ -74,11 +75,46 @@ function testUsageAccrual() {
   check('drain resets', __drainUsage().length === 0);
 }
 
+function testCache() {
+  console.log('cache:');
+  __resetCache();
+  setCached('k1', { a: 1 }, 60);
+  const h = getCached('k1');
+  check('hit returns value', (h?.value as any)?.a === 1);
+  check('hit umur >= 0', typeof h?.umurDetik === 'number');
+  check('miss returns null', getCached('nope') === null);
+  const big = { s: 'x'.repeat(1_100_000) };
+  setCached('big', big, 60);
+  check('oversized not cached', getCached('big') === null);
+}
+
+function testRate() {
+  console.log('rate limit:');
+  __resetRate();
+  let last = true;
+  for (let i = 0; i < 120; i++) last = checkRateLimit('key', 120);
+  check('120th allowed', last === true);
+  check('121st blocked', checkRateLimit('key', 120) === false);
+  check('other key independent', checkRateLimit('key2', 120) === true);
+}
+
+async function testInflight() {
+  console.log('inflight:');
+  let active = 0, maxSeen = 0;
+  const job = () => new Promise<void>(res => { active++; maxSeen = Math.max(maxSeen, active); setTimeout(() => { active--; res(); }, 10); });
+  const runs = Array.from({ length: 8 }, () => acquireInflight(job, 4, 5000));
+  await Promise.all(runs);
+  check('never more than 4 concurrent', maxSeen <= 4);
+}
+
 async function main() {
   testSanitize();
   testKeyGen();
   testVerifyRow();
   testUsageAccrual();
+  testCache();
+  testRate();
+  await testInflight();
   console.log(`\n${passed} passed, ${failed} failed`);
   if (failed) process.exit(1);
 }
