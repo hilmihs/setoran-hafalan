@@ -201,6 +201,18 @@ function testMaahirRegistry() {
   check('aktif=maybe → 400', parseRequest(new URLSearchParams('aktif=maybe'), pmt).ok === false);
 }
 
+function testHitsRegistry() {
+  console.log('hits registry:');
+  const hits = Object.values(ENTITIES).filter(e => e.scope === 'hits');
+  check('14 hits entities', hits.length === 14);
+  check('halaqah-peserta drops ketua_wa', !getEntity('hits/halaqah-peserta')!.columns.includes('ketua_wa'));
+  check('kajian-presensi drops ketua_wa', !getEntity('hits/kajian-presensi')!.columns.includes('ketua_wa'));
+  check('kaldik-pertemuan drops set_by_id', !getEntity('hits/kaldik-pertemuan')!.columns.includes('set_by_id'));
+  check('keterangan-harian drops diisi_by_id', !getEntity('hits/keterangan-harian')!.columns.includes('diisi_by_id'));
+  check('tabayyun drops koordinator_kk_id', !getEntity('hits/tabayyun')!.columns.includes('koordinator_kk_id'));
+  check('pengajar drops whatsapp_number', !getEntity('hits/pengajar')!.columns.includes('whatsapp_number'));
+}
+
 function testScope() {
   console.log('scope gate:');
   check('maahir key → maahir entity ok', scopeAllows(['maahir'], 'maahir'));
@@ -212,6 +224,7 @@ async function main() {
   testParse();
   testScope();
   testMaahirRegistry();
+  testHitsRegistry();
   testSanitize();
   testKeyGen();
   testVerifyRow();

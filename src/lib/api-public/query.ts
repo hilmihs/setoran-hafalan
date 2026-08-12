@@ -66,3 +66,24 @@ export async function runEntity(def: EntityDef, parsed: Extract<ParseResult, { o
   const { data, count } = await q;
   return { rows: data ?? [], total: count ?? 0 };
 }
+
+/** Injeksi ketua_nama ke baris kajian-presensi tanpa pernah membocorkan ketua_wa. */
+export async function resolveKajianPresensi(rows: Array<Record<string, unknown>>): Promise<Array<Record<string, unknown>>> {
+  if (!rows.length) return rows;
+  const ids = rows.map(r => r.id as string);
+  // 1) ambil ketua_wa per baris (kolom ini TIDAK ada di columns entitas → query terpisah)
+  const { data: waRows } = await supabaseAdmin.from('hits_kajian_presensi').select('id, ketua_wa').in('id', ids);
+  const idToWa = new Map<string, string | null>();
+  for (const w of (waRows ?? []) as Array<{ id: string; ketua_wa: string | null }>) idToWa.set(w.id, w.ketua_wa);
+  // 2) peta ketua_wa → nama dari hits_halaqah_peserta
+  const { data: pesRows } = await supabaseAdmin.from('hits_halaqah_peserta').select('ketua_wa, name');
+  const waToName = new Map<string, string>();
+  for (const p of (pesRows ?? []) as Array<{ ketua_wa: string | null; name: string }>) {
+    if (p.ketua_wa) waToName.set(p.ketua_wa, p.name);
+  }
+  // 3) set ketua_nama; JANGAN pernah menaruh ketua_wa ke baris keluaran
+  return rows.map(r => {
+    const wa = idToWa.get(r.id as string) ?? null;
+    return { ...r, ketua_nama: wa ? (waToName.get(wa) ?? null) : null };
+  });
+}

@@ -152,6 +152,146 @@ export const ENTITIES: Record<string, EntityDef> = {
     ],
     order: { column: 'created_at', dir: 'desc' },
   },
+  'hits/batch': {
+    route: 'hits/batch', table: 'hits_batch', scope: 'hits',
+    columns: ['id', 'slug', 'name', 'start_date', 'active', 'created_at'],
+    filters: [{ param: 'active', column: 'active', kind: 'bool' }],
+    order: { column: 'created_at', dir: 'desc' },
+  },
+  'hits/halaqah': {
+    route: 'hits/halaqah', table: 'hits_halaqah', scope: 'hits',
+    columns: ['id', 'batch_id', 'name', 'gender', 'pengajar_id', 'level', 'program', 'start_date', 'jadwal_hari', 'created_at'],
+    filters: [
+      { param: 'batch_id', column: 'batch_id', kind: 'eq' },
+      { param: 'gender', column: 'gender', kind: 'eq' },
+      { param: 'pengajar_id', column: 'pengajar_id', kind: 'eq' },
+      { param: 'level', column: 'level', kind: 'eq' },
+      { param: 'program', column: 'program', kind: 'eq' },
+    ],
+    order: { column: 'created_at', dir: 'desc' },
+  },
+  'hits/halaqah-peserta': {
+    route: 'hits/halaqah-peserta', table: 'hits_halaqah_peserta', scope: 'hits',
+    columns: ['id', 'halaqah_id', 'murid_id', 'name', 'is_ketua', 'created_at'],
+    filters: [
+      { param: 'halaqah_id', column: 'halaqah_id', kind: 'eq' },
+      { param: 'is_ketua', column: 'is_ketua', kind: 'bool' },
+    ],
+    order: { column: 'created_at', dir: 'desc' },
+  },
+  'hits/kaldik-hari': {
+    route: 'hits/kaldik-hari', table: 'hits_kaldik_hari', scope: 'hits',
+    columns: ['id', 'batch_id', 'level', 'tanggal', 'pekan', 'is_libur'],
+    filters: [
+      { param: 'batch_id', column: 'batch_id', kind: 'eq' },
+      { param: 'level', column: 'level', kind: 'eq' },
+      { param: 'tanggal_dari', column: 'tanggal', kind: 'date_from' },
+      { param: 'tanggal_sampai', column: 'tanggal', kind: 'date_to' },
+      { param: 'pekan', column: 'pekan', kind: 'eq' },
+      { param: 'is_libur', column: 'is_libur', kind: 'bool' },
+    ],
+    order: { column: 'tanggal', dir: 'asc' },
+  },
+  'hits/kaldik-pertemuan': {
+    route: 'hits/kaldik-pertemuan', table: 'hits_kaldik_pertemuan', scope: 'hits',
+    columns: ['id', 'halaqah_id', 'level', 'pertemuan_no', 'tanggal', 'is_skipped', 'note'],
+    filters: [
+      { param: 'halaqah_id', column: 'halaqah_id', kind: 'eq' },
+      { param: 'level', column: 'level', kind: 'eq' },
+      { param: 'pertemuan_no', column: 'pertemuan_no', kind: 'eq' },
+      { param: 'is_skipped', column: 'is_skipped', kind: 'bool' },
+    ],
+    order: { column: 'pertemuan_no', dir: 'asc' },
+  },
+  'hits/keterangan-harian': {
+    route: 'hits/keterangan-harian', table: 'hits_keterangan_harian', scope: 'hits',
+    columns: ['id', 'halaqah_id', 'level', 'pertemuan_no', 'tanggal', 'kondisi', 'status_latihan', 'source', 'created_at'],
+    filters: [
+      { param: 'halaqah_id', column: 'halaqah_id', kind: 'eq' },
+      { param: 'level', column: 'level', kind: 'eq' },
+      { param: 'pertemuan_no', column: 'pertemuan_no', kind: 'eq' },
+      { param: 'kondisi', column: 'kondisi', kind: 'eq' },
+      { param: 'tanggal_dari', column: 'tanggal', kind: 'date_from' },
+      { param: 'tanggal_sampai', column: 'tanggal', kind: 'date_to' },
+    ],
+    order: { column: 'tanggal', dir: 'desc' },
+  },
+  'hits/pelanggaran': {
+    route: 'hits/pelanggaran', table: 'hits_pelanggaran', scope: 'hits',
+    columns: ['id', 'keterangan_id', 'jenis', 'menit'],
+    filters: [
+      { param: 'keterangan_id', column: 'keterangan_id', kind: 'eq' },
+      { param: 'jenis', column: 'jenis', kind: 'eq' },
+    ],
+    order: { column: 'id', dir: 'asc' },
+  },
+  'hits/hutang-bayar': {
+    route: 'hits/hutang-bayar', table: 'hits_hutang_bayar', scope: 'hits',
+    columns: ['id', 'halaqah_id', 'pengajar_id', 'keterangan_id', 'menit', 'tanggal', 'created_at'],
+    filters: [
+      { param: 'halaqah_id', column: 'halaqah_id', kind: 'eq' },
+      { param: 'pengajar_id', column: 'pengajar_id', kind: 'eq' },
+      { param: 'tanggal_dari', column: 'tanggal', kind: 'date_from' },
+      { param: 'tanggal_sampai', column: 'tanggal', kind: 'date_to' },
+    ],
+    order: { column: 'tanggal', dir: 'desc' },
+  },
+  'hits/teguran': {
+    route: 'hits/teguran', table: 'hits_teguran', scope: 'hits',
+    columns: ['id', 'pengajar_id', 'category', 'year_month', 'nomor_teguran', 'created_at'],
+    filters: [
+      { param: 'pengajar_id', column: 'pengajar_id', kind: 'eq' },
+      { param: 'category', column: 'category', kind: 'eq' },
+      { param: 'year_month', column: 'year_month', kind: 'eq' },
+    ],
+    order: { column: 'created_at', dir: 'desc' },
+  },
+  'hits/tabayyun': {
+    route: 'hits/tabayyun', table: 'hits_tabayyun', scope: 'hits',
+    columns: ['id', 'keterangan_id', 'pengajar_id', 'status', 'kondisi', 'alasan', 'deadline_at', 'created_at'],
+    filters: [
+      { param: 'pengajar_id', column: 'pengajar_id', kind: 'eq' },
+      { param: 'status', column: 'status', kind: 'eq' },
+      { param: 'keterangan_id', column: 'keterangan_id', kind: 'eq' },
+    ],
+    order: { column: 'created_at', dir: 'desc' },
+  },
+  'hits/kajian-presensi': {
+    route: 'hits/kajian-presensi', table: 'hits_kajian_presensi', scope: 'hits',
+    columns: ['id', 'halaqah_id', 'tanggal', 'status', 'created_at'],
+    filters: [
+      { param: 'halaqah_id', column: 'halaqah_id', kind: 'eq' },
+      { param: 'status', column: 'status', kind: 'eq' },
+      { param: 'tanggal_dari', column: 'tanggal', kind: 'date_from' },
+      { param: 'tanggal_sampai', column: 'tanggal', kind: 'date_to' },
+    ],
+    order: { column: 'tanggal', dir: 'desc' },
+  },
+  'hits/kajian-libur': {
+    route: 'hits/kajian-libur', table: 'hits_kajian_libur', scope: 'hits',
+    columns: ['id', 'tanggal'],
+    filters: [
+      { param: 'tanggal_dari', column: 'tanggal', kind: 'date_from' },
+      { param: 'tanggal_sampai', column: 'tanggal', kind: 'date_to' },
+    ],
+    order: { column: 'tanggal', dir: 'desc' },
+  },
+  'hits/pengajar': {
+    route: 'hits/pengajar', table: 'pengajar', scope: 'hits',
+    columns: ['id', 'name', 'gender', 'kelompok_id', 'is_ketua', 'matrix_exclude', 'active', 'created_at'],
+    filters: [
+      { param: 'gender', column: 'gender', kind: 'eq' },
+      { param: 'active', column: 'active', kind: 'bool' },
+      { param: 'kelompok_id', column: 'kelompok_id', kind: 'eq' },
+    ],
+    order: { column: 'name', dir: 'asc' },
+  },
+  'hits/kelompok-pengajar': {
+    route: 'hits/kelompok-pengajar', table: 'kelompok_pengajar', scope: 'hits',
+    columns: ['id', 'name', 'gender', 'created_at'],
+    filters: [{ param: 'gender', column: 'gender', kind: 'eq' }],
+    order: { column: 'name', dir: 'asc' },
+  },
 };
 
 auditEntities(ENTITIES);

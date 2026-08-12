@@ -1,7 +1,7 @@
 import { NextRequest } from 'next/server';
 import { verifyBearer, recordUsage, flushUsage } from '@/lib/api-public/auth';
 import { getEntity } from '@/lib/api-public/registry';
-import { parseRequest, runEntity, scopeAllows } from '@/lib/api-public/query';
+import { parseRequest, runEntity, scopeAllows, resolveKajianPresensi } from '@/lib/api-public/query';
 import { sanitize } from '@/lib/api-public/sanitize';
 import { ok, fail, handle } from '@/lib/api-public/respond';
 import { getCached, setCached, checkRateLimit, acquireInflight } from '@/lib/api-public/cache';
@@ -57,7 +57,10 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ path: strin
       }, { ifNoneMatch, ttlSec: ENTITY_TTL });
     }
 
-    const { rows, total } = await acquireInflight(() => runEntity(def, parsed), MAX_INFLIGHT, 5000);
+    const result = await acquireInflight(() => runEntity(def, parsed), MAX_INFLIGHT, 5000);
+    let rows = result.rows as Array<Record<string, unknown>>;
+    const total = result.total;
+    if (route === 'hits/kajian-presensi') rows = await resolveKajianPresensi(rows);
     const data = sanitize(rows);
     setCached(cacheKey, { data, total }, ENTITY_TTL);
 
