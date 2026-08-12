@@ -3,7 +3,14 @@ import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { requireKoordinatorKetuaKelas } from '@/lib/session';
 import { getNoDataActionInfo, type InsidenDetail } from '@/lib/hits-ranking';
-import { getHitsKoordinatorRekap, type HitsMode } from '@/lib/hits-koordinator-rekap';
+import {
+  getHitsKoordinatorRekap,
+  parseRekapFilter,
+  filterQuery,
+  filterAktif,
+  type HitsMode,
+  type RekapFilter,
+} from '@/lib/hits-koordinator-rekap';
 import { getHitsPengajuan } from '@/lib/hits-pengajuan';
 import type { CakupanPengajar, PertemuanObservasi } from '@/lib/hits-observasi-cakupan';
 import { GenderNavSelect } from '@/components/GenderNavSelect';
@@ -171,6 +178,17 @@ function InsidenDetailRows({ list }: { list: InsidenDetail[] }) {
                   {i.catatanKetua?.trim() || '—'}
                 </td>
                 <td className="t-tiny" style={{ color: 'var(--muted-2)', maxWidth: 220 }}>
+                  {i.dariIzin && (
+                    <div style={{ marginBottom: 2 }}>
+                      <span
+                        className="badge"
+                        title="Alasan diambil dari izin yang pengajar kirim lewat Shakwa sebelum kelas — tak perlu tabayyun susulan."
+                        style={{ background: 'var(--hijau-tint)', borderColor: 'var(--hijau-line)', color: 'var(--hijau-ink)' }}
+                      >
+                        Izin pra-kelas
+                      </span>
+                    </div>
+                  )}
                   {i.alasanPengajar?.trim() || '—'}
                 </td>
                 <td className="t-tiny" style={{ maxWidth: 180 }}>
@@ -191,7 +209,10 @@ function InsidenDetailRows({ list }: { list: InsidenDetail[] }) {
 export default async function HitsKoordinatorPage({
   searchParams,
 }: {
-  searchParams: { mode?: string; month?: string; week?: string; gender?: string; sort?: string; dir?: string };
+  searchParams: {
+    mode?: string; month?: string; week?: string; gender?: string; sort?: string; dir?: string;
+    masalah?: string; obs?: string;
+  };
 }) {
   try {
     await requireKoordinatorKetuaKelas();
@@ -220,9 +241,12 @@ export default async function HitsKoordinatorPage({
       ? searchParams.gender
       : undefined;
 
+  const filter = parseRekapFilter({ masalah: searchParams.masalah, obs: searchParams.obs });
+
   // Satu loader dipakai bersama halaman ini, export XLSX, dan halaman cetak —
   // supaya angka di layar dan di file tak mungkin berbeda.
-  const rekap = await getHitsKoordinatorRekap({ mode, month, week, gender: genderFilter });
+  const rekap = await getHitsKoordinatorRekap({ mode, month, week, gender: genderFilter, filter });
+  const counts = rekap.counts;
   const periodeLabel = rekap.periodeLabel;
   const insidenByPengajar = rekap.insidenByPengajar;
   const cakupanByPengajar = rekap.cakupanByPengajar;
@@ -247,11 +271,19 @@ export default async function HitsKoordinatorPage({
       return dir === 'asc' ? av - bv : bv - av;
     });
   }
-  // Base query utk link sortir (pertahankan periode + gender).
+  // Base query utk link sortir (pertahankan periode + gender + filter). Tombol
+  // Unduh XLSX & Cetak memakai base yang sama, jadi filter aktif ikut terbawa.
   const sortBase =
     `?mode=${mode}` +
     (mode === 'minggu' ? `&week=${week}` : `&month=${month}`) +
+    (genderFilter ? `&gender=${genderFilter}` : '') +
+    filterQuery(filter);
+  /** Base tanpa filter — dipakai chip untuk menyusun kombinasi filter baru. */
+  const periodeBase =
+    `?mode=${mode}` +
+    (mode === 'minggu' ? `&week=${week}` : `&month=${month}`) +
     (genderFilter ? `&gender=${genderFilter}` : '');
+  const chipHref = (next: RekapFilter) => `${periodeBase}${filterQuery(next)}`;
   const sortHref = (key: SortKey) => {
     const nextDir = sortKey === key && dir === 'desc' ? 'asc' : 'desc';
     return `${sortBase}&sort=${key}&dir=${nextDir}`;
@@ -373,7 +405,9 @@ export default async function HitsKoordinatorPage({
                 </p>
                 <p className="t-tiny" style={{ color: 'var(--muted)', marginTop: 8 }}>
                   {mode === 'minggu' ? 'Mingguan' : 'Bulanan'} · {periodeLabel} · {genderLabel} ·{' '}
-                  {ranked.length} pengajar
+                  {filterAktif(filter)
+                    ? `${ranked.length + noData.length} dari ${counts.total} pengajar (difilter)`
+                    : `${ranked.length} pengajar`}
                 </p>
               </div>
               <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
@@ -401,6 +435,41 @@ export default async function HitsKoordinatorPage({
                 <GenderNavSelect value={genderFilter ?? ''} />
               </div>
             </div>
+
+            {/* Penyaring — dua grup yang bisa dipakai bersamaan: 'bermasalah DAN
+                observasinya belum lengkap' adalah kasus paling rawan salah nilai. */}
+            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center', marginTop: 14 }}>
+              <Link
+                href={chipHref({ ...filter, masalah: !filter.masalah })}
+                className="chip-select"
+                title="Punya insiden KMT/KBLA/JKG/TL pada periode ini"
+                style={{ fontWeight: filter.masalah ? 700 : 400, opacity: filter.masalah ? 1 : 0.7 }}
+              >
+                Bermasalah ({counts.bermasalah})
+              </Link>
+              <span className="t-tiny" style={{ color: 'var(--muted-2)', marginLeft: 6 }}>
+                Observasi:
+              </span>
+              {([
+                { v: 'semua' as const, label: 'Semua' },
+                { v: 'belum' as const, label: `Belum lengkap (${counts.obsBelum})` },
+                { v: 'lengkap' as const, label: `Lengkap (${counts.obsLengkap})` },
+              ]).map((o) => (
+                <Link
+                  key={o.v}
+                  href={chipHref({ ...filter, obs: o.v })}
+                  className="chip-select"
+                  style={{ fontWeight: filter.obs === o.v ? 700 : 400, opacity: filter.obs === o.v ? 1 : 0.7 }}
+                >
+                  {o.label}
+                </Link>
+              ))}
+              {filterAktif(filter) && (
+                <Link href={periodeBase} className="t-tiny" style={{ color: 'var(--muted-2)', marginLeft: 4 }}>
+                  Reset filter
+                </Link>
+              )}
+            </div>
           </div>
 
           {ranked.length === 0 && noData.length === 0 ? (
@@ -414,10 +483,26 @@ export default async function HitsKoordinatorPage({
               >
                 {Icon.shield(22)}
               </div>
-              <p className="t-h3" style={{ marginBottom: 4 }}>Belum ada data</p>
-              <p className="t-small" style={{ color: 'var(--muted-2)' }}>
-                Tak ada pengajar/keterangan pada periode ini.
-              </p>
+              {filterAktif(filter) ? (
+                <>
+                  <p className="t-h3" style={{ marginBottom: 4 }}>Tak ada pengajar cocok filter</p>
+                  <p className="t-small" style={{ color: 'var(--muted-2)' }}>
+                    {counts.total} pengajar ada di periode ini, tapi tak satu pun memenuhi filter yang aktif.
+                  </p>
+                  <p style={{ marginTop: 10 }}>
+                    <Link href={periodeBase} className="t-small" style={{ color: 'var(--accent)' }}>
+                      Reset filter
+                    </Link>
+                  </p>
+                </>
+              ) : (
+                <>
+                  <p className="t-h3" style={{ marginBottom: 4 }}>Belum ada data</p>
+                  <p className="t-small" style={{ color: 'var(--muted-2)' }}>
+                    Tak ada pengajar/keterangan pada periode ini.
+                  </p>
+                </>
+              )}
             </div>
           ) : (
             <>

@@ -1,6 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSession } from '@/lib/session';
-import { getHitsKoordinatorRekap, type HitsMode } from '@/lib/hits-koordinator-rekap';
+import {
+  getHitsKoordinatorRekap,
+  parseRekapFilter,
+  filterAktif,
+  type HitsMode,
+} from '@/lib/hits-koordinator-rekap';
 import { buildHitsDisiplinWorkbook } from '@/lib/hits-disiplin-xlsx';
 import { weekStartMonday } from '@/lib/week';
 import type { Gender } from '@/types/db';
@@ -44,11 +49,20 @@ export async function GET(req: NextRequest) {
   const gender: Gender | undefined =
     genderRaw === 'ikhwan' || genderRaw === 'akhwat' ? genderRaw : undefined;
 
-  const rekap = await getHitsKoordinatorRekap({ mode, month, week, gender });
+  // Filter mengikuti chip yang aktif di halaman — tombol unduh meneruskan
+  // querystring apa adanya, jadi isi file = apa yang koordinator lihat.
+  const filter = parseRekapFilter({ masalah: q.get('masalah'), obs: q.get('obs') });
+
+  const rekap = await getHitsKoordinatorRekap({ mode, month, week, gender, filter });
   const buffer = await buildHitsDisiplinWorkbook(rekap);
 
   const periode = mode === 'minggu' ? week : month;
-  const namaFile = `ranking-disiplin-${periode}${gender ? `-${gender}` : ''}.xlsx`;
+  const sufiksFilter = filterAktif(filter)
+    ? `-${[filter.masalah ? 'bermasalah' : null, filter.obs !== 'semua' ? `obs${filter.obs}` : null]
+        .filter(Boolean)
+        .join('-')}`
+    : '';
+  const namaFile = `ranking-disiplin-${periode}${gender ? `-${gender}` : ''}${sufiksFilter}.xlsx`;
 
   return new NextResponse(buffer, {
     status: 200,

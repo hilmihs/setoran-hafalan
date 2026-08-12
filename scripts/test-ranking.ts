@@ -1,6 +1,16 @@
 // Uji fungsi murni week helpers + ranking disiplin. Jalankan: npm run test-ranking
 import { weekStartMonday, weekBounds, formatWeekRangeShort, recentMondays } from '@/lib/week';
 import { rankFromAggregates, type DisiplinAgg } from '@/lib/hits-ranking';
+import {
+  parseRekapFilter,
+  filterQuery,
+  filterAktif,
+  filterLabel,
+  isBermasalah,
+  isObsLengkap,
+  FILTER_NETRAL,
+} from '@/lib/hits-koordinator-rekap';
+import type { CakupanPengajar } from '@/lib/hits-observasi-cakupan';
 
 let failed = 0;
 function eq(actual: unknown, expected: unknown, label: string) {
@@ -80,6 +90,33 @@ eq(tie.map((r) => r.pengajarNama), ['Amir', 'Zaid'], 'seri penuh -> urut nama');
 
 // agregat: fungsi murni terima nilai sudah dijumlah (uji pembagian pct)
 eq(rankFromAggregates([A('x', 'X', 17, 20, 20, 20, 0)])[0].pctOnTime, 85, 'pctOnTime 17/20 -> 85 (dibulatkan)');
+
+// --- filter rekap koordinator (chip Bermasalah + kelengkapan observasi) ---
+const bersih = rankFromAggregates([A('n', 'Nihil', 10, 10, 10, 10, 0)])[0];
+eq(isBermasalah(bersih), false, 'tanpa insiden -> tidak bermasalah');
+eq(isBermasalah({ ...bersih, kmt: 1 }), true, 'KMT 1 -> bermasalah');
+eq(isBermasalah({ ...bersih, tidakLatihan: 2 }), true, 'TL saja tetap bermasalah');
+eq(isBermasalah({ ...bersih, hutangSaldo: 120 }), false, 'hutang menit bukan penanda insiden periode ini');
+
+const cak = (sudah: number, belum: number): CakupanPengajar => ({
+  pengajarId: 'x', pertemuan: [], sudah, belum, total: sudah + belum,
+  persen: sudah + belum > 0 ? Math.round((sudah / (sudah + belum)) * 100) : null,
+});
+eq(isObsLengkap(cak(4, 0)), true, '4 dari 4 terobservasi -> lengkap');
+eq(isObsLengkap(cak(3, 1)), false, 'sisa 1 belum -> belum lengkap');
+eq(isObsLengkap(cak(0, 0)), false, 'nol pertemuan -> belum lengkap (bukan lengkap)');
+eq(isObsLengkap(undefined), false, 'tanpa cakupan (blok belum ada data) -> belum lengkap');
+
+eq(parseRekapFilter({}), FILTER_NETRAL, 'query kosong -> filter netral');
+eq(parseRekapFilter({ masalah: '1', obs: 'belum' }), { masalah: true, obs: 'belum' }, 'parse dua filter');
+eq(parseRekapFilter({ masalah: '0', obs: 'ngawur' }), FILTER_NETRAL, 'nilai asing jatuh ke netral');
+eq(filterQuery(FILTER_NETRAL), '', 'filter netral tak menambah querystring');
+eq(filterQuery({ masalah: true, obs: 'lengkap' }), '&masalah=1&obs=lengkap', 'querystring dua filter');
+eq(parseRekapFilter({ masalah: '1', obs: 'lengkap' }), { masalah: true, obs: 'lengkap' }, 'parse(filterQuery(x)) konsisten');
+eq(filterAktif(FILTER_NETRAL), false, 'netral = tidak aktif');
+eq(filterAktif({ masalah: false, obs: 'belum' }), true, 'obs saja sudah dianggap aktif');
+eq(filterLabel(FILTER_NETRAL), null, 'label netral null');
+eq(filterLabel({ masalah: true, obs: 'belum' }), 'bermasalah · observasi belum lengkap', 'label kombinasi');
 
 if (failed) { console.error(`\n${failed} test GAGAL`); process.exit(1); }
 console.log('\nSemua test lolos');

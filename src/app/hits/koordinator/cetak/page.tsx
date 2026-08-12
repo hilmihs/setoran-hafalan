@@ -1,7 +1,13 @@
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { getSession } from '@/lib/session';
-import { getHitsKoordinatorRekap, type HitsMode } from '@/lib/hits-koordinator-rekap';
+import {
+  getHitsKoordinatorRekap,
+  parseRekapFilter,
+  filterQuery,
+  filterLabel,
+  type HitsMode,
+} from '@/lib/hits-koordinator-rekap';
 import { weekStartMonday } from '@/lib/week';
 import type { Gender } from '@/types/db';
 import { PrintButton } from '@/components/PrintButton';
@@ -32,7 +38,7 @@ function pctInk(p: number | null): string | undefined {
 export default async function CetakHitsKoordinatorPage({
   searchParams,
 }: {
-  searchParams: { mode?: string; month?: string; week?: string; gender?: string };
+  searchParams: { mode?: string; month?: string; week?: string; gender?: string; masalah?: string; obs?: string };
 }) {
   const s = await getSession();
   const accesses = s.accesses ?? (s.session ? [s.session] : []);
@@ -53,12 +59,16 @@ export default async function CetakHitsKoordinatorPage({
       ? searchParams.gender
       : undefined;
 
-  const r = await getHitsKoordinatorRekap({ mode, month, week, gender });
+  const filter = parseRekapFilter({ masalah: searchParams.masalah, obs: searchParams.obs });
+  const r = await getHitsKoordinatorRekap({ mode, month, week, gender, filter });
+  // Judul menyebut filter aktif — kertas hasil cetak gampang disangka daftar lengkap.
+  const labelFilter = filterLabel(filter);
 
   const kembali =
     `/hits/koordinator?mode=${mode}` +
     (mode === 'minggu' ? `&week=${week}` : `&month=${month}`) +
-    (gender ? `&gender=${gender}` : '');
+    (gender ? `&gender=${gender}` : '') +
+    filterQuery(filter);
 
   const semua = [...r.ranked, ...r.noData];
   const totalInsiden = semua.reduce(
@@ -87,6 +97,11 @@ export default async function CetakHitsKoordinatorPage({
         {mode === 'minggu' ? 'Mingguan' : 'Bulanan'} · {r.periodeLabel} · {r.genderLabel} ·{' '}
         {r.ranked.length} pengajar berperingkat
         {r.noData.length > 0 && `, ${r.noData.length} tanpa data`}
+        {labelFilter && (
+          <>
+            {' '}· <strong>disaring: {labelFilter}</strong> (dari {r.counts.total} pengajar)
+          </>
+        )}
       </p>
 
       {/* ── Ranking ── */}
