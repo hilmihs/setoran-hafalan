@@ -4,6 +4,7 @@
 import { sanitize } from '../src/lib/api-public/sanitize';
 import { generateKey, hashKey, __verifyRow, recordUsage, __drainUsage, __resetAuthCache } from '../src/lib/api-public/auth';
 import { getCached, setCached, __resetCache, checkRateLimit, __resetRate, acquireInflight } from '../src/lib/api-public/cache';
+import { etagOf, fail, ok } from '../src/lib/api-public/respond';
 
 let passed = 0, failed = 0;
 function check(name: string, cond: boolean, extra = '') {
@@ -107,6 +108,18 @@ async function testInflight() {
   check('never more than 4 concurrent', maxSeen <= 4);
 }
 
+function testRespond() {
+  console.log('respond:');
+  const e1 = etagOf({ a: 1, b: 2 });
+  const e2 = etagOf({ a: 1, b: 2 });
+  const e3 = etagOf({ a: 1, b: 3 });
+  check('same content same etag', e1 === e2);
+  check('diff content diff etag', e1 !== e3);
+  const f = fail('forbidden_scope', "Key tidak punya scope 'hits'.", 403);
+  check('fail status 403', f.status === 403);
+  void ok;
+}
+
 async function main() {
   testSanitize();
   testKeyGen();
@@ -115,6 +128,7 @@ async function main() {
   testCache();
   testRate();
   await testInflight();
+  testRespond();
   console.log(`\n${passed} passed, ${failed} failed`);
   if (failed) process.exit(1);
 }
