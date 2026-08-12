@@ -1,5 +1,5 @@
 'use client';
-import { useState, useTransition } from 'react';
+import { useMemo, useState, useTransition } from 'react';
 import { submitKoreksi } from './actions';
 import type { KoreksiItemInput } from '@/lib/hits-koreksi';
 
@@ -13,6 +13,23 @@ export function KoreksiPanel({ halaqahId, slots }: { halaqahId: string; slots: S
 
   const add = (it: KoreksiItemInput) => setItems((p) => [...p, it]);
   const removeAt = (i: number) => setItems((p) => p.filter((_, idx) => idx !== i));
+
+  // Nomor yang sedang dipakai per tahap — dari daftar pertemuan sekarang plus
+  // penambahan yang sudah masuk draft. Nomor yang pernah dihapus tidak ada di
+  // `slots`, jadi otomatis boleh dipakai lagi.
+  const takenByLevel = useMemo(() => {
+    const m = new Map<string, Set<number>>();
+    const put = (level: string, no: number) => {
+      const set = m.get(level) ?? new Set<number>();
+      set.add(no);
+      m.set(level, set);
+    };
+    for (const s of slots) put(s.level, s.pertemuan_no);
+    for (const it of items) {
+      if (it.jenis === 'tambah' && it.level && it.pertemuan_no != null) put(it.level, it.pertemuan_no);
+    }
+    return m;
+  }, [slots, items]);
 
   function submit() {
     setErr(null);
@@ -35,7 +52,7 @@ export function KoreksiPanel({ halaqahId, slots }: { halaqahId: string; slots: S
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
       <SetMulai onAdd={add} />
-      <TambahPertemuan onAdd={add} />
+      <TambahPertemuan onAdd={add} taken={takenByLevel} />
       <div>
         <div className="t-tiny" style={{ marginBottom: 6, color: 'var(--muted-2)' }}>Pertemuan saat ini — pilih aksi:</div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
@@ -63,7 +80,7 @@ export function KoreksiPanel({ halaqahId, slots }: { halaqahId: string; slots: S
 
 function describe(it: KoreksiItemInput): string {
   if (it.jenis === 'set_mulai') return `Set mulai: ${it.tanggal}`;
-  if (it.jenis === 'tambah') return `Tambah (${it.level}): ${it.tanggal}`;
+  if (it.jenis === 'tambah') return `Tambah ${it.pertemuan_no != null ? `#${it.pertemuan_no} ` : ''}(${it.level}): ${it.tanggal}`;
   if (it.jenis === 'hapus') return `Hapus #${it.pertemuan_no} (${it.level})`;
   return `Ubah #${it.pertemuan_no} (${it.level}) → ${it.tanggal}`;
 }
@@ -81,9 +98,23 @@ function SetMulai({ onAdd }: { onAdd: (it: KoreksiItemInput) => void }) {
   );
 }
 
-function TambahPertemuan({ onAdd }: { onAdd: (it: KoreksiItemInput) => void }) {
+function TambahPertemuan({ onAdd, taken }: { onAdd: (it: KoreksiItemInput) => void; taken: Map<string, Set<number>> }) {
   const [lv, setLv] = useState('qoidah_nuroniyyah');
   const [d, setD] = useState('');
+  const [no, setNo] = useState('');
+
+  const used = taken.get(lv) ?? new Set<number>();
+  const maxNo = used.size ? Math.max(...used) : 0;
+  // Lubang di bawah nomor tertinggi = bekas pertemuan yang dihapus. Ini yang
+  // biasanya mau diisi ulang, jadi ditawarkan langsung.
+  const lubang: number[] = [];
+  for (let i = 1; i <= maxNo; i++) if (!used.has(i)) lubang.push(i);
+
+  const noNum = no.trim() === '' ? null : Number(no);
+  const noSalah = noNum != null && (!Number.isInteger(noNum) || noNum < 1 || noNum > 200);
+  const noBentrok = noNum != null && used.has(noNum);
+  const bisaTambah = !!d && !noSalah && !noBentrok;
+
   return (
     <div className="card-flat" style={{ padding: 12 }}>
       <div className="t-tiny" style={{ marginBottom: 4 }}>Tambah pertemuan (yang terlewat)</div>
@@ -92,8 +123,28 @@ function TambahPertemuan({ onAdd }: { onAdd: (it: KoreksiItemInput) => void }) {
           <option value="qoidah_nuroniyyah">Nuroniyyah</option>
           <option value="perbaikan_bacaan">Perbaikan</option>
         </select>
+        <input
+          type="number" min={1} max={200} inputMode="numeric" value={no}
+          onChange={(e) => setNo(e.target.value)} className="input"
+          placeholder={`#${maxNo + 1}`} style={{ width: 88 }} aria-label="Nomor pertemuan"
+        />
         <input type="date" value={d} onChange={(e) => setD(e.target.value)} className="input" style={{ flex: 1 }} />
-        <button type="button" className="btn btn-sm" disabled={!d} onClick={() => { onAdd({ jenis: 'tambah', level: lv as KoreksiItemInput['level'], tanggal: d }); setD(''); }}>+ tambah</button>
+        <button
+          type="button" className="btn btn-sm" disabled={!bisaTambah}
+          onClick={() => {
+            onAdd({ jenis: 'tambah', level: lv as KoreksiItemInput['level'], pertemuan_no: noNum, tanggal: d });
+            setD(''); setNo('');
+          }}
+        >+ tambah</button>
+      </div>
+      <div className="t-tiny" style={{ marginTop: 6, color: noBentrok || noSalah ? 'var(--danger)' : 'var(--muted-2)' }}>
+        {noBentrok
+          ? `Pertemuan ${noNum} sudah ada — pakai nomor lain, atau ubah tanggalnya lewat daftar di bawah.`
+          : noSalah
+            ? 'Nomor pertemuan harus 1–200.'
+            : lubang.length > 0
+              ? `Nomor kosong (bekas dihapus): ${lubang.join(', ')}. Kosongkan nomor untuk taruh di urutan terakhir (#${maxNo + 1}).`
+              : `Kosongkan nomor untuk taruh di urutan terakhir (#${maxNo + 1}).`}
       </div>
     </div>
   );

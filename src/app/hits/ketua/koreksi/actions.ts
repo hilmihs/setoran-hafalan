@@ -3,7 +3,7 @@ import { supabaseAdmin } from '@/lib/supabase-admin';
 import { requireKetuaKelas } from '@/lib/session';
 import { absUrl } from '@/lib/url';
 import { buildWaMeUrl, tplKoreksiPertemuanApproval } from '@/lib/whatsapp';
-import { determineKoreksiApprover, type KoreksiItemInput } from '@/lib/hits-koreksi';
+import { determineKoreksiApprover, validateKoreksiItems, type KoreksiItemInput } from '@/lib/hits-koreksi';
 import { logAudit } from '@/lib/audit';
 
 export type SubmitKoreksiResult = { ok?: boolean; error?: string; waUrl?: string };
@@ -31,6 +31,11 @@ export async function submitKoreksi(halaqahId: string, items: KoreksiItemInput[]
 
   const { data: h } = await supabaseAdmin.from('hits_halaqah').select('name, gender').eq('id', halaqahId).maybeSingle();
   if (!h) return { error: 'Halaqah tidak ditemukan.' };
+
+  // Nomor pertemuan pilihan ketua tak boleh menabrak yang sudah ada. Dicek lagi
+  // saat koordinator Acc — cek di sini supaya salahnya ketahuan sebelum kirim WA.
+  const vErr = await validateKoreksiItems(halaqahId, items);
+  if (vErr) return { error: vErr };
 
   const approver = await determineKoreksiApprover((h.gender as 'ikhwan' | 'akhwat') ?? 'ikhwan');
   if (!approver) return { error: 'Tidak ada koordinator ketua kelas ber-WA untuk menyetujui.' };
