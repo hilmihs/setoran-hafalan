@@ -6,6 +6,7 @@ import { generateKey, hashKey, __verifyRow, recordUsage, __drainUsage, __resetAu
 import { getCached, setCached, __resetCache, checkRateLimit, __resetRate, acquireInflight } from '../src/lib/api-public/cache';
 import { etagOf, fail, ok } from '../src/lib/api-public/respond';
 import { FORBIDDEN_COLUMNS, auditEntities } from '../src/lib/api-public/registry';
+import { parseRequest } from '../src/lib/api-public/query';
 import type { EntityDef } from '../src/lib/api-public/types';
 
 let passed = 0, failed = 0;
@@ -144,7 +145,47 @@ function testRegistryAudit() {
   check('forbidden column throws', threw);
 }
 
+const PESERTA_DEF: EntityDef = {
+  route: 'peserta', table: 'peserta', scope: 'maahir',
+  columns: ['id', 'name', 'gender', 'active'],
+  filters: [
+    { param: 'gender', column: 'gender', kind: 'eq' },
+    { param: 'active', column: 'active', kind: 'bool' },
+  ],
+  order: { column: 'created_at', dir: 'desc' },
+};
+const PERTEMUAN_DEF: EntityDef = {
+  route: 'pertemuan', table: 'pertemuan_program', scope: 'maahir',
+  columns: ['id', 'tanggal'],
+  filters: [
+    { param: 'tanggal_dari', column: 'tanggal', kind: 'date_from' },
+    { param: 'tanggal_sampai', column: 'tanggal', kind: 'date_to' },
+  ],
+  order: { column: 'tanggal', dir: 'desc' },
+};
+function sp(q: string) { return new URLSearchParams(q); }
+function testParse() {
+  console.log('parse request:');
+  const okr = parseRequest(sp('gender=IKHWAN&active=true&page=2&limit=50'), PESERTA_DEF);
+  check('valid parses', okr.ok === true);
+  if (okr.ok) {
+    check('page 2', okr.page === 2);
+    check('limit 50', okr.limit === 50);
+    check('gender filter', okr.filters.some(f => f.column === 'gender' && f.value === 'IKHWAN'));
+    check('bool coerced', okr.filters.some(f => f.column === 'active' && f.value === true));
+  }
+  check('unknown param → error', parseRequest(sp('gender=X&bogus=1'), PESERTA_DEF).ok === false);
+  check('limit 0 → error', parseRequest(sp('limit=0'), PESERTA_DEF).ok === false);
+  check('limit 501 → error', parseRequest(sp('limit=501'), PESERTA_DEF).ok === false);
+  check('limit abc → error', parseRequest(sp('limit=abc'), PESERTA_DEF).ok === false);
+  const def1 = parseRequest(sp(''), PESERTA_DEF);
+  check('default page 1 limit 100', def1.ok && def1.page === 1 && def1.limit === 100);
+  check('good date ok', parseRequest(sp('tanggal_dari=2026-08-01'), PERTEMUAN_DEF).ok === true);
+  check('bad date 2026-8-1 → error', parseRequest(sp('tanggal_dari=2026-8-1'), PERTEMUAN_DEF).ok === false);
+}
+
 async function main() {
+  testParse();
   testSanitize();
   testKeyGen();
   testVerifyRow();
