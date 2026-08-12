@@ -5,6 +5,8 @@ import { sanitize } from '../src/lib/api-public/sanitize';
 import { generateKey, hashKey, __verifyRow, recordUsage, __drainUsage, __resetAuthCache } from '../src/lib/api-public/auth';
 import { getCached, setCached, __resetCache, checkRateLimit, __resetRate, acquireInflight } from '../src/lib/api-public/cache';
 import { etagOf, fail, ok } from '../src/lib/api-public/respond';
+import { FORBIDDEN_COLUMNS, auditEntities } from '../src/lib/api-public/registry';
+import type { EntityDef } from '../src/lib/api-public/types';
 
 let passed = 0, failed = 0;
 function check(name: string, cond: boolean, extra = '') {
@@ -120,6 +122,28 @@ function testRespond() {
   void ok;
 }
 
+function testRegistryAudit() {
+  console.log('registry audit:');
+  check('forbidden includes whatsapp_number', FORBIDDEN_COLUMNS.includes('whatsapp_number'));
+  check('forbidden includes password_hash', FORBIDDEN_COLUMNS.includes('password_hash'));
+  check('forbidden includes audio_url', FORBIDDEN_COLUMNS.includes('audio_url'));
+  check('forbidden includes magic_token', FORBIDDEN_COLUMNS.includes('magic_token'));
+
+  const good: Record<string, EntityDef> = {
+    peserta: { route: 'peserta', table: 'peserta', scope: 'maahir', columns: ['id', 'name'], filters: [], order: { column: 'id', dir: 'asc' } },
+  };
+  let cleanOk = true;
+  try { auditEntities(good); } catch { cleanOk = false; }
+  check('clean entities pass audit', cleanOk);
+
+  const bad: Record<string, EntityDef> = {
+    peserta: { route: 'peserta', table: 'peserta', scope: 'maahir', columns: ['id', 'whatsapp_number'], filters: [], order: { column: 'id', dir: 'asc' } },
+  };
+  let threw = false;
+  try { auditEntities(bad); } catch { threw = true; }
+  check('forbidden column throws', threw);
+}
+
 async function main() {
   testSanitize();
   testKeyGen();
@@ -129,6 +153,7 @@ async function main() {
   testRate();
   await testInflight();
   testRespond();
+  testRegistryAudit();
   console.log(`\n${passed} passed, ${failed} failed`);
   if (failed) process.exit(1);
 }
