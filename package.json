@@ -45,7 +45,8 @@
     "test-sp": "tsx scripts/test-sp-pemutihan.ts",
     "test-hits-xlsx": "tsx scripts/test-hits-xlsx.ts",
     "test-cutoff": "tsx scripts/test-periode-cutoff.ts",
-    "test-api": "tsx scripts/test-api-public.ts"
+    "test-api": "tsx scripts/test-api-public.ts",
+    "check-api": "tsx --env-file=.env.local scripts/check-api-registry.ts"
   },
   "dependencies": {
     "@supabase/ssr": "^0.5.0",
