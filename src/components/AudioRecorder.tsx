@@ -71,19 +71,38 @@ export function AudioRecorder({
   const elapsedRef = useRef(0);
   const uploadRef = useRef<HTMLInputElement | null>(null);
 
+  // Cermin `state` untuk dipakai di effect ber-deps kosong tanpa ikut stale.
+  const stateRef = useRef(state);
+  stateRef.current = state;
+  const hydratedRef = useRef(false);
+
+  // Hidrasi rekaman awal. `initialRecording` datang ASYNC dari cache IndexedDB
+  // (loadRecordings di parent), jadi effect harus ikut perubahan prop — bukan
+  // hanya saat mount — kalau tidak rekaman yang belum sempat terkirim akan
+  // "hilang" tiap refresh. Hidrasi cuma sekali & hanya saat masih idle supaya
+  // tidak menimpa rekaman yang sedang/baru dibuat atau yang sengaja dihapus.
   useEffect(() => {
+    if (hydratedRef.current || stateRef.current.kind !== 'idle') return;
     if (initialRecording) {
+      hydratedRef.current = true;
       const url = URL.createObjectURL(initialRecording.blob);
       setState({ kind: 'recorded', blob: initialRecording.blob, url, durationSec: initialRecording.durationSec });
       onChange(initialRecording.blob, initialRecording.durationSec);
     } else if (initialAudioUrl) {
       // Sudah tersimpan di server — tampilkan untuk diputar, JANGAN panggil onChange.
+      hydratedRef.current = true;
       setState({ kind: 'recorded', blob: null, url: initialAudioUrl, durationSec: initialDurationSec ?? 0 });
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialRecording, initialAudioUrl, initialDurationSec]);
+
+  useEffect(() => {
     return () => {
       stopStream();
       if (tickRef.current) window.clearInterval(tickRef.current);
-      if (state.kind === 'recorded') URL.revokeObjectURL(state.url);
+      const s = stateRef.current;
+      // Rekaman server bukan objectURL — jangan di-revoke.
+      if (s.kind === 'recorded' && s.blob) URL.revokeObjectURL(s.url);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
