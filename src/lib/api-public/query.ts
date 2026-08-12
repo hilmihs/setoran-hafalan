@@ -1,6 +1,6 @@
 // query.ts — terjemah query-string → filter tervalidasi + jalankan ke pg-shim.
 import { supabaseAdmin } from '@/lib/supabase-admin';
-import type { EntityDef } from './types';
+import type { EntityDef, ScopeName } from './types';
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -10,6 +10,11 @@ export type ParseResult =
   | { ok: false; code: 'bad_param'; message: string };
 
 const RESERVED = new Set(['page', 'limit', 'urut']);
+
+/** Gerbang scope: key hanya boleh akses entitas yang scope-nya ia miliki. */
+export function scopeAllows(keyScopes: ScopeName[], entityScope: ScopeName): boolean {
+  return keyScopes.includes(entityScope);
+}
 
 export function parseRequest(params: URLSearchParams, def: EntityDef): ParseResult {
   const byParam = new Map(def.filters.map(f => [f.param, f]));

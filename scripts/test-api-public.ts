@@ -6,7 +6,7 @@ import { generateKey, hashKey, __verifyRow, recordUsage, __drainUsage, __resetAu
 import { getCached, setCached, __resetCache, checkRateLimit, __resetRate, acquireInflight } from '../src/lib/api-public/cache';
 import { etagOf, fail, ok } from '../src/lib/api-public/respond';
 import { FORBIDDEN_COLUMNS, auditEntities, ENTITIES, getEntity } from '../src/lib/api-public/registry';
-import { parseRequest } from '../src/lib/api-public/query';
+import { parseRequest, scopeAllows } from '../src/lib/api-public/query';
 import type { EntityDef } from '../src/lib/api-public/types';
 
 let passed = 0, failed = 0;
@@ -201,8 +201,16 @@ function testMaahirRegistry() {
   check('aktif=maybe → 400', parseRequest(new URLSearchParams('aktif=maybe'), pmt).ok === false);
 }
 
+function testScope() {
+  console.log('scope gate:');
+  check('maahir key → maahir entity ok', scopeAllows(['maahir'], 'maahir'));
+  check('maahir key → hits entity 403', !scopeAllows(['maahir'], 'hits'));
+  check('multi scope', scopeAllows(['maahir', 'hits'], 'hits'));
+}
+
 async function main() {
   testParse();
+  testScope();
   testMaahirRegistry();
   testSanitize();
   testKeyGen();
