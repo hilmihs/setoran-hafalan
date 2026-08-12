@@ -46,6 +46,24 @@ function testSanitize() {
   check('still drop whatsappNumber next to catatan', a2.whatsappNumber === undefined);
 }
 
+function testRekapSanitizeShape() {
+  console.log('rekap sanitize shape:');
+  // bentuk mirip RekapKelas[] dgn anggota membawa whatsappNumber + keterangan, plus Map (spt HitsKoordinatorRekap)
+  const rekapLike = {
+    kelas: [{
+      nama: 'Kelas A',
+      anggota: [{ name: 'Fulan', whatsappNumber: '628123', keterangan: 'demam', persen: 80 }],
+    }],
+    insidenByPengajar: new Map<string, number>([['guru1', 3]]),
+  };
+  const clean = sanitize(rekapLike) as any;
+  const j = JSON.stringify(clean);
+  check('rekap: whatsappNumber stripped', j.indexOf('whatsappNumber') === -1 && j.indexOf('628123') === -1);
+  check('rekap: keterangan kept', clean.kelas[0].anggota[0].keterangan === 'demam');
+  check('rekap: persen kept', clean.kelas[0].anggota[0].persen === 80);
+  check('rekap: Map→object (data not lost)', clean.insidenByPengajar.guru1 === 3 && !(clean.insidenByPengajar instanceof Map));
+}
+
 function testKeyGen() {
   console.log('key gen:');
   const a = generateKey();
@@ -243,6 +261,7 @@ async function main() {
   testHitsRegistry();
   testPenilaianRefRegistry();
   testSanitize();
+  testRekapSanitizeShape();
   testKeyGen();
   testVerifyRow();
   testUsageAccrual();
