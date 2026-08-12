@@ -1,7 +1,7 @@
 // _shared.ts — preamble bersama 6 route rekap: master-switch → auth → scope →
 // rate-limit, plus pembungkus baca/tulis cache. Validasi param tetap per-route.
 import { NextRequest, NextResponse } from 'next/server';
-import { verifyBearer } from '@/lib/api-public/auth';
+import { verifyBearer, recordUsage, flushUsage } from '@/lib/api-public/auth';
 import { scopeAllows } from '@/lib/api-public/query';
 import { ok, fail } from '@/lib/api-public/respond';
 import { getCached, setCached, checkRateLimit, acquireInflight } from '@/lib/api-public/cache';
@@ -12,6 +12,16 @@ export const REKAP_PER_MIN = 120;
 export const MAX_INFLIGHT = Number(process.env.PUBLIC_API_MAX_INFLIGHT) || 4;
 export const MONTH_RE = /^\d{4}-\d{2}$/;
 export const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+// Timer flush pemakaian: didaftarkan di sini juga supaya proses yang hanya melayani
+// route rekap (tak pernah memuat modul catch-all) tetap menulis last_used_at/request_count.
+declare global {
+  // eslint-disable-next-line no-var
+  var __apiUsageTimer: ReturnType<typeof setInterval> | undefined;
+}
+if (!globalThis.__apiUsageTimer) {
+  globalThis.__apiUsageTimer = setInterval(() => { void flushUsage(); }, 60_000);
+}
 
 const GENDERS = new Set(['ikhwan', 'akhwat']);
 /** gender valid = tak diisi, atau tepat 'ikhwan' | 'akhwat'. */
@@ -43,6 +53,7 @@ export async function rekapPreamble(
     r.headers.set('Retry-After', '2');
     return r;
   }
+  recordUsage(auth.client.id);
   return {
     scopeKey: [...auth.client.scopes].sort().join(','),
     ifNoneMatch: req.headers.get('if-none-match'),
