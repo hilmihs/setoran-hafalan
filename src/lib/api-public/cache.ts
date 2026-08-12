@@ -1,4 +1,6 @@
 // cache.ts — cache respons di memori (LRU by insertion), rate limit, inflight limiter.
+import { apiEnv } from './env';
+
 const MAX_BYTES = 32 * 1024 * 1024;
 const MAX_ENTRY = 1 * 1024 * 1024;
 
@@ -21,7 +23,7 @@ export function getCached(key: string): { value: unknown; umurDetik: number } | 
 }
 
 export function setCached(key: string, value: unknown, ttlSec: number): void {
-  const override = process.env.PUBLIC_API_CACHE_TTL;
+  const override = apiEnv('PUBLIC_API_CACHE_TTL');
   const ttl = override !== undefined ? Number(override) : ttlSec;
   if (ttl <= 0) return;
   const bytes = sizeOf(value);

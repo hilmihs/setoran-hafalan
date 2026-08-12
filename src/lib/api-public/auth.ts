@@ -1,9 +1,10 @@
 // auth.ts — verifikasi Bearer key, cache 30s, akrual pemakaian flush 60s.
 import { createHash, randomBytes } from 'node:crypto';
 import { supabaseAdmin } from '@/lib/supabase-admin';
+import { apiEnv } from './env';
 import type { AuthResult, ScopeName } from './types';
 
-const AUTH_TTL_MS = (Number(process.env.PUBLIC_API_AUTH_TTL) || 30) * 1000;
+const AUTH_TTL_MS = (Number(apiEnv('PUBLIC_API_AUTH_TTL')) || 30) * 1000;
 
 export function hashKey(raw: string): string {
   return createHash('sha256').update(raw).digest('hex');

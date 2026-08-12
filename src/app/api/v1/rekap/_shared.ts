@@ -5,11 +5,12 @@ import { verifyBearer, recordUsage, flushUsage } from '@/lib/api-public/auth';
 import { scopeAllows } from '@/lib/api-public/query';
 import { ok, fail } from '@/lib/api-public/respond';
 import { getCached, setCached, checkRateLimit, acquireInflight } from '@/lib/api-public/cache';
+import { publicApiOn, apiEnv } from '@/lib/api-public/env';
 import type { ScopeName } from '@/lib/api-public/types';
 
 export const REKAP_TTL = 300;
 export const REKAP_PER_MIN = 120;
-export const MAX_INFLIGHT = Number(process.env.PUBLIC_API_MAX_INFLIGHT) || 4;
+export const MAX_INFLIGHT = Number(apiEnv('PUBLIC_API_MAX_INFLIGHT')) || 4;
 export const MONTH_RE = /^\d{4}-\d{2}$/;
 export const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -42,7 +43,7 @@ export async function rekapPreamble(
   req: NextRequest,
   scope: ScopeName,
 ): Promise<NextResponse | Preamble> {
-  if (process.env.PUBLIC_API !== 'on') return fail('not_found', 'Tidak ditemukan.', 404);
+  if (!publicApiOn()) return fail('not_found', 'Tidak ditemukan.', 404);
   const auth = await verifyBearer(req.headers.get('authorization'));
   if (!auth.ok) return fail(auth.code, auth.message, auth.status);
   if (!scopeAllows(auth.client.scopes, scope)) {

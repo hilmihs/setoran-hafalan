@@ -5,11 +5,12 @@ import { parseRequest, runEntity, scopeAllows, resolveKajianPresensi } from '@/l
 import { sanitize } from '@/lib/api-public/sanitize';
 import { ok, fail, handle } from '@/lib/api-public/respond';
 import { getCached, setCached, checkRateLimit, acquireInflight } from '@/lib/api-public/cache';
+import { publicApiOn, apiEnv } from '@/lib/api-public/env';
 
 export const dynamic = 'force-dynamic';
 
 const ENTITY_TTL = 60;
-const MAX_INFLIGHT = Number(process.env.PUBLIC_API_MAX_INFLIGHT) || 4;
+const MAX_INFLIGHT = Number(apiEnv('PUBLIC_API_MAX_INFLIGHT')) || 4;
 
 declare global {
   // eslint-disable-next-line no-var
@@ -21,7 +22,7 @@ if (!globalThis.__apiUsageTimer) {
 
 export async function GET(req: NextRequest, ctx: { params: Promise<{ path: string[] }> }) {
   return handle(async () => {
-    if (process.env.PUBLIC_API !== 'on') return fail('not_found', 'Tidak ditemukan.', 404);
+    if (!publicApiOn()) return fail('not_found', 'Tidak ditemukan.', 404);
 
     const auth = await verifyBearer(req.headers.get('authorization'));
     if (!auth.ok) return fail(auth.code, auth.message, auth.status);
