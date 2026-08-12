@@ -213,6 +213,22 @@ function testHitsRegistry() {
   check('pengajar drops whatsapp_number', !getEntity('hits/pengajar')!.columns.includes('whatsapp_number'));
 }
 
+function testPenilaianRefRegistry() {
+  console.log('penilaian + ref registry:');
+  check('5 penilaian entities', Object.values(ENTITIES).filter(e => e.scope === 'penilaian').length === 5);
+  check('4 ref entities', Object.values(ENTITIES).filter(e => e.scope === 'ref').length === 4);
+  check('total 36 entities', Object.keys(ENTITIES).length === 36);
+  check('13 maahir still', Object.values(ENTITIES).filter(e => e.scope === 'maahir').length === 13);
+  check('14 hits still', Object.values(ENTITIES).filter(e => e.scope === 'hits').length === 14);
+  for (const r of ['musyrif', 'koordinator', 'syaikh', 'koordinator-ketua-kelas']) {
+    const e = getEntity(r);
+    check(`ref ${r} present, only id/name/gender/active`, !!e && e.columns.join() === 'id,name,gender,active' && e.refShared === true);
+  }
+  check('ketua_kelas NOT exposed', getEntity('ketua-kelas') === null && getEntity('ketua_kelas') === null);
+  check('penilaian-pedagogis drops catatan_umum', !getEntity('penilaian-pedagogis')!.columns.includes('catatan_umum'));
+  check('penilaian-masyaikh drops keterangan_bacaan', !getEntity('penilaian-masyaikh')!.columns.includes('keterangan_bacaan'));
+}
+
 function testScope() {
   console.log('scope gate:');
   check('maahir key → maahir entity ok', scopeAllows(['maahir'], 'maahir'));
@@ -225,6 +241,7 @@ async function main() {
   testScope();
   testMaahirRegistry();
   testHitsRegistry();
+  testPenilaianRefRegistry();
   testSanitize();
   testKeyGen();
   testVerifyRow();

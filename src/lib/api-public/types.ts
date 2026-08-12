@@ -1,5 +1,5 @@
 // types.ts — tipe bersama jalur API publik.
-export type ScopeName = 'maahir' | 'hits' | 'penilaian';
+export type ScopeName = 'maahir' | 'hits' | 'penilaian' | 'ref';
 
 export type FilterKind = 'eq' | 'bool' | 'date_from' | 'date_to' | 'since' | 'is_null';
 
@@ -21,6 +21,8 @@ export interface EntityDef {
   filters: FilterDef[];
   /** kolom + arah urutan default */
   order: { column: string; dir: 'asc' | 'desc' };
+  /** true = boleh dibaca semua key terautentikasi (referensi orang), lepas dari scope. */
+  refShared?: boolean;
 }
 
 export interface AuthClient {

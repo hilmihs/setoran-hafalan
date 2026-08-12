@@ -36,7 +36,7 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ path: strin
     const route = path.join('/');
     const def = getEntity(route);
     if (!def) return fail('unknown_entity', `Entitas '${route}' tidak ada.`, 404);
-    if (!scopeAllows(auth.client.scopes, def.scope))
+    if (!def.refShared && !scopeAllows(auth.client.scopes, def.scope))
       return fail('forbidden_scope', `Key tidak punya scope '${def.scope}'.`, 403);
 
     const params = req.nextUrl.searchParams;

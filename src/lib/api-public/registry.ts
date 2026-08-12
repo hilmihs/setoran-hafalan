@@ -292,6 +292,76 @@ export const ENTITIES: Record<string, EntityDef> = {
     filters: [{ param: 'gender', column: 'gender', kind: 'eq' }],
     order: { column: 'name', dir: 'asc' },
   },
+  'penilaian-peserta': {
+    route: 'penilaian-peserta', table: 'penilaian_peserta', scope: 'penilaian',
+    columns: ['id', 'peserta_id', 'year_month', 'skor_bacaan', 'skor_hafalan', 'assessor_role', 'updated_at'],
+    filters: [
+      { param: 'peserta_id', column: 'peserta_id', kind: 'eq' },
+      { param: 'year_month', column: 'year_month', kind: 'eq' },
+      { param: 'sejak', column: 'updated_at', kind: 'since' },
+    ],
+    order: { column: 'year_month', dir: 'desc' },
+  },
+  'penilaian-masyaikh': {
+    route: 'penilaian-masyaikh', table: 'penilaian_masyaikh', scope: 'penilaian',
+    columns: ['id', 'pengajar_id', 'year_month', 'skor_bacaan', 'skor_hafalan', 'assessor_role', 'updated_at'],
+    filters: [
+      { param: 'pengajar_id', column: 'pengajar_id', kind: 'eq' },
+      { param: 'year_month', column: 'year_month', kind: 'eq' },
+      { param: 'sejak', column: 'updated_at', kind: 'since' },
+    ],
+    order: { column: 'year_month', dir: 'desc' },
+  },
+  'penilaian-pedagogis': {
+    route: 'penilaian-pedagogis', table: 'penilaian_pedagogis', scope: 'penilaian',
+    columns: ['id', 'pengajar_id', 'year_month', 'skor_metode_pengajaran', 'skor_kepatuhan_silabus', 'skor_manajemen_halaqah', 'skor_evaluasi_penguasaan', 'skor_kepatuhan_sop', 'updated_at'],
+    filters: [
+      { param: 'pengajar_id', column: 'pengajar_id', kind: 'eq' },
+      { param: 'year_month', column: 'year_month', kind: 'eq' },
+      { param: 'sejak', column: 'updated_at', kind: 'since' },
+    ],
+    order: { column: 'year_month', dir: 'desc' },
+  },
+  'matrix-rekap': {
+    route: 'matrix-rekap', table: 'matrix_rekap', scope: 'penilaian',
+    columns: ['id', 'pengajar_id', 'year_month', 'skor_bacaan', 'skor_hafalan', 'skor_tajwid', 'skor_kehadiran_maahir', 'skor_kehadiran_tibyan', 'rata_rata_hard_skill', 'skor_metode_pengajaran', 'skor_kepatuhan_silabus', 'skor_manajemen_halaqah', 'skor_evaluasi_penguasaan', 'rata_rata_pedagogis', 'skor_kedisiplinan_waktu', 'skor_komitmen_jadwal', 'skor_tanggung_jawab', 'skor_kepatuhan_sop', 'rata_rata_soft_skill', 'rata_rata_keseluruhan', 'ranking', 'total_teguran_bulan', 'total_teguran_kumulatif', 'updated_at'],
+    filters: [
+      { param: 'pengajar_id', column: 'pengajar_id', kind: 'eq' },
+      { param: 'year_month', column: 'year_month', kind: 'eq' },
+      { param: 'sejak', column: 'updated_at', kind: 'since' },
+    ],
+    order: { column: 'year_month', dir: 'desc' },
+  },
+  'indikator-standar': {
+    route: 'indikator-standar', table: 'indikator_standar', scope: 'penilaian',
+    columns: ['kode', 'kategori', 'nama', 'standar'],
+    filters: [{ param: 'kategori', column: 'kategori', kind: 'eq' }],
+    order: { column: 'kode', dir: 'asc' },
+  },
+  musyrif: {
+    route: 'musyrif', table: 'musyrif', scope: 'ref', refShared: true,
+    columns: ['id', 'name', 'gender', 'active'],
+    filters: [{ param: 'gender', column: 'gender', kind: 'eq' }, { param: 'active', column: 'active', kind: 'bool' }],
+    order: { column: 'name', dir: 'asc' },
+  },
+  koordinator: {
+    route: 'koordinator', table: 'koordinator', scope: 'ref', refShared: true,
+    columns: ['id', 'name', 'gender', 'active'],
+    filters: [{ param: 'gender', column: 'gender', kind: 'eq' }, { param: 'active', column: 'active', kind: 'bool' }],
+    order: { column: 'name', dir: 'asc' },
+  },
+  syaikh: {
+    route: 'syaikh', table: 'syaikh', scope: 'ref', refShared: true,
+    columns: ['id', 'name', 'gender', 'active'],
+    filters: [{ param: 'gender', column: 'gender', kind: 'eq' }, { param: 'active', column: 'active', kind: 'bool' }],
+    order: { column: 'name', dir: 'asc' },
+  },
+  'koordinator-ketua-kelas': {
+    route: 'koordinator-ketua-kelas', table: 'koordinator_ketua_kelas', scope: 'ref', refShared: true,
+    columns: ['id', 'name', 'gender', 'active'],
+    filters: [{ param: 'gender', column: 'gender', kind: 'eq' }, { param: 'active', column: 'active', kind: 'bool' }],
+    order: { column: 'name', dir: 'asc' },
+  },
 };
 
 auditEntities(ENTITIES);
