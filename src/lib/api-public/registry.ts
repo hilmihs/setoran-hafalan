@@ -172,7 +172,7 @@ export const ENTITIES: Record<string, EntityDef> = {
   },
   'hits/halaqah-peserta': {
     route: 'hits/halaqah-peserta', table: 'hits_halaqah_peserta', scope: 'hits',
-    columns: ['id', 'halaqah_id', 'murid_id', 'name', 'is_ketua', 'created_at'],
+    columns: ['id', 'halaqah_id', 'murid_id', 'nama', 'is_ketua', 'created_at'],
     filters: [
       { param: 'halaqah_id', column: 'halaqah_id', kind: 'eq' },
       { param: 'is_ketua', column: 'is_ketua', kind: 'bool' },

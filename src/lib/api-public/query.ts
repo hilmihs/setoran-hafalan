@@ -76,10 +76,10 @@ export async function resolveKajianPresensi(rows: Array<Record<string, unknown>>
   const idToWa = new Map<string, string | null>();
   for (const w of (waRows ?? []) as Array<{ id: string; ketua_wa: string | null }>) idToWa.set(w.id, w.ketua_wa);
   // 2) peta ketua_wa → nama dari hits_halaqah_peserta
-  const { data: pesRows } = await supabaseAdmin.from('hits_halaqah_peserta').select('ketua_wa, name');
+  const { data: pesRows } = await supabaseAdmin.from('hits_halaqah_peserta').select('ketua_wa, nama');
   const waToName = new Map<string, string>();
-  for (const p of (pesRows ?? []) as Array<{ ketua_wa: string | null; name: string }>) {
-    if (p.ketua_wa) waToName.set(p.ketua_wa, p.name);
+  for (const p of (pesRows ?? []) as Array<{ ketua_wa: string | null; nama: string }>) {
+    if (p.ketua_wa) waToName.set(p.ketua_wa, p.nama);
   }
   // 3) set ketua_nama; JANGAN pernah menaruh ketua_wa ke baris keluaran
   return rows.map(r => {
