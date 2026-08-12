@@ -201,6 +201,7 @@ export default async function KoordinatorKetuaKelasPage({
         pengajarId: (h.pengajar_id as string | null) ?? null,
         pengajarWa: (h.pengajar_wa as string | null) ?? null,
         ketuaKKId: ketua?.id ?? null,
+        ketuaName: ketua?.name ?? null,
         kosong,
       };
     })
@@ -406,6 +407,9 @@ export default async function KoordinatorKetuaKelasPage({
                 <div key={h.id} className="card-flat" style={{ padding: '10px 14px', marginBottom: 6, borderLeft: '3px solid var(--merah)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
                   <div style={{ minWidth: 0 }}>
                     <div style={{ fontWeight: 600, fontSize: 14 }}>{h.name}</div>
+                    <div className="t-tiny" style={{ color: 'var(--muted-2)', marginTop: 2 }}>
+                      {h.ketuaName ? `Ketua: ${h.ketuaName}` : 'Belum ada ketua kelas'}
+                    </div>
                     <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 4 }}>
                       {h.reasons.map((r) => (
                         <span key={r} className="badge badge-merah" style={{ fontSize: 10 }}><span className="dot" />{r}</span>
