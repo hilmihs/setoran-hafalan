@@ -11,6 +11,8 @@ const FORBIDDEN_KEYS = new Set([
   'masukan',
   'ket_bacaan', 'ketBacaan', 'ket_hafalan', 'ketHafalan',
   'catatan_umum', 'catatanUmum',
+  // Nomor WA pelapor Shakwa — dipakai koordinator untuk membalas, bukan konsumsi API.
+  'pelapor_wa', 'pelaporWa',
 ]);
 
 export function sanitize(value: unknown): unknown {

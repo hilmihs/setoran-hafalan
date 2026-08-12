@@ -207,7 +207,20 @@ export default async function HalaqahDetailPage({ params }: { params: { id: stri
                               ))}
                             </div>
                           </td>
-                          <td className="t-small" style={{ color: 'var(--muted-2)', maxWidth: 200 }}>{i.alasanPengajar ?? '—'}</td>
+                          <td className="t-small" style={{ color: 'var(--muted-2)', maxWidth: 200 }}>
+                            {i.dariIzin && (
+                              <div style={{ marginBottom: 2 }}>
+                                <span
+                                  className="badge"
+                                  title="Alasan dari izin pra-kelas (Shakwa) — tabayyun susulan tak diperlukan."
+                                  style={{ background: 'var(--hijau-tint)', borderColor: 'var(--hijau-line)', color: 'var(--hijau-ink)' }}
+                                >
+                                  Izin pra-kelas
+                                </span>
+                              </div>
+                            )}
+                            {i.alasanPengajar ?? '—'}
+                          </td>
                           <td><span className="badge" style={{ background: ss.bg, borderColor: ss.bd, color: ss.ink }}>{INDIS_STATUS_LABEL[i.status]}</span></td>
                           <td style={{ whiteSpace: 'nowrap' }}>{udzurCell(i)}</td>
                           <td className="t-small" style={{ color: 'var(--muted-2)', maxWidth: 220 }}>{i.keputusanCatatan ?? '—'}</td>

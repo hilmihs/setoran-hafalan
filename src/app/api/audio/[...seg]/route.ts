@@ -16,6 +16,14 @@ const MIME: Record<string, string> = {
   m4a: 'audio/mp4',
   ogg: 'audio/ogg',
   wav: 'audio/wav',
+  // Lampiran Shakwa lewat bucket lain, tapi penyaji + tanda tangannya sama.
+  // Tanpa entri ini gambar terunduh sebagai octet-stream, bukan tampil di tab.
+  jpg: 'image/jpeg',
+  jpeg: 'image/jpeg',
+  png: 'image/png',
+  webp: 'image/webp',
+  heic: 'image/heic',
+  pdf: 'application/pdf',
 };
 
 export async function GET(req: NextRequest, ctx: { params: { seg: string[] } }) {

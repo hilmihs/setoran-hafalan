@@ -202,6 +202,7 @@ Landing per role (`src/lib/roles.ts` `ROLE_LANDING`): peserta→`/2in1/peserta`,
 - `admin` (`requireAdmin`, superadmin) — `users` (+`person`/`[role]`, mgmt/impersonation), `reset-password`, `audit`, `db` (raw SQL runner).
 - `kehadiran/pengajar` — real `pengajar` landing (check in/out); `kehadiran/ketua-kelompok` → redirects to pedagogical scoring.
 - `observasi/koordinator` (`requireKoordinatorKetuaKelas`, +`kajian`); `observasi/ketua-kelas` **retired** → redirects `/hits/ketua`.
+- `shakwa` — **public** complaint/service form (no login; the only unprotected app route besides `/`). Categories `izin` & `tali_kasih` require a `pengajar` session, enforced server-side in the action. `shakwa/koordinator` (`requireKoordinator`) — inbox, daily recap, follow-up status.
 - `matrix/koordinator` (+`pengajar/[id]`) — Matrix Skill Guru dashboard.
 - `penilaian` (top-level) — legacy Masyaikh scoring, superseded by `2in1/syaikh/penilaian`.
 - `laporan`/`koordinator`/`musyrif`/`syaikh`/`peserta` (top-level) — thin legacy redirect shims to `2in1/*`. `ikhwan`/`akhwat` — dead redirects to `/`.
@@ -329,7 +330,8 @@ The non-prefixed `kondisi_kelas`/`status_latihan`/`status_tabayyun` back the **o
 | Table | Purpose | Key columns / FKs |
 |---|---|---|
 | `audit_log` | Generic audit trail (tabayyun/teguran/penilaian, admin SQL) | `id`; `actor_role`/`actor_id`; `action`; `target_table`/`target_id`; `detail` jsonb |
-| `shakwa` | Complaint/ticket (pengajar logged-in or peserta public) | `id`; `pelapor_type`; `pengajar_id`; `status`; `reviewed_by_*` |
+| `shakwa` | Complaint/ticket (pengajar logged-in or peserta public). Dormant until 0049 revived it as the `/shakwa` feature | `id`; `nomor_tiket` (SKW-YYYYMMDD-NNN); `pelapor_type`; `pelapor_wa`; `kategori`; `halaqoh`; `jawaban` jsonb; `lampiran` text[]; `pengajar_id`; `status` (submitted/in_review/resolved/closed); `reviewed_by_*` |
+| `shakwa_izin` | Pre-class leave details from a Shakwa `izin` ticket; auto-attaches as `alasan_pengajar` on the tabayyun the ketua's observation creates | `id`; `shakwa_id`; `pengajar_id`; `halaqah_id`; `tanggal`; `jenis` (KMT/KBLA/JKG/TIDAK_HADIR); `menit`; `jadwal_ganti`; `dipakai_tabayyun_id` |
 | `wa_reminder_log` | Log of prepared WA reminder links (no delivery confirmation) | `id`; `sender_*`; `recipient_*`; `template_kind`; `target_*` |
 | `koordinator_notes` | Collaborative notes between coordinators | `id`; `target_type`/`target_id`; `author_*`; `visibility` (peer/private) |
 

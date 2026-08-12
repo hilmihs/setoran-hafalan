@@ -4,6 +4,7 @@ import { getMaahirSP } from '@/lib/maahir-sp';
 import { getMaahirRekap } from '@/lib/maahir-rekap';
 import { getTibyanView } from '@/lib/tibyan-rekap';
 import { getHitsKoordinatorRekap } from '@/lib/hits-koordinator-rekap';
+import { getShakwaRekap } from '@/lib/shakwa-rekap';
 import { supabaseAdmin } from '@/lib/supabase-admin';
 import { sanitize } from './sanitize';
 
@@ -28,6 +29,20 @@ export async function rekapTibyan(bulan: string, opts: Parameters<typeof getTiby
   const raw = await getTibyanView(bulan, opts);
   const { start, end } = monthRange(bulan);
   return { data: sanitize(raw), meta: { bulan, mulai: start, sampai: end } };
+}
+
+/**
+ * Rekap Shakwa (default: hari ini WIB). Nomor WA pelapor dibuang sanitize();
+ * lampiran hanya dilaporkan jumlahnya — berkasnya tak pernah keluar lewat API.
+ */
+export async function rekapShakwa(opts: Parameters<typeof getShakwaRekap>[0]) {
+  const raw = await getShakwaRekap(opts);
+  const { items, ...ringkas } = raw;
+  const data = {
+    ...ringkas,
+    items: items.map(({ lampiran: _lampiran, ...rest }) => rest),
+  };
+  return { data: sanitize(data), meta: { mulai: raw.mulai, sampai: raw.sampai, total: raw.total } };
 }
 
 export async function rekapHitsDisiplin(opts: Parameters<typeof getHitsKoordinatorRekap>[0]) {

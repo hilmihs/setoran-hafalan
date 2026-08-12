@@ -10,6 +10,7 @@ import { statusOnCheckin, KAJIAN_GHOSTING_DAYS } from '@/lib/hits-kajian';
 import { logAudit } from '@/lib/audit';
 import { absUrl } from '@/lib/url';
 import { buildWaMeUrl, tplHapusPertemuanToKoorKK } from '@/lib/whatsapp';
+import { cariIzinCocok, alasanDariIzin, tandaiIzinTerpakai } from '@/lib/shakwa-izin';
 import { HITS_LEVEL_SHORT } from '@/lib/hits-pertemuan';
 import type { HitsKondisi, HitsStatusLatihan, HitsLevel, HitsPelanggaranJenis } from '@/types/db';
 
@@ -316,13 +317,29 @@ export async function submitKeteranganHarian(
       .eq('keterangan_id', saved.id)
       .maybeSingle();
     if (!existing) {
-      await supabaseAdmin.from('hits_tabayyun').insert({
-        keterangan_id: saved.id,
-        halaqah_id: halaqahId,
-        pengajar_id: halaqah?.pengajar_id ?? null,
-        kondisi: head,
-        status: 'pending',
+      // Pengajar sudah lapor izin lewat Shakwa untuk tanggal ini? Pakai alasannya
+      // langsung supaya ia tak ditagih klarifikasi dua kali; status 'awaiting_reason'
+      // di basis kode ini berarti alasan sudah masuk, tinggal diputus koordinator.
+      const izin = await cariIzinCocok({
+        pengajarId: halaqah?.pengajar_id,
+        halaqahId,
+        tanggal: match.tanggal,
+        jenisList,
       });
+      const { data: tabBaru } = await supabaseAdmin
+        .from('hits_tabayyun')
+        .insert({
+          keterangan_id: saved.id,
+          halaqah_id: halaqahId,
+          pengajar_id: halaqah?.pengajar_id ?? null,
+          kondisi: head,
+          status: izin ? 'awaiting_reason' : 'pending',
+          alasan_pengajar: izin ? alasanDariIzin(izin) : null,
+          alasan_submitted_at: izin ? izin.dikirimAt : null,
+        })
+        .select('id')
+        .single();
+      if (izin && tabBaru?.id) await tandaiIzinTerpakai(izin.id, tabBaru.id as string);
     } else if (existing.status !== 'decided') {
       await supabaseAdmin.from('hits_tabayyun').update({ kondisi: head }).eq('id', existing.id);
     }

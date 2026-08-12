@@ -14,6 +14,7 @@ import {
   type PelanggaranRingkas,
 } from '@/lib/hits-pelanggaran-kategori';
 import { computeHutangForHalaqahList } from '@/lib/hits-hutang';
+import { berasalDariIzin } from '@/lib/shakwa-izin';
 import type { Gender } from '@/types/db';
 
 export type DisiplinAgg = {
@@ -274,6 +275,8 @@ export type InsidenDetail = {
   catatanKetua: string | null; // keterangan yang ditulis ketua kelas
   status: InsidenTabayyunStatus;
   alasanPengajar: string | null; // hasil tabayyun
+  /** Alasannya datang dari izin pra-kelas (Shakwa), bukan dari tabayyun susulan. */
+  dariIzin: boolean;
   isUdzurSyari: boolean | null; // putusan koordinator KK
   keputusanCatatan: string | null;
   decidedAt: string | null;
@@ -413,6 +416,7 @@ export async function getInsidenDetailByPengajar(opts: {
       catatanKetua: k.catatan,
       status: tabayyunStatusOf(t?.status),
       alasanPengajar: t?.alasan_pengajar ?? null,
+      dariIzin: berasalDariIzin(t?.alasan_pengajar),
       isUdzurSyari: t?.is_udzur_syari ?? null,
       keputusanCatatan: t?.keputusan_catatan ?? null,
       decidedAt: t?.decided_at ?? null,

@@ -11,6 +11,7 @@ import {
   KETERANGAN_NILAI_COLS,
   type KeteranganNilaiFields,
 } from '@/lib/hits-observasi';
+import { berasalDariIzin } from '@/lib/shakwa-izin';
 import type { Gender, HitsKondisi, HitsLevel } from '@/types/db';
 
 export type HitsRekapRow = {
@@ -282,6 +283,8 @@ export type IndisiplinerInsiden = {
   catatan: string | null;
   status: IndisiplinerStatus;
   alasanPengajar: string | null;
+  /** Alasannya datang dari izin pra-kelas (Shakwa), bukan tabayyun susulan. */
+  dariIzin: boolean;
   isUdzurSyari: boolean | null;
   keputusanCatatan: string | null;
   decidedAt: string | null;
@@ -450,6 +453,7 @@ export async function getIndisiplinerRekap(
         catatan: k.catatan,
         status: statusOf(t),
         alasanPengajar: t?.alasan_pengajar ?? null,
+        dariIzin: berasalDariIzin(t?.alasan_pengajar),
         isUdzurSyari: t?.is_udzur_syari ?? null,
         keputusanCatatan: t?.keputusan_catatan ?? null,
         decidedAt: t?.decided_at ?? null,

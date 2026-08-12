@@ -347,7 +347,8 @@ export function tplTabayyunToPengajar(args: {
 
 /**
  * Teguran ghosting: pengajar tak merespons tabayyun dalam 72 jam sejak diingatkan
- * → dianggap tanpa udzur syar'i. `diingatkanWib`/`deadlineWib` = string waktu WIB
+ * → teguran terbit. Pesannya sengaja tak menyebut vonis udzur; yang disampaikan
+ * hanya fakta terbitnya teguran. `diingatkanWib`/`deadlineWib` = string waktu WIB
  * yang sudah diformat oleh pemanggil.
  */
 export function tplTabayyunGhostingTeguran(args: {
@@ -376,7 +377,7 @@ export function tplTabayyunGhostingTeguran(args: {
     ``,
     `Permintaan klarifikasi telah dikirim pada *${args.diingatkanWib}* dengan tenggat *${args.deadlineWib}* (72 jam). Hingga tenggat terlewati belum ada respons.`,
     ``,
-    `Karena itu dicatat sebagai *tanpa udzur syar'i* dan diterbitkan *teguran ke-${args.nomorTeguran}*.`,
+    `Oleh karena itu, diterbitkan *teguran ke-${args.nomorTeguran}*.`,
     ...hutangLines,
     ``,
     `Jazakumullahu khairan.`,
@@ -849,6 +850,72 @@ export function tplReminderIsiKeterangan(args: {
     args.isiUrl,
     ``,
     `Jazakumullahu khairan.`,
+  ].join('\n');
+}
+
+/**
+ * Dari pelapor Shakwa ke penanggung jawab kategori. Dibuka pelapor sendiri
+ * setelah formulir tersimpan — isi pesannya sudah memuat nomor tiket supaya
+ * koordinator bisa menautkan percakapan WA ke baris aduannya.
+ */
+export function tplShakwaKeTujuan(args: {
+  nomorTiket: string;
+  kategoriLabel: string;
+  nama: string;
+  halaqahLabel: string;
+  isi: string;
+  rincian?: string[];
+}): string {
+  return [
+    `Assalamu'alaikum,`,
+    ``,
+    `Saya *${args.nama}* menyampaikan laporan lewat formulir Shakwa.`,
+    ``,
+    `Nomor tiket: *${args.nomorTiket}*`,
+    `Kategori: *${args.kategoriLabel}*`,
+    `Halaqoh: ${args.halaqahLabel}`,
+    ``,
+    args.isi,
+    ...(args.rincian && args.rincian.length ? ['', 'Rincian:', ...args.rincian.map((r) => `• ${r}`)] : []),
+    ``,
+    `Jazakumullahu khairan.`,
+  ].join('\n');
+}
+
+/** Balasan koordinator ke pelapor Shakwa (dibuka dari dashboard). */
+export function tplShakwaBalasPelapor(args: {
+  nama: string;
+  nomorTiket: string;
+  kategoriLabel: string;
+}): string {
+  return [
+    `Assalamu'alaikum ${args.nama},`,
+    ``,
+    `Terkait laporan Shakwa *${args.nomorTiket}* (${args.kategoriLabel}) yang antum/i kirim —`,
+    ``,
+    `Jazakumullahu khairan.`,
+  ].join('\n');
+}
+
+/** Rekap harian Shakwa ke koordinator (teks siap tempel). */
+export function tplShakwaRekapHarian(args: {
+  tanggalLabel: string;
+  total: number;
+  perKategori: Array<{ label: string; jumlah: number }>;
+  belumDitangani: number;
+  dashboardUrl: string;
+}): string {
+  const baris = args.perKategori.length
+    ? args.perKategori.map((k) => `• ${k.label}: ${k.jumlah}`)
+    : ['• (tidak ada laporan)'];
+  return [
+    `*Rekap Shakwa ${args.tanggalLabel}*`,
+    ``,
+    `Total laporan masuk: *${args.total}*`,
+    ...baris,
+    ``,
+    `Belum ditangani: *${args.belumDitangani}*`,
+    args.dashboardUrl,
   ].join('\n');
 }
 

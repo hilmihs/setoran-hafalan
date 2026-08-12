@@ -4,9 +4,12 @@ import { maintenanceGate } from '@/lib/maintenance';
 
 // Prefix halaman terproteksi (butuh login). Bila belum login (cookie sesi
 // tak ada) → arahkan ke home dengan ?next= supaya setelah login balik ke sini.
+// Catatan: '/shakwa' sengaja TIDAK ada di sini — formulirnya memang pintu
+// publik. Hanya dashboard koordinatornya yang butuh login.
 const PROTECTED = [
   '/hits', '/observasi', '/matrix', '/kehadiran',
   '/2in1', '/penilaian', '/laporan', '/audit', '/akun', '/peserta',
+  '/shakwa/koordinator',
 ];
 
 const SESSION_COOKIE = 'maahir-hits-session';

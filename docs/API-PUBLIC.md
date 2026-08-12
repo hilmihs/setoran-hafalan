@@ -61,7 +61,7 @@ const laporan = await ambil('rekap/laporan-maahir', { bulan: '2026-08' });
 
 ### Scope key
 
-Tiap key punya satu atau lebih **scope**: `maahir`, `hits`, `penilaian`. Sebuah route
+Tiap key punya satu atau lebih **scope**: `maahir`, `hits`, `penilaian`, `shakwa`. Sebuah route
 hanya bisa diakses kalau key Anda memiliki scope route tersebut (lihat kolom Scope di
 tabel §3). Route rekap mewarisi scope domainnya — tidak ada scope `rekap` terpisah.
 
@@ -255,7 +255,7 @@ Kolom yang keluar per entitas:
 | `syaikh` | `gender`, `active` | `id`, `name`, `gender`, `active` |
 | `koordinator-ketua-kelas` | `gender`, `active` | `id`, `name`, `gender`, `active` |
 
-### 3.5 Route rekap (6)
+### 3.5 Route rekap (7)
 
 Route rekap **tidak dipaginasi** (memotong laporan membuat total & rata-rata salah).
 Setiap route mewarisi scope domainnya.
@@ -268,6 +268,7 @@ Setiap route mewarisi scope domainnya.
 | `rekap/tibyan` | `bulan=YYYY-MM` (**wajib**), `gender` | `maahir` |
 | `rekap/hits-disiplin` | `mode=bulan\|minggu` (**wajib**), `bulan`, `minggu=YYYY-MM-DD`, `gender` | `hits` |
 | `rekap/matrix-guru` | `bulan=YYYY-MM` (**wajib**), `gender` | `penilaian` |
+| `rekap/shakwa` | `tanggal=YYYY-MM-DD`, atau `dari`+`sampai`; `kategori`, `status`, `gender` (semua opsional) | `shakwa` |
 
 Aturan parameter rekap:
 
@@ -276,6 +277,11 @@ Aturan parameter rekap:
 - `rekap/hits-disiplin`: `mode` wajib. `mode=bulan` → `bulan` wajib; `mode=minggu` →
   `minggu` wajib **dan harus jatuh pada hari Senin** (kalau bukan Senin → `400`, tidak
   dibetulkan diam-diam).
+- `rekap/shakwa`: tanpa parameter tanggal → **hari ini menurut WIB**. `dari` dan `sampai`
+  harus diisi berpasangan; kalau `tanggal` juga diisi, rentang yang menang. `kategori`
+  memakai nilai enum (`evaluasi`, `pengajar`, `peserta`, `cerita_menarik`,
+  `modul_kurikulum`, `ketidaksesuaian_aplikasi`, `izin`, `tali_kasih`); `status` salah
+  satu dari `submitted` (baru), `in_review` (diproses), `resolved` (selesai), `closed`.
 - Perilaku periode & bisnis tiap rekap dijelaskan di §9.
 
 ---
@@ -435,6 +441,15 @@ entitas mentah.**
   berarti **28 Juli–27 Agustus**. Rentang aktual dikembalikan di `meta`
   (`{"bulan":"2026-08","mulai":"2026-07-28","sampai":"2026-08-27"}`) — pakai itu untuk
   melabeli grafik, jangan asumsikan 1–31.
+
+- **`rekap/shakwa` memotong hari menurut WIB (UTC+7), bukan UTC.** Laporan yang masuk
+  pukul 06.00 WIB tetap masuk hitungan hari itu. Nomor WhatsApp pelapor **tidak pernah**
+  ikut keluar, dan lampiran hanya dilaporkan jumlahnya (`jumlahLampiran`) — berkasnya
+  hanya bisa dibuka koordinator lewat dashboard.
+
+- **SP di `rekap/laporan-maahir` dihitung per periode bulan itu saja** (28→27), bukan
+  kumulatif sejak program berjalan. Angka kumulatif ada di `rekap/sp`. Dua-duanya sah —
+  jangan saling dibandingkan seolah harus sama.
 
 - **`rekap/hits-disiplin` mode `bulan` justru memakai kalender penuh** (1–akhir bulan),
   **berbeda** dari window 28→27 milik `laporan-maahir`. Dua route ini memakai definisi

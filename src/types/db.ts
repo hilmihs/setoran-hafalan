@@ -421,6 +421,45 @@ export interface HitsTabayyun {
   created_at: string;
 }
 
+// ---------- Shakwa (formulir aduan & layanan) ----------
+
+/** Tabel dari migrasi 0008 (+0015 reviewer, +0049 tiket/lampiran/jawaban). */
+export interface Shakwa {
+  id: string;
+  nomor_tiket: string;
+  pelapor_type: 'peserta' | 'pengajar';
+  kategori: string; // ShakwaKategori — divalidasi di src/lib/shakwa.ts
+  gender: Gender;
+  nama: string;
+  pelapor_wa: string | null;
+  halaqoh: string | null;
+  pengajar_id: string | null;
+  isi: string;
+  saran_kritik: string | null;
+  jawaban: Record<string, string>;
+  lampiran: string[];
+  status: 'submitted' | 'in_review' | 'resolved' | 'closed';
+  catatan_reviewer: string | null;
+  reviewed_by_id: string | null;
+  reviewed_by_role: string | null;
+  reviewed_at: string | null;
+  created_at: string;
+}
+
+export interface ShakwaIzin {
+  id: string;
+  shakwa_id: string;
+  pengajar_id: string;
+  halaqah_id: string | null;
+  tanggal: string; // YYYY-MM-DD
+  jenis: 'KMT' | 'KBLA' | 'JKG' | 'TIDAK_HADIR';
+  menit: number | null;
+  jadwal_ganti: string | null;
+  alasan: string;
+  dipakai_tabayyun_id: string | null;
+  created_at: string;
+}
+
 export interface HitsTeguran {
   id: string;
   pengajar_id: string;

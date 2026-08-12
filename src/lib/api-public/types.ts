@@ -1,5 +1,5 @@
 // types.ts — tipe bersama jalur API publik.
-export type ScopeName = 'maahir' | 'hits' | 'penilaian' | 'ref';
+export type ScopeName = 'maahir' | 'hits' | 'penilaian' | 'ref' | 'shakwa';
 
 export type FilterKind = 'eq' | 'bool' | 'date_from' | 'date_to' | 'since' | 'is_null';
 

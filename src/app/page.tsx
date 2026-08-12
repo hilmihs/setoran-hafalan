@@ -164,6 +164,25 @@ export default async function HomePage({ searchParams }: { searchParams: { next?
 
           <LoginForm next={safeNext ?? undefined} />
 
+          {/* Shakwa terbuka tanpa akun — pelapor luar tetap punya jalan masuk. */}
+          <a
+            href="/shakwa"
+            className="card-flat"
+            style={{
+              display: 'block',
+              padding: '14px 18px',
+              marginTop: 20,
+              textDecoration: 'none',
+              color: 'inherit',
+              borderRadius: 12,
+            }}
+          >
+            <div style={{ fontWeight: 600, marginBottom: 4 }}>Sampaikan Shakwa</div>
+            <div className="t-small" style={{ color: 'var(--muted-2)' }}>
+              Aduan, izin, masukan, atau cerita menarik — tanpa perlu masuk
+            </div>
+          </a>
+
           <p
             className="t-small"
             style={{ textAlign: 'center', marginTop: 22, color: 'var(--muted-2)' }}
