@@ -22,7 +22,7 @@ export function parseRequest(params: URLSearchParams, def: EntityDef): ParseResu
     if (fd.kind === 'date_from' || fd.kind === 'date_to' || fd.kind === 'since') {
       if (!DATE_RE.test(v)) return { ok: false, code: 'bad_param', message: `Tanggal harus YYYY-MM-DD: '${k}'.` };
       filters.push({ column: fd.column, kind: fd.kind, value: v });
-    } else if (fd.kind === 'bool') {
+    } else if (fd.kind === 'bool' || fd.kind === 'is_null') {
       if (v !== 'true' && v !== 'false') return { ok: false, code: 'bad_param', message: `Nilai boolean harus true/false: '${k}'.` };
       filters.push({ column: fd.column, kind: fd.kind, value: v === 'true' });
     } else {
@@ -53,6 +53,7 @@ export async function runEntity(def: EntityDef, parsed: Extract<ParseResult, { o
     else if (f.kind === 'date_from') q = q.gte(f.column, f.value);
     else if (f.kind === 'date_to') q = q.lte(f.column, f.value);
     else if (f.kind === 'since') q = q.gte(f.column, f.value);
+    else if (f.kind === 'is_null') { if (f.value === true) q = q.is(f.column, null); else q = q.not(f.column, 'is', null); }
   }
   q = q.order(def.order.column, { ascending: parsed.urut === 'asc' });
   const from = (parsed.page - 1) * parsed.limit;

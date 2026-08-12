@@ -5,7 +5,7 @@ import { sanitize } from '../src/lib/api-public/sanitize';
 import { generateKey, hashKey, __verifyRow, recordUsage, __drainUsage, __resetAuthCache } from '../src/lib/api-public/auth';
 import { getCached, setCached, __resetCache, checkRateLimit, __resetRate, acquireInflight } from '../src/lib/api-public/cache';
 import { etagOf, fail, ok } from '../src/lib/api-public/respond';
-import { FORBIDDEN_COLUMNS, auditEntities } from '../src/lib/api-public/registry';
+import { FORBIDDEN_COLUMNS, auditEntities, ENTITIES, getEntity } from '../src/lib/api-public/registry';
 import { parseRequest } from '../src/lib/api-public/query';
 import type { EntityDef } from '../src/lib/api-public/types';
 
@@ -184,8 +184,26 @@ function testParse() {
   check('bad date 2026-8-1 → error', parseRequest(sp('tanggal_dari=2026-8-1'), PERTEMUAN_DEF).ok === false);
 }
 
+function testMaahirRegistry() {
+  console.log('maahir registry:');
+  const maahir = Object.values(ENTITIES).filter(e => e.scope === 'maahir');
+  check('13 maahir entities', maahir.length === 13);
+  check('peserta drops whatsapp_number', !getEntity('peserta')!.columns.includes('whatsapp_number'));
+  check('peserta drops password_hash', !getEntity('peserta')!.columns.includes('password_hash'));
+  check('kehadiran KEEPS catatan', getEntity('kehadiran')!.columns.includes('catatan'));
+  check('rekaman keeps nilai, drops audio_url', getEntity('rekaman')!.columns.includes('nilai') && !getEntity('rekaman')!.columns.includes('audio_url'));
+  check('rekaman drops masukan', !getEntity('rekaman')!.columns.includes('masukan'));
+  check('program-kelas drops ketua_wa/wakil_wa', !getEntity('program-kelas')!.columns.some(c => c === 'ketua_wa' || c === 'wakil_wa'));
+  // pemutihan aktif = is_null filter
+  const pmt = getEntity('pemutihan')!;
+  const rok = parseRequest(new URLSearchParams('aktif=true'), pmt);
+  check('aktif=true → is_null true', rok.ok && rok.filters.some(f => f.kind === 'is_null' && f.value === true));
+  check('aktif=maybe → 400', parseRequest(new URLSearchParams('aktif=maybe'), pmt).ok === false);
+}
+
 async function main() {
   testParse();
+  testMaahirRegistry();
   testSanitize();
   testKeyGen();
   testVerifyRow();
