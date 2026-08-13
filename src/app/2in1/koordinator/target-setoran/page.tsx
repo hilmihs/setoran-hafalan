@@ -135,10 +135,18 @@ export default async function TargetSetoranPage() {
               capaiannya.
             </p>
             <p className="t-tiny" style={{ color: 'var(--muted-2)', marginTop: 4 }}>
+              Yang mengisi sehari-hari <strong>bukan koordinator</strong>: peserta Takhassus Ikhwan
+              memasang sendiri lewat Presensi Mandiri, dan peserta Akhwat dipasangkan oleh ketua
+              kelasnya lewat halaman Setoran Hafalan. Halaman ini untuk memantau semuanya dan
+              mengoreksi bila ada yang keliru atau belum terisi.
+            </p>
+            <p className="t-tiny" style={{ color: 'var(--muted-2)', marginTop: 4 }}>
               Mengubah target berarti <strong>menambah versi baru</strong>, bukan menimpa yang lama:
-              periode yang sudah dilaporkan tetap memakai target yang berlaku saat itu. Isi{' '}
-              <em>berlaku mulai</em> dengan tanggal mundur bila ingin bulan-bulan lama ikut dinilai —
-              default {tanggalPendek(PRESENSI_ANCHOR)}, awal program.
+              periode yang sudah dilaporkan tetap memakai target yang berlaku saat itu. Peserta dan
+              ketua terkunci ke periode berjalan; <strong>hanya dari halaman ini</strong> tanggal
+              berlaku boleh dimundurkan — isi <em>berlaku mulai</em> dengan tanggal lama bila ingin
+              bulan-bulan yang sudah lewat ikut dinilai. Default {tanggalPendek(PRESENSI_ANCHOR)},
+              awal program.
             </p>
           </div>
 

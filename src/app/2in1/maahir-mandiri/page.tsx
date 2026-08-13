@@ -2,8 +2,11 @@ import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { getSessionWa, findSelfAttendanceMembership, isTakhassusKelas } from '@/lib/program-kelas';
 import { getUnfilledDaysForAnggota, PROGRAM_LABEL } from '@/lib/maahir-presensi';
+import { berlakuPeriodeBerjalan, getSetoranTargets, targetResolver } from '@/lib/setoran-target';
+import { todayJakarta } from '@/lib/anggota-periode';
 import { LogoutButton } from '@/components/LogoutButton';
 import { SelfPresensiForm } from './SelfPresensiForm';
+import { TargetSayaForm } from './TargetSayaForm';
 import { RemindKetuaButton } from './RemindKetuaButton';
 import { LiburRequestForm } from '../ketua-kelas/libur/LiburRequestForm';
 
@@ -64,6 +67,11 @@ export default async function MaahirMandiriPage() {
     </Link>
   );
 
+  // Target hafalan harian — hanya kelas Takhassus yang menyetor. Pesertanya
+  // memasang sendiri karena kelas ini presensi-mandiri dan tak punya ketua di
+  // alur presensi.
+  const targetBlock = isTakhassusKelas(kelas.name) ? await renderTargetBlock(kelas.id, anggotaId) : null;
+
   if (unfilled.length === 0) {
     return (
       <Shell>
@@ -74,6 +82,7 @@ export default async function MaahirMandiriPage() {
           </div>
         </div>
         {riwayatLink}
+        {targetBlock}
         {liburBlock}
         <Link href="/" className="btn btn-ghost btn-block" style={{ marginTop: 16 }}>← Beranda</Link>
       </Shell>
@@ -121,7 +130,32 @@ export default async function MaahirMandiriPage() {
       {!isLeader && <RemindKetuaButton kelasId={kelas.id} tanggal={day.tanggal} />}
 
       {riwayatLink}
+      {targetBlock}
       {liburBlock}
     </Shell>
+  );
+}
+
+/**
+ * Kartu "Target hafalan saya". Angka yang ditampilkan adalah yang BERLAKU hari
+ * ini — bisa berasal dari setelan peserta sendiri, atau dari default kelas yang
+ * dipasang koordinator. Bedanya disebutkan supaya peserta tahu ia sedang
+ * mengikuti angka orang lain atau angkanya sendiri.
+ */
+async function renderTargetBlock(kelasId: string, anggotaId: string) {
+  const rows = await getSetoranTargets([kelasId]);
+  const hariIni = todayJakarta();
+  const berlaku = targetResolver(rows)(kelasId, anggotaId, hariIni);
+  const punyaKoreksi = rows.some((r) => r.anggotaId === anggotaId && r.berlakuMulai <= hariIni);
+  const berlakuMulai = berlakuPeriodeBerjalan();
+  const berlakuLabel = new Date(berlakuMulai + 'T00:00:00').toLocaleDateString('id-ID', {
+    day: 'numeric', month: 'long', year: 'numeric',
+  });
+  return (
+    <TargetSayaForm
+      nilai={berlaku}
+      berlakuLabel={berlakuLabel}
+      sumberDefault={berlaku !== null && !punyaKoreksi}
+    />
   );
 }

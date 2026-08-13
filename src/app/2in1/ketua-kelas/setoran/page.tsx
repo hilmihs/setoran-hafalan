@@ -5,8 +5,11 @@ import { getSessionWa, findKetuaWakilKelas, isTakhassusKelas } from '@/lib/progr
 import { MonthNavSelect } from '@/components/MonthNavSelect';
 import { monthOptionsSince } from '@/lib/month';
 import { PRESENSI_ANCHOR } from '@/lib/maahir-presensi';
+import { berlakuPeriodeBerjalan, getSetoranTargets, targetResolver } from '@/lib/setoran-target';
+import { todayJakarta } from '@/lib/anggota-periode';
 import { Icon } from '@/components/icons';
 import { SetoranGrid, type GridPertemuan, type GridPeserta } from './SetoranGrid';
+import { TargetPesertaPanel, type TargetBaris } from './TargetPesertaPanel';
 
 export const dynamic = 'force-dynamic';
 
@@ -144,6 +147,35 @@ export default async function SetoranKetuaPage({
     })
     .filter((b) => b.pert.length > 0 && b.pes.length > 0);
 
+  // Target hafalan harian per peserta. Dipisah dari `blocks` supaya panelnya
+  // tetap muncul pada bulan yang belum punya pertemuan sama sekali — target
+  // justru paling perlu dipasang sebelum kelas berjalan.
+  const targetRows = await getSetoranTargets(kelasIds);
+  const hariIni = todayJakarta();
+  const berlakuPada = targetResolver(targetRows);
+  const berlakuLabel = new Date(berlakuPeriodeBerjalan() + 'T00:00:00').toLocaleDateString('id-ID', {
+    day: 'numeric', month: 'long', year: 'numeric',
+  });
+  const targetBlocks = myKelas
+    .map((k) => ({
+      kelas: k,
+      baris: anggotaList
+        .filter((a) => a.program_kelas_id === k.id)
+        .map((a): TargetBaris => {
+          const nilai = berlakuPada(k.id, a.id, hariIni);
+          const punyaKoreksi = targetRows.some(
+            (r) => r.anggotaId === a.id && r.berlakuMulai <= hariIni
+          );
+          return {
+            anggotaId: a.id,
+            name: a.name,
+            nilai,
+            sumberDefault: nilai !== null && !punyaKoreksi,
+          };
+        }),
+    }))
+    .filter((b) => b.baris.length > 0);
+
   return (
     <main style={{ minHeight: '100vh' }}>
       <div style={{ maxWidth: 900, margin: '0 auto' }}>
@@ -165,6 +197,16 @@ export default async function SetoranKetuaPage({
             </div>
             <MonthNavSelect options={monthOptionsSince(ANCHOR_MONTH)} value={month} />
           </div>
+
+          {targetBlocks.map((b) => (
+            <TargetPesertaPanel
+              key={b.kelas.id}
+              kelasId={b.kelas.id}
+              kelasName={b.kelas.name}
+              baris={b.baris}
+              berlakuLabel={berlakuLabel}
+            />
+          ))}
 
           {blocks.length === 0 ? (
             <div className="card-flat" style={{ padding: 20 }}>

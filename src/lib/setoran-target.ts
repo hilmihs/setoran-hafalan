@@ -17,8 +17,22 @@
 // sendiri.
 
 import { supabaseAdmin } from '@/lib/supabase-admin';
+import { periodeBerjalan, periodeStartDate } from '@/lib/periode-laporan';
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+/**
+ * Tanggal berlaku yang boleh dipakai peserta & ketua kelas: awal periode
+ * berjalan (window 28–27).
+ *
+ * Target dipasang oleh pihak yang juga dinilai olehnya, jadi tanggal berlakunya
+ * dikunci ke depan — tanpa itu, menurunkan target di akhir bulan akan
+ * memperbaiki capaian bulan yang sudah berjalan. Koordinator tetap bebas
+ * memilih tanggal, termasuk mundur, lewat halaman /koordinator/target-setoran.
+ */
+export function berlakuPeriodeBerjalan(): string {
+  return periodeStartDate(periodeBerjalan());
+}
 
 /** Batas atas kewajaran — menahan salah ketik (mis. 400 alih-alih 4,00). */
 const MAX_HALAMAN_PER_HARI = 20;

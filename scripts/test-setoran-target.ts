@@ -186,9 +186,9 @@ async function main() {
 
   // Import SETELAH DATABASE_URL di-set — pool dibaca saat koneksi pertama.
   const { getLaporanMaahir } = await import('../src/lib/laporan-maahir');
-  const { simpanTarget, hapusTarget, getSetoranTargets, targetResolver } = await import(
-    '../src/lib/setoran-target'
-  );
+  const { simpanTarget, hapusTarget, getSetoranTargets, targetResolver, berlakuPeriodeBerjalan } =
+    await import('../src/lib/setoran-target');
+  const { periodeBerjalan, periodeStartDate } = await import('../src/lib/periode-laporan');
 
   const lap = async () => (await getLaporanMaahir(MONTH)).takhassus.setoran;
   const cari = (list: Awaited<ReturnType<typeof lap>>['peserta'], nama: string) =>
@@ -417,6 +417,27 @@ async function main() {
       const rows = (await getSetoranTargets([K_AKH])).filter((x) => x.anggotaId === A_AKHWAT);
       check('tetap 1 versi', rows.length === 1, String(rows.length));
       check('nilainya diperbarui', rows[0]?.halamanPerHari === 2, String(rows[0]?.halamanPerHari));
+    }
+
+    console.log('\n15. Kunci tanggal berlaku untuk peserta & ketua');
+    {
+      // Peserta ikhwan dan ketua akhwat tak memilih tanggal — server memakai
+      // awal periode berjalan, supaya menurunkan target hari ini tak bisa
+      // memperbaiki capaian bulan yang sudah dilaporkan.
+      const harap = periodeStartDate(periodeBerjalan());
+      check('berlakuPeriodeBerjalan = awal periode berjalan', berlakuPeriodeBerjalan() === harap, berlakuPeriodeBerjalan());
+      check('bukan tanggal mundur sembarang', berlakuPeriodeBerjalan() > ANCHOR, berlakuPeriodeBerjalan());
+
+      // Target yang dipasang lewat jalur terkunci tak boleh mengubah periode
+      // Juli yang sudah lewat.
+      const sebelum = cari((await lap()).peserta, 'Peserta Koreksi')?.target;
+      await simpanTarget({
+        programKelasId: K_IKH, anggotaId: A_KOREKSI, halamanPerHari: 1,
+        berlakuMulai: berlakuPeriodeBerjalan(), catatan: null, dibuatOleh: 'Peserta Koreksi',
+      });
+      const sesudah = cari((await lap()).peserta, 'Peserta Koreksi')?.target;
+      check('laporan Juli tak berubah oleh target periode berjalan',
+        sesudah === sebelum, `${sebelum} → ${sesudah}`);
     }
   } finally {
     await server.stop();

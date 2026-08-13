@@ -1,7 +1,14 @@
 'use server';
 
+import { revalidatePath } from 'next/cache';
 import { supabaseAdmin } from '@/lib/supabase-admin';
-import { getSessionWa, getSelfAttendanceKelas } from '@/lib/program-kelas';
+import {
+  getSessionWa,
+  getSelfAttendanceKelas,
+  findSelfAttendanceMembership,
+  isTakhassusKelas,
+} from '@/lib/program-kelas';
+import { berlakuPeriodeBerjalan, simpanTarget } from '@/lib/setoran-target';
 import { PRESENSI_ANCHOR, todayJakarta, expectedDaysInRange } from '@/lib/maahir-presensi';
 import { getLiburDates } from '@/lib/maahir-libur';
 import { pesanTerkunci, presensiTerbuka } from '@/lib/periode-laporan';
@@ -12,6 +19,47 @@ import { butuhAlasan, isStatusValid } from '@/lib/kehadiran-status';
 
 export type SelfPresensiResult = { ok?: boolean; error?: string };
 export type RemindResult = { ok?: boolean; error?: string; waUrl?: string };
+export type TargetResult = { ok?: boolean; error?: string };
+
+/**
+ * Peserta Takhassus Ikhwan menetapkan target hafalan HARIANNYA SENDIRI.
+ *
+ * Kelas itu presensi-mandiri dan tak punya ketua di alur presensi, jadi
+ * pesertanya yang memasang sendiri. Tanggal berlakunya dikunci ke awal periode
+ * berjalan — target yang dipasang hari ini tak boleh memperbaiki capaian bulan
+ * yang sudah dilaporkan. Koordinator tetap bisa mengoreksi dan memundurkan
+ * tanggal lewat /2in1/koordinator/target-setoran.
+ */
+export async function simpanTargetSaya(
+  _prev: TargetResult | undefined,
+  fd: FormData
+): Promise<TargetResult> {
+  const wa = await getSessionWa();
+  if (!wa) return { error: 'Login diperlukan.' };
+
+  const m = await findSelfAttendanceMembership(wa);
+  if (!m) return { error: 'Akun Anda tidak terdaftar di kelas presensi mandiri.' };
+  if (!isTakhassusKelas(m.kelas.name)) {
+    return { error: 'Target setoran hanya untuk kelas Maahir Takhassus.' };
+  }
+
+  // Koma sebagai pemisah desimal — "0,5" adalah cara mengetik yang paling wajar.
+  const halamanPerHari = Number(String(fd.get('halaman_per_hari') ?? '').replace(',', '.'));
+  const res = await simpanTarget({
+    programKelasId: m.kelas.id,
+    anggotaId: m.anggotaId,
+    halamanPerHari,
+    berlakuMulai: berlakuPeriodeBerjalan(),
+    catatan: null,
+    dibuatOleh: m.anggotaName,
+  });
+  if (res.error) return { error: res.error };
+
+  revalidatePath('/2in1/maahir-mandiri');
+  revalidatePath('/2in1/koordinator/target-setoran');
+  revalidatePath('/2in1/laporan/maahir');
+  return { ok: true };
+}
 
 /** Peserta mengingatkan ketua kelas bahwa pertemuan tanggal ini libur → WA ketua. */
 export async function remindKetuaLibur(kelasId: string, tanggal: string): Promise<RemindResult> {
