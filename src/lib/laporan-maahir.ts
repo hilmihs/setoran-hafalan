@@ -11,6 +11,7 @@ import { getLiburDatesForKelas } from '@/lib/maahir-libur';
 import { anchorKelas, expectedDaysInRange, filledKeyOf, todayJakarta } from '@/lib/maahir-presensi';
 import { getMaahirSP, periodeStartDate, type SPRekap } from '@/lib/maahir-sp';
 import { getPemutihan } from '@/lib/maahir-pemutihan';
+import { getSetoranTargets, targetResolver } from '@/lib/setoran-target';
 import { getLaporanNotes, type LaporanNote } from '@/lib/laporan-note';
 import { isTakhassusKelas, type ProgramKelasRow } from '@/lib/program-kelas';
 import { dalamPeriode, mulaiEfektif } from '@/lib/anggota-periode';
@@ -59,14 +60,27 @@ export type SetoranPeserta = {
   halaman: number | null; // total halaman sebulan; null bila belum pernah isi
   pertemuanSetor: number; // jumlah pertemuan yang diisi setorannya
   rincian: string; // 'DD/MM: N hal · …' per pertemuan
+  /** Target halaman/hari yang berlaku di akhir periode — label saja. */
+  targetHarian: number | null;
+  /** Sesi kelas_maahir yang benar-benar ditagih ke dia (sesudah libur & sakit). */
+  sesiTarget: number;
+  /** Σ target harian sepanjang sesi itu. null = target belum diatur / diputihkan. */
+  target: number | null;
+  /** halaman/target × 100. null bila tak ada target. */
+  persen: number | null;
 };
 
 export type LaporanMaahir = {
   month: string; // YYYY-MM
   takhassus: {
     setoran: {
-      benchmark: number; // 80 halaman/bulan
+      /** Rata-rata target periode (halaman) atas peserta yang punya target. null = belum diatur. */
+      benchmark: number | null;
       aktual: number | null; // rata-rata halaman per peserta yang sudah setor
+      /** Σhalaman / Σtarget × 100 atas peserta bertarget. Tertimbang; non-penyetor dihitung 0. */
+      persen: number | null;
+      /** false = belum ada satu pun target diatur, kolom capaian tampil '—'. */
+      adaTarget: boolean;
       peserta: SetoranPeserta[]; // semua anggota 2 kelas takhassus
     };
     kehadiran: { avgIkhwan: number | null; avgAkhwat: number | null; aktual: number | null; benchmark: number };
@@ -140,7 +154,7 @@ export async function getLaporanMaahir(month: string): Promise<LaporanMaahir> {
   const emptyResult: LaporanMaahir = {
     month,
     takhassus: {
-      setoran: { benchmark: 80, aktual: null, peserta: [] },
+      setoran: { benchmark: null, aktual: null, persen: null, adaTarget: false, peserta: [] },
       kehadiran: empty(80),
       dibawahTarget: { jumlah: 0, list: [] },
       kehadiranPengajar: 100,
@@ -376,6 +390,64 @@ export async function getLaporanMaahir(month: string): Promise<LaporanMaahir> {
   const takhBawah = takhStudents
     .filter((s) => s.persen !== null && s.persen < 80)
     .sort((a, b) => (a.persen ?? 0) - (b.persen ?? 0));
+  // Target setoran harian koordinator (halaman/hari), per kelas dgn koreksi
+  // per peserta. Hanya kelas takhassus yang punya setoran, jadi hanya itu yang
+  // ditarik.
+  const takhKelasIds = kelasList.filter((k) => isTakhassus(k.name)).map((k) => k.id);
+  const targetHarianPada = targetResolver(await getSetoranTargets(takhKelasIds));
+
+  /**
+   * Penyebut capaian setoran seorang peserta: Σ target harian sepanjang sesi
+   * kelas_maahir yang benar-benar ditagih kepadanya.
+   *
+   * Sengaja memakai sesi yang SEHARUSNYA ada, bukan sesi yang presensinya
+   * terisi — kebalikan dari penyebut kehadiran di `studentsFor`. Kehadiran
+   * memakai sesi terisi supaya sesi yang lalai diisi tak menerbitkan alpa palsu;
+   * setoran punya kegagalan sebaliknya, karena sesi yang tak terisi juga berarti
+   * tak ada halaman tercatat, sehingga penyebut berbasis sesi terisi runtuh jadi
+   * 0/0 dan kelas yang tak menyetor apa pun justru terbaca 100%.
+   */
+  function targetPeserta(
+    a: (typeof anggotaList)[number],
+    kelas: ProgramKelasRow,
+    sakit: number
+  ): { targetHarian: number | null; sesiTarget: number; target: number | null } {
+    // Pemutihan sebulan penuh → tak ada target sama sekali, bukan 100%.
+    // Pemutihan menghapus KETIDAKHADIRAN; memaksa setoran jadi penuh akan
+    // mengarang hafalan yang tak pernah disetorkan.
+    if (pemutihan.has(a.id)) return { targetHarian: null, sesiTarget: 0, target: null };
+
+    const mulaiKelas = anchorKelas(kelas);
+    const dari = mulaiKelas > start ? mulaiKelas : start;
+    if (dari > end) return { targetHarian: null, sesiTarget: 0, target: null };
+
+    const harian: number[] = [];
+    for (const d of expectedDaysInRange(kelas, dari, end, liburByKelas.get(kelas.id))) {
+      // WAJIB: kelas takhassus ber-presensi_sifat 'harian', dan
+      // expectedDaysInRange menyelipkan satu sesi at_tibyan tiap Sabtu. Tanpa
+      // saringan ini tiap target membengkak ~4 sesi/periode.
+      if (d.program !== 'kelas_maahir') continue;
+      if (!dalamPeriode(a, d.tanggal, start, end)) continue;
+      if (pemutihanTanggal.has(`${a.id}|${d.tanggal}`)) continue;
+      const t = targetHarianPada(kelas.id, a.id, d.tanggal);
+      if (t === null) continue; // hari sebelum target berlaku — tak ditagih
+      harian.push(t);
+    }
+    if (harian.length === 0) return { targetHarian: null, sesiTarget: 0, target: null };
+
+    // Sakit = udzur, sesinya dikeluarkan dari penyebut sebagaimana kehadiran.
+    // Yang dibuang sesi TERAKHIR: bila target naik di tengah periode, tarif
+    // yang berlaku saat sakit itulah yang paling mendekati.
+    const sesiTarget = Math.max(0, harian.length - sakit);
+    const dipakai = harian.slice(0, sesiTarget);
+    const target = dipakai.reduce((s, v) => s + v, 0);
+    return {
+      targetHarian: harian[harian.length - 1],
+      sesiTarget,
+      target: sesiTarget > 0 ? Math.round(target * 100) / 100 : 0,
+    };
+  }
+
   // Setoran: list semua anggota 2 kelas takhassus (ikhwan dulu, lalu akhwat, lalu nama).
   const takhPeserta = anggotaList
     .map((a) => ({ a, kelas: kelasById.get(a.program_kelas_id) }))
@@ -389,6 +461,8 @@ export async function getLaporanMaahir(month: string): Promise<LaporanMaahir> {
         p.tanggal < q.tanggal ? -1 : p.tanggal > q.tanggal ? 1 : 0
       );
       const halaman = rows.reduce((s, rw) => s + rw.halaman, 0);
+      const sakit = statByAnggotaScope.get(`${x.a.id}|kelas_maahir`)?.S ?? 0;
+      const { targetHarian, sesiTarget, target } = targetPeserta(x.a, x.kelas!, sakit);
       return {
         anggotaId: x.a.id,
         name: x.a.name,
@@ -399,11 +473,23 @@ export async function getLaporanMaahir(month: string): Promise<LaporanMaahir> {
         rincian: rows
           .map((rw) => `${rw.tanggal.slice(8, 10)}/${rw.tanggal.slice(5, 7)}: ${rw.halaman} hal`)
           .join(' · '),
+        targetHarian,
+        sesiTarget,
+        target,
+        persen: target !== null && target > 0 ? Math.round((halaman / target) * 100) : null,
       };
     });
   const takhSetoranAktual = mean(
     takhPeserta.filter((p) => p.halaman !== null).map((p) => p.halaman as number)
   );
+  // Capaian agregat: tertimbang atas peserta BERTARGET. Beda semantik dari
+  // `aktual` yang hanya merata-rata penyetor — di sini peserta bertarget yang
+  // tak menyetor apa pun dihitung sebagai 0, dan memang itu maksudnya.
+  const bertarget = takhPeserta.filter((p) => p.target !== null && p.target > 0);
+  const totalTarget = bertarget.reduce((s, p) => s + (p.target as number), 0);
+  const totalHalaman = bertarget.reduce((s, p) => s + (p.halaman ?? 0), 0);
+  const takhSetoranPersen = totalTarget > 0 ? Math.round((totalHalaman / totalTarget) * 100) : null;
+  const takhSetoranBenchmark = mean(bertarget.map((p) => Math.round(p.target as number)));
 
   // ---- Maahir (non-takhassus, scope kelas_maahir) ----
   const maahirStudents = studentsFor(isMaahir, 'kelas_maahir');
@@ -462,7 +548,13 @@ export async function getLaporanMaahir(month: string): Promise<LaporanMaahir> {
   return {
     month,
     takhassus: {
-      setoran: { benchmark: 80, aktual: takhSetoranAktual, peserta: takhPeserta },
+      setoran: {
+        benchmark: takhSetoranBenchmark,
+        aktual: takhSetoranAktual,
+        persen: takhSetoranPersen,
+        adaTarget: bertarget.length > 0,
+        peserta: takhPeserta,
+      },
       kehadiran: { avgIkhwan: takhAvgI, avgAkhwat: takhAvgA, aktual: avgOfGenders(takhAvgI, takhAvgA), benchmark: 80 },
       dibawahTarget: { jumlah: takhBawah.length, list: takhBawah },
       kehadiranPengajar: 100,

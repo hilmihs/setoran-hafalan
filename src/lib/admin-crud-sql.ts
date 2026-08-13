@@ -148,6 +148,7 @@ const DOMAIN_MAP: Record<string, string> = {
   kelompok_pengajar: 'Identitas & Role', kelas: 'Identitas & Role', kelas_hits: 'Identitas & Role',
   setoran: 'Setoran & Hafalan', setoran_musyrif: 'Setoran & Hafalan',
   rekaman: 'Setoran & Hafalan', rekaman_musyrif: 'Setoran & Hafalan',
+  maahir_setoran_target: 'Setoran & Hafalan',
   penilaian_masyaikh: 'Penilaian & Matrix', penilaian_pedagogis: 'Penilaian & Matrix',
   matrix_rekap: 'Penilaian & Matrix', indikator_standar: 'Penilaian & Matrix',
   checkin_pengajar: 'Kehadiran & Program', program_kehadiran: 'Kehadiran & Program',

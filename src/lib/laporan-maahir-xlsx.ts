@@ -248,29 +248,54 @@ export async function buildLaporanMaahirWorkbook(lap: LaporanMaahir, bulan: stri
     1,
     "Setoran Al-Qur'an per bulan (halaman)",
     t.setoran.aktual === null ? '—' : String(t.setoran.aktual),
-    String(t.setoran.benchmark),
+    t.setoran.benchmark === null ? '—' : String(t.setoran.benchmark),
     { notes: 'Rata-rata halaman per peserta yang mengisi setoran' }
   );
-  obsRow(2, 'Kehadiran peserta per bulan', pct(t.kehadiran.aktual), `${t.kehadiran.benchmark}%`, { ink: inkForPct(t.kehadiran.aktual, t.kehadiran.benchmark) }, true);
-  obsRow(3, 'Jumlah peserta dengan absensi di bawah target', `${t.dibawahTarget.jumlah} orang`, '');
-  obsRow(4, 'Kehadiran pengajar per bulan', `${t.kehadiranPengajar}%`, '80%', { ink: C.ok }, true);
-  obsRow(5, 'Jumlah pengajar dengan absensi di bawah target', `${t.pengajarDibawahTarget} orang`, '');
+  obsRow(
+    2,
+    'Pencapaian target setoran hafalan',
+    pct(t.setoran.persen),
+    t.setoran.adaTarget ? '100%' : '',
+    {
+      ink: inkForPct(t.setoran.persen, 100),
+      notes: t.setoran.adaTarget
+        ? 'Total halaman ÷ total target periode (target harian × sesi yang seharusnya berjalan); peserta tanpa setoran dihitung 0'
+        : 'Target harian belum diatur koordinator',
+    },
+    true
+  );
+  obsRow(3, 'Kehadiran peserta per bulan', pct(t.kehadiran.aktual), `${t.kehadiran.benchmark}%`, { ink: inkForPct(t.kehadiran.aktual, t.kehadiran.benchmark) }, true);
+  obsRow(4, 'Jumlah peserta dengan absensi di bawah target', `${t.dibawahTarget.jumlah} orang`, '');
+  obsRow(5, 'Kehadiran pengajar per bulan', `${t.kehadiranPengajar}%`, '80%', { ink: C.ok }, true);
+  obsRow(6, 'Jumlah pengajar dengan absensi di bawah target', `${t.pengajarDibawahTarget} orang`, '');
   spacer();
 
   subBand(`Rincian Setoran — Peserta Takhassus (${t.setoran.peserta.length}) — halaman per pertemuan`);
+  // Kolom baru Target & % ditaruh di dalam rentang 4–7 supaya NCOL dan lebar
+  // ws.columns tak berubah — keduanya dipakai bersama tabel "peserta di bawah
+  // target" di bawah, yang akan ikut bergeser kalau tata letaknya diubah.
   tableHead([
     { text: 'Peserta', from: 1, to: 2, align: 'left' },
     { text: 'Gender', from: 3, to: 3 },
-    { text: 'Setoran (hal)', from: 4, to: 5 },
-    { text: 'Pertemuan', from: 6, to: 7 },
+    { text: 'Setoran (hal)', from: 4, to: 4 },
+    { text: 'Target (hal)', from: 5, to: 5 },
+    { text: '%', from: 6, to: 6 },
+    { text: 'Pertemuan', from: 7, to: 7 },
     { text: 'Rincian per Pertemuan', from: 8, to: NCOL, align: 'left' },
   ]);
   t.setoran.peserta.forEach((p, i) => {
     dataRow([
       { text: p.name, from: 1, to: 2, align: 'left' },
       { text: p.gender === 'ikhwan' ? 'Ikhwan' : 'Akhwat', from: 3, to: 3, ink: C.muted },
-      { text: p.halaman ?? '—', from: 4, to: 5, bold: p.halaman !== null },
-      { text: p.pertemuanSetor > 0 ? `${p.pertemuanSetor}x` : '—', from: 6, to: 7, ink: C.muted },
+      { text: p.halaman ?? '—', from: 4, to: 4, bold: p.halaman !== null },
+      { text: p.target === null ? '—' : p.target, from: 5, to: 5, ink: C.muted },
+      {
+        text: p.persen === null ? '—' : `${p.persen}%`,
+        from: 6, to: 6,
+        bold: p.persen !== null,
+        ink: inkForPct(p.persen, 100),
+      },
+      { text: p.pertemuanSetor > 0 ? `${p.pertemuanSetor}x` : '—', from: 7, to: 7, ink: C.muted },
       { text: p.rincian || '—', from: 8, to: NCOL, align: 'left', ink: C.muted },
     ], i % 2 === 1);
   });

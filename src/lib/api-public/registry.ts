@@ -95,6 +95,21 @@ export const ENTITIES: Record<string, EntityDef> = {
     filters: [{ param: 'month', column: 'month', kind: 'eq' }],
     order: { column: 'urutan', dir: 'asc' },
   },
+  'setoran-target': {
+    // Target setoran hafalan Takhassus, halaman PER HARI. anggota_id kosong =
+    // default seluruh kelas; berlaku_mulai membedakan versi, baris lama tak
+    // dihapus saat target berubah.
+    route: 'setoran-target', table: 'maahir_setoran_target', scope: 'maahir',
+    columns: [
+      'id', 'program_kelas_id', 'anggota_id', 'halaman_per_hari',
+      'berlaku_mulai', 'catatan', 'dibuat_oleh', 'created_at',
+    ],
+    filters: [
+      { param: 'program_kelas_id', column: 'program_kelas_id', kind: 'eq' },
+      { param: 'anggota_id', column: 'anggota_id', kind: 'eq' },
+    ],
+    order: { column: 'berlaku_mulai', dir: 'desc' },
+  },
   peserta: {
     route: 'peserta', table: 'peserta', scope: 'maahir',
     columns: ['id', 'name', 'gender', 'kelas_id', 'active', 'created_at'],

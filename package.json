@@ -45,6 +45,7 @@
     "db": "tsx --env-file=.env.local scripts/db.ts",
     "test-sp": "tsx scripts/test-sp-pemutihan.ts",
     "test-bulk": "tsx scripts/test-bulk-pemutihan.ts",
+    "test-target": "tsx scripts/test-setoran-target.ts",
     "test-hits-xlsx": "tsx scripts/test-hits-xlsx.ts",
     "test-cutoff": "tsx scripts/test-periode-cutoff.ts",
     "test-api": "tsx scripts/test-api-public.ts",

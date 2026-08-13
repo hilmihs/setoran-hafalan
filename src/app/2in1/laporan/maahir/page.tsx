@@ -19,6 +19,13 @@ function pct(v: number | null): string {
 function num(v: number | null): string {
   return v === null ? '—' : String(v);
 }
+/** Warna kolom capaian target: ≥100 hijau · 80–99 kuning · <80 merah. */
+function inkPersen(v: number | null): string | undefined {
+  if (v === null) return 'var(--muted-2)';
+  if (v >= 100) return 'var(--hijau-ink)';
+  if (v >= 80) return 'var(--kuning-ink)';
+  return 'var(--merah-ink)';
+}
 function monthLabel(month: string): string {
   const [y, m] = month.split('-').map(Number);
   return new Date(Date.UTC(y, m - 1, 1)).toLocaleDateString('id-ID', {
@@ -86,6 +93,15 @@ export default async function LaporanMaahirPage({
             <a href={kehadiranUrl} className="btn btn-sm btn-ghost" download style={{ textDecoration: 'none' }}>
               Export Data Kehadiran — {monthLabel(month)}
             </a>
+            {session.role !== 'syaikh' && (
+              <Link
+                href="/2in1/koordinator/target-setoran"
+                className="btn btn-sm btn-ghost"
+                style={{ textDecoration: 'none' }}
+              >
+                Atur target setoran
+              </Link>
+            )}
           </div>
           <p className="t-tiny" style={{ color: 'var(--muted-2)', marginBottom: 20 }}>
             Export Data Kehadiran = matriks peserta × tanggal per kelas (H/I/S/A/T tiap pertemuan,
@@ -260,13 +276,24 @@ function TakhassusBlock({ lap }: { lap: Awaited<ReturnType<typeof getLaporanMaah
           no="1"
           hal="Setoran Al-Qur'an per bulan (halaman)"
           aktual={num(t.setoran.aktual)}
-          benchmark={String(t.setoran.benchmark)}
+          benchmark={num(t.setoran.benchmark)}
           notes="Rata-rata halaman per peserta yang mengisi setoran"
         />
-        <ObsRow no="2" hal="Kehadiran peserta per bulan" aktual={pct(t.kehadiran.aktual)} benchmark={`${t.kehadiran.benchmark}%`} />
-        <ObsRow no="3" hal="Jumlah peserta dengan absensi di bawah target" aktual={`${t.dibawahTarget.jumlah} orang`} benchmark="" />
-        <ObsRow no="4" hal="Kehadiran pengajar per bulan" aktual={`${t.kehadiranPengajar}%`} benchmark="80%" />
-        <ObsRow no="5" hal="Jumlah pengajar dengan absensi di bawah target" aktual={`${t.pengajarDibawahTarget} orang`} benchmark="" />
+        <ObsRow
+          no="2"
+          hal="Pencapaian target setoran hafalan"
+          aktual={pct(t.setoran.persen)}
+          benchmark={t.setoran.adaTarget ? '100%' : ''}
+          notes={
+            t.setoran.adaTarget
+              ? 'Total halaman ÷ total target periode; peserta tanpa setoran dihitung 0'
+              : 'Target harian belum diatur koordinator'
+          }
+        />
+        <ObsRow no="3" hal="Kehadiran peserta per bulan" aktual={pct(t.kehadiran.aktual)} benchmark={`${t.kehadiran.benchmark}%`} />
+        <ObsRow no="4" hal="Jumlah peserta dengan absensi di bawah target" aktual={`${t.dibawahTarget.jumlah} orang`} benchmark="" />
+        <ObsRow no="5" hal="Kehadiran pengajar per bulan" aktual={`${t.kehadiranPengajar}%`} benchmark="80%" />
+        <ObsRow no="6" hal="Jumlah pengajar dengan absensi di bawah target" aktual={`${t.pengajarDibawahTarget} orang`} benchmark="" />
       </ObsTable>
 
       <div className="t-tiny" style={{ color: 'var(--muted-2)', margin: '4px 0' }}>Rincian setoran — peserta ({t.setoran.peserta.length})</div>
@@ -277,6 +304,10 @@ function TakhassusBlock({ lap }: { lap: Awaited<ReturnType<typeof getLaporanMaah
               <th>Peserta</th>
               <th style={{ width: 60 }}>Gender</th>
               <th style={{ width: 110 }}>Setoran (hal)</th>
+              <th style={{ width: 100 }} title="Target harian × sesi yang ditagih dalam periode ini">
+                Target (hal)
+              </th>
+              <th style={{ width: 70 }}>%</th>
               <th style={{ width: 90 }}>Pertemuan</th>
               <th>Rincian per pertemuan</th>
             </tr>
@@ -290,6 +321,21 @@ function TakhassusBlock({ lap }: { lap: Awaited<ReturnType<typeof getLaporanMaah
                   {p.halaman ?? '—'}
                 </td>
                 <td style={{ textAlign: 'center' }} className="t-tiny">
+                  {p.target === null ? (
+                    '—'
+                  ) : (
+                    <>
+                      {p.target}
+                      <span style={{ color: 'var(--muted-2)' }}>
+                        {' '}({p.targetHarian}×{p.sesiTarget})
+                      </span>
+                    </>
+                  )}
+                </td>
+                <td style={{ textAlign: 'center', fontWeight: 600, color: inkPersen(p.persen) }}>
+                  {p.persen === null ? '—' : `${p.persen}%`}
+                </td>
+                <td style={{ textAlign: 'center' }} className="t-tiny">
                   {p.pertemuanSetor > 0 ? `${p.pertemuanSetor}×` : '—'}
                 </td>
                 <td className="t-tiny" style={{ color: 'var(--muted-2)' }}>{p.rincian || '—'}</td>
@@ -298,6 +344,14 @@ function TakhassusBlock({ lap }: { lap: Awaited<ReturnType<typeof getLaporanMaah
           </tbody>
         </table>
       </div>
+      <p className="t-tiny" style={{ color: 'var(--muted-2)', marginBottom: 12 }}>
+        Target dihitung dari halaman/hari yang ditetapkan koordinator dikalikan sesi kelas yang
+        <strong> seharusnya berjalan</strong> pada periode ini — sudah dipotong tanggal libur, sesi
+        sebelum peserta bergabung, dan sesi sakit. Penyebut ini sengaja berbeda dari persentase
+        kehadiran, yang memakai sesi terisi: sesi yang lalai diisi tak boleh menerbitkan alpa, tapi
+        untuk setoran ia berarti memang tak ada halaman tercatat. Peserta yang diputihkan sebulan
+        penuh tampil “—”, bukan 100% — pemutihan menghapus ketidakhadiran, bukan mengarang hafalan.
+      </p>
 
       <GenderRata ikhwan={t.kehadiran.avgIkhwan} akhwat={t.kehadiran.avgAkhwat} rata={t.kehadiran.aktual} />
       <div className="t-tiny" style={{ color: 'var(--muted-2)', margin: '4px 0' }}>Peserta di bawah target (&lt; 80%)</div>

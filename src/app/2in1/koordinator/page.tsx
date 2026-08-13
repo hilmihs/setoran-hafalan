@@ -498,6 +498,13 @@ export default async function KoordinatorDashboard({
             Libur
           </Link>
           <Link
+            href="/2in1/koordinator/target-setoran"
+            className="btn btn-sm btn-ghost"
+            style={{ height: 30, padding: '0 12px', textDecoration: 'none' }}
+          >
+            Target Setoran
+          </Link>
+          <Link
             href="/2in1/laporan"
             className="btn btn-sm btn-ghost"
             style={{ height: 30, padding: '0 12px', textDecoration: 'none' }}
