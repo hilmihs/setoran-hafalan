@@ -3,11 +3,14 @@ import { redirect } from 'next/navigation';
 import { getSession } from '@/lib/session';
 import { getMaahirRekap } from '@/lib/maahir-rekap';
 import { PRESENSI_ANCHOR, weekRangeLabel } from '@/lib/maahir-presensi';
-import { periodeBerjalan, periodeStartDate, periodeEndDate } from '@/lib/periode-laporan';
+import {
+  periodeBerjalan,
+  periodeStartDate,
+  periodeEndDate,
+  periodeMonthOf,
+} from '@/lib/periode-laporan';
 import { todayJakarta } from '@/lib/anggota-periode';
 import { MaahirRekapTable } from '@/components/MaahirRekapTable';
-import { MonthNavSelect } from '@/components/MonthNavSelect';
-import { monthOptionsSince } from '@/lib/month';
 import { SectionHeader } from '@/components/ui/SectionHeader';
 import { SearchableBlocks } from '@/components/SearchableBlocks';
 import { Icon } from '@/components/icons';
@@ -16,10 +19,9 @@ import { absUrl } from '@/lib/url';
 
 export const dynamic = 'force-dynamic';
 
-const ANCHOR_MONTH = PRESENSI_ANCHOR.slice(0, 7);
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
-type SP = { month?: string; gender?: string; start?: string; end?: string };
+type SP = { gender?: string; start?: string; end?: string };
 
 const GENDER_TABS: Array<{ key: string; label: string }> = [
   { key: 'semua', label: 'Semua' },
@@ -47,19 +49,18 @@ export default async function KoordinatorKehadiranPage({
     redirect('/2in1/koordinator/login');
   }
 
-  const month =
-    searchParams.month && /^\d{4}-\d{2}$/.test(searchParams.month)
-      ? searchParams.month
-      : periodeBerjalan();
   const genderParam = searchParams.gender === 'ikhwan' || searchParams.gender === 'akhwat'
     ? searchParams.gender
     : undefined;
 
-  // Default = periode laporan 28–27 (tgl 28 bulan lalu s/d tgl 27 bulan ini),
-  // sama dengan Laporan Bulanan supaya angkanya sebanding. Koordinator boleh
-  // menggantinya lewat dua input tanggal di bawah.
-  const defStart = periodeStartDate(month);
-  const defEnd = periodeEndDate(month);
+  // Filter tunggal halaman ini adalah RENTANG TANGGAL. Dropdown bulan dibuang:
+  // dua kontrol yang saling menimpa hanya membingungkan — bulan yang dipilih
+  // tak berpengaruh apa-apa begitu rentangnya disetel manual.
+  //
+  // Default = periode laporan berjalan 28–27, sama dengan Laporan Bulanan supaya
+  // angkanya sebanding.
+  const defStart = periodeStartDate(periodeBerjalan());
+  const defEnd = periodeEndDate(periodeBerjalan());
   const startParam = searchParams.start && DATE_RE.test(searchParams.start) ? searchParams.start : null;
   const endParam = searchParams.end && DATE_RE.test(searchParams.end) ? searchParams.end : null;
   const start = startParam ?? defStart;
@@ -73,12 +74,14 @@ export default async function KoordinatorKehadiranPage({
   const rangeEnd = rangeEndPilihan > today ? today : rangeEndPilihan;
   const dipotongHariIni = rangeEndPilihan > today;
   const rangeCustom = rangeStart !== defStart || rangeEndPilihan !== defEnd;
+  // `month` kini turunan rentang, bukan pilihan tersendiri — dipakai untuk label
+  // periode di template WhatsApp pengingat ketua kelas.
+  const month = periodeMonthOf(rangeEndPilihan);
 
   const rekap = await getMaahirRekap(month, {
     gender: genderParam,
     range: { start: rangeStart, end: rangeEnd },
   });
-  const monthOptions = monthOptionsSince(ANCHOR_MONTH);
 
   const totalBelum = rekap.reduce((sum, k) => sum + k.belumDiisi, 0);
 
@@ -108,7 +111,6 @@ export default async function KoordinatorKehadiranPage({
                 )}
               </span>
             </p>
-            <MonthNavSelect options={monthOptions} value={month} clear={['start', 'end']} />
           </div>
 
           {/* Rentang tanggal — default periode 28–27, bisa diubah */}
@@ -117,7 +119,6 @@ export default async function KoordinatorKehadiranPage({
             className="card-flat"
             style={{ padding: 12, marginBottom: 12, display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'flex-end' }}
           >
-            <input type="hidden" name="month" value={month} />
             {genderParam && <input type="hidden" name="gender" value={genderParam} />}
             <div style={{ flex: '1 1 150px' }}>
               <label className="t-tiny" htmlFor="rekap_start" style={{ display: 'block', marginBottom: 4 }}>
@@ -152,10 +153,7 @@ export default async function KoordinatorKehadiranPage({
             </button>
             {rangeCustom && (
               <Link
-                href={`?${new URLSearchParams({
-                  month,
-                  ...(genderParam ? { gender: genderParam } : {}),
-                }).toString()}`}
+                href={`?${new URLSearchParams(genderParam ? { gender: genderParam } : {}).toString()}`}
                 className="btn btn-soft btn-sm"
                 style={{ height: 38, textDecoration: 'none', display: 'inline-flex', alignItems: 'center' }}
               >
@@ -202,7 +200,6 @@ export default async function KoordinatorKehadiranPage({
               const active =
                 (t.key === 'semua' && !genderParam) || t.key === genderParam;
               const params = new URLSearchParams();
-              params.set('month', month);
               if (t.key !== 'semua') params.set('gender', t.key);
               // Pertahankan rentang manual supaya ganti gender tak mereset filter tanggal.
               if (rangeCustom) {

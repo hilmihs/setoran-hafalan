@@ -89,6 +89,14 @@ export default async function SPDetailPage({ params }: { params: { anggotaId: st
               {detail.spKotor !== detail.sp && ` (sebelum pemutihan: SP ${detail.spKotor})`}
               {' · '}alpa {detail.alpa} · izin {detail.izin}
             </p>
+            {detail.penetapan.length > 0 && (
+              <p className="t-tiny" style={{ color: 'var(--muted-2)', marginTop: 4 }}>
+                Penetapan:{' '}
+                {detail.penetapan
+                  .map((r) => `SP${r.level} ${tanggalPanjang(r.tanggal)} (${r.pemicu})`)
+                  .join(' · ')}
+              </p>
+            )}
             <p className="t-tiny" style={{ color: 'var(--muted-2)', marginTop: 4 }}>
               Centang tanggal yang diputihkan — sesi itu tak lagi dihitung untuk SP maupun
               persentase kehadiran. Baris presensi aslinya tetap tersimpan, dan pembatalan

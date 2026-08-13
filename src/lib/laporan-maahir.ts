@@ -164,6 +164,7 @@ export async function getLaporanMaahir(month: string): Promise<LaporanMaahir> {
       cutoff: todayJakarta(),
       mulai: periodeStartDate(month),
       perBulan: true,
+      dariTampilan: null,
     },
     notes: [],
   };

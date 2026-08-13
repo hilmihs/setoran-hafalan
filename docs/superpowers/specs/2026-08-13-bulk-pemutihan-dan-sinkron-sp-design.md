@@ -65,10 +65,15 @@ ada tetap `batch_id NULL`, jadi tak ada perilaku lama yang berubah.
 ### Batas modul
 
 `src/lib/maahir-pemutihan-batch.ts` (baru) memegang seluruh urusan batch:
-`getBatches(month?)`, `buatBatch({ month, kelasIds, alasan, oleh })`,
-`batalkanBatch(id, oleh)`. `src/lib/maahir-pemutihan.ts` tetap urusan satu baris;
-satu-satunya perubahan di sana adalah parameter opsional `batchId` pada
-`simpanSatu`.
+`getBatches(month?)`, `getKelasPilihan(month)`, `buatBatch({ month, kelasIds,
+alasan, oleh })`, `batalkanBatch(id, oleh)`. `src/lib/maahir-pemutihan.ts` tak
+berubah sama sekali — ia tetap urusan satu baris. Modul batch memakai satu
+bulk-insert sendiri, bukan memanggil `simpanSatu` ratusan kali, supaya 160
+peserta selesai dalam satu perjalanan ke DB.
+
+`batch_id` juga ditambahkan ke entitas `pemutihan` di registry API publik
+(`src/lib/api-public/registry.ts`) beserta filternya, agar konsumen bisa
+mengelompokkan pemutihan massal tanpa menebak lewat waktu dan alasan.
 
 Halaman baru `/2in1/koordinator/kehadiran/pemutihan/massal`, bukan tambahan ke
 `PemutihanClient.tsx` yang sudah 189 baris dan punya tugas lain (cari satu orang,

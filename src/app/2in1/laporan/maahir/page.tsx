@@ -393,8 +393,9 @@ function SPBlock({ lap }: { lap: Awaited<ReturnType<typeof getLaporanMaahir>> })
       <h2 className="t-h2" style={{ marginBottom: 8 }}>Pendataan SP (Surat Peringatan)</h2>
       <p className="t-tiny" style={{ color: 'var(--muted-2)', marginBottom: 8 }}>
         Periode {mulai} s/d {cutoff} (bulan ini saja), dari presensi yang diinput ketua kelas.
-        Alpa 1×/2×/≥3× → SP1/SP2/SP3 · Izin 2×/3×/≥4× → SP1/SP2/SP3 (diambil yang tertinggi).
-        Total {summary.total} peserta — SP1 {summary.sp1} · SP2 {summary.sp2} · SP3 {summary.sp3}.
+        Sesi Maahir &amp; At-Tibyan digabung. Alpa 1×/2×/≥3× → SP1/SP2/SP3 · Izin 2×/3×/≥4× →
+        SP1/SP2/SP3 (diambil yang tertinggi). Total {summary.total} peserta — SP1 {summary.sp1} ·
+        SP2 {summary.sp2} · SP3 {summary.sp3}.
       </p>
       {list.length === 0 ? (
         <p className="t-small" style={{ color: 'var(--muted-2)' }}>Tidak ada peserta terkena SP.</p>
@@ -410,6 +411,7 @@ function SPBlock({ lap }: { lap: Awaited<ReturnType<typeof getLaporanMaahir>> })
                 <th style={{ width: 50 }}>Izin</th>
                 <th style={{ width: 50 }}>Sakit</th>
                 <th style={{ width: 60 }}>Hadir</th>
+                <th>Penetapan</th>
               </tr>
             </thead>
             <tbody>
@@ -428,6 +430,13 @@ function SPBlock({ lap }: { lap: Awaited<ReturnType<typeof getLaporanMaahir>> })
                     <td style={{ textAlign: 'center' }}>{p.izin}</td>
                     <td style={{ textAlign: 'center' }}>{p.sakit}</td>
                     <td style={{ textAlign: 'center' }}>{p.hadir + p.terlambat}</td>
+                    <td className="t-tiny" style={{ color: 'var(--muted-2)' }}>
+                      {p.penetapan.length === 0
+                        ? '—'
+                        : p.penetapan
+                            .map((r) => `SP${r.level} ${r.tanggal.slice(8, 10)}/${r.tanggal.slice(5, 7)}`)
+                            .join(' · ')}
+                    </td>
                   </tr>
                 );
               })}

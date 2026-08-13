@@ -3,7 +3,12 @@
 //   Alpa (tidak_ada_keterangan):  1×→SP1, 2×→SP2, ≥3×→SP3(diberhentikan)
 //   Izin:                          2×→SP1, 3×→SP2, ≥4×→SP3(diberhentikan)
 //   SP peserta = level tertinggi dari dua metrik.
-// Scope hitung = pertemuan program='kelas_maahir' (exclude tanggal libur).
+//
+// Scope hitung = pertemuan program 'kelas_maahir' DAN 'at_tibyan' (exclude
+// tanggal libur). At-Tibyan sempat tak ikut dihitung, sehingga halaman ini
+// melaporkan angka berbeda dari Rekap Kehadiran yang memang menggabung keduanya
+// — peserta dengan tiga izin At-Tibyan terbaca "izin 0" di sini. Rekap dijadikan
+// acuan; 'muallim_najih' tetap di luar.
 
 import { supabaseAdmin } from '@/lib/supabase-admin';
 import { getLiburDatesForKelas } from '@/lib/maahir-libur';
@@ -15,10 +20,14 @@ import {
   periodeMonthOf,
   type Pemutihan,
 } from '@/lib/maahir-pemutihan';
+import { dalamPeriode, type AnggotaPeriode } from '@/lib/anggota-periode';
 import type { Gender } from '@/types/db';
 
 // Anchor rentang libur (program Maahir mulai ~awal 2026).
 export const PROGRAM_START = '2026-01-01';
+
+/** Sesi yang ikut menentukan SP. `muallim_najih` sengaja di luar. */
+export const SP_PROGRAMS = ['kelas_maahir', 'at_tibyan'] as const;
 
 export type SPLevel = 0 | 1 | 2 | 3;
 
@@ -27,6 +36,45 @@ export function spLevel(alpa: number, izin: number): SPLevel {
   const a: SPLevel = alpa >= 3 ? 3 : alpa >= 2 ? 2 : alpa >= 1 ? 1 : 0;
   const i: SPLevel = izin >= 4 ? 3 : izin >= 3 ? 2 : izin >= 2 ? 1 : 0;
   return (a >= i ? a : i);
+}
+
+/** Kapan seorang peserta menyentuh satu tingkat SP, dan sesi mana pemicunya. */
+export type Penetapan = {
+  level: 1 | 2 | 3;
+  /** Tanggal pertemuan yang membuat hitungannya menembus ambang. */
+  tanggal: string;
+  pemicu: 'alpa' | 'izin';
+};
+
+/** Satu sesi yang menyumbang SP, dipakai menurunkan tanggal penetapan. */
+type SesiSP = { tanggal: string; jenis: 'alpa' | 'izin' };
+
+/**
+ * Tanggal penetapan SP1/SP2/SP3 — diturunkan, bukan diinput. Sesi pelanggaran
+ * diurutkan menaik lalu dihitung maju; tanggal pertemuan pertama yang membuat
+ * `spLevel()` mencapai tiap tingkat itulah tanggal penetapannya.
+ *
+ * Karena masukannya sesi yang SUDAH bersih dari pemutihan, tanggal penetapan
+ * ikut bergeser ketika koordinator memutihkan sesuatu — persis seperti levelnya.
+ */
+export function hitungPenetapan(sesi: SesiSP[]): Penetapan[] {
+  const urut = [...sesi].sort((x, y) => (x.tanggal < y.tanggal ? -1 : x.tanggal > y.tanggal ? 1 : 0));
+  const out: Penetapan[] = [];
+  let alpa = 0;
+  let izin = 0;
+  let level: SPLevel = 0;
+  for (const s of urut) {
+    if (s.jenis === 'alpa') alpa++;
+    else izin++;
+    const baru = spLevel(alpa, izin);
+    // while, bukan if: satu sesi tak pernah melompati dua tingkat sekaligus,
+    // tapi kalau ambangnya diubah kelak, tak ada tingkat yang hilang catatannya.
+    while (level < baru) {
+      level = (level + 1) as SPLevel;
+      out.push({ level: level as 1 | 2 | 3, tanggal: s.tanggal, pemicu: s.jenis });
+    }
+  }
+  return out;
 }
 
 /** Satu tindakan pemutihan sebagaimana ditampilkan di daftar SP. */
@@ -57,6 +105,8 @@ export type SPPeserta = {
   sp: SPLevel;
   /** SP sebelum pemutihan — sama dengan `sp` bila tak ada pemutihan. */
   spKotor: SPLevel;
+  /** Kapan tiap tingkat SP tersentuh, menaik. Kosong bila sp = 0. */
+  penetapan: Penetapan[];
   /** Pemutihan aktif milik orang ini; kosong = tak pernah diputihkan. */
   diputihkan: PemutihanRingkas[];
 };
@@ -71,10 +121,23 @@ export type SPRekap = {
   mulai: string;
   /** true = hanya satu periode bulan, bukan kumulatif sejak program berjalan. */
   perBulan: boolean;
+  /**
+   * Batas awal SARINGAN TAMPILAN, bila dipakai: hitungan tetap kumulatif, tapi
+   * hanya peserta yang penetapan SP-nya jatuh pada/ sesudah tanggal ini yang
+   * ditampilkan. null = tak menyaring.
+   */
+  dariTampilan: string | null;
 };
 
-function emptySP(cutoff: string, mulai = PROGRAM_START, perBulan = false): SPRekap {
-  return { list: [], summary: { total: 0, sp1: 0, sp2: 0, sp3: 0, diputihkan: 0 }, cutoff, mulai, perBulan };
+function emptySP(cutoff: string, mulai = PROGRAM_START, perBulan = false, dariTampilan: string | null = null): SPRekap {
+  return {
+    list: [],
+    summary: { total: 0, sp1: 0, sp2: 0, sp3: 0, diputihkan: 0 },
+    cutoff,
+    mulai,
+    perBulan,
+    dariTampilan,
+  };
 }
 
 /**
@@ -105,7 +168,7 @@ export async function getMaahirPeriodeMonths(): Promise<string[]> {
   const { data } = await supabaseAdmin
     .from('pertemuan_program')
     .select('tanggal')
-    .eq('program', 'kelas_maahir')
+    .in('program', SP_PROGRAMS as unknown as string[])
     .lte('tanggal', today);
   const set = new Set((data ?? []).map((r) => periodeMonthOf(r.tanggal as string)));
   return [...set].sort().reverse();
@@ -119,28 +182,40 @@ export async function getMaahirPeriodeMonths(): Promise<string[]> {
  * `bulan` ('YYYY-MM') mengunci perhitungan pada SATU periode saja (28–27),
  * bukan kumulatif — itulah yang dipakai laporan bulanan Maahir: SP di sana
  * menggambarkan disiplin bulan itu, bukan tumpukan sejak program dimulai.
+ *
+ * `sampai` ('YYYY-MM-DD') memotong perhitungan pada tanggal bebas — pasangan
+ * `dari` TIDAK memotong hitungan (SP tetap kumulatif), ia hanya menyaring
+ * tampilan ke peserta yang penetapan SP-nya jatuh di dalam rentang.
  */
 export async function getMaahirSP(opts?: {
   gender?: Gender;
   sampaiBulan?: string;
   bulan?: string;
+  sampai?: string;
+  dari?: string;
 }): Promise<SPRekap> {
   const hariIni = new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Jakarta' });
   const batas = opts?.bulan
     ? periodeEndDate(opts.bulan)
-    : opts?.sampaiBulan
-      ? periodeEndDate(opts.sampaiBulan)
-      : hariIni;
+    : opts?.sampai
+      ? opts.sampai
+      : opts?.sampaiBulan
+        ? periodeEndDate(opts.sampaiBulan)
+        : hariIni;
   // Bulan berjalan belum selesai — jangan mengklaim data s/d tanggal 27 kalau
   // hari ini masih tanggal 10.
   const today = batas < hariIni ? batas : hariIni;
   const mulai = opts?.bulan ? periodeStartDate(opts.bulan) : PROGRAM_START;
+  // Saringan tampilan, bukan batas hitung — abaikan bila mendahului awal data
+  // atau melewati cutoff, supaya tak diam-diam mengosongkan daftar.
+  const dariTampilan =
+    opts?.dari && opts.dari > mulai && opts.dari <= today ? opts.dari : null;
 
   let kq = supabaseAdmin.from('program_kelas').select('id, name, gender');
   if (opts?.gender) kq = kq.eq('gender', opts.gender);
   const { data: kelasRows } = await kq;
   const kelasList = (kelasRows ?? []) as Array<{ id: string; name: string; gender: Gender }>;
-  if (!kelasList.length) return emptySP(today, mulai, !!opts?.bulan);
+  if (!kelasList.length) return emptySP(today, mulai, !!opts?.bulan, dariTampilan);
   const kelasById = new Map(kelasList.map((k) => [k.id, k]));
   const kelasIds = kelasList.map((k) => k.id);
 
@@ -148,7 +223,7 @@ export async function getMaahirSP(opts?: {
     .from('pertemuan_program')
     .select('id, program_kelas_id, program, tanggal')
     .in('program_kelas_id', kelasIds)
-    .eq('program', 'kelas_maahir')
+    .in('program', SP_PROGRAMS as unknown as string[])
     .gte('tanggal', mulai)
     .lte('tanggal', today);
   const pertById = new Map(
@@ -158,13 +233,13 @@ export async function getMaahirSP(opts?: {
     ])
   );
   const pertIds = (pertRows ?? []).map((p) => p.id as string);
-  if (!pertIds.length) return emptySP(today, mulai, !!opts?.bulan);
+  if (!pertIds.length) return emptySP(today, mulai, !!opts?.bulan, dariTampilan);
 
   const liburByKelas = await getLiburDatesForKelas(kelasIds, mulai, today);
 
   const { data: anggotaRows } = await supabaseAdmin
     .from('program_kelas_anggota')
-    .select('id, program_kelas_id, name, whatsapp_number, selesai_tanggal')
+    .select('id, program_kelas_id, name, whatsapp_number, mulai_tanggal, selesai_tanggal')
     .in('program_kelas_id', kelasIds)
     .eq('active', true);
   const anggotaList = (anggotaRows ?? []) as Array<{
@@ -172,8 +247,24 @@ export async function getMaahirSP(opts?: {
     program_kelas_id: string;
     name: string;
     whatsapp_number: string | null;
+    mulai_tanggal: string | null;
     selesai_tanggal: string | null;
   }>;
+  // Sesi di luar rentang keanggotaan tak dihitung — aturan yang sudah dipakai
+  // laporan bulanan. Tanpa ini, peserta yang pindah kelas terbaca beda SP di
+  // dua halaman karena sesi kelas lamanya ikut/tak ikut terhitung.
+  //
+  // `created_at` sengaja TIDAK dipakai sebagai cadangan tanggal gabung di sini.
+  // Cadangan itu masuk akal untuk laporan bulanan yang rentangnya sempit, tapi
+  // SP kumulatif mulai dari PROGRAM_START — dan ratusan baris keanggotaan dibuat
+  // belakangan saat data dimasukkan ke sistem, bukan saat orangnya bergabung.
+  // Memakainya di sini akan diam-diam membuang pelanggaran bulan-bulan awal.
+  const periodeByAnggota = new Map<string, AnggotaPeriode>(
+    anggotaList.map((a) => [
+      a.id,
+      { mulai_tanggal: a.mulai_tanggal, selesai_tanggal: a.selesai_tanggal },
+    ])
+  );
 
   const kehadiranRows = await fetchAllRows<{
     pertemuan_id: string;
@@ -206,11 +297,15 @@ export async function getMaahirSP(opts?: {
   const kosong = (): Tally => ({ H: 0, T: 0, I: 0, S: 0, A: 0 });
   const kotorByAnggota = new Map<string, Tally>();
   const bersihByAnggota = new Map<string, Tally>();
+  // Sesi pelanggaran yang masih berlaku, untuk menurunkan tanggal penetapan SP.
+  const sesiByAnggota = new Map<string, SesiSP[]>();
   for (const k of kehadiranRows) {
     if (!k.anggota_id) continue;
     const p = pertById.get(k.pertemuan_id);
     if (!p) continue;
     if (liburByKelas.get(p.kelasId)?.has(p.tanggal)) continue; // anulir libur
+    const per = periodeByAnggota.get(k.anggota_id);
+    if (per && !dalamPeriode(per, p.tanggal, mulai, today)) continue;
 
     const tambah = (m: Map<string, Tally>) => {
       let t = m.get(k.anggota_id as string);
@@ -228,7 +323,20 @@ export async function getMaahirSP(opts?: {
     };
 
     tambah(kotorByAnggota);
-    if (!diputihkanPada(pemutihanKeys, k.anggota_id, p.tanggal)) tambah(bersihByAnggota);
+    if (!diputihkanPada(pemutihanKeys, k.anggota_id, p.tanggal)) {
+      tambah(bersihByAnggota);
+      const jenis: SesiSP['jenis'] | null =
+        k.status === 'izin'
+          ? 'izin'
+          : k.status === 'hadir' || k.status === 'terlambat' || k.status === 'sakit'
+            ? null
+            : 'alpa';
+      if (jenis) {
+        const arr = sesiByAnggota.get(k.anggota_id) ?? [];
+        arr.push({ tanggal: p.tanggal, jenis });
+        sesiByAnggota.set(k.anggota_id, arr);
+      }
+    }
   }
 
   // SP melekat pada ORANG, bukan baris keanggotaan. Peserta yang pindah kelas
@@ -242,6 +350,8 @@ export async function getMaahirSP(opts?: {
     gender: 'ikhwan' | 'akhwat';
     kotor: Tally;
     bersih: Tally;
+    /** Sesi pelanggaran seluruh baris keanggotaan orang ini, belum diurutkan. */
+    sesi: SesiSP[];
     diputihkan: PemutihanRingkas[];
     aktifSekarang: boolean;
   };
@@ -278,6 +388,7 @@ export async function getMaahirSP(opts?: {
         gender: kelas.gender,
         kotor: { ...kotor },
         bersih: { ...bersih },
+        sesi: [...(sesiByAnggota.get(a.id) ?? [])],
         diputihkan: putih,
         aktifSekarang: masihBerjalan,
       });
@@ -285,6 +396,7 @@ export async function getMaahirSP(opts?: {
     }
     tambahTally(g.kotor, kotor);
     tambahTally(g.bersih, bersih);
+    g.sesi.push(...(sesiByAnggota.get(a.id) ?? []));
     g.diputihkan.push(...putih);
     // Kelas yang ditampilkan diambil dari keanggotaan yang masih berjalan.
     if (masihBerjalan && !g.aktifSekarang) {
@@ -314,12 +426,21 @@ export async function getMaahirSP(opts?: {
       alpa: g.bersih.A,
       sp,
       spKotor,
+      penetapan: hitungPenetapan(g.sesi),
       diputihkan: g.diputihkan.sort((a, b) =>
         (a.tanggal ?? a.month).localeCompare(b.tanggal ?? b.month)
       ),
     });
   }
-  list.sort(
+  // Saringan rentang: hitungan tetap kumulatif, tapi hanya orang yang SP-nya
+  // benar-benar bergerak di dalam rentang yang ditampilkan. Baris bank data
+  // (sp 0 karena diputihkan) tak punya penetapan, jadi ikut tersaring keluar —
+  // itu memang yang diinginkan saat koordinator bertanya "siapa yang kena SP
+  // dalam rentang ini".
+  const tersaring = dariTampilan
+    ? list.filter((p) => p.penetapan.some((x) => x.tanggal >= dariTampilan))
+    : list;
+  tersaring.sort(
     (x, y) =>
       y.sp - x.sp ||
       y.spKotor - x.spKotor ||
@@ -329,17 +450,18 @@ export async function getMaahirSP(opts?: {
   );
 
   return {
-    list,
+    list: tersaring,
     cutoff: today,
     mulai,
     perBulan: !!opts?.bulan,
+    dariTampilan,
     summary: {
       // Ringkasan menghitung SP EFEKTIF saja — baris bank data tak ikut.
-      total: list.filter((p) => p.sp >= 1).length,
-      sp1: list.filter((p) => p.sp === 1).length,
-      sp2: list.filter((p) => p.sp === 2).length,
-      sp3: list.filter((p) => p.sp === 3).length,
-      diputihkan: list.filter((p) => p.diputihkan.length > 0).length,
+      total: tersaring.filter((p) => p.sp >= 1).length,
+      sp1: tersaring.filter((p) => p.sp === 1).length,
+      sp2: tersaring.filter((p) => p.sp === 2).length,
+      sp3: tersaring.filter((p) => p.sp === 3).length,
+      diputihkan: tersaring.filter((p) => p.diputihkan.length > 0).length,
     },
   };
 }
@@ -369,6 +491,8 @@ export type SPDetail = {
   spKotor: SPLevel;
   alpa: number;
   izin: number;
+  /** Kapan tiap tingkat SP tersentuh, menaik. */
+  penetapan: Penetapan[];
   /** Sesi izin/alpa, terbaru dulu. */
   sesi: SesiPelanggaran[];
   /** Seluruh riwayat pemutihan orang ini, TERMASUK yang sudah dibatalkan. */
@@ -383,7 +507,7 @@ export type SPDetail = {
 export async function getSPDetail(anggotaId: string): Promise<SPDetail | null> {
   const { data: aku } = await supabaseAdmin
     .from('program_kelas_anggota')
-    .select('id, program_kelas_id, name, whatsapp_number, selesai_tanggal')
+    .select('id, program_kelas_id, name, whatsapp_number, mulai_tanggal, selesai_tanggal')
     .eq('id', anggotaId)
     .maybeSingle();
   if (!aku) return null;
@@ -393,7 +517,7 @@ export async function getSPDetail(anggotaId: string): Promise<SPDetail | null> {
   if (wa) {
     const { data } = await supabaseAdmin
       .from('program_kelas_anggota')
-      .select('id, program_kelas_id, name, whatsapp_number, selesai_tanggal')
+      .select('id, program_kelas_id, name, whatsapp_number, mulai_tanggal, selesai_tanggal')
       .eq('whatsapp_number', wa)
       .eq('active', true);
     if ((data ?? []).length) saudara = data as Array<Record<string, unknown>>;
@@ -414,7 +538,7 @@ export async function getSPDetail(anggotaId: string): Promise<SPDetail | null> {
     .from('pertemuan_program')
     .select('id, program_kelas_id, tanggal')
     .in('program_kelas_id', kelasIds)
-    .eq('program', 'kelas_maahir')
+    .in('program', SP_PROGRAMS as unknown as string[])
     .lte('tanggal', today);
   const pertById = new Map(
     ((pertRows ?? []) as Array<{ id: string; program_kelas_id: string; tanggal: string }>).map((p) => [
@@ -455,22 +579,38 @@ export async function getSPDetail(anggotaId: string): Promise<SPDetail | null> {
     }))
   );
 
+  // Rentang keanggotaan per baris — sejalan dengan getMaahirSP, termasuk
+  // alasannya tak memakai `created_at` sebagai cadangan tanggal gabung.
+  const periodeByAnggota = new Map<string, AnggotaPeriode>(
+    saudara.map((s) => [
+      s.id as string,
+      {
+        mulai_tanggal: (s.mulai_tanggal as string | null) ?? null,
+        selesai_tanggal: (s.selesai_tanggal as string | null) ?? null,
+      },
+    ])
+  );
+
   let alpa = 0;
   let izin = 0;
   let alpaKotor = 0;
   let izinKotor = 0;
   const sesi: SesiPelanggaran[] = [];
+  const sesiBersih: SesiSP[] = [];
   for (const k of kehadiran) {
     if (!k.anggota_id) continue;
     const p = pertById.get(k.pertemuan_id);
     if (!p) continue;
     if (liburByKelas.get(p.program_kelas_id)?.has(p.tanggal)) continue;
+    const per = periodeByAnggota.get(k.anggota_id);
+    if (per && !dalamPeriode(per, p.tanggal, PROGRAM_START, today)) continue;
     const status: 'izin' | 'alpa' | null =
       k.status === 'izin' ? 'izin' : k.status === 'hadir' || k.status === 'terlambat' || k.status === 'sakit' ? null : 'alpa';
     if (!status) continue;
 
     const putih = diputihkanPada(keys, k.anggota_id, p.tanggal);
     if (status === 'alpa') { alpaKotor++; if (!putih) alpa++; } else { izinKotor++; if (!putih) izin++; }
+    if (!putih) sesiBersih.push({ tanggal: p.tanggal, jenis: status });
     sesi.push({
       anggotaId: k.anggota_id,
       tanggal: p.tanggal,
@@ -502,6 +642,7 @@ export async function getSPDetail(anggotaId: string): Promise<SPDetail | null> {
     spKotor: spLevel(alpaKotor, izinKotor),
     alpa,
     izin,
+    penetapan: hitungPenetapan(sesiBersih),
     sesi,
     riwayat: semuaPemutihan,
   };

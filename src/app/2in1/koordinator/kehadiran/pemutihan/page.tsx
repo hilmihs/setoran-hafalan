@@ -98,8 +98,11 @@ export default async function PemutihanPage({
               <p className="t-tiny" style={{ color: 'var(--muted-2)', marginTop: 4 }}>
                 Untuk memutihkan <strong>tanggal tertentu saja</strong>, buka{' '}
                 <Link href="/2in1/koordinator/kehadiran/sp">Pendataan SP</Link> lalu tap nama
-                pesertanya. Daftar di bawah memuat seluruh riwayat bulan ini, termasuk yang sudah
-                dibatalkan.
+                pesertanya. Untuk <strong>banyak kelas sekaligus</strong>, pakai{' '}
+                <Link href={`/2in1/koordinator/kehadiran/pemutihan/massal?month=${month}`}>
+                  Pemutihan massal
+                </Link>
+                . Daftar di bawah memuat seluruh riwayat bulan ini, termasuk yang sudah dibatalkan.
               </p>
             </div>
             <MonthNavSelect options={monthOptionsSince(ANCHOR_MONTH)} value={month} />

@@ -3,25 +3,19 @@ import { redirect } from 'next/navigation';
 import { getSession } from '@/lib/session';
 import {
   getMaahirSP,
-  getMaahirPeriodeMonths,
+  PROGRAM_START,
   type PemutihanRingkas,
+  type Penetapan,
   type SPLevel,
 } from '@/lib/maahir-sp';
+import { todayJakarta } from '@/lib/anggota-periode';
 import { GenderNavSelect } from '@/components/GenderNavSelect';
-import { MonthNavSelect } from '@/components/MonthNavSelect';
 import { Icon } from '@/components/icons';
 import type { Gender } from '@/types/db';
 
 export const dynamic = 'force-dynamic';
 
-function monthLabel(ym: string) {
-  const [y, m] = ym.split('-').map(Number);
-  return new Date(Date.UTC(y, m - 1, 1)).toLocaleDateString('id-ID', {
-    month: 'long',
-    year: 'numeric',
-    timeZone: 'UTC',
-  });
-}
+const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
 function tanggalLabel(iso: string) {
   const [y, m, d] = iso.split('-').map(Number);
@@ -69,10 +63,27 @@ function spStyle(sp: SPLevel) {
   return { bg: 'var(--surface-3)', bd: 'var(--line)', ink: 'var(--muted)' };
 }
 
+/** Tanggal penetapan tiap tingkat, satu baris per tingkat. */
+function PenetapanSel({ rows }: { rows: Penetapan[] }) {
+  if (rows.length === 0) return <span className="t-tiny" style={{ color: 'var(--muted-2)' }}>—</span>;
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+      {rows.map((r) => (
+        <span key={r.level} className="t-tiny" style={{ whiteSpace: 'nowrap' }}>
+          <strong>SP{r.level}</strong>{' '}
+          <span style={{ color: 'var(--muted-2)' }}>
+            {tanggalPendek(r.tanggal)} · {r.pemicu}
+          </span>
+        </span>
+      ))}
+    </div>
+  );
+}
+
 export default async function PendataanSPPage({
   searchParams,
 }: {
-  searchParams: { gender?: string; month?: string };
+  searchParams: { gender?: string; dari?: string; sampai?: string };
 }) {
   const { accesses } = await getSession();
   if (!accesses?.some((a) => a.role === 'koordinator' || a.role === 'koordinator_kehadiran')) {
@@ -84,22 +95,21 @@ export default async function PendataanSPPage({
       ? searchParams.gender
       : undefined;
 
-  // Filter periode: SP tetap kumulatif, hanya dipotong di akhir periode bulan
-  // terpilih (window 28–27) supaya bisa dilihat "per akhir bulan itu, siapa
-  // sudah kena SP berapa". Kosong = s/d hari ini.
-  const periodeMonths = await getMaahirPeriodeMonths();
-  const monthOptions = [
-    { value: '', label: 'Semua (s/d sekarang)' },
-    ...periodeMonths.map((m) => ({ value: m, label: monthLabel(m) })),
-  ];
-  const monthFilter =
-    searchParams.month && monthOptions.some((o) => o.value && o.value === searchParams.month)
-      ? searchParams.month
-      : '';
+  // Rentang tanggal, bukan dropdown bulan. SP tetap KUMULATIF sejak program
+  // mulai — `sampai` memotong perhitungan di tanggal itu ("per tanggal ini,
+  // siapa sudah kena SP berapa"), `dari` hanya menyaring tampilan ke peserta
+  // yang penetapan SP-nya jatuh di dalam rentang.
+  const hariIni = todayJakarta();
+  const dariParam = searchParams.dari && DATE_RE.test(searchParams.dari) ? searchParams.dari : '';
+  const sampaiParam = searchParams.sampai && DATE_RE.test(searchParams.sampai) ? searchParams.sampai : '';
+  const rangeTerbalik = !!dariParam && !!sampaiParam && dariParam > sampaiParam;
+  const dari = rangeTerbalik ? '' : dariParam;
+  const sampai = rangeTerbalik ? '' : sampaiParam;
 
-  const { list, summary, cutoff } = await getMaahirSP({
+  const { list, summary, cutoff, dariTampilan } = await getMaahirSP({
     gender: genderFilter,
-    sampaiBulan: monthFilter || undefined,
+    dari: dari || undefined,
+    sampai: sampai || undefined,
   });
 
   return (
@@ -116,17 +126,75 @@ export default async function PendataanSPPage({
               <h1 className="t-h1" style={{ marginBottom: 2 }}>Surat Peringatan Peserta</h1>
               <p className="t-small" style={{ color: 'var(--muted-2)' }}>
                 Disiplin kehadiran Maahir (kumulatif). Alpa 1/2/≥3 → SP 1/2/3 · Izin 2/3/≥4 → SP 1/2/3.
+                Sesi Maahir &amp; At-Tibyan digabung, sama dengan Rekap Kehadiran.
               </p>
               <p className="t-tiny" style={{ color: 'var(--muted-2)', marginTop: 2 }}>
                 Dihitung s/d {tanggalLabel(cutoff)}
-                {monthFilter ? ' (akhir periode bulan terpilih)' : ''}.
+                {dariTampilan ? ` · hanya yang kena SP sejak ${tanggalLabel(dariTampilan)}` : ''}.
               </p>
             </div>
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-              <MonthNavSelect options={monthOptions} value={monthFilter} />
-              <GenderNavSelect value={genderFilter ?? ''} />
-            </div>
+            <GenderNavSelect value={genderFilter ?? ''} />
           </div>
+
+          {/* Rentang tanggal — hitungan tetap kumulatif s/d tanggal akhir */}
+          <form
+            method="get"
+            className="card-flat"
+            style={{ padding: 12, marginBottom: 12, display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'flex-end' }}
+          >
+            {genderFilter && <input type="hidden" name="gender" value={genderFilter} />}
+            <div style={{ flex: '1 1 150px' }}>
+              <label className="t-tiny" htmlFor="sp_dari" style={{ display: 'block', marginBottom: 4 }}>
+                Dari tanggal
+              </label>
+              <input
+                id="sp_dari"
+                type="date"
+                name="dari"
+                defaultValue={dari}
+                min={PROGRAM_START}
+                max={hariIni}
+                className="input"
+                style={{ height: 38 }}
+              />
+            </div>
+            <div style={{ flex: '1 1 150px' }}>
+              <label className="t-tiny" htmlFor="sp_sampai" style={{ display: 'block', marginBottom: 4 }}>
+                Sampai tanggal
+              </label>
+              <input
+                id="sp_sampai"
+                type="date"
+                name="sampai"
+                defaultValue={sampai}
+                min={PROGRAM_START}
+                max={hariIni}
+                className="input"
+                style={{ height: 38 }}
+              />
+            </div>
+            <button type="submit" className="btn btn-ghost btn-sm" style={{ height: 38 }}>
+              Terapkan
+            </button>
+            {(dari || sampai) && (
+              <Link
+                href={`?${new URLSearchParams(genderFilter ? { gender: genderFilter } : {}).toString()}`}
+                className="btn btn-soft btn-sm"
+                style={{ height: 38, textDecoration: 'none', display: 'inline-flex', alignItems: 'center' }}
+              >
+                Reset
+              </Link>
+            )}
+          </form>
+
+          {rangeTerbalik && (
+            <div className="banner banner-error" style={{ marginBottom: 12 }}>
+              <div className="desc">
+                Tanggal awal melewati tanggal akhir — rentang diabaikan, daftar kembali kumulatif
+                s/d hari ini.
+              </div>
+            </div>
+          )}
 
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, marginBottom: 16 }}>
             <Stat label="Total kena SP" value={summary.total} />
@@ -155,6 +223,9 @@ export default async function PendataanSPPage({
                       <th style={{ textAlign: 'right' }}>Telat</th>
                       <th style={{ textAlign: 'right' }} title="Hadir">Hadir</th>
                       <th style={{ textAlign: 'center' }}>SP</th>
+                      <th title="Tanggal sesi yang membuat hitungannya menembus tiap ambang">
+                        Penetapan
+                      </th>
                       <th>Diputihkan</th>
                     </tr>
                   </thead>
@@ -194,6 +265,7 @@ export default async function PendataanSPPage({
                               SP {p.sp}{p.sp >= 3 ? ' ⚠' : ''}
                             </span>
                           </td>
+                          <td><PenetapanSel rows={p.penetapan} /></td>
                           <td
                             className="t-small"
                             style={{ color: adaPemutihan ? 'var(--ink)' : 'var(--muted-2)' }}
@@ -212,9 +284,11 @@ export default async function PendataanSPPage({
 
           <p className="t-tiny" style={{ color: 'var(--muted-2)', marginTop: 12 }}>
             SP 3 = melebihi batas → kandidat diberhentikan dari program Maahir. Angka kumulatif sejak
-            program mulai s/d {tanggalLabel(cutoff)}, tanggal libur tak dihitung. Filter bulan
-            memotong perhitungan di akhir periode bulan itu (window tanggal 28–27), bukan menghitung
-            bulan itu saja.
+            program mulai s/d {tanggalLabel(cutoff)}; tanggal libur, sesi di luar rentang
+            keanggotaan, dan sesi yang diputihkan tak dihitung. Kolom Penetapan menunjukkan tanggal
+            pertemuan yang membuat hitungannya menembus tiap ambang — ikut bergeser bila koordinator
+            memutihkan sesi. Filter <strong>Sampai tanggal</strong> memotong perhitungan di tanggal
+            itu, <strong>Dari tanggal</strong> hanya menyaring siapa yang tampil.
           </p>
         </div>
       </div>

@@ -78,11 +78,14 @@ export const ENTITIES: Record<string, EntityDef> = {
   },
   pemutihan: {
     route: 'pemutihan', table: 'maahir_pemutihan', scope: 'maahir',
-    columns: ['id', 'anggota_id', 'month', 'tanggal', 'alasan', 'dibuat_oleh', 'dibatalkan_pada', 'created_at'],
+    // `batch_id` menandai pemutihan yang lahir dari satu aksi massal koordinator
+    // — konsumen bisa mengelompokkannya tanpa menebak lewat waktu & alasan.
+    columns: ['id', 'anggota_id', 'month', 'tanggal', 'alasan', 'dibuat_oleh', 'dibatalkan_pada', 'batch_id', 'created_at'],
     filters: [
       { param: 'anggota_id', column: 'anggota_id', kind: 'eq' },
       { param: 'month', column: 'month', kind: 'eq' },
       { param: 'aktif', column: 'dibatalkan_pada', kind: 'is_null' },
+      { param: 'batch_id', column: 'batch_id', kind: 'eq' },
     ],
     order: { column: 'created_at', dir: 'desc' },
   },
