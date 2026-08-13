@@ -48,13 +48,25 @@ const KODE_LABEL: Record<StatusCode, string> = {
   '-': 'Tak tercatat',
 };
 
+/** 'Sel, 5 Agt' — hari ikut disebut karena jadwal kelas terikat hari tertentu. */
+function tanggalHari(t: string): string {
+  return new Date(t + 'T00:00:00').toLocaleDateString('id-ID', {
+    weekday: 'short',
+    day: 'numeric',
+    month: 'short',
+  });
+}
+
 /**
  * Alasan yang ditulis ketua kelas saat presensi, per tanggal.
  *
- * Koordinator menanyakan "kenapa izin", jadi yang berguna adalah alasan yang
- * melekat pada tanggalnya — bukan gabungan semua catatan sebulan. Sesi tanpa
- * catatan sengaja tetap disebut bila statusnya izin/alpa, supaya yang tak
- * beralasan justru menonjol.
+ * Koordinator menanyakan "kenapa izin tanggal itu", jadi yang berguna adalah
+ * alasan yang melekat pada tanggalnya — bukan gabungan semua catatan sebulan.
+ * Sesi izin/alpa TANPA catatan tetap didaftarkan dan diberi tanda kuning:
+ * kalau disembunyikan, justru yang bermasalah yang lolos dari perhatian.
+ *
+ * Tata letaknya kartu bertumpuk, bukan kolom sejajar — kolom berlebar tetap
+ * pecah di layar HP, padahal koordinator paling sering membukanya dari HP.
  */
 function KeteranganList({
   anggota,
@@ -73,32 +85,77 @@ function KeteranganList({
 
   if (baris.length === 0) return null;
 
+  const tanpaKet = baris.filter((x) => !x.catatan).length;
+
   return (
-    <div style={{ marginTop: 10, borderTop: '1px solid var(--line)', paddingTop: 8 }}>
-      <div className="t-tiny" style={{ color: 'var(--muted-2)', fontWeight: 600, marginBottom: 4 }}>
-        KETERANGAN
+    <div style={{ marginTop: 12, borderTop: '1px solid var(--line)', paddingTop: 10 }}>
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'baseline',
+          gap: 8,
+          flexWrap: 'wrap',
+          marginBottom: 7,
+        }}
+      >
+        <span
+          className="t-tiny"
+          style={{ color: 'var(--muted-2)', fontWeight: 700, letterSpacing: '0.04em' }}
+        >
+          KETERANGAN
+        </span>
+        <span className="t-tiny" style={{ color: 'var(--muted-2)' }}>
+          {baris.length} sesi
+          {tanpaKet > 0 ? ` · ${tanpaKet} belum ditulis alasannya` : ''}
+        </span>
       </div>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-        {baris.map((x) => (
-          <div key={x.p.id} className="t-tiny" style={{ display: 'flex', gap: 6 }}>
-            <span style={{ minWidth: 96, color: 'var(--muted-2)', flexShrink: 0 }}>
-              {tanggalShort(x.p.tanggal)} · {PROGRAM_SHORT[x.p.program] ?? x.p.program}
-            </span>
-            <span
+
+      <div style={{ display: 'grid', gap: 6 }}>
+        {baris.map((x) => {
+          const warna = x.code === '-' ? 'var(--muted-2)' : CODE_COLOR[x.code];
+          const kosong = !x.catatan;
+          return (
+            <div
+              key={x.p.id}
               style={{
-                minWidth: 62,
-                flexShrink: 0,
-                fontWeight: 600,
-                color: x.code === '-' ? 'var(--muted-2)' : CODE_COLOR[x.code],
+                padding: '7px 10px',
+                borderRadius: 8,
+                border: `1px solid ${kosong ? 'var(--kuning-line)' : 'var(--line)'}`,
+                borderLeft: `3px solid ${warna}`,
+                background: kosong ? 'var(--kuning-tint)' : 'var(--surface)',
               }}
             >
-              {KODE_LABEL[x.code]}
-            </span>
-            <span style={{ color: x.catatan ? 'var(--ink)' : 'var(--muted-2)' }}>
-              {x.catatan || '(tanpa keterangan)'}
-            </span>
-          </div>
-        ))}
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 6,
+                  flexWrap: 'wrap',
+                  marginBottom: 3,
+                }}
+              >
+                <span className="badge badge-neutral" style={{ gap: 5 }}>
+                  <span className="dot" style={{ background: warna }} />
+                  {KODE_LABEL[x.code]}
+                </span>
+                <span className="t-tiny" style={{ color: 'var(--muted-2)' }}>
+                  {tanggalHari(x.p.tanggal)} · {PROGRAM_SHORT[x.p.program] ?? x.p.program}
+                </span>
+              </div>
+              <div
+                className="t-small"
+                style={{
+                  color: kosong ? 'var(--kuning-ink)' : 'var(--ink)',
+                  fontStyle: kosong ? 'italic' : 'normal',
+                  lineHeight: 1.45,
+                  wordBreak: 'break-word',
+                }}
+              >
+                {x.catatan || 'Ketua kelas tidak menuliskan alasannya'}
+              </div>
+            </div>
+          );
+        })}
       </div>
     </div>
   );
@@ -254,7 +311,27 @@ export function MaahirRekapTable({ kelas }: { kelas: RekapKelas }) {
                                   (catatan ? `\n${catatan}` : '')
                                 }
                               >
-                                <Chip code={a.perPertemuan[p.id] ?? '-'} />
+                                {/* Titik penanda "ada alasan tertulis" ditempel di
+                                    sudut chip secara absolut — kalau jadi baris
+                                    sendiri, tinggi tiap kolom chip jadi tak rata. */}
+                                <span style={{ position: 'relative', display: 'inline-flex' }}>
+                                  <Chip code={a.perPertemuan[p.id] ?? '-'} />
+                                  {catatan && (
+                                    <span
+                                      aria-hidden
+                                      style={{
+                                        position: 'absolute',
+                                        top: -2,
+                                        right: -2,
+                                        width: 7,
+                                        height: 7,
+                                        borderRadius: '50%',
+                                        background: 'var(--kuning)',
+                                        border: '1.5px solid var(--surface-2)',
+                                      }}
+                                    />
+                                  )}
+                                </span>
                                 <span className="t-tiny" style={{ color: 'var(--muted-2)' }}>
                                   {tanggalShort(p.tanggal)}
                                 </span>
@@ -264,17 +341,6 @@ export function MaahirRekapTable({ kelas }: { kelas: RekapKelas }) {
                                 >
                                   {p.program === 'kelas_maahir' ? 'Maahir' : (p.program as string) === 'muallim_najih' ? 'Najih' : 'Tibyan'}
                                 </span>
-                                {/* Penanda bahwa sesi ini punya alasan tertulis —
-                                    teksnya sendiri ada di daftar bawah, di sini
-                                    tak muat tanpa merusak barisan chip. */}
-                                {catatan && (
-                                  <span
-                                    className="t-tiny"
-                                    style={{ color: 'var(--kuning-ink)', fontSize: 9, lineHeight: 1 }}
-                                  >
-                                    ✎
-                                  </span>
-                                )}
                               </div>
                             );
                           })}
@@ -294,9 +360,9 @@ export function MaahirRekapTable({ kelas }: { kelas: RekapKelas }) {
       <div className="t-tiny" style={{ color: 'var(--muted-2)', marginTop: 8, lineHeight: 1.6 }}>
         H = Hadir · I = Izin · S = Sakit · A = Alpa · T = Terlambat
         <br />
-        Tap nama peserta untuk membuka rinciannya. Tanda <strong>✎</strong> di bawah chip = sesi itu
-        punya keterangan; teks lengkapnya ada di blok <strong>KETERANGAN</strong>, beserta sesi
-        izin/alpa yang ketuanya tak menuliskan alasan.
+        Tap nama peserta untuk membuka rinciannya. Titik kuning di sudut chip = sesi itu punya
+        keterangan; teks lengkapnya ada di blok <strong>KETERANGAN</strong>, beserta sesi izin/alpa
+        yang alasannya belum ditulis ketua kelas.
         <br />
         %Hadir = (H+T) / (jml pertemuan − sakit). <strong>Sakit tidak menurunkan persen</strong>{' '}
         (dianggap udzur, sesinya dikeluarkan dari penyebut); izin dan alpa tetap menurunkan.
