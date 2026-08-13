@@ -39,6 +39,71 @@ const PROGRAM_SHORT: Record<string, string> = {
   muallim_najih: 'Najih',
 };
 
+const KODE_LABEL: Record<StatusCode, string> = {
+  H: 'Hadir',
+  I: 'Izin',
+  S: 'Sakit',
+  A: 'Alpa',
+  T: 'Terlambat',
+  '-': 'Tak tercatat',
+};
+
+/**
+ * Alasan yang ditulis ketua kelas saat presensi, per tanggal.
+ *
+ * Koordinator menanyakan "kenapa izin", jadi yang berguna adalah alasan yang
+ * melekat pada tanggalnya — bukan gabungan semua catatan sebulan. Sesi tanpa
+ * catatan sengaja tetap disebut bila statusnya izin/alpa, supaya yang tak
+ * beralasan justru menonjol.
+ */
+function KeteranganList({
+  anggota,
+  pertemuan,
+}: {
+  anggota: RekapKelas['anggota'][number];
+  pertemuan: RekapKelas['pertemuan'];
+}) {
+  const baris = pertemuan
+    .map((p) => ({
+      p,
+      code: anggota.perPertemuan[p.id] ?? '-',
+      catatan: anggota.catatanPerPertemuan?.[p.id] ?? '',
+    }))
+    .filter((x) => x.catatan || x.code === 'I' || x.code === 'A');
+
+  if (baris.length === 0) return null;
+
+  return (
+    <div style={{ marginTop: 10, borderTop: '1px solid var(--line)', paddingTop: 8 }}>
+      <div className="t-tiny" style={{ color: 'var(--muted-2)', fontWeight: 600, marginBottom: 4 }}>
+        KETERANGAN
+      </div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+        {baris.map((x) => (
+          <div key={x.p.id} className="t-tiny" style={{ display: 'flex', gap: 6 }}>
+            <span style={{ minWidth: 96, color: 'var(--muted-2)', flexShrink: 0 }}>
+              {tanggalShort(x.p.tanggal)} · {PROGRAM_SHORT[x.p.program] ?? x.p.program}
+            </span>
+            <span
+              style={{
+                minWidth: 62,
+                flexShrink: 0,
+                fontWeight: 600,
+                color: x.code === '-' ? 'var(--muted-2)' : CODE_COLOR[x.code],
+              }}
+            >
+              {KODE_LABEL[x.code]}
+            </span>
+            <span style={{ color: x.catatan ? 'var(--ink)' : 'var(--muted-2)' }}>
+              {x.catatan || '(tanpa keterangan)'}
+            </span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 type Tally = { H: number; I: number; S: number; A: number; T: number; nilai: number };
 
 /**
@@ -172,31 +237,50 @@ export function MaahirRekapTable({ kelas }: { kelas: RekapKelas }) {
                           ))}
                         </div>
                         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-                          {kelas.pertemuan.map((p) => (
-                            <div
-                              key={p.id}
-                              style={{
-                                display: 'flex',
-                                flexDirection: 'column',
-                                alignItems: 'center',
-                                gap: 3,
-                                minWidth: 48,
-                              }}
-                              title={`${p.programLabel} · ${tanggalShort(p.tanggal)}`}
-                            >
-                              <Chip code={a.perPertemuan[p.id] ?? '-'} />
-                              <span className="t-tiny" style={{ color: 'var(--muted-2)' }}>
-                                {tanggalShort(p.tanggal)}
-                              </span>
-                              <span
-                                className="t-tiny"
-                                style={{ color: 'var(--muted-2)', fontSize: 9 }}
+                          {kelas.pertemuan.map((p) => {
+                            const catatan = a.catatanPerPertemuan?.[p.id];
+                            return (
+                              <div
+                                key={p.id}
+                                style={{
+                                  display: 'flex',
+                                  flexDirection: 'column',
+                                  alignItems: 'center',
+                                  gap: 3,
+                                  minWidth: 48,
+                                }}
+                                title={
+                                  `${p.programLabel} · ${tanggalShort(p.tanggal)}` +
+                                  (catatan ? `\n${catatan}` : '')
+                                }
                               >
-                                {p.program === 'kelas_maahir' ? 'Maahir' : (p.program as string) === 'muallim_najih' ? 'Najih' : 'Tibyan'}
-                              </span>
-                            </div>
-                          ))}
+                                <Chip code={a.perPertemuan[p.id] ?? '-'} />
+                                <span className="t-tiny" style={{ color: 'var(--muted-2)' }}>
+                                  {tanggalShort(p.tanggal)}
+                                </span>
+                                <span
+                                  className="t-tiny"
+                                  style={{ color: 'var(--muted-2)', fontSize: 9 }}
+                                >
+                                  {p.program === 'kelas_maahir' ? 'Maahir' : (p.program as string) === 'muallim_najih' ? 'Najih' : 'Tibyan'}
+                                </span>
+                                {/* Penanda bahwa sesi ini punya alasan tertulis —
+                                    teksnya sendiri ada di daftar bawah, di sini
+                                    tak muat tanpa merusak barisan chip. */}
+                                {catatan && (
+                                  <span
+                                    className="t-tiny"
+                                    style={{ color: 'var(--kuning-ink)', fontSize: 9, lineHeight: 1 }}
+                                  >
+                                    ✎
+                                  </span>
+                                )}
+                              </div>
+                            );
+                          })}
                         </div>
+
+                        <KeteranganList anggota={a} pertemuan={kelas.pertemuan} />
                       </td>
                     </tr>
                   )}
@@ -209,6 +293,10 @@ export function MaahirRekapTable({ kelas }: { kelas: RekapKelas }) {
 
       <div className="t-tiny" style={{ color: 'var(--muted-2)', marginTop: 8, lineHeight: 1.6 }}>
         H = Hadir · I = Izin · S = Sakit · A = Alpa · T = Terlambat
+        <br />
+        Tap nama peserta untuk membuka rinciannya. Tanda <strong>✎</strong> di bawah chip = sesi itu
+        punya keterangan; teks lengkapnya ada di blok <strong>KETERANGAN</strong>, beserta sesi
+        izin/alpa yang ketuanya tak menuliskan alasan.
         <br />
         %Hadir = (H+T) / (jml pertemuan − sakit). <strong>Sakit tidak menurunkan persen</strong>{' '}
         (dianggap udzur, sesinya dikeluarkan dari penyebut); izin dan alpa tetap menurunkan.

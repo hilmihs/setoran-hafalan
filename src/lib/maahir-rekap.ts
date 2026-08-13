@@ -39,6 +39,12 @@ export type RekapAnggota = {
   isKetua: boolean;
   isWakil: boolean;
   perPertemuan: Record<string, StatusCode>; // pertemuanId → code ('-' jika tak ada data)
+  /**
+   * pertemuanId → catatan/alasan yang ditulis saat presensi. Terikat ke
+   * pertemuannya, bukan digabung per orang: koordinator perlu tahu alasan izin
+   * yang MANA untuk tanggal yang mana.
+   */
+  catatanPerPertemuan: Record<string, string>;
   /** Catatan/alasan yang tercatat pada sesi-sesi bulan ini (unik, digabung '; '). */
   keterangan: string;
   totals: { H: number; I: number; S: number; A: number; T: number };
@@ -143,6 +149,8 @@ export async function getMaahirRekap(
   // 4. Kehadiran (hanya yang sudah disubmit)
   const kehadiranByPertemuan = new Map<string, Map<string, StatusCode>>();
   const catatanByAnggota = new Map<string, Set<string>>();
+  /** `${pertemuanId}|${anggotaId}` → catatan, supaya alasan tetap melekat pada tanggalnya. */
+  const catatanByKey = new Map<string, string>();
   const filledPertemuan = new Set<string>();
   if (pertemuanIds.length > 0) {
     // Paginasi: rekap semua-kelas sebulan bisa >1000 baris (limit PostgREST).
@@ -175,6 +183,7 @@ export async function getMaahirRekap(
         let set = catatanByAnggota.get(k.anggota_id);
         if (!set) { set = new Set(); catatanByAnggota.set(k.anggota_id, set); }
         set.add(c);
+        catatanByKey.set(`${k.pertemuan_id}|${k.anggota_id}`, c);
       }
     }
   }
@@ -210,6 +219,7 @@ export async function getMaahirRekap(
     );
     const anggota: RekapAnggota[] = (anggotaByKelas.get(k.id) ?? []).map((a) => {
       const perPertemuan: Record<string, StatusCode> = {};
+      const catatanPerPertemuan: Record<string, string> = {};
       const totals = { H: 0, I: 0, S: 0, A: 0, T: 0 };
       let dihitung = 0; // pertemuan dalam rentang keanggotaan (denominator %)
       for (const p of pertemuan) {
@@ -222,6 +232,8 @@ export async function getMaahirRekap(
         const code = kehadiranByPertemuan.get(p.id)?.get(a.id) ?? '-';
         perPertemuan[p.id] = code;
         if (code !== '-') totals[code]++;
+        const c = catatanByKey.get(`${p.id}|${a.id}`);
+        if (c) catatanPerPertemuan[p.id] = c;
       }
       // Sakit tak menghukum persen: sesi sakit dikeluarkan dari penyebut.
       // Semua sesi sakit → penyebut 0 tapi dianggap hadir penuh (100%).
@@ -239,6 +251,7 @@ export async function getMaahirRekap(
         isKetua: a.is_ketua,
         isWakil: a.is_wakil,
         perPertemuan,
+        catatanPerPertemuan,
         keterangan: Array.from(catatanByAnggota.get(a.id) ?? []).join('; '),
         totals,
         persenHadir,
