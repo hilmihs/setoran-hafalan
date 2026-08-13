@@ -255,7 +255,20 @@ export async function GET(req: NextRequest) {
   sheet.views = [{ state: 'frozen', ySplit: 1 }];
   sheet.autoFilter = { from: { row: 1, column: 1 }, to: { row: 1, column: sheet.columns.length } };
 
-  for (const p of pengajarList ?? []) {
+  // Urut peringkat, bukan abjad — kolom pertama sheet ini memang Rank, jadi
+  // daftar yang tersusun menurut nama membuat angkanya terbaca acak. Pengajar
+  // yang matrix-nya belum ada (ranking null) ditaruh paling bawah, diurutkan
+  // menurut nama, supaya yang belum dinilai tak menyusup ke deretan atas.
+  const urut = [...(pengajarList ?? [])].sort((a, b) => {
+    const ra = (matrixByPengajar.get(a.id)?.ranking as number | null | undefined) ?? null;
+    const rb = (matrixByPengajar.get(b.id)?.ranking as number | null | undefined) ?? null;
+    if (ra === null && rb === null) return a.name.localeCompare(b.name);
+    if (ra === null) return 1;
+    if (rb === null) return -1;
+    return ra - rb || a.name.localeCompare(b.name);
+  });
+
+  for (const p of urut) {
     const m = matrixByPengajar.get(p.id);
     sheet.addRow({
       rank: m?.ranking ?? '',
