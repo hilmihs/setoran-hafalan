@@ -12,11 +12,11 @@ export const maxDuration = 60;
 
 export async function GET(req: NextRequest) {
   const s = await getSession();
-  const acc = s.accesses?.find(
-    (a) => a.role === 'koordinator'
-  ) ?? (s.session && s.session.role === 'koordinator'
-    ? s.session
-    : null);
+  // Halaman /2in1/koordinator/matrix dibuka koordinator DAN syaikh
+  // (requireOneOfRoles di sana). Unduhannya harus mengikuti — dulu route ini
+  // hanya menerima koordinator, jadi tombol unduh selalu 403 bagi syaikh.
+  const accesses = s.accesses ?? (s.session ? [s.session] : []);
+  const acc = accesses.find((a) => a.role === 'koordinator' || a.role === 'syaikh') ?? null;
   if (!acc) {
     return NextResponse.json({ error: 'Akses ditolak.' }, { status: 403 });
   }
@@ -28,20 +28,28 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: 'Parameter bulan harus YYYY-MM.' }, { status: 400 });
   }
 
+  // 'all' = kedua gender, dipakai dashboard matrix yang memang menampilkan
+  // keduanya sekaligus. Tanpa opsi ini unduhan diam-diam terpotong ke gender
+  // koordinatornya sendiri, tak cocok dengan yang terlihat di layar.
   const genderParam = searchParams.get('gender');
-  const gender = genderParam === 'ikhwan' || genderParam === 'akhwat' ? genderParam : acc.gender;
+  const gender: 'ikhwan' | 'akhwat' | 'all' =
+    genderParam === 'ikhwan' || genderParam === 'akhwat'
+      ? genderParam
+      : genderParam === 'all'
+        ? 'all'
+        : (acc.gender as 'ikhwan' | 'akhwat');
+  const genderLabelFull = gender === 'all' ? 'Ikhwan & Akhwat' : gender === 'ikhwan' ? 'Ikhwan' : 'Akhwat';
 
-  const { data: kelompokList } = await supabaseAdmin
-    .from('kelompok_pengajar')
-    .select('id, name')
-    .eq('gender', gender);
+  let kq = supabaseAdmin.from('kelompok_pengajar').select('id, name');
+  if (gender !== 'all') kq = kq.eq('gender', gender);
+  const { data: kelompokList } = await kq;
   const kelompokMap = new Map((kelompokList ?? []).map((k) => [k.id, k.name]));
 
   let pq = supabaseAdmin
     .from('pengajar')
-    .select('id, name, kelompok_id, active')
-    .eq('gender', gender)
+    .select('id, name, gender, kelompok_id, active')
     .neq('matrix_exclude', true); // guru observasi-saja (mis. DPQ) tak masuk matrix
+  if (gender !== 'all') pq = pq.eq('gender', gender);
   if (kelompokId) pq = pq.eq('kelompok_id', kelompokId);
   const { data: pengajarList } = await pq.order('name');
 
@@ -137,7 +145,7 @@ export async function GET(req: NextRequest) {
     ];
     cols.forEach((c, i) => (sh.getColumn(i + 1).width = c.w));
     const NC = cols.length;
-    const genderLabel = gender === 'ikhwan' ? 'Ikhwan' : 'Akhwat';
+    const genderLabel = genderLabelFull;
 
     // Baris 1: judul
     sh.mergeCells(1, 1, 1, NC);
@@ -216,6 +224,9 @@ export async function GET(req: NextRequest) {
   sheet.columns = [
     { header: 'Rank', key: 'rank', width: 6 },
     { header: 'Nama', key: 'nama', width: 28 },
+    // Kolom gender selalu ada: saat unduhan mencakup kedua gender (mode 'all'),
+    // tanpa ini baris ikhwan dan akhwat tak bisa dibedakan.
+    { header: 'Gender', key: 'gender', width: 10 },
     { header: 'Kelompok', key: 'kelompok', width: 18 },
     { header: 'Aktif', key: 'active', width: 8 },
     { header: 'Bacaan', key: 'bacaan', width: 8 },
@@ -239,12 +250,17 @@ export async function GET(req: NextRequest) {
   ];
 
   sheet.getRow(1).font = { bold: true };
+  // Header tetap terlihat saat men-scroll 100+ baris pengajar, dan bisa disaring
+  // langsung di Excel tanpa menyalin ulang.
+  sheet.views = [{ state: 'frozen', ySplit: 1 }];
+  sheet.autoFilter = { from: { row: 1, column: 1 }, to: { row: 1, column: sheet.columns.length } };
 
   for (const p of pengajarList ?? []) {
     const m = matrixByPengajar.get(p.id);
     sheet.addRow({
       rank: m?.ranking ?? '',
       nama: p.name,
+      gender: p.gender === 'ikhwan' ? 'Ikhwan' : 'Akhwat',
       kelompok: kelompokMap.get(p.kelompok_id ?? '') ?? '',
       active: p.active ? 'Ya' : 'Tidak',
       bacaan: m?.skor_bacaan ?? '',

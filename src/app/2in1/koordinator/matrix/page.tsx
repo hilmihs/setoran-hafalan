@@ -151,13 +151,9 @@ export default async function Matrix2in1Page({
           >
             <Initials name={session.name} />
           </div>
-          <a
-            href={`/api/matrix/download?bulan=${ym}`}
-            className="btn btn-sm btn-ghost"
-            style={{ height: 32, padding: '0 10px', textDecoration: 'none', fontSize: 12 }}
-          >
-            Unduh CSV
-          </a>
+          {/* Tombol export pindah ke toolbar dashboard supaya ikut filter gender
+              yang sedang aktif. Yang di sini dulu berlabel "Unduh CSV" padahal
+              berkasnya XLSX, dan selalu terpotong ke gender koordinatornya. */}
         </div>
       </div>
 

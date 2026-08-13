@@ -532,8 +532,36 @@ function FilterBar({
           </Link>
         ))}
       </div>
+
+      {/* Export — sengaja di sini, bukan di topbar, supaya ikut chip gender di
+          sebelahnya. Unduhan yang tak mengikuti filter layar hanya membingungkan. */}
+      <div style={{ display: 'flex', gap: 4, flexBasis: '100%' }}>
+        <a
+          href={`/api/matrix/download?bulan=${ym}&gender=${gender}`}
+          className="btn btn-xs btn-primary"
+          style={{ textDecoration: 'none' }}
+        >
+          ⬇ Export Excel — {bulanPendek(ym)}
+          {gender !== 'all' ? ` · ${gender === 'ikhwan' ? 'Ikhwan' : 'Akhwat'}` : ''}
+        </a>
+        <a
+          href={`/api/matrix/download?bulan=${ym}&gender=${gender}&incomplete=1`}
+          className="btn btn-xs btn-ghost"
+          style={{ textDecoration: 'none' }}
+          title="Hanya pengajar yang masih punya indikator kosong, beserta rincian bagian yang belum terisi"
+        >
+          ⬇ Yang belum lengkap
+        </a>
+      </div>
     </div>
   );
+}
+
+function bulanPendek(ym: string): string {
+  return new Date(ym + '-01T00:00:00').toLocaleDateString('id-ID', {
+    month: 'long',
+    year: 'numeric',
+  });
 }
 
 /* ─── MatrixDashboard (main export) ─────────────────────── */
