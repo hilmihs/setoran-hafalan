@@ -215,8 +215,15 @@ function BawahTargetTable({ list }: { list: StudentAtt[] }) {
             <th style={{ width: 70 }}>Tidak hadir</th>
             <th style={{ width: 50 }}>Izin</th>
             <th style={{ width: 50 }}>Sakit</th>
-            <th style={{ width: 50 }}>Alpa</th>
-            <th style={{ width: 70 }}>Tanpa ket.</th>
+            <th style={{ width: 50 }} title="Peserta ditandai alpa oleh ketua kelas (tercatat).">
+              Alpa
+            </th>
+            <th
+              style={{ width: 70 }}
+              title="Sesi yang ketua kelasnya belum mengisi status peserta sama sekali. Bukan alpa — peserta tidak dirugikan; ini jejak kelalaian pengisian."
+            >
+              Tanpa ket.
+            </th>
             <th style={{ width: 60 }}>Online</th>
             <th>Keterangan</th>
           </tr>
@@ -261,6 +268,12 @@ function BawahTargetTable({ list }: { list: StudentAtt[] }) {
           })}
         </tbody>
       </table>
+      <p className="t-tiny" style={{ color: 'var(--muted-2)', margin: '6px 2px 0' }}>
+        <strong>Alpa</strong> = peserta ditandai alpa oleh ketua kelas (tercatat).{' '}
+        <strong>Tanpa ket.</strong> = sesi yang ketua kelasnya belum mengisi status peserta sama
+        sekali — bukan alpa, peserta tidak dirugikan; angka ini murni jejak kelalaian pengisian
+        agar koordinator bisa menegur.
+      </p>
     </div>
   );
 }
