@@ -20,6 +20,10 @@ export type IzinCocok = {
   alasan: string;
   /** Kapan pengajar mengirim formulirnya — dipakai sebagai alasan_submitted_at. */
   dikirimAt: string;
+  /** Pengajar pemilik izin — dipakai reverse-link mencocokkan tabayyun. */
+  pengajarId: string;
+  /** Halaqah yang disebut izin; null = berlaku semua halaqah pengajar hari itu. */
+  halaqahId: string | null;
 };
 
 /** Penanda di awal alasan_pengajar; dipakai UI untuk menandai asal alasannya. */
@@ -35,9 +39,31 @@ export function alasanDariIzin(izin: IzinCocok): string {
   ].join('\n');
 }
 
+/**
+ * Apakah tanggal izin masih dalam jendela pantau yatim: antara (today - hari)
+ * eksklusif dan today inklusif. Membatasi daftar agar izin lama tak menumpuk.
+ * Semua argumen ISO date "YYYY-MM-DD" (perbandingan leksikografis aman).
+ */
+export function dalamJendelaYatim(tanggal: string, today: string, hari: number): boolean {
+  if (tanggal > today) return false;
+  const batas = new Date(`${today}T00:00:00Z`);
+  batas.setUTCDate(batas.getUTCDate() - hari);
+  const batasISO = batas.toISOString().slice(0, 10);
+  return tanggal > batasISO;
+}
+
 /** Alasan ini berasal dari izin pra-kelas, bukan tabayyun biasa. */
 export function berasalDariIzin(alasan: string | null | undefined): boolean {
   return !!alasan && alasan.startsWith(PENANDA_IZIN);
+}
+
+/**
+ * Apakah satu izin cocok dipakai untuk tabayyun berkondisi tertentu.
+ * Jenis sama → cocok. TIDAK_HADIR jadi jaring pengaman: menaungi semua bentuk
+ * ketidakhadiran hari itu (mirror logika fallback di cariIzinCocok).
+ */
+export function izinCocokKondisi(izinJenis: ShakwaIzinJenis, tabKondisi: string): boolean {
+  return izinJenis === 'TIDAK_HADIR' || tabKondisi === izinJenis;
 }
 
 /**
@@ -99,6 +125,8 @@ export async function cariIzinCocok(args: {
     jadwalGanti: cocok.jadwal_ganti,
     alasan: cocok.alasan,
     dikirimAt: s?.created_at ?? new Date().toISOString(),
+    pengajarId: args.pengajarId,
+    halaqahId: cocok.halaqah_id,
   };
 }
 
@@ -108,4 +136,114 @@ export async function tandaiIzinTerpakai(izinId: string, tabayyunId: string): Pr
     .from('shakwa_izin')
     .update({ dipakai_tabayyun_id: tabayyunId })
     .eq('id', izinId);
+}
+
+/**
+ * Reverse-link: pengajar mengirim izin SETELAH ketua kelas terlanjur mengisi
+ * observasi (tabayyun sudah 'pending' tanpa alasan). Cari tabayyun cocok lalu
+ * isi alasannya dari izin, supaya pengajar tak ditagih klarifikasi & tak kena
+ * ghosting. Menaungi urutan input kebalikan dari forward-match di hits/ketua.
+ *
+ * Hanya menyentuh tabayyun 'pending' tanpa alasan_pengajar — tak menimpa yang
+ * sudah 'awaiting_reason'/'decided' atau sudah punya alasan. Return id tabayyun
+ * yang ter-backfill, atau null bila tak ada yang cocok.
+ */
+export async function backfillTabayyunDariIzin(izin: IzinCocok): Promise<string | null> {
+  let q = supabaseAdmin
+    .from('hits_tabayyun')
+    .select('id, kondisi, keterangan:keterangan_id(tanggal)')
+    .eq('pengajar_id', izin.pengajarId)
+    .eq('status', 'pending')
+    .is('alasan_pengajar', null);
+  if (izin.halaqahId) q = q.eq('halaqah_id', izin.halaqahId);
+
+  const { data } = await q;
+  const rows = (data ?? []) as unknown as Array<{
+    id: string;
+    kondisi: string;
+    keterangan: { tanggal: string } | null;
+  }>;
+
+  const cocok = rows.find(
+    (r) => r.keterangan?.tanggal === izin.tanggal && izinCocokKondisi(izin.jenis, r.kondisi)
+  );
+  if (!cocok) return null;
+
+  const { error } = await supabaseAdmin
+    .from('hits_tabayyun')
+    .update({
+      status: 'awaiting_reason',
+      alasan_pengajar: alasanDariIzin(izin),
+      alasan_submitted_at: izin.dikirimAt,
+    })
+    .eq('id', cocok.id);
+  if (error) {
+    console.error('backfillTabayyunDariIzin: gagal update tabayyun', error);
+    return null;
+  }
+  await tandaiIzinTerpakai(izin.id, cocok.id);
+  return cocok.id;
+}
+
+export type IzinYatimRow = {
+  id: string;
+  nomorTiket: string;
+  pengajarNama: string;
+  tanggal: string;
+  jenis: ShakwaIzinJenis;
+  menit: number | null;
+  jadwalGanti: string | null;
+  halaqahNama: string | null;
+};
+
+/**
+ * Izin yang belum ke-match tabayyun apa pun (dipakai_tabayyun_id null) dalam
+ * jendela pantau. Menandakan pengajar melapor tapi ketua tak mencatat
+ * pelanggaran cocok — discrepancy yang perlu dilihat koordinator observasi.
+ * Scope gender via pengajar.gender.
+ */
+export async function getIzinYatim(
+  viewGender: 'ikhwan' | 'akhwat',
+  today: string,
+  hari = 14
+): Promise<IzinYatimRow[]> {
+  const { data, error } = await supabaseAdmin
+    .from('shakwa_izin')
+    .select(
+      `id, tanggal, jenis, menit, jadwal_ganti,
+       shakwa:shakwa_id(nomor_tiket),
+       pengajar:pengajar_id(name, gender),
+       halaqah:halaqah_id(name)`
+    )
+    .is('dipakai_tabayyun_id', null)
+    .lte('tanggal', today)
+    .order('tanggal', { ascending: false });
+  if (error) {
+    console.error('getIzinYatim: gagal query', error);
+    return [];
+  }
+
+  const rows = (data ?? []) as unknown as Array<{
+    id: string;
+    tanggal: string;
+    jenis: ShakwaIzinJenis;
+    menit: number | null;
+    jadwal_ganti: string | null;
+    shakwa: { nomor_tiket: string } | null;
+    pengajar: { name: string; gender: string } | null;
+    halaqah: { name: string } | null;
+  }>;
+
+  return rows
+    .filter((r) => r.pengajar?.gender === viewGender && dalamJendelaYatim(r.tanggal, today, hari))
+    .map((r) => ({
+      id: r.id,
+      nomorTiket: r.shakwa?.nomor_tiket ?? '—',
+      pengajarNama: r.pengajar?.name ?? '—',
+      tanggal: r.tanggal,
+      jenis: r.jenis,
+      menit: r.menit,
+      jadwalGanti: r.jadwal_ganti,
+      halaqahNama: r.halaqah?.name ?? null,
+    }));
 }

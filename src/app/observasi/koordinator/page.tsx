@@ -14,6 +14,8 @@ import { ReminderButton } from './ReminderButton';
 import { ReminderMassalPanel } from './ReminderMassalPanel';
 import { ObservasiFilterBar } from './ObservasiFilterBar';
 import { OBSERVASI_EFEKTIF } from '@/lib/hits-harian';
+import { getIzinYatim } from '@/lib/shakwa-izin';
+import { IZIN_JENIS_LABEL } from '@/lib/shakwa';
 
 export const dynamic = 'force-dynamic';
 
@@ -48,6 +50,8 @@ export default async function KoordinatorKetuaKelasPage({
   const statusTab = searchParams.statusTab ?? null;
 
   const { rows: harianRows, kaldikMissing } = await getHitsHarian(today, viewGender);
+
+  const izinYatim = await getIzinYatim(viewGender, today);
 
   const matchesSearch = (kelasName: string, pengajarName: string | null) =>
     !q || kelasName.toLowerCase().includes(q) || (pengajarName ?? '').toLowerCase().includes(q);
@@ -389,6 +393,29 @@ export default async function KoordinatorKetuaKelasPage({
               </h2>
               {tabayyunItems.map((t) => (
                 <TabayyunCard key={t.id} tabayyun={t} />
+              ))}
+            </div>
+          )}
+
+          {/* Izin belum ke-match tabayyun */}
+          {izinYatim.length > 0 && (
+            <div style={{ marginBottom: 24 }}>
+              <h2 className="t-h2" style={{ marginBottom: 4 }}>Izin Belum Ke-match ({izinYatim.length})</h2>
+              <p className="t-small" style={{ color: 'var(--muted-2)', margin: '4px 0 12px' }}>
+                Pengajar melapor izin lewat Shakwa, tapi belum tertaut ke tabayyun mana pun. Cek apakah observasi hari itu sudah/perlu dicatat.
+              </p>
+              {izinYatim.map((iz) => (
+                <div key={iz.id} className="card-flat" style={{ padding: '10px 14px', marginBottom: 6, borderLeft: '3px solid var(--kuning)', display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 8 }}>
+                  <span style={{ fontWeight: 600, fontSize: 14 }}>{iz.pengajarNama}</span>
+                  <span className="t-small" style={{ color: 'var(--muted-2)' }}>{iz.tanggal}</span>
+                  <span className="badge" style={{ background: 'var(--kuning-tint)', borderColor: 'var(--kuning-line)', color: 'var(--kuning-ink)', fontSize: 10 }}>
+                    {IZIN_JENIS_LABEL[iz.jenis]}
+                    {iz.menit != null ? ` · ${iz.menit} mnt` : ''}
+                    {iz.jadwalGanti ? ` · ganti ${iz.jadwalGanti}` : ''}
+                  </span>
+                  {iz.halaqahNama && <span className="t-small" style={{ color: 'var(--muted)' }}>{iz.halaqahNama}</span>}
+                  <span className="t-tiny" style={{ marginLeft: 'auto', color: 'var(--muted)' }}>{iz.nomorTiket}</span>
+                </div>
               ))}
             </div>
           )}

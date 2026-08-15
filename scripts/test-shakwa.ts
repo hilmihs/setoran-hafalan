@@ -11,7 +11,7 @@ import {
   nomorTiket,
   kategoriDef,
 } from '@/lib/shakwa';
-import { alasanDariIzin, berasalDariIzin, PENANDA_IZIN } from '@/lib/shakwa-izin';
+import { alasanDariIzin, berasalDariIzin, izinCocokKondisi, dalamJendelaYatim, PENANDA_IZIN } from '@/lib/shakwa-izin';
 import { rentangShakwa } from '@/lib/shakwa-rekap';
 import { periodeStartDate, periodeEndDate } from '@/lib/maahir-sp';
 import { normalizeWhatsApp } from '@/lib/whatsapp';
@@ -84,6 +84,7 @@ const izin = {
   id: 'x', shakwaId: 'y', nomorTiket: 'SKW-20260812-003', tanggal: '2026-08-12',
   jenis: 'KMT' as const, menit: 15, jadwalGanti: null, alasan: 'Sakit demam',
   dikirimAt: '2026-08-11T02:00:00.000Z',
+  pengajarId: 'p', halaqahId: null,
 };
 const teks = alasanDariIzin(izin);
 eq(teks.startsWith(`${PENANDA_IZIN} SKW-20260812-003]`), true, 'alasan diawali penanda + nomor tiket');
@@ -102,6 +103,26 @@ eq(
 eq(periodeStartDate('2026-08'), '2026-07-28', 'awal periode Agustus');
 eq(periodeEndDate('2026-08'), '2026-08-27', 'akhir periode Agustus');
 eq(periodeStartDate('2026-01'), '2025-12-28', 'awal periode Januari lintas tahun');
+
+// --- Attestation: opsi "Belum" dihapus (feedback pengajar) ---
+const opsiField = (kategori: string, field: string) =>
+  kategoriDef(kategori)?.fieldTambahan.find((f) => f.name === field)?.opsi;
+eq(opsiField('tali_kasih', 'sudah_presensi'), ['Sudah'], 'talikasih sudah_presensi hanya "Sudah"');
+eq(opsiField('izin', 'sudah_info_koordinator'), ['Sudah'], 'izin sudah_info_koordinator hanya "Sudah"');
+eq(opsiField('tali_kasih', 'punya_rekening_cimb'), ['Sudah', 'Belum'], 'rekening CIMB tetap Sudah/Belum');
+
+// --- Predikat kecocokan izin ↔ kondisi tabayyun ---
+eq(izinCocokKondisi('KMT', 'KMT'), true, 'jenis sama → cocok');
+eq(izinCocokKondisi('KBLA', 'KMT'), false, 'jenis beda → tak cocok');
+eq(izinCocokKondisi('TIDAK_HADIR', 'BADAL'), true, 'TIDAK_HADIR net → cocok kondisi apa pun');
+eq(izinCocokKondisi('TIDAK_HADIR', 'TIDAK_LATIHAN'), true, 'TIDAK_HADIR net → cocok TIDAK_LATIHAN');
+eq(izinCocokKondisi('JKG', 'BADAL'), false, 'JKG vs BADAL → tak cocok');
+
+// --- Jendela izin yatim (default 14 hari) ---
+eq(dalamJendelaYatim('2026-08-15', '2026-08-15', 14), true, 'hari ini masuk jendela');
+eq(dalamJendelaYatim('2026-08-02', '2026-08-15', 14), true, 'tepat 13 hari lalu masuk');
+eq(dalamJendelaYatim('2026-08-01', '2026-08-15', 14), false, '14 hari lalu di luar jendela');
+eq(dalamJendelaYatim('2026-08-16', '2026-08-15', 14), false, 'masa depan di luar jendela');
 
 if (failed) { console.error(`\n${failed} uji gagal.`); process.exit(1); }
 console.log('\nSemua uji Shakwa lolos.');
