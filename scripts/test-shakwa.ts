@@ -11,7 +11,7 @@ import {
   nomorTiket,
   kategoriDef,
 } from '@/lib/shakwa';
-import { alasanDariIzin, berasalDariIzin, PENANDA_IZIN } from '@/lib/shakwa-izin';
+import { alasanDariIzin, berasalDariIzin, izinCocokKondisi, PENANDA_IZIN } from '@/lib/shakwa-izin';
 import { rentangShakwa } from '@/lib/shakwa-rekap';
 import { periodeStartDate, periodeEndDate } from '@/lib/maahir-sp';
 import { normalizeWhatsApp } from '@/lib/whatsapp';
@@ -109,6 +109,13 @@ const opsiField = (kategori: string, field: string) =>
 eq(opsiField('tali_kasih', 'sudah_presensi'), ['Sudah'], 'talikasih sudah_presensi hanya "Sudah"');
 eq(opsiField('izin', 'sudah_info_koordinator'), ['Sudah'], 'izin sudah_info_koordinator hanya "Sudah"');
 eq(opsiField('tali_kasih', 'punya_rekening_cimb'), ['Sudah', 'Belum'], 'rekening CIMB tetap Sudah/Belum');
+
+// --- Predikat kecocokan izin ↔ kondisi tabayyun ---
+eq(izinCocokKondisi('KMT', 'KMT'), true, 'jenis sama → cocok');
+eq(izinCocokKondisi('KBLA', 'KMT'), false, 'jenis beda → tak cocok');
+eq(izinCocokKondisi('TIDAK_HADIR', 'BADAL'), true, 'TIDAK_HADIR net → cocok kondisi apa pun');
+eq(izinCocokKondisi('TIDAK_HADIR', 'TIDAK_LATIHAN'), true, 'TIDAK_HADIR net → cocok TIDAK_LATIHAN');
+eq(izinCocokKondisi('JKG', 'BADAL'), false, 'JKG vs BADAL → tak cocok');
 
 if (failed) { console.error(`\n${failed} uji gagal.`); process.exit(1); }
 console.log('\nSemua uji Shakwa lolos.');

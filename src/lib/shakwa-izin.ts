@@ -41,6 +41,15 @@ export function berasalDariIzin(alasan: string | null | undefined): boolean {
 }
 
 /**
+ * Apakah satu izin cocok dipakai untuk tabayyun berkondisi tertentu.
+ * Jenis sama → cocok. TIDAK_HADIR jadi jaring pengaman: menaungi semua bentuk
+ * ketidakhadiran hari itu (mirror logika fallback di cariIzinCocok).
+ */
+export function izinCocokKondisi(izinJenis: ShakwaIzinJenis, tabKondisi: string): boolean {
+  return izinJenis === 'TIDAK_HADIR' || tabKondisi === izinJenis;
+}
+
+/**
  * Cari izin yang cocok untuk satu pertemuan. Cocok bila pengajar & tanggalnya
  * sama, dan jenisnya termasuk pelanggaran yang tercatat — atau izinnya
  * TIDAK_HADIR, yang menaungi semua bentuk ketidakhadiran hari itu.
