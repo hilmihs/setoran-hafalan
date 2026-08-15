@@ -84,6 +84,7 @@ const izin = {
   id: 'x', shakwaId: 'y', nomorTiket: 'SKW-20260812-003', tanggal: '2026-08-12',
   jenis: 'KMT' as const, menit: 15, jadwalGanti: null, alasan: 'Sakit demam',
   dikirimAt: '2026-08-11T02:00:00.000Z',
+  pengajarId: 'p', halaqahId: null,
 };
 const teks = alasanDariIzin(izin);
 eq(teks.startsWith(`${PENANDA_IZIN} SKW-20260812-003]`), true, 'alasan diawali penanda + nomor tiket');

@@ -20,6 +20,10 @@ export type IzinCocok = {
   alasan: string;
   /** Kapan pengajar mengirim formulirnya — dipakai sebagai alasan_submitted_at. */
   dikirimAt: string;
+  /** Pengajar pemilik izin — dipakai reverse-link mencocokkan tabayyun. */
+  pengajarId: string;
+  /** Halaqah yang disebut izin; null = berlaku semua halaqah pengajar hari itu. */
+  halaqahId: string | null;
 };
 
 /** Penanda di awal alasan_pengajar; dipakai UI untuk menandai asal alasannya. */
@@ -108,6 +112,8 @@ export async function cariIzinCocok(args: {
     jadwalGanti: cocok.jadwal_ganti,
     alasan: cocok.alasan,
     dikirimAt: s?.created_at ?? new Date().toISOString(),
+    pengajarId: args.pengajarId,
+    halaqahId: cocok.halaqah_id,
   };
 }
 
@@ -117,4 +123,51 @@ export async function tandaiIzinTerpakai(izinId: string, tabayyunId: string): Pr
     .from('shakwa_izin')
     .update({ dipakai_tabayyun_id: tabayyunId })
     .eq('id', izinId);
+}
+
+/**
+ * Reverse-link: pengajar mengirim izin SETELAH ketua kelas terlanjur mengisi
+ * observasi (tabayyun sudah 'pending' tanpa alasan). Cari tabayyun cocok lalu
+ * isi alasannya dari izin, supaya pengajar tak ditagih klarifikasi & tak kena
+ * ghosting. Menaungi urutan input kebalikan dari forward-match di hits/ketua.
+ *
+ * Hanya menyentuh tabayyun 'pending' tanpa alasan_pengajar — tak menimpa yang
+ * sudah 'awaiting_reason'/'decided' atau sudah punya alasan. Return id tabayyun
+ * yang ter-backfill, atau null bila tak ada yang cocok.
+ */
+export async function backfillTabayyunDariIzin(izin: IzinCocok): Promise<string | null> {
+  let q = supabaseAdmin
+    .from('hits_tabayyun')
+    .select('id, kondisi, keterangan:keterangan_id(tanggal)')
+    .eq('pengajar_id', izin.pengajarId)
+    .eq('status', 'pending')
+    .is('alasan_pengajar', null);
+  if (izin.halaqahId) q = q.eq('halaqah_id', izin.halaqahId);
+
+  const { data } = await q;
+  const rows = (data ?? []) as unknown as Array<{
+    id: string;
+    kondisi: string;
+    keterangan: { tanggal: string } | null;
+  }>;
+
+  const cocok = rows.find(
+    (r) => r.keterangan?.tanggal === izin.tanggal && izinCocokKondisi(izin.jenis, r.kondisi)
+  );
+  if (!cocok) return null;
+
+  const { error } = await supabaseAdmin
+    .from('hits_tabayyun')
+    .update({
+      status: 'awaiting_reason',
+      alasan_pengajar: alasanDariIzin(izin),
+      alasan_submitted_at: izin.dikirimAt,
+    })
+    .eq('id', cocok.id);
+  if (error) {
+    console.error('backfillTabayyunDariIzin: gagal update tabayyun', error);
+    return null;
+  }
+  await tandaiIzinTerpakai(izin.id, cocok.id);
+  return cocok.id;
 }
