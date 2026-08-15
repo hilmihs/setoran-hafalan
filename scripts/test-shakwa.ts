@@ -11,7 +11,7 @@ import {
   nomorTiket,
   kategoriDef,
 } from '@/lib/shakwa';
-import { alasanDariIzin, berasalDariIzin, izinCocokKondisi, PENANDA_IZIN } from '@/lib/shakwa-izin';
+import { alasanDariIzin, berasalDariIzin, izinCocokKondisi, dalamJendelaYatim, PENANDA_IZIN } from '@/lib/shakwa-izin';
 import { rentangShakwa } from '@/lib/shakwa-rekap';
 import { periodeStartDate, periodeEndDate } from '@/lib/maahir-sp';
 import { normalizeWhatsApp } from '@/lib/whatsapp';
@@ -117,6 +117,12 @@ eq(izinCocokKondisi('KBLA', 'KMT'), false, 'jenis beda → tak cocok');
 eq(izinCocokKondisi('TIDAK_HADIR', 'BADAL'), true, 'TIDAK_HADIR net → cocok kondisi apa pun');
 eq(izinCocokKondisi('TIDAK_HADIR', 'TIDAK_LATIHAN'), true, 'TIDAK_HADIR net → cocok TIDAK_LATIHAN');
 eq(izinCocokKondisi('JKG', 'BADAL'), false, 'JKG vs BADAL → tak cocok');
+
+// --- Jendela izin yatim (default 14 hari) ---
+eq(dalamJendelaYatim('2026-08-15', '2026-08-15', 14), true, 'hari ini masuk jendela');
+eq(dalamJendelaYatim('2026-08-02', '2026-08-15', 14), true, 'tepat 13 hari lalu masuk');
+eq(dalamJendelaYatim('2026-08-01', '2026-08-15', 14), false, '14 hari lalu di luar jendela');
+eq(dalamJendelaYatim('2026-08-16', '2026-08-15', 14), false, 'masa depan di luar jendela');
 
 if (failed) { console.error(`\n${failed} uji gagal.`); process.exit(1); }
 console.log('\nSemua uji Shakwa lolos.');

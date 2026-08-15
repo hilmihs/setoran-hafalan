@@ -39,6 +39,19 @@ export function alasanDariIzin(izin: IzinCocok): string {
   ].join('\n');
 }
 
+/**
+ * Apakah tanggal izin masih dalam jendela pantau yatim: antara (today - hari)
+ * eksklusif dan today inklusif. Membatasi daftar agar izin lama tak menumpuk.
+ * Semua argumen ISO date "YYYY-MM-DD" (perbandingan leksikografis aman).
+ */
+export function dalamJendelaYatim(tanggal: string, today: string, hari: number): boolean {
+  if (tanggal > today) return false;
+  const batas = new Date(`${today}T00:00:00Z`);
+  batas.setUTCDate(batas.getUTCDate() - hari);
+  const batasISO = batas.toISOString().slice(0, 10);
+  return tanggal > batasISO;
+}
+
 /** Alasan ini berasal dari izin pra-kelas, bukan tabayyun biasa. */
 export function berasalDariIzin(alasan: string | null | undefined): boolean {
   return !!alasan && alasan.startsWith(PENANDA_IZIN);
@@ -170,4 +183,67 @@ export async function backfillTabayyunDariIzin(izin: IzinCocok): Promise<string 
   }
   await tandaiIzinTerpakai(izin.id, cocok.id);
   return cocok.id;
+}
+
+export type IzinYatimRow = {
+  id: string;
+  nomorTiket: string;
+  pengajarNama: string;
+  tanggal: string;
+  jenis: ShakwaIzinJenis;
+  menit: number | null;
+  jadwalGanti: string | null;
+  halaqahNama: string | null;
+};
+
+/**
+ * Izin yang belum ke-match tabayyun apa pun (dipakai_tabayyun_id null) dalam
+ * jendela pantau. Menandakan pengajar melapor tapi ketua tak mencatat
+ * pelanggaran cocok — discrepancy yang perlu dilihat koordinator observasi.
+ * Scope gender via pengajar.gender.
+ */
+export async function getIzinYatim(
+  viewGender: 'ikhwan' | 'akhwat',
+  today: string,
+  hari = 14
+): Promise<IzinYatimRow[]> {
+  const { data, error } = await supabaseAdmin
+    .from('shakwa_izin')
+    .select(
+      `id, tanggal, jenis, menit, jadwal_ganti,
+       shakwa:shakwa_id(nomor_tiket),
+       pengajar:pengajar_id(name, gender),
+       halaqah:halaqah_id(name)`
+    )
+    .is('dipakai_tabayyun_id', null)
+    .lte('tanggal', today)
+    .order('tanggal', { ascending: false });
+  if (error) {
+    console.error('getIzinYatim: gagal query', error);
+    return [];
+  }
+
+  const rows = (data ?? []) as unknown as Array<{
+    id: string;
+    tanggal: string;
+    jenis: ShakwaIzinJenis;
+    menit: number | null;
+    jadwal_ganti: string | null;
+    shakwa: { nomor_tiket: string } | null;
+    pengajar: { name: string; gender: string } | null;
+    halaqah: { name: string } | null;
+  }>;
+
+  return rows
+    .filter((r) => r.pengajar?.gender === viewGender && dalamJendelaYatim(r.tanggal, today, hari))
+    .map((r) => ({
+      id: r.id,
+      nomorTiket: r.shakwa?.nomor_tiket ?? '—',
+      pengajarNama: r.pengajar?.name ?? '—',
+      tanggal: r.tanggal,
+      jenis: r.jenis,
+      menit: r.menit,
+      jadwalGanti: r.jadwal_ganti,
+      halaqahNama: r.halaqah?.name ?? null,
+    }));
 }
