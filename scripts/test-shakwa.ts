@@ -103,5 +103,12 @@ eq(periodeStartDate('2026-08'), '2026-07-28', 'awal periode Agustus');
 eq(periodeEndDate('2026-08'), '2026-08-27', 'akhir periode Agustus');
 eq(periodeStartDate('2026-01'), '2025-12-28', 'awal periode Januari lintas tahun');
 
+// --- Attestation: opsi "Belum" dihapus (feedback pengajar) ---
+const opsiField = (kategori: string, field: string) =>
+  kategoriDef(kategori)?.fieldTambahan.find((f) => f.name === field)?.opsi;
+eq(opsiField('tali_kasih', 'sudah_presensi'), ['Sudah'], 'talikasih sudah_presensi hanya "Sudah"');
+eq(opsiField('izin', 'sudah_info_koordinator'), ['Sudah'], 'izin sudah_info_koordinator hanya "Sudah"');
+eq(opsiField('tali_kasih', 'punya_rekening_cimb'), ['Sudah', 'Belum'], 'rekening CIMB tetap Sudah/Belum');
+
 if (failed) { console.error(`\n${failed} uji gagal.`); process.exit(1); }
 console.log('\nSemua uji Shakwa lolos.');

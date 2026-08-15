@@ -139,7 +139,7 @@ export const KATEGORI: ShakwaKategoriDef[] = [
       {
         name: 'sudah_info_koordinator',
         label: 'Apakah sudah menginfokan ke Koordinator / Ketua kelompok pengajar?',
-        opsi: ['Sudah', 'Belum'],
+        opsi: ['Sudah'],
       },
     ],
   },
@@ -156,7 +156,7 @@ export const KATEGORI: ShakwaKategoriDef[] = [
       {
         name: 'sudah_presensi',
         label: 'Apakah Anda sudah menyelesaikan presensi peserta dan absensi pengajar?',
-        opsi: ['Sudah', 'Belum'],
+        opsi: ['Sudah'],
       },
       {
         name: 'punya_rekening_cimb',
