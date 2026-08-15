@@ -18,6 +18,7 @@ import {
   type ShakwaIzinJenis,
 } from '@/lib/shakwa';
 import { uploadLampiran, validasiLampiran } from '@/lib/shakwa-storage';
+import { backfillTabayyunDariIzin, type IzinCocok } from '@/lib/shakwa-izin';
 import type { Gender, PengajarSession } from '@/types/db';
 
 export type KirimShakwaResult = {
@@ -221,19 +222,50 @@ export async function kirimShakwa(
   }
 
   if (rincianIzin.length && pengajar) {
-    const { error: izinErr } = await supabaseAdmin.from('shakwa_izin').insert(
-      rincianIzin.map((r) => ({
-        shakwa_id: simpan.id,
-        pengajar_id: pengajar!.pengajar_id,
-        halaqah_id: r.halaqahId,
+    const { data: izinRows, error: izinErr } = await supabaseAdmin
+      .from('shakwa_izin')
+      .insert(
+        rincianIzin.map((r) => ({
+          shakwa_id: simpan.id,
+          pengajar_id: pengajar!.pengajar_id,
+          halaqah_id: r.halaqahId,
+          tanggal: r.tanggal,
+          jenis: r.jenis,
+          menit: r.menit,
+          jadwal_ganti: r.jadwalGanti,
+          alasan: isi,
+        }))
+      )
+      .select('id');
+    if (izinErr) console.error('shakwa: gagal simpan rincian izin', izinErr);
+
+    // Reverse-link: bila ketua kelas sudah terlanjur mengisi observasi hari itu,
+    // tabayyun 'pending' yang cocok langsung diisi alasannya dari izin ini.
+    const ids = (izinRows ?? []) as Array<{ id: string }>;
+    const dikirimAt = new Date().toISOString();
+    for (let i = 0; i < rincianIzin.length; i++) {
+      const idRow = ids[i];
+      if (!idRow) continue;
+      const r = rincianIzin[i];
+      const izin: IzinCocok = {
+        id: idRow.id,
+        shakwaId: simpan.id,
+        nomorTiket: simpan.nomorTiket,
         tanggal: r.tanggal,
         jenis: r.jenis,
         menit: r.menit,
-        jadwal_ganti: r.jadwalGanti,
+        jadwalGanti: r.jadwalGanti,
         alasan: isi,
-      }))
-    );
-    if (izinErr) console.error('shakwa: gagal simpan rincian izin', izinErr);
+        dikirimAt,
+        pengajarId: pengajar!.pengajar_id,
+        halaqahId: r.halaqahId,
+      };
+      try {
+        await backfillTabayyunDariIzin(izin);
+      } catch (e) {
+        console.error('shakwa: gagal reverse-link izin', e);
+      }
+    }
   }
 
   if (pengajar) {
