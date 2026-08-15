@@ -95,6 +95,9 @@ export async function PUT(
       setoran_halaman?: number | string | null;
       mode?: string | null; // 'online' | 'offline'
     }>;
+    // Materi pertemuan (per-pertemuan, seragam se-kelas). undefined = klien tak
+    // mengirim (pertahankan nilai lama); '' → null.
+    const materiRaw = body.materi as string | null | undefined;
 
     if (!Array.isArray(rows) || rows.length === 0) {
       return NextResponse.json({ error: 'rows wajib diisi.' }, { status: 400 });
@@ -159,6 +162,18 @@ export async function PUT(
       .upsert(upsertData, { onConflict: 'pertemuan_id,anggota_id' });
 
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+    // Simpan materi pertemuan bila dikirim. Disimpan di pertemuan_program (bukan
+    // per-peserta) karena satu materi berlaku untuk seluruh anggota kelas.
+    if (materiRaw !== undefined) {
+      const materiVal =
+        typeof materiRaw === 'string' && materiRaw.trim() !== '' ? materiRaw.trim() : null;
+      const { error: materiErr } = await supabaseAdmin
+        .from('pertemuan_program')
+        .update({ materi: materiVal })
+        .eq('id', params.pertemuan_id);
+      if (materiErr) return NextResponse.json({ error: materiErr.message }, { status: 500 });
+    }
 
     return NextResponse.json({ ok: true });
   } catch (e: unknown) {

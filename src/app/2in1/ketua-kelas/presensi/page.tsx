@@ -33,7 +33,7 @@ export default async function PresensiWizardPage() {
       },
       { onConflict: 'program_kelas_id,program,tanggal', ignoreDuplicates: false }
     )
-    .select('id')
+    .select('id, materi')
     .single();
 
   if (pErr || !pertemuan) {
@@ -188,6 +188,7 @@ export default async function PresensiWizardPage() {
             pertemuanId={pertemuan.id}
             pesertaList={pesertaRows}
             remaining={total}
+            materi={(pertemuan.materi as string | null) ?? ''}
             showSetoran={day.program === 'kelas_maahir' && isTakhassusKelas(day.kelasName)}
           />
 

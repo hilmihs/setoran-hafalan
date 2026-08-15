@@ -18,7 +18,7 @@ export default async function PertemuanDetailPage({ params }: { params: { id: st
 
   const { data: pertemuan } = await supabaseAdmin
     .from('pertemuan_program')
-    .select('id, program_kelas_id, program, tanggal, nama_kegiatan, waktu_mulai, waktu_selesai, program_kelas:program_kelas_id(id, name, ketua_wa, wakil_wa)')
+    .select('id, program_kelas_id, program, tanggal, nama_kegiatan, materi, waktu_mulai, waktu_selesai, program_kelas:program_kelas_id(id, name, ketua_wa, wakil_wa)')
     .eq('id', params.id)
     .single();
 
@@ -90,6 +90,7 @@ export default async function PertemuanDetailPage({ params }: { params: { id: st
         <KehadiranForm
           pertemuanId={params.id}
           pesertaList={anggotaWithStatus}
+          materi={(pertemuan.materi as string | null) ?? ''}
           showSetoran={pertemuan.program === 'kelas_maahir' && isTakhassusKelas(kelas.name)}
         />
       </div>

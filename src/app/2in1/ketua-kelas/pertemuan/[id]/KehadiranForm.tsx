@@ -25,16 +25,28 @@ type PesertaRow = {
 export function KehadiranForm({
   pertemuanId,
   pesertaList,
+  materi: materiAwal = '',
   showSetoran = false,
 }: {
   pertemuanId: string;
   pesertaList: PesertaRow[];
+  materi?: string;
   showSetoran?: boolean;
 }) {
   const [rows, setRows] = useState<PesertaRow[]>(pesertaList);
+  // Materi pertemuan — per-pertemuan (seragam se-kelas). Ref supaya autosave yang
+  // ditunda membaca nilai terbaru, bukan closure lama.
+  const [materi, setMateri] = useState(materiAwal);
+  const materiRef = useRef(materiAwal);
   const [globalStatus, setGlobalStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const [error, setError] = useState<string | null>(null);
   const saveTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  function updateMateri(value: string) {
+    materiRef.current = value;
+    setMateri(value);
+    scheduleAutoSave(rows);
+  }
 
   function updateRow(pesertaId: string, patch: Partial<PesertaRow>) {
     setRows((prev) => {
@@ -87,6 +99,7 @@ export function KehadiranForm({
             mode: r.mode,
             ...(showSetoran ? { setoran_halaman: r.setoran === '' ? null : r.setoran } : {}),
           })),
+          ...(showSetoran ? { materi: materiRef.current } : {}),
         }),
       });
       const json = await res.json();
@@ -114,6 +127,29 @@ export function KehadiranForm({
           {globalStatus === 'error' && <span className="t-tiny" style={{ color: 'var(--merah-ink)' }}>✗ Gagal</span>}
         </div>
       </div>
+
+      {/* Materi pertemuan — per-pertemuan, seragam se-kelas (takhassus). */}
+      {showSetoran && (
+        <div className="card" style={{ padding: '10px 12px', marginBottom: 12 }}>
+          <label className="t-tiny" style={{ color: 'var(--muted-2)', display: 'block', marginBottom: 4 }}>
+            Materi pertemuan ini (mis. surat/juz yang disetorkan)
+          </label>
+          <input
+            type="text"
+            value={materi}
+            onChange={(e) => updateMateri(e.target.value)}
+            placeholder="materi / tema…"
+            style={{
+              width: '100%',
+              fontSize: 12,
+              padding: '6px 10px',
+              borderRadius: 6,
+              border: '1px solid var(--border)',
+              background: 'var(--bg-input, #f5f5f5)',
+            }}
+          />
+        </div>
+      )}
 
       {/* Bulk mark */}
       <div style={{ display: 'flex', gap: 6, marginBottom: 12, flexWrap: 'wrap' }}>

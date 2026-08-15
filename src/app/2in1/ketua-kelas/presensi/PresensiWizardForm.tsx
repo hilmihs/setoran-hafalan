@@ -28,15 +28,19 @@ export function PresensiWizardForm({
   pertemuanId,
   pesertaList,
   remaining,
+  materi: materiAwal = '',
   showSetoran = false,
 }: {
   pertemuanId: string;
   pesertaList: PesertaRow[];
   remaining: number;
+  materi?: string;
   showSetoran?: boolean;
 }) {
   const router = useRouter();
   const [rows, setRows] = useState<PesertaRow[]>(pesertaList);
+  // Materi pertemuan — seragam untuk seluruh peserta (per-pertemuan).
+  const [materi, setMateri] = useState(materiAwal);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   // Cegah double-submit / flicker saat berpindah ke hari berikutnya.
@@ -76,6 +80,7 @@ export function PresensiWizardForm({
             mode: r.mode,
             ...(showSetoran ? { setoran_halaman: r.setoran === '' ? null : r.setoran } : {}),
           })),
+          ...(showSetoran ? { materi } : {}),
         }),
       });
       const json = await res.json();
@@ -119,6 +124,28 @@ export function PresensiWizardForm({
       {error && (
         <div className="banner banner-error" style={{ marginBottom: 12 }}>
           <div className="desc">{error}</div>
+        </div>
+      )}
+
+      {showSetoran && (
+        <div className="card" style={{ padding: '10px 12px', marginBottom: 12 }}>
+          <label className="t-tiny" style={{ color: 'var(--muted-2)', display: 'block', marginBottom: 4 }}>
+            Materi pertemuan ini (mis. surat/juz yang disetorkan)
+          </label>
+          <input
+            type="text"
+            value={materi}
+            onChange={(e) => setMateri(e.target.value)}
+            placeholder="materi / tema…"
+            style={{
+              width: '100%',
+              fontSize: 12,
+              padding: '6px 10px',
+              borderRadius: 6,
+              border: '1px solid var(--border)',
+              background: 'var(--bg-input, #f5f5f5)',
+            }}
+          />
         </div>
       )}
 
