@@ -24,7 +24,10 @@ export function parseRequest(params: URLSearchParams, def: EntityDef): ParseResu
     if (RESERVED.has(k)) continue;
     const fd = byParam.get(k);
     if (!fd) return { ok: false, code: 'bad_param', message: `Filter tak dikenal: '${k}'.` };
-    if (fd.kind === 'date_from' || fd.kind === 'date_to' || fd.kind === 'since') {
+    if (
+      fd.kind === 'date_from' || fd.kind === 'date_to' || fd.kind === 'since' ||
+      fd.kind === 'ts_from' || fd.kind === 'ts_to' || fd.kind === 'ts_since'
+    ) {
       if (!DATE_RE.test(v)) return { ok: false, code: 'bad_param', message: `Tanggal harus YYYY-MM-DD: '${k}'.` };
       filters.push({ column: fd.column, kind: fd.kind, value: v });
     } else if (fd.kind === 'bool' || fd.kind === 'is_null') {
@@ -58,6 +61,9 @@ export async function runEntity(def: EntityDef, parsed: Extract<ParseResult, { o
     else if (f.kind === 'date_from') q = q.gte(f.column, f.value);
     else if (f.kind === 'date_to') q = q.lte(f.column, f.value);
     else if (f.kind === 'since') q = q.gte(f.column, f.value);
+    // timestamptz sadar-WIB: awal/akhir hari Asia/Jakarta (UTC+7), inklusif.
+    else if (f.kind === 'ts_from' || f.kind === 'ts_since') q = q.gte(f.column, `${f.value as string}T00:00:00+07:00`);
+    else if (f.kind === 'ts_to') q = q.lte(f.column, `${f.value as string}T23:59:59.999+07:00`);
     else if (f.kind === 'is_null') { if (f.value === true) q = q.is(f.column, null); else q = q.not(f.column, 'is', null); }
   }
   q = q.order(def.order.column, { ascending: parsed.urut === 'asc' });

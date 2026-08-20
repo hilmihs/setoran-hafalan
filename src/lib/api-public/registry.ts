@@ -3,7 +3,7 @@ import type { EntityDef } from './types';
 
 export const FORBIDDEN_COLUMNS: string[] = [
   'password_hash',
-  'whatsapp_number', 'ketua_wa', 'wakil_wa', 'pengajar_wa',
+  'whatsapp_number', 'ketua_wa', 'wakil_wa', 'pengajar_wa', 'pelapor_wa',
   'magic_token',
   'new_password_plaintext',
   'token',
@@ -386,8 +386,8 @@ export const ENTITIES: Record<string, EntityDef> = {
   shakwa: {
     route: 'shakwa', table: 'shakwa', scope: 'shakwa',
     columns: [
-      'id', 'pelapor_type', 'pengajar_id', 'nama', 'gender', 'kategori', 'halaqoh',
-      'isi', 'saran_kritik', 'status', 'catatan_reviewer', 'reviewed_by_role',
+      'id', 'nomor_tiket', 'pelapor_type', 'pengajar_id', 'nama', 'gender', 'kategori',
+      'halaqoh', 'isi', 'saran_kritik', 'status', 'catatan_reviewer', 'reviewed_by_role',
       'reviewed_at', 'created_at',
     ],
     filters: [
@@ -396,12 +396,12 @@ export const ENTITIES: Record<string, EntityDef> = {
       { param: 'gender', column: 'gender', kind: 'eq' },
       { param: 'kategori', column: 'kategori', kind: 'eq' },
       { param: 'status', column: 'status', kind: 'eq' },
-      // `created_at` bertipe timestamptz — hanya batas-bawah yang aman inklusif
-      // (`gte` dari awal hari). date_to/`lte 'YYYY-MM-DD'` akan membuang baris
-      // jam >00:00 hari itu, jadi tak disediakan. Pakai `sejak` untuk sinkron
-      // inkremental.
-      { param: 'tanggal_dari', column: 'created_at', kind: 'date_from' },
-      { param: 'sejak', column: 'created_at', kind: 'since' },
+      // `created_at` timestamptz — batas hari ditafsir WIB (UTC+7) agar sama
+      // persis dengan dashboard koordinator (lihat shakwa-rekap.ts). `sejak`
+      // untuk sinkron inkremental (juga awal-hari WIB).
+      { param: 'tanggal_dari', column: 'created_at', kind: 'ts_from' },
+      { param: 'tanggal_sampai', column: 'created_at', kind: 'ts_to' },
+      { param: 'sejak', column: 'created_at', kind: 'ts_since' },
     ],
     order: { column: 'created_at', dir: 'desc' },
   },

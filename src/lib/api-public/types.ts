@@ -1,7 +1,13 @@
 // types.ts — tipe bersama jalur API publik.
 export type ScopeName = 'maahir' | 'hits' | 'penilaian' | 'ref' | 'shakwa';
 
-export type FilterKind = 'eq' | 'bool' | 'date_from' | 'date_to' | 'since' | 'is_null';
+export type FilterKind =
+  | 'eq' | 'bool' | 'date_from' | 'date_to' | 'since' | 'is_null'
+  // Varian timestamptz sadar-WIB: input YYYY-MM-DD ditafsir sebagai batas hari
+  // Asia/Jakarta (UTC+7), bukan UTC. Pakai untuk kolom `timestamptz` (mis.
+  // `created_at`) agar batas hari sama persis dengan dashboard. `ts_from`/`ts_since`
+  // = gte awal hari WIB; `ts_to` = lte akhir hari WIB (inklusif).
+  | 'ts_from' | 'ts_to' | 'ts_since';
 
 export interface FilterDef {
   /** nama param di query-string, mis. 'gender' */
