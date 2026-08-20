@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { createKey, revokeKey } from './actions';
 import type { ScopeName } from '@/lib/api-public/types';
 
-const SCOPES: ScopeName[] = ['maahir', 'hits', 'penilaian'];
+const SCOPES: ScopeName[] = ['maahir', 'hits', 'penilaian', 'shakwa'];
 
 export function CreateKeyForm() {
   const [nama, setNama] = useState('');

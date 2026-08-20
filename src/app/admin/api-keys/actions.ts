@@ -6,7 +6,7 @@ import { logAudit } from '@/lib/audit';
 import { generateKey } from '@/lib/api-public/auth';
 import type { ScopeName } from '@/lib/api-public/types';
 
-const VALID_SCOPES: ScopeName[] = ['maahir', 'hits', 'penilaian'];
+const VALID_SCOPES: ScopeName[] = ['maahir', 'hits', 'penilaian', 'shakwa'];
 
 export async function createKey(input: {
   nama: string;

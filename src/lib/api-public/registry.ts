@@ -379,6 +379,32 @@ export const ENTITIES: Record<string, EntityDef> = {
     filters: [{ param: 'gender', column: 'gender', kind: 'eq' }, { param: 'active', column: 'active', kind: 'bool' }],
     order: { column: 'name', dir: 'asc' },
   },
+  // Aduan Shakwa per-baris — MEMBUKA teks aduan (`isi`), nama pelapor, saran, dan
+  // catatan reviewer. Ini PII + isi sensitif; entitas ini sengaja diberi scope
+  // `shakwa` tersendiri agar hanya key yang eksplisit diberi scope itu bisa baca.
+  // `lampiran` (path storage) TIDAK diekspos — butuh signed-URL & bisa bocor.
+  shakwa: {
+    route: 'shakwa', table: 'shakwa', scope: 'shakwa',
+    columns: [
+      'id', 'pelapor_type', 'pengajar_id', 'nama', 'gender', 'kategori', 'halaqoh',
+      'isi', 'saran_kritik', 'status', 'catatan_reviewer', 'reviewed_by_role',
+      'reviewed_at', 'created_at',
+    ],
+    filters: [
+      { param: 'pelapor_type', column: 'pelapor_type', kind: 'eq' },
+      { param: 'pengajar_id', column: 'pengajar_id', kind: 'eq' },
+      { param: 'gender', column: 'gender', kind: 'eq' },
+      { param: 'kategori', column: 'kategori', kind: 'eq' },
+      { param: 'status', column: 'status', kind: 'eq' },
+      // `created_at` bertipe timestamptz — hanya batas-bawah yang aman inklusif
+      // (`gte` dari awal hari). date_to/`lte 'YYYY-MM-DD'` akan membuang baris
+      // jam >00:00 hari itu, jadi tak disediakan. Pakai `sejak` untuk sinkron
+      // inkremental.
+      { param: 'tanggal_dari', column: 'created_at', kind: 'date_from' },
+      { param: 'sejak', column: 'created_at', kind: 'since' },
+    ],
+    order: { column: 'created_at', dir: 'desc' },
+  },
 };
 
 auditEntities(ENTITIES);
