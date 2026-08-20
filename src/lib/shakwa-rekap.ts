@@ -57,6 +57,10 @@ export type ShakwaRekap = {
   perKategori: Array<{ kategori: ShakwaKategori; label: string; jumlah: number }>;
   perStatus: Array<{ status: ShakwaStatus; label: string; jumlah: number }>;
   items: ShakwaItem[];
+  page: number; // halaman aktif (1 bila tak dipaginasi)
+  limit: number; // ukuran halaman efektif
+  totalItems: number; // jumlah baris penuh dalam rentang (sebelum diiris halaman)
+  totalHalaman: number; // jumlah halaman (minimal 1)
 };
 
 export type ShakwaFilter = {
@@ -69,6 +73,8 @@ export type ShakwaFilter = {
   gender?: Gender;
   /** Batas jumlah baris yang dikembalikan (bukan batas hitungan ringkasan). */
   limit?: number;
+  /** Halaman aktif (mulai 1). Bila diisi, `items` diiris per halaman; bila kosong, semua baris dikembalikan (jalur API). */
+  page?: number;
 };
 
 const STATUS_LIST: ShakwaStatus[] = ['submitted', 'in_review', 'resolved', 'closed'];
@@ -190,6 +196,7 @@ export async function getShakwaRekap(f: ShakwaFilter = {}): Promise<ShakwaRekap>
     createdAt: r.created_at,
   }));
 
+  // Semua hitungan ringkasan tetap dari set baris penuh dalam rentang.
   const hitungKategori = new Map<ShakwaKategori, number>();
   const hitungStatus = new Map<ShakwaStatus, number>();
   for (const i of items) {
@@ -197,10 +204,30 @@ export async function getShakwaRekap(f: ShakwaFilter = {}): Promise<ShakwaRekap>
     hitungStatus.set(i.status, (hitungStatus.get(i.status) ?? 0) + 1);
   }
 
+  // Paginasi hanya bila `page` diisi (jalur dashboard). Jalur API biarkan `page`
+  // undefined agar seluruh baris dalam rentang dikembalikan utuh.
+  const totalItems = items.length;
+  const PER_HALAMAN = f.limit ?? 25;
+  let page: number;
+  let limit: number;
+  let totalHalaman: number;
+  let itemsHalaman: ShakwaItem[];
+  if (f.page != null) {
+    page = Math.max(1, f.page);
+    limit = PER_HALAMAN;
+    totalHalaman = Math.max(1, Math.ceil(totalItems / PER_HALAMAN));
+    itemsHalaman = items.slice((page - 1) * PER_HALAMAN, page * PER_HALAMAN);
+  } else {
+    page = 1;
+    limit = totalItems || PER_HALAMAN;
+    totalHalaman = 1;
+    itemsHalaman = items;
+  }
+
   return {
     mulai,
     sampai,
-    total: items.length,
+    total: totalItems,
     belumDitangani: items.filter((i) => i.status === 'submitted').length,
     perKategori: KATEGORI.map((k) => ({
       kategori: k.value,
@@ -212,6 +239,19 @@ export async function getShakwaRekap(f: ShakwaFilter = {}): Promise<ShakwaRekap>
       label: STATUS_LABEL[s],
       jumlah: hitungStatus.get(s) ?? 0,
     })),
-    items,
+    items: itemsHalaman,
+    page,
+    limit,
+    totalItems,
+    totalHalaman,
   };
+}
+
+/** Jumlah aduan berstatus 'submitted' sepanjang waktu (lepas dari filter tanggal). */
+export async function countShakwaBelumDitangani(): Promise<number> {
+  const { count } = await supabaseAdmin
+    .from('shakwa')
+    .select('id', { count: 'exact', head: true })
+    .eq('status', 'submitted');
+  return count ?? 0;
 }

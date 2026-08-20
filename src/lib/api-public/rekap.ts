@@ -37,7 +37,9 @@ export async function rekapTibyan(bulan: string, opts: Parameters<typeof getTiby
  */
 export async function rekapShakwa(opts: Parameters<typeof getShakwaRekap>[0]) {
   const raw = await getShakwaRekap(opts);
-  const { items, ...ringkas } = raw;
+  // Field paginasi khusus dashboard (page/limit/totalItems/totalHalaman) dibuang
+  // dari keluaran API — tak relevan bagi konsumen agregat.
+  const { items, page: _page, limit: _limit, totalItems: _totalItems, totalHalaman: _totalHalaman, ...ringkas } = raw;
   const data = {
     ...ringkas,
     items: items.map(({ lampiran: _lampiran, ...rest }) => rest),
