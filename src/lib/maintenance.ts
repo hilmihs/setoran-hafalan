@@ -84,7 +84,10 @@ h1{font-size:22px;margin:0 0 10px}
 p{font-size:15px;line-height:1.6;color:#aebbcf;margin:0 0 8px}
 .tag{display:inline-block;margin-top:18px;font-size:12px;letter-spacing:.06em;
   text-transform:uppercase;color:#7d8ba3;border-top:1px solid #223049;padding-top:16px;width:100%}
+.bismillah{direction:rtl;font-size:26px;line-height:1.9;margin:0 0 20px;color:#e6edf6;
+  font-family:"Traditional Arabic","Amiri","Scheherazade New",serif}
 </style></head><body><div class="card">
+<div class="bismillah">بِسْمِ اللَّهِ الرَّحْمَٰنِ الرَّحِيمِ</div>
 <div class="icon">🛠️</div>
 <h1>Sedang Pemeliharaan</h1>
 <p>${msg}</p>
