@@ -1,5 +1,7 @@
 // Mirror dari schema SQL. Update kalau migration berubah.
 
+import type { Jenis } from '@/lib/evaluasi';
+
 export type Gender = 'ikhwan' | 'akhwat';
 
 export type StatusSetoran = 'draft' | 'submitted' | 'checked';
@@ -662,6 +664,95 @@ export interface PasswordResetRequest {
   decided_by_wa: string | null;
   decided_at: string | null;
   created_at: string;
+}
+
+// ========== Evaluasi Halaqah (migration 0051) ==========
+
+export interface EvalBatch {
+  id: string;
+  nama: string;
+  aktif: boolean;
+  synced_at: string;
+}
+
+export interface EvalPengajar {
+  id: string;
+  nama: string;
+  gender: Gender;
+  whatsapp: string | null;
+  synced_at: string;
+}
+
+export interface EvalHalaqah {
+  id: string;
+  nama: string;
+  gender: Gender;
+  mustawa: number | null;
+  level: string | null;
+  pengajar_id: string | null;
+  batch_id: string | null;
+  ambang_ujian: number;
+  synced_at: string;
+}
+
+export interface EvalPeserta {
+  id: string;
+  nama: string;
+  gender: Gender;
+  halaqah_id: string | null;
+  is_ketua: boolean;
+  aktif: boolean;
+  urutan: number;
+  synced_at: string;
+}
+
+export interface EvalConfig {
+  gender: Gender;
+  nama_qn: string;
+  nama_pb: string;
+  ujian_attempts: number;
+  jadwal: { qn: string[]; pb: string[]; ujian: string[] };
+  updated_at: string;
+}
+
+export interface EvaluasiSesi {
+  id: string;
+  halaqah_id: string;
+  jenis: Jenis;
+  nomor_sesi: number;
+  tgl_jadwal: string | null;
+  surat: string;
+  ayat_mulai: number;
+  ayat_selesai: number;
+  ambang: number;
+  status: 'draft' | 'terkirim';
+  dibuat_oleh: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface EvaluasiNilai {
+  id: string;
+  sesi_id: string;
+  peserta_id: string;
+  hadir: boolean;
+  ayat_terakhir: number | null;
+  jk_huruf: number;
+  jk_harakat: number;
+  jk_mad: number;
+  jk_tasydid: number;
+  kh_izhar: number;
+  kh_idgham_bighunnah: number;
+  kh_idgham_bilaghunnah: number;
+  kh_idgham_mimi: number;
+  kh_iqlab: number;
+  kh_ikhfa_hakiki: number;
+  kh_ikhfa_syafawi: number;
+  skor: number;
+  catatan: string | null;
+  confirmed: boolean;
+  done: boolean;
+  updated_at: string;
 }
 
 // ========== Session types ==========
