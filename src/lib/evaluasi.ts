@@ -79,3 +79,43 @@ export function columnsToCounts(row: Record<string, unknown>): LahnCounts {
   for (const d of ALL_LAHN) c[d.key] = Number(row[d.column] || 0);
   return c;
 }
+
+// --- Geometri grafik tren rapor (port murni dari mockup buildTrack) ---
+export interface TrackPoint { no: number; score: number | null; filled: boolean; cx: number; cy: number; }
+export interface TrackGeometry {
+  points: string;          // polyline points for filled sessions, '' if none
+  sessions: TrackPoint[];  // one per history entry
+  avg: number | null;      // rounded mean of filled, null if none
+  trend: number;           // last filled − prev filled, 0 if <2 filled
+  ambangY: number;         // y of the ambang(70) dashed line
+  chartW: number; chartH: number; padX: number;
+}
+
+export function buildTrackGeometry(history: (number | null)[]): TrackGeometry {
+  const W = 260, H = 92, padX = 16, padY = 12;
+  const n = history.length;
+  const denom = n > 1 ? n - 1 : 1;
+  const xFor = (i: number) => padX + i * ((W - 2 * padX) / denom);
+  const yFor = (score: number) => padY + (1 - score / 100) * (H - 2 * padY);
+
+  const sessions: TrackPoint[] = history.map((v, i) => {
+    const filled = v != null;
+    return {
+      no: i + 1,
+      score: filled ? v : null,
+      filled,
+      cx: xFor(i),
+      cy: filled ? yFor(v as number) : H - padY,
+    };
+  });
+
+  const nums = sessions.filter((x) => x.filled).map((x) => x.score as number);
+  const avg = nums.length ? Math.round(nums.reduce((a, b) => a + b, 0) / nums.length) : null;
+  const trend = nums.length >= 2 ? nums[nums.length - 1] - nums[nums.length - 2] : 0;
+  const points = sessions
+    .filter((x) => x.filled)
+    .map((x) => x.cx + ',' + x.cy.toFixed(1))
+    .join(' ');
+
+  return { points, sessions, avg, trend, ambangY: yFor(AMBANG), chartW: W, chartH: H, padX };
+}
