@@ -20,24 +20,47 @@ steps:
     inputs:
       targetType: "inline"
       script: |
-        echo "🔄 Export Azure DevOps Variable Group with prefix ENV_"
+        # Emit systemd EnvironmentFile format (KEY=value, NO `export`, one per line).
+        # systemd EnvironmentFile does not accept shell syntax; double-quoted values
+        # are unquoted by systemd and `$` is left literal (safe for tokens).
+        echo "🔄 Export Azure DevOps Variable Group (prefix ENV_) to systemd env file"
         printenv | grep '^ENV_' | while IFS='=' read -r key value; do
           safe_value=$(python3 -c "import json, os; print(json.dumps(os.getenv('$key')))")
-          echo "export $key=$safe_value"
-        done > env_vars.sh
+          echo "$key=$safe_value"
+        done > maahir.env
 
-        chmod +x env_vars.sh
-        cat env_vars.sh
-  #⬇️ Kirim env_vars.sh ke server via SCP
+        cat maahir.env
+  #⬇️ Kirim maahir.env ke server via SCP
   - task: CopyFilesOverSSH@0
-    displayName: "📤 Upload env_vars.sh to server"
+    displayName: "📤 Upload maahir.env to server"
     inputs:
       sshEndpoint: "server-staging@103.181.142.223"
       sourceFolder: "."
-      contents: "env_vars.sh"
+      contents: "maahir.env"
       targetFolder: "/var/www/html/maahir"
       cleanTargetFolder: false
       overwrite: true
+  - task: Ssh@0
+    displayName: "🔗 Wire maahir.env into next-maahir via systemd drop-in"
+    inputs:
+      sshEndpoint: "server-staging@103.181.142.223"
+      runOptions: "inline"
+      failOnStdErr: false
+      inline: |
+        # env_vars.sh dulu di-upload tapi tak pernah dibaca proses → semua var
+        # (ENV_PUBLIC_API dll) tak sampai ke `next start` → /api/v1/* 404.
+        # Pasang EnvironmentFile lewat drop-in (idempotent, tak perlu sentuh unit).
+        DROPIN_DIR=/etc/systemd/system/next-maahir.service.d
+        DESIRED='[Service]
+        EnvironmentFile=/var/www/html/maahir/maahir.env'
+        sudo mkdir -p "$DROPIN_DIR"
+        if [ "$(cat "$DROPIN_DIR/10-env.conf" 2>/dev/null)" != "$DESIRED" ]; then
+          echo "$DESIRED" | sudo tee "$DROPIN_DIR/10-env.conf"
+          sudo systemctl daemon-reload
+          echo "✅ EnvironmentFile drop-in installed"
+        else
+          echo "✅ drop-in already current, skip"
+        fi
   - task: Ssh@0
     displayName: "🔧 Ensure nginx upload limit (audio rekaman ~14MB)"
     inputs:

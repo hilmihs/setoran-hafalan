@@ -5,6 +5,8 @@ build/
 .env
 .env.local
 .env*.local
+maahir.env
+env_vars.sh
 *.log
 .DS_Store
 .vercel

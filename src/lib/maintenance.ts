@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
+import { apiEnv } from '@/lib/api-public/env';
 
 // ── Mode maintenance situs ──────────────────────────────────────────────────
 // Situs dikunci penuh mulai 13 Juli 2026 (WIB) karena migrasi database keluar
@@ -28,21 +29,21 @@ const BYPASS_PARAM = 'maintenance_bypass';
 const ALLOW_PREFIXES = ['/api/health', '/maintenance', '/api/admin/db'];
 
 export function isMaintenanceActive(now = new Date()): boolean {
-  const mode = (process.env.MAINTENANCE_MODE ?? 'auto').toLowerCase();
+  const mode = (apiEnv('MAINTENANCE_MODE') ?? 'auto').toLowerCase();
   if (mode === 'off') return false;
   if (mode === 'on') return true;
-  const start = new Date(process.env.MAINTENANCE_START ?? DEFAULT_START);
+  const start = new Date(apiEnv('MAINTENANCE_START') ?? DEFAULT_START);
   return now.getTime() >= start.getTime();
 }
 
 function hasBypass(req: NextRequest): boolean {
-  const token = process.env.MAINTENANCE_BYPASS_TOKEN;
+  const token = apiEnv('MAINTENANCE_BYPASS_TOKEN');
   if (!token) return false;
   return req.cookies.get(BYPASS_COOKIE)?.value === token;
 }
 
 function bypassGrant(req: NextRequest): NextResponse | null {
-  const token = process.env.MAINTENANCE_BYPASS_TOKEN;
+  const token = apiEnv('MAINTENANCE_BYPASS_TOKEN');
   if (!token) return null;
   const q = req.nextUrl.searchParams.get(BYPASS_PARAM);
   if (q && q === token) {
@@ -65,7 +66,7 @@ const MESSAGE_DEFAULT =
   'Situs sedang dalam pemeliharaan (migrasi database). Silakan kembali lagi nanti. Terima kasih atas kesabarannya.';
 
 function pageHtml(): string {
-  const msg = process.env.MAINTENANCE_MESSAGE ?? MESSAGE_DEFAULT;
+  const msg = apiEnv('MAINTENANCE_MESSAGE') ?? MESSAGE_DEFAULT;
   return `<!doctype html><html lang="id"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex">
