@@ -477,6 +477,34 @@ entitas mentah.**
 
 ---
 
+## Evaluasi Halaqah — sync (masuk, server-to-server)
+
+Berbeda dari route `GET /api/v1/*` yang read-only, endpoint ini **menerima** data master
+Evaluasi Halaqah (mirror `eval_batch` / `eval_pengajar` / `eval_halaqah` / `eval_peserta`)
+dari sistem sumber user.
+
+- **Path**: `POST /api/evaluasi/sync`
+- **Auth**: header `Authorization: Bearer k_live_xxxxx` (API key konsumen yang sama seperti
+  jalur `v1`; diverifikasi lewat `verifyBearer`).
+- **Body** (JSON): setiap array opsional; yang tak dikirim dihitung `0`.
+
+```json
+{
+  "batch":    [{ "id": "b1", "nama": "Batch 1", "aktif": true }],
+  "pengajar": [{ "id": "p1", "nama": "Ustadz A", "gender": "ikhwan" }],
+  "halaqah":  [{ "id": "h1", "nama": "Halaqah 1", "gender": "ikhwan", "pengajar_id": "p1", "batch_id": "b1" }],
+  "peserta":  [{ "id": "s1", "nama": "Santri A", "gender": "ikhwan", "halaqah_id": "h1" }]
+}
+```
+
+- Tiap baris **wajib** punya `id` dan `nama`; baris tanpa keduanya diabaikan.
+- Upsert `onConflict: 'id'`, ditambah `synced_at` otomatis.
+- **Respons**: `{ "ok": true, "counts": { "batch": n, "pengajar": n, "halaqah": n, "peserta": n } }`.
+- Nama field sumber di atas **provisional** — menunggu spesifikasi API sinkron user; pemetaan
+  ke kolom mirror dilakukan di route ini.
+
+---
+
 ## 10. Ringkasan cepat
 
 - Base URL `https://maahir.muhajirproject.org/api/v1`, header `Authorization: Bearer
