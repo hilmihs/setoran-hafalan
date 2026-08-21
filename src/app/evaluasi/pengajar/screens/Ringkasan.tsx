@@ -29,7 +29,7 @@ interface RingkasanProps {
 export function Ringkasan(props: RingkasanProps) {
   return (
     <>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 16px', background: '#ffffff', borderBottom: '1px solid #e8e4dc' }}>
+      <div className="no-print" style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 16px', background: '#ffffff', borderBottom: '1px solid #e8e4dc' }}>
         <button onClick={props.back} style={{ width: 32, height: 32, borderRadius: 8, border: '1px solid #e8e4dc', background: '#ffffff', color: '#44423d', fontSize: 15, cursor: 'pointer' }}>←</button>
         <div style={{ fontSize: 15, fontWeight: 700 }}>Ringkasan Sesi</div>
       </div>
@@ -62,13 +62,13 @@ export function Ringkasan(props: RingkasanProps) {
         ))}
       </div>
 
-      <div style={{ padding: '18px 16px 0', display: 'flex', flexDirection: 'column', gap: 8 }}>
+      <div className="no-print" style={{ padding: '18px 16px 0', display: 'flex', flexDirection: 'column', gap: 8 }}>
         <button onClick={props.openWa} style={{ width: '100%', height: 46, borderRadius: 8, border: 'none', background: 'oklch(0.58 0.12 155)', color: '#ffffff', font: 'inherit', fontSize: 14, fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>Rekap teks untuk WhatsApp</button>
-        <button className="ev-ghost" style={{ width: '100%', height: 46, borderRadius: 8, border: '1px solid #d8d3c8', background: '#ffffff', font: 'inherit', fontSize: 14, fontWeight: 600, color: '#1b1a17', cursor: 'pointer' }}>Unduh PDF rekap sesi</button>
+        <button onClick={() => window.print()} className="ev-ghost" style={{ width: '100%', height: 46, borderRadius: 8, border: '1px solid #d8d3c8', background: '#ffffff', font: 'inherit', fontSize: 14, fontWeight: 600, color: '#1b1a17', cursor: 'pointer' }}>Unduh PDF rekap sesi</button>
       </div>
 
       <div style={{ flex: 1 }} />
-      <div style={{ position: 'sticky', bottom: 0, background: '#ffffff', borderTop: '1px solid #e8e4dc', padding: '12px 16px 18px', marginTop: 18 }}>
+      <div className="no-print" style={{ position: 'sticky', bottom: 0, background: '#ffffff', borderTop: '1px solid #e8e4dc', padding: '12px 16px 18px', marginTop: 18 }}>
         <button onClick={props.kirim} disabled={props.kirimDisabled} style={{ width: '100%', height: 50, borderRadius: 8, border: 'none', background: '#1b1a17', color: '#ffffff', font: 'inherit', fontSize: 15, fontWeight: 600, cursor: props.kirimDisabled ? 'not-allowed' : 'pointer', opacity: props.kirimDisabled ? 0.55 : 1 }}>{props.kirimLabel}</button>
         <div style={{ textAlign: 'center', fontSize: 11, color: '#a8a39a', marginTop: 8 }}>{props.offlineNote}</div>
       </div>

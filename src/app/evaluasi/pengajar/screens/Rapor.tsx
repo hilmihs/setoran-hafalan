@@ -38,10 +38,10 @@ export function Rapor(props: RaporProps) {
     : [{ key: 'none', label: 'Tanpa kesalahan tercatat', count: 0, tag: '', tagColor: '#a8a39a' }];
   return (
     <>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 16px', background: '#ffffff', borderBottom: '1px solid #e8e4dc' }}>
+      <div className="no-print" style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 16px', background: '#ffffff', borderBottom: '1px solid #e8e4dc' }}>
         <button onClick={props.back} style={{ width: 32, height: 32, borderRadius: 8, border: '1px solid #e8e4dc', background: '#ffffff', color: '#44423d', fontSize: 15, cursor: 'pointer' }}>←</button>
         <div style={{ fontSize: 15, fontWeight: 700 }}>Rapor Peserta</div>
-        <button className="ev-dark" style={{ marginLeft: 'auto', height: 36, padding: '0 14px', borderRadius: 8, border: 'none', background: 'oklch(0.58 0.09 165)', font: 'inherit', fontSize: 12.5, fontWeight: 700, color: '#ffffff', cursor: 'pointer' }}>⬇ Unduh PDF</button>
+        <button onClick={() => window.print()} className="ev-dark" style={{ marginLeft: 'auto', height: 36, padding: '0 14px', borderRadius: 8, border: 'none', background: 'oklch(0.58 0.09 165)', font: 'inherit', fontSize: 12.5, fontWeight: 700, color: '#ffffff', cursor: 'pointer' }}>⬇ Unduh PDF</button>
       </div>
 
       <div style={{ padding: 16 }}>

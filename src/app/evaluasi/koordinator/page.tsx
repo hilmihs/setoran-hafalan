@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { requireKoordinator } from '@/lib/session';
 import { supabaseAdmin } from '@/lib/supabase-admin';
 import { ALL_LAHN, AMBANG, columnsToCounts } from '@/lib/evaluasi';
+import { PrintButton } from '@/components/PrintButton';
 
 export const dynamic = 'force-dynamic';
 
@@ -180,7 +181,7 @@ export default async function KoordinatorEvaluasiPage() {
 
   return (
     <main style={{ minHeight: '100vh' }}>
-      <div style={{ maxWidth: 1180, margin: '0 auto', padding: '20px 20px 40px' }}>
+      <div className="eval-print-wrap" style={{ maxWidth: 1180, margin: '0 auto', padding: '20px 20px 40px' }}>
         {/* Header */}
         <div
           style={{
@@ -199,7 +200,7 @@ export default async function KoordinatorEvaluasiPage() {
               {session.name} · {halaqahList.length} halaqah binaan · {periode}
             </div>
           </div>
-          <div style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
+          <div className="no-print" style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
             <Link
               href="/evaluasi/koordinator/pengaturan"
               className="btn btn-ghost btn-sm"
@@ -207,14 +208,7 @@ export default async function KoordinatorEvaluasiPage() {
             >
               ⚙ Pengaturan
             </Link>
-            {/* Placeholder — wiring PDF di fase berikutnya. */}
-            <button
-              type="button"
-              className="btn btn-ghost btn-sm"
-              style={{ height: 40, padding: '0 14px' }}
-            >
-              Unduh rekap PDF
-            </button>
+            <PrintButton label="Unduh rekap PDF" />
           </div>
         </div>
 
@@ -376,6 +370,7 @@ export default async function KoordinatorEvaluasiPage() {
                             {showIngatkan && (
                               <button
                                 type="button"
+                                className="no-print"
                                 style={{
                                   display: 'inline-flex',
                                   alignItems: 'center',

@@ -3,6 +3,7 @@ import { notFound } from 'next/navigation';
 import { requireKoordinator } from '@/lib/session';
 import { supabaseAdmin } from '@/lib/supabase-admin';
 import { ALL_LAHN, AMBANG, columnsToCounts, initials, tierOf } from '@/lib/evaluasi';
+import { PrintButton } from '@/components/PrintButton';
 
 export const dynamic = 'force-dynamic';
 
@@ -127,10 +128,10 @@ export default async function KoordinatorHalaqahPage({
 
   return (
     <main style={{ minHeight: '100vh' }}>
-      <div style={{ maxWidth: 1180, margin: '0 auto', padding: '20px 20px 40px' }}>
+      <div className="eval-print-wrap" style={{ maxWidth: 1180, margin: '0 auto', padding: '20px 20px 40px' }}>
         <Link
           href="/evaluasi/koordinator"
-          className="btn btn-ghost btn-sm"
+          className="btn btn-ghost btn-sm no-print"
           style={{ height: 34, padding: '0 12px', fontSize: 12, textDecoration: 'none', marginBottom: 14 }}
         >
           ← Semua halaqah
@@ -155,11 +156,8 @@ export default async function KoordinatorHalaqahPage({
               Pengajar: {pengajar}
             </div>
           </div>
-          <div style={{ marginLeft: 'auto' }}>
-            {/* Placeholder — wiring laporan di fase berikutnya. */}
-            <button type="button" className="btn btn-ghost btn-sm" style={{ height: 40, padding: '0 14px' }}>
-              Unduh laporan halaqah
-            </button>
+          <div className="no-print" style={{ marginLeft: 'auto' }}>
+            <PrintButton label="Unduh laporan" />
           </div>
         </div>
 

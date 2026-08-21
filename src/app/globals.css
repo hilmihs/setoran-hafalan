@@ -896,6 +896,10 @@ dialog[open] {
 
   .cetak { max-width: none !important; margin: 0 !important; padding: 0 !important; }
 
+  /* Evaluasi Halaqah — container fixed-width (460 mobile / 1180 desktop)
+     dibiarkan penuh di kertas supaya tabel/rapor tak terpotong. */
+  .eval-print-wrap { max-width: none !important; padding: 0 !important; }
+
   .cetak table { width: 100%; border-collapse: collapse; page-break-inside: auto; }
   /* Header tabel berulang di tiap halaman — tabel ranking bisa >1 halaman. */
   .cetak thead { display: table-header-group; }
