@@ -1,0 +1,1000 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="" />
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+<style>
+  body { margin: 0; background: #f4f2ed; color: #1b1a17; font-family: "Plus Jakarta Sans", system-ui, sans-serif; -webkit-font-smoothing: antialiased; letter-spacing: -0.005em; }
+  a { color: oklch(0.46 0.09 165); }
+  a:hover { color: oklch(0.58 0.09 165); }
+  * { box-sizing: border-box; }
+  input[type="number"]::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+  @keyframes sheet-up { from { transform: translateY(100%); } to { transform: translateY(0); } }
+</style>
+</helmet>
+
+<div style="min-height: 100vh; background: #f4f2ed;">
+
+  <div style="display: flex; align-items: center; justify-content: center; gap: 8px; padding: 10px; background: #1b1a17;">
+    <span style="font-size: 11px; color: #a8a39a; font-weight: 600;">Pratinjau tampilan:</span>
+    <button onClick="{{ toPengajar }}" style="height: 28px; padding: 0 12px; border-radius: 999px; border: 1px solid transparent; font: inherit; font-size: 12px; font-weight: 700; cursor: pointer; background: {{ roleTabPengajarBg }}; color: {{ roleTabPengajarFg }};">Pengajar</button>
+    <button onClick="{{ toKoordinator }}" style="height: 28px; padding: 0 12px; border-radius: 999px; border: 1px solid transparent; font: inherit; font-size: 12px; font-weight: 700; cursor: pointer; background: {{ roleTabKoordinatorBg }}; color: {{ roleTabKoordinatorFg }};">Koordinator</button>
+  </div>
+
+  <sc-if value="{{ isPengajar }}" hint-placeholder-val="{{ true }}">
+  <div style="max-width: 460px; margin: 0 auto; min-height: calc(100vh - 46px); background: #f4f2ed; display: flex; flex-direction: column; box-shadow: 0 0 0 1px #e8e4dc;">
+
+    <!-- ===== P-HOME ===== -->
+    <sc-if value="{{ isPHome }}">
+      <div style="display: flex; align-items: center; gap: 10px; padding: 14px 16px; background: #ffffff; border-bottom: 1px solid #e8e4dc;">
+        <div style="width: 38px; height: 38px; border-radius: 50%; background: #efece5; color: #44423d; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 700;">UA</div>
+        <div style="flex: 1; min-width: 0;">
+          <div style="font-size: 15px; font-weight: 700; line-height: 1.2;">Ust. Abdullah</div>
+          <div style="font-size: 11px; color: #7a766f; margin-top: 1px;">Halaqah A-14 · Ikhwan · Mustawa 2 · 9 peserta</div>
+        </div>
+      </div>
+
+      <div style="padding: 18px 16px 0;">
+        <div style="font-size: 11px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: #7a766f; margin-bottom: 10px;">Mulai penilaian · 4 sesi tiap level</div>
+        <div style="display: flex; flex-direction: column; gap: 10px;">
+          <sc-for list="{{ homeCards }}" as="hc" hint-placeholder-count="3">
+            <button onClick="{{ hc.start }}" style="text-align: left; width: 100%; padding: 16px; border-radius: 14px; border: 1.5px solid {{ hc.border }}; background: {{ hc.bg }}; cursor: pointer; font: inherit; display: flex; align-items: center; gap: 14px;" style-active="transform: scale(0.98);">
+              <div style="width: 44px; height: 44px; border-radius: 12px; background: #ffffff; display: flex; align-items: center; justify-content: center; font-size: 20px; flex-shrink: 0;">{{ hc.icon }}</div>
+              <div style="flex: 1; min-width: 0;">
+                <div style="font-size: 15px; font-weight: 700; color: #1b1a17;">{{ hc.title }}</div>
+                <div style="font-size: 12px; color: #7a766f; margin-top: 2px;">{{ hc.desc }}</div>
+              </div>
+              <div style="display: flex; align-items: center; gap: 4px; flex-shrink: 0;">
+                <sc-for list="{{ hc.dots }}" as="d" hint-placeholder-count="4">
+                  <span style="width: 8px; height: 8px; border-radius: 50%; background: {{ d.color }};"></span>
+                </sc-for>
+              </div>
+              <span style="font-size: 18px; color: #a8a39a;">→</span>
+            </button>
+          </sc-for>
+        </div>
+      </div>
+
+      <div style="padding: 20px 16px 0;">
+        <div style="font-size: 11px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: #7a766f; margin-bottom: 10px;">Riwayat sesi</div>
+        <div style="background: #ffffff; border: 1px solid #e8e4dc; border-radius: 12px; overflow: hidden;">
+          <div style="display: flex; align-items: center; gap: 10px; padding: 12px 14px; border-bottom: 1px solid #e8e4dc;">
+            <span style="width: 8px; height: 8px; border-radius: 50%; background: oklch(0.62 0.11 150); flex-shrink: 0;"></span>
+            <div style="flex: 1;"><div style="font-size: 13px; font-weight: 600;">QN Sesi 3 — Juli 2026</div><div style="font-size: 11px; color: #a8a39a; margin-top: 1px;">9/9 peserta · rata-rata 79</div></div>
+            <button style="height: 28px; padding: 0 10px; border-radius: 7px; border: 1px solid #d8d3c8; background: #ffffff; font: inherit; font-size: 11px; font-weight: 600; color: #44423d; cursor: pointer;">PDF</button>
+          </div>
+          <div style="display: flex; align-items: center; gap: 10px; padding: 12px 14px;">
+            <span style="width: 8px; height: 8px; border-radius: 50%; background: oklch(0.62 0.11 150); flex-shrink: 0;"></span>
+            <div style="flex: 1;"><div style="font-size: 13px; font-weight: 600;">PB Sesi 2 — Juli 2026</div><div style="font-size: 11px; color: #a8a39a; margin-top: 1px;">9/9 peserta · rata-rata 74</div></div>
+            <button style="height: 28px; padding: 0 10px; border-radius: 7px; border: 1px solid #d8d3c8; background: #ffffff; font: inherit; font-size: 11px; font-weight: 600; color: #44423d; cursor: pointer;">PDF</button>
+          </div>
+        </div>
+      </div>
+      <div style="height: 24px;"></div>
+    </sc-if>
+
+    <!-- ===== P-SETUP ===== -->
+    <sc-if value="{{ isPSetup }}">
+      <div style="display: flex; align-items: center; gap: 10px; padding: 12px 16px; background: #ffffff; border-bottom: 1px solid #e8e4dc;">
+        <button onClick="{{ backHome }}" style="width: 32px; height: 32px; border-radius: 8px; border: 1px solid #e8e4dc; background: #ffffff; color: #44423d; font-size: 15px; cursor: pointer;">←</button>
+        <div>
+          <div style="font-size: 15px; font-weight: 700;">{{ setup.judul }}</div>
+          <div style="font-size: 11px; color: #7a766f;">{{ setup.sesiLabel }}</div>
+        </div>
+      </div>
+
+      <div style="padding: 16px; display: flex; flex-direction: column; gap: 14px;">
+        <div style="background: #ffffff; border: 1px solid #e8e4dc; border-radius: 12px; padding: 14px;">
+          <div style="font-size: 10px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; color: #7a766f; margin-bottom: 6px;">Halaqah</div>
+          <div style="font-size: 14px; font-weight: 700;">A-14 · Ikhwan · Mustawa 2</div>
+          <div style="font-size: 12px; color: #7a766f; margin-top: 2px;">9 peserta terdaftar</div>
+        </div>
+
+        <div style="background: #ffffff; border: 1px solid #e8e4dc; border-radius: 12px; padding: 14px;">
+          <div style="font-size: 10px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; color: #7a766f; margin-bottom: 10px;">Evaluasi ke berapa?</div>
+          <div style="display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 8px;">
+            <sc-for list="{{ setup.sesiOptions }}" as="o" hint-placeholder-count="4">
+              <button onClick="{{ o.pick }}" style="height: 44px; border-radius: 8px; border: 1.5px solid {{ o.bg }}; background: {{ o.bg }}; color: {{ o.fg }}; font: inherit; font-size: 14px; font-weight: 700; cursor: pointer;">Sesi {{ o.n }}</button>
+            </sc-for>
+          </div>
+        </div>
+
+        <sc-if value="{{ setup.isUjian }}">
+          <div style="background: oklch(0.96 0.035 85); border: 1px solid oklch(0.88 0.07 82); border-radius: 12px; padding: 14px;">
+            <div style="font-size: 12px; font-weight: 700; color: oklch(0.50 0.09 70);">Ambang kelulusan: 65 / 100</div>
+            <div style="font-size: 11px; color: oklch(0.50 0.09 70); opacity: 0.85; margin-top: 3px;">Ditetapkan koordinator untuk Mustawa 2. Skor di bawah ambang direkomendasikan mengulang.</div>
+          </div>
+        </sc-if>
+
+        <div style="background: #ffffff; border: 1px solid #e8e4dc; border-radius: 12px; padding: 14px;">
+          <div style="font-size: 10px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; color: #7a766f; margin-bottom: 10px;">Materi · surat &amp; ayat</div>
+          <div style="margin-bottom: 10px;">
+            <div style="font-size: 12px; font-weight: 600; color: #44423d; margin-bottom: 5px;">Surat</div>
+            <select style="width: 100%; height: 44px; padding: 0 14px; background: #ffffff; border: 1px solid #d8d3c8; border-radius: 8px; font: inherit; font-size: 14px; color: #1b1a17;">
+              <option>Al-Baqarah</option>
+              <option>Ali 'Imran</option>
+              <option>An-Nisa</option>
+            </select>
+          </div>
+          <div style="display: flex; gap: 10px;">
+            <div style="flex: 1;">
+              <div style="font-size: 12px; font-weight: 600; color: #44423d; margin-bottom: 5px;">Ayat mulai</div>
+              <input type="number" value="{{ setup.ayatMulai }}" onChange="{{ setup.setAyatMulai }}" style="width: 100%; height: 44px; padding: 0 14px; background: #ffffff; border: 1px solid #d8d3c8; border-radius: 8px; font: inherit; font-size: 14px; color: #1b1a17; font-variant-numeric: tabular-nums;" />
+            </div>
+            <div style="flex: 1;">
+              <div style="font-size: 12px; font-weight: 600; color: #44423d; margin-bottom: 5px;">Ayat selesai</div>
+              <input type="number" value="{{ setup.ayatSelesai }}" onChange="{{ setup.setAyatSelesai }}" style="width: 100%; height: 44px; padding: 0 14px; background: #ffffff; border: 1px solid #d8d3c8; border-radius: 8px; font: inherit; font-size: 14px; color: #1b1a17; font-variant-numeric: tabular-nums;" />
+            </div>
+          </div>
+          <div style="font-size: 11px; color: #a8a39a; margin-top: 8px;">Default mengikuti silabus pertemuan bulan ini — ubah bila perlu.</div>
+        </div>
+      </div>
+
+      <div style="flex: 1;"></div>
+      <div style="padding: 10px 16px 20px;">
+        <button onClick="{{ setup.lanjut }}" style="width: 100%; height: 50px; border-radius: 8px; border: none; background: #1b1a17; color: #ffffff; font: inherit; font-size: 15px; font-weight: 600; cursor: pointer;" style-hover="background: #2a2722;">Lanjut ke daftar peserta →</button>
+      </div>
+    </sc-if>
+
+    <!-- ===== P-DAFTAR ===== -->
+    <sc-if value="{{ isPDaftar }}">
+      <div style="display: flex; align-items: center; gap: 10px; padding: 12px 16px; background: #ffffff; border-bottom: 1px solid #e8e4dc;">
+        <button onClick="{{ backSetup }}" style="width: 32px; height: 32px; border-radius: 8px; border: 1px solid #e8e4dc; background: #ffffff; color: #44423d; font-size: 15px; cursor: pointer;">←</button>
+        <div style="flex: 1;">
+          <div style="font-size: 15px; font-weight: 700;">{{ daftar.judul }}</div>
+          <div style="font-size: 11px; color: #7a766f;">{{ daftar.sub }}</div>
+        </div>
+        <button style="height: 34px; padding: 0 12px; border-radius: 8px; border: 1px solid #d8d3c8; background: #ffffff; font: inherit; font-size: 12px; font-weight: 600; color: #44423d; cursor: pointer; white-space: nowrap;">Unduh PDF</button>
+      </div>
+
+      <div style="padding: 12px 16px 0;">
+        <div style="font-size: 11px; color: #7a766f; line-height: 1.4;">Semua peserta dipilih otomatis. Ketuk untuk lepas centang bila tidak hadir hari ini.</div>
+      </div>
+
+      <div style="padding: 12px 16px 0; display: flex; flex-direction: column; gap: 8px;">
+        <sc-for list="{{ daftar.items }}" as="p" hint-placeholder-count="9">
+          <div style="display: flex; align-items: center; gap: 12px; background: #ffffff; border: 1px solid #e8e4dc; border-radius: 12px; padding: 10px 12px; opacity: {{ p.rowOpacity }};">
+            <button onClick="{{ p.toggle }}" style="width: 22px; height: 22px; border-radius: 6px; border: 1.5px solid {{ p.checkBorder }}; background: {{ p.checkBg }}; color: #ffffff; font-size: 13px; font-weight: 800; display: flex; align-items: center; justify-content: center; cursor: pointer; flex-shrink: 0;">{{ p.checkMark }}</button>
+            <div style="width: 32px; height: 32px; border-radius: 50%; background: #efece5; color: #44423d; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; flex-shrink: 0;">{{ p.initial }}</div>
+            <button onClick="{{ p.buka }}" style="flex: 1; min-width: 0; text-align: left; background: none; border: none; font: inherit; cursor: pointer; padding: 0;">
+              <div style="font-size: 13px; font-weight: 600; color: #1b1a17;">{{ p.nama }}{{ p.ketua }}</div>
+              <div style="font-size: 11px; color: #a8a39a; margin-top: 1px;">{{ p.statusText }}</div>
+            </button>
+            <sc-if value="{{ p.showSkor }}">
+              <span style="font-size: 13px; font-weight: 800; color: {{ p.skorColor }}; font-variant-numeric: tabular-nums;">{{ p.skor }}</span>
+            </sc-if>
+            <span style="font-size: 15px; color: #d8d3c8;">›</span>
+          </div>
+        </sc-for>
+      </div>
+
+      <div style="flex: 1;"></div>
+      <div style="position: sticky; bottom: 0; background: #ffffff; border-top: 1px solid #e8e4dc; padding: 12px 16px 18px; margin-top: 16px;">
+        <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px;">
+          <div style="flex: 1; height: 6px; border-radius: 3px; background: #e8e4dc; overflow: hidden;"><div style="height: 100%; border-radius: 3px; background: oklch(0.58 0.09 165); width: {{ daftar.progressPct }}%;"></div></div>
+          <span style="font-size: 12px; font-weight: 700; color: #44423d; white-space: nowrap;">{{ daftar.selesai }}/{{ daftar.total }} selesai</span>
+        </div>
+        <button onClick="{{ daftar.mulai }}" style="width: 100%; height: 50px; border-radius: 8px; border: none; background: #1b1a17; color: #ffffff; font: inherit; font-size: 15px; font-weight: 600; cursor: pointer;">{{ daftar.tombolLabel }}</button>
+      </div>
+    </sc-if>
+
+    <!-- ===== P-NILAI ===== -->
+    <sc-if value="{{ isPNilai }}">
+      <div style="display: flex; align-items: center; gap: 10px; padding: 12px 16px; background: #ffffff; border-bottom: 1px solid #e8e4dc; position: sticky; top: 0; z-index: 5;">
+        <button onClick="{{ backDaftar }}" style="width: 32px; height: 32px; border-radius: 8px; border: 1px solid #e8e4dc; background: #ffffff; color: #44423d; font-size: 15px; cursor: pointer; flex-shrink: 0;">←</button>
+        <div style="flex: 1; min-width: 0;">
+          <div style="font-size: 14px; font-weight: 700; line-height: 1.2;">{{ nilai.nama }}</div>
+          <div style="font-size: 11px; color: #7a766f; margin-top: 1px;">Peserta {{ nilai.pos }} dari {{ nilai.totalPeserta }}</div>
+        </div>
+        <div style="display: flex; align-items: center; gap: 5px; font-size: 11px; font-weight: 600; color: oklch(0.50 0.09 70); background: oklch(0.96 0.035 85); border: 1px solid oklch(0.88 0.07 82); padding: 4px 9px; border-radius: 999px; white-space: nowrap;">
+          <span style="width: 6px; height: 6px; border-radius: 50%; background: oklch(0.78 0.10 80);"></span>Di HP
+        </div>
+      </div>
+
+      <div style="padding: 14px 16px 0;">
+        <div style="border-radius: 20px; padding: 16px; background: linear-gradient(150deg, oklch(0.97 0.02 165), oklch(0.945 0.03 165)); border: 1px solid oklch(0.88 0.045 165);">
+          <div style="display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 14px;">
+            <div>
+              <div style="font-size: 9px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: oklch(0.46 0.09 165);">Sedang di ayat</div>
+              <div style="font-size: 15px; font-weight: 800; margin-top: 2px; color: #1b1a17;">Al-Baqarah <span style="font-variant-numeric: tabular-nums;">{{ nilai.ayat }}</span></div>
+            </div>
+            <div style="display: flex; gap: 6px;">
+              <button onClick="{{ nilai.prevAyat }}" style="width: 34px; height: 34px; border-radius: 10px; border: none; background: #ffffff; font: inherit; font-size: 16px; font-weight: 700; color: #44423d; cursor: pointer; box-shadow: 0 1px 2px rgba(20,18,14,0.08);" style-active="transform: scale(0.92);">−</button>
+              <button onClick="{{ nilai.nextAyat }}" style="width: 34px; height: 34px; border-radius: 10px; border: none; background: #1b1a17; font: inherit; font-size: 16px; font-weight: 700; color: #ffffff; cursor: pointer;" style-active="transform: scale(0.92);">+</button>
+            </div>
+          </div>
+          <div style="position: relative; height: 4px; border-radius: 2px; background: oklch(0.88 0.045 165); margin-bottom: 16px;">
+            <div style="position: absolute; top: -3px; width: 10px; height: 10px; border-radius: 50%; background: #1b1a17; border: 2px solid #ffffff; left: {{ nilai.ayatPct }}%; transform: translateX(-50%);"></div>
+          </div>
+          <div style="display: flex; align-items: center; gap: 16px;">
+            <div style="position: relative; width: 84px; height: 84px; border-radius: 50%; flex-shrink: 0; background: {{ nilai.ringGradient }}; display: flex; align-items: center; justify-content: center;">
+              <div style="width: 68px; height: 68px; border-radius: 50%; background: #fbfaf7; display: flex; flex-direction: column; align-items: center; justify-content: center;">
+                <span style="font-size: 21px; font-weight: 800; line-height: 1; color: {{ nilai.skorColor }}; font-variant-numeric: tabular-nums;">{{ nilai.skor }}</span>
+                <span style="font-size: 9px; font-weight: 700; color: #a8a39a;">/ 100</span>
+              </div>
+            </div>
+            <div style="flex: 1; min-width: 0;">
+              <div style="font-size: 15px; font-weight: 800; color: {{ nilai.skorColor }};">{{ nilai.tierLabel }}</div>
+              <div style="font-size: 11px; color: #5c5950; margin-top: 2px;">{{ nilai.hitungan }}</div>
+              <div style="font-size: 10px; color: #7a766f; margin-top: 4px;">Ambang lulus: {{ nilai.ambang }} / 100</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <sc-if value="{{ nilai.isUjian }}">
+        <div style="margin: 14px 16px 0; padding: 12px 14px; border-radius: 12px; background: {{ nilai.lulusBg }}; border: 1px solid {{ nilai.lulusBorder }}; display: flex; align-items: center; gap: 10px;">
+          <span style="font-size: 13px; font-weight: 800; color: {{ nilai.lulusColor }};">Rekomendasi: {{ nilai.lulusLabel }}</span>
+          <label style="margin-left: auto; display: flex; align-items: center; gap: 6px; font-size: 11px; color: {{ nilai.lulusColor }}; cursor: pointer;">
+            <input type="checkbox" checked="{{ nilai.confirmed }}" onChange="{{ nilai.toggleConfirm }}" />
+            Konfirmasi
+          </label>
+        </div>
+      </sc-if>
+
+      <div style="padding: 18px 16px 0;">
+        <div style="font-size: 11px; color: #a8a39a; margin-bottom: 10px;">Ketuk kartu setiap ada kesalahan · ketuk angka untuk mengoreksi manual</div>
+        <div style="font-size: 11px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: oklch(0.46 0.14 25); margin-bottom: 8px;">Lahn Jaliy <span style="font-weight: 500; color: #a8a39a; text-transform: none;">· −6 / kesalahan</span></div>
+        <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px;">
+          <sc-for list="{{ nilai.jaliy }}" as="c" hint-placeholder-count="4">
+            <div onClick="{{ c.tap }}" style="position: relative; min-height: 104px; border-radius: 16px; padding: 14px 8px 10px; background: {{ c.tileBg }}; border: 1.5px solid {{ c.tileBorder }}; display: flex; flex-direction: column; align-items: center; justify-content: space-between; gap: 6px; cursor: pointer;" style-active="transform: scale(0.95);">
+              <sc-if value="{{ c.showMinus }}">
+                <button onClick="{{ c.minus }}" style="position: absolute; top: -14px; left: -14px; width: 42px; height: 42px; border-radius: 50%; background: #ffffff; border: 2.5px solid {{ c.tileBorder }}; color: {{ c.textColor }}; font-size: 22px; font-weight: 800; display: flex; align-items: center; justify-content: center; line-height: 1; cursor: pointer; box-shadow: 0 2px 6px rgba(20,18,14,0.18); z-index: 2;" style-active="transform: scale(0.88);">−</button>
+              </sc-if>
+              <span style="font-size: 11px; font-weight: 700; line-height: 1.25; color: {{ c.textColor }}; text-align: center;">{{ c.label }}</span>
+              <input type="text" inputMode="numeric" pattern="[0-9]*" value="{{ c.count }}" onClick="{{ c.stop }}" onChange="{{ c.setCount }}" style="width: 52px; height: 34px; text-align: center; font-size: 20px; font-weight: 800; color: {{ c.textColor }}; background: #ffffff; border: 1.5px solid {{ c.tileBorder }}; border-radius: 8px; outline: none; font-variant-numeric: tabular-nums; cursor: text;" style-focus="border-color: {{ c.textColor }}; box-shadow: 0 0 0 3px rgba(0,0,0,0.06);" />
+            </div>
+          </sc-for>
+        </div>
+      </div>
+
+      <div style="padding: 16px 16px 0;">
+        <div style="font-size: 11px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: oklch(0.48 0.10 75); margin-bottom: 8px;">Lahn Khafiy <span style="font-weight: 500; color: #a8a39a; text-transform: none;">· −2 / kesalahan</span></div>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+          <sc-for list="{{ nilai.khafiy }}" as="c" hint-placeholder-count="7">
+            <div onClick="{{ c.tap }}" style="position: relative; min-height: 62px; border-radius: 14px; padding: 8px 12px; background: {{ c.tileBg }}; border: 1.5px solid {{ c.tileBorder }}; display: flex; align-items: center; gap: 8px; cursor: pointer;" style-active="transform: scale(0.96);">
+              <sc-if value="{{ c.showMinus }}">
+                <button onClick="{{ c.minus }}" style="position: absolute; top: -12px; left: -12px; width: 36px; height: 36px; border-radius: 50%; background: #ffffff; border: 2.5px solid {{ c.tileBorder }}; color: {{ c.textColor }}; font-size: 19px; font-weight: 800; display: flex; align-items: center; justify-content: center; line-height: 1; cursor: pointer; box-shadow: 0 2px 6px rgba(20,18,14,0.18); z-index: 2;" style-active="transform: scale(0.88);">−</button>
+              </sc-if>
+              <span style="flex: 1; font-size: 12px; font-weight: 600; line-height: 1.25; color: {{ c.textColor }};">{{ c.label }}</span>
+              <input type="text" inputMode="numeric" pattern="[0-9]*" value="{{ c.count }}" onClick="{{ c.stop }}" onChange="{{ c.setCount }}" style="width: 38px; height: 30px; text-align: center; font-size: 15px; font-weight: 800; color: {{ c.textColor }}; background: #ffffff; border: 1.5px solid {{ c.tileBorder }}; border-radius: 7px; outline: none; font-variant-numeric: tabular-nums; flex-shrink: 0; cursor: text;" style-focus="border-color: {{ c.textColor }}; box-shadow: 0 0 0 3px rgba(0,0,0,0.06);" />
+            </div>
+          </sc-for>
+        </div>
+      </div>
+
+      <div style="padding: 18px 16px 0;">
+        <div style="font-size: 10px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; color: #7a766f; margin-bottom: 6px;">Catatan untuk peserta</div>
+        <textarea placeholder="Mad wajib di ayat 148 masih pendek. Latih lagi 5× sebelum pertemuan depan." value="{{ nilai.catatan }}" onChange="{{ nilai.setCatatan }}" style="width: 100%; min-height: 66px; padding: 10px 12px; background: #ffffff; border: 1px solid #d8d3c8; border-radius: 8px; font: inherit; font-size: 13px; line-height: 1.45; color: #1b1a17; outline: none; resize: none;"></textarea>
+      </div>
+
+      <div style="height: 110px;"></div>
+      <div style="position: sticky; bottom: 0; background: #ffffff; border-top: 1px solid #e8e4dc; padding: 10px 16px 14px;">
+        <div style="display: flex; gap: 8px;">
+          <button onClick="{{ nilai.prevPeserta }}" disabled="{{ nilai.isFirst }}" style="width: 50px; height: 48px; border-radius: 8px; border: 1px solid #d8d3c8; background: #ffffff; font: inherit; font-size: 16px; color: #1b1a17; cursor: pointer;" style-hover="background: #faf8f4;">←</button>
+          <button onClick="{{ nilai.simpanLanjut }}" disabled="{{ nilai.simpanDisabled }}" style="flex: 1; height: 48px; border-radius: 8px; border: none; background: #1b1a17; color: #ffffff; font: inherit; font-size: 15px; font-weight: 600; cursor: pointer;" style-hover="background: #2a2722;">{{ nilai.simpanLabel }}</button>
+        </div>
+      </div>
+    </sc-if>
+
+    <!-- ===== P-RINGKASAN ===== -->
+    <sc-if value="{{ isPRingkasan }}">
+      <div style="display: flex; align-items: center; gap: 10px; padding: 12px 16px; background: #ffffff; border-bottom: 1px solid #e8e4dc;">
+        <button onClick="{{ backDaftar }}" style="width: 32px; height: 32px; border-radius: 8px; border: 1px solid #e8e4dc; background: #ffffff; color: #44423d; font-size: 15px; cursor: pointer;">←</button>
+        <div style="font-size: 15px; font-weight: 700;">Ringkasan Sesi</div>
+      </div>
+
+      <div style="padding: 14px 16px 0; display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px;">
+        <div style="background: #ffffff; border: 1px solid #e8e4dc; border-radius: 12px; padding: 12px; text-align: center;">
+          <div style="font-size: 22px; font-weight: 800; line-height: 1;">{{ ringkasan.rata }}</div>
+          <div style="font-size: 10px; color: #7a766f; margin-top: 4px; font-weight: 600;">Rata-rata</div>
+        </div>
+        <div style="background: oklch(0.96 0.035 150); border: 1px solid oklch(0.85 0.06 150); border-radius: 12px; padding: 12px; text-align: center;">
+          <div style="font-size: 22px; font-weight: 800; line-height: 1; color: oklch(0.40 0.10 150);">{{ ringkasan.standarCount }}</div>
+          <div style="font-size: 10px; color: oklch(0.40 0.10 150); margin-top: 4px; font-weight: 600;">≥ Standar</div>
+        </div>
+        <div style="background: oklch(0.96 0.03 25); border: 1px solid oklch(0.86 0.07 25); border-radius: 12px; padding: 12px; text-align: center;">
+          <div style="font-size: 22px; font-weight: 800; line-height: 1; color: oklch(0.46 0.14 25);">{{ ringkasan.bawahCount }}</div>
+          <div style="font-size: 10px; color: oklch(0.46 0.14 25); margin-top: 4px; font-weight: 600;">Di bawah</div>
+        </div>
+      </div>
+
+      <div style="padding: 16px 16px 0; display: flex; flex-direction: column; gap: 8px;">
+        <sc-for list="{{ ringkasan.items }}" as="p" hint-placeholder-count="9">
+          <button onClick="{{ p.lihat }}" style="display: flex; align-items: center; gap: 12px; background: #ffffff; border: 1px solid #e8e4dc; border-radius: 12px; padding: 10px 12px; width: 100%; text-align: left; font: inherit; cursor: pointer;">
+            <div style="width: 32px; height: 32px; border-radius: 50%; background: #efece5; color: #44423d; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; flex-shrink: 0;">{{ p.initial }}</div>
+            <div style="flex: 1; min-width: 0;">
+              <div style="font-size: 13px; font-weight: 600; color: #1b1a17;">{{ p.nama }}</div>
+              <div style="font-size: 11px; color: #a8a39a; margin-top: 1px;">{{ p.tierLabel }}</div>
+            </div>
+            <span style="font-size: 16px; font-weight: 800; color: {{ p.skorColor }}; font-variant-numeric: tabular-nums;">{{ p.skor }}</span>
+          </button>
+        </sc-for>
+      </div>
+
+      <div style="padding: 18px 16px 0; display: flex; flex-direction: column; gap: 8px;">
+        <button onClick="{{ ringkasan.openWa }}" style="width: 100%; height: 46px; border-radius: 8px; border: none; background: oklch(0.58 0.12 155); color: #ffffff; font: inherit; font-size: 14px; font-weight: 600; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px;">Rekap teks untuk WhatsApp</button>
+        <button style="width: 100%; height: 46px; border-radius: 8px; border: 1px solid #d8d3c8; background: #ffffff; font: inherit; font-size: 14px; font-weight: 600; color: #1b1a17; cursor: pointer;" style-hover="background: #faf8f4;">Unduh PDF rekap sesi</button>
+      </div>
+
+      <div style="flex: 1;"></div>
+      <div style="position: sticky; bottom: 0; background: #ffffff; border-top: 1px solid #e8e4dc; padding: 12px 16px 18px; margin-top: 18px;">
+        <button onClick="{{ ringkasan.kirim }}" disabled="{{ ringkasan.kirimDisabled }}" style="width: 100%; height: 50px; border-radius: 8px; border: none; background: #1b1a17; color: #ffffff; font: inherit; font-size: 15px; font-weight: 600; cursor: pointer;">{{ ringkasan.kirimLabel }}</button>
+        <div style="text-align: center; font-size: 11px; color: #a8a39a; margin-top: 8px;">{{ ringkasan.offlineNote }}</div>
+      </div>
+
+      <sc-if value="{{ ringkasan.waOpen }}">
+        <div onClick="{{ ringkasan.closeWa }}" style="position: fixed; inset: 0; background: rgba(20,18,14,0.42); z-index: 20;"></div>
+        <div style="position: fixed; left: 50%; bottom: 0; transform: translateX(-50%); width: 100%; max-width: 460px; z-index: 21; background: #ffffff; border-top-left-radius: 22px; border-top-right-radius: 22px; padding: 16px; box-shadow: 0 -12px 40px -12px rgba(20,18,14,0.3); animation: sheet-up 0.18s ease-out;">
+          <div style="width: 38px; height: 4px; border-radius: 2px; background: #d8d3c8; margin: 0 auto 14px;"></div>
+          <div style="font-size: 14px; font-weight: 800; margin-bottom: 10px;">Rekap untuk WhatsApp</div>
+          <div style="background: #faf8f4; border: 1px solid #e8e4dc; border-radius: 10px; padding: 12px; font-size: 12px; line-height: 1.7; color: #44423d; white-space: pre-wrap; margin-bottom: 12px;">{{ ringkasan.waText }}</div>
+          <div style="display: flex; gap: 8px;">
+            <button onClick="{{ ringkasan.closeWa }}" style="height: 46px; padding: 0 16px; border-radius: 8px; border: 1px solid #d8d3c8; background: #ffffff; font: inherit; font-size: 13px; font-weight: 600; color: #1b1a17; cursor: pointer;">Tutup</button>
+            <button style="flex: 1; height: 46px; border-radius: 8px; border: none; background: oklch(0.58 0.12 155); color: #ffffff; font: inherit; font-size: 14px; font-weight: 600; cursor: pointer;">Buka WhatsApp</button>
+          </div>
+        </div>
+      </sc-if>
+    </sc-if>
+
+    <!-- ===== P-RAPOR ===== -->
+    <sc-if value="{{ isPRapor }}">
+      <div style="display: flex; align-items: center; gap: 10px; padding: 12px 16px; background: #ffffff; border-bottom: 1px solid #e8e4dc;">
+        <button onClick="{{ backRingkasan }}" style="width: 32px; height: 32px; border-radius: 8px; border: 1px solid #e8e4dc; background: #ffffff; color: #44423d; font-size: 15px; cursor: pointer;">←</button>
+        <div style="font-size: 15px; font-weight: 700;">Rapor Peserta</div>
+        <button style="margin-left: auto; height: 36px; padding: 0 14px; border-radius: 8px; border: none; background: oklch(0.58 0.09 165); font: inherit; font-size: 12.5px; font-weight: 700; color: #ffffff; cursor: pointer;" style-hover="background: oklch(0.46 0.09 165);">⬇ Unduh PDF</button>
+      </div>
+
+      <div style="padding: 16px;">
+        <div style="background: #ffffff; border: 1px solid #e8e4dc; border-radius: 16px; padding: 22px 18px; box-shadow: 0 1px 2px rgba(20,18,14,0.04), 0 6px 24px -8px rgba(20,18,14,0.10);">
+          <div style="text-align: center; border-bottom: 1px solid #e8e4dc; padding-bottom: 14px; margin-bottom: 14px;">
+            <div style="font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: #7a766f;">Rapor Evaluasi</div>
+            <div style="font-size: 17px; font-weight: 800; margin-top: 4px;">{{ rapor.nama }}</div>
+            <div style="font-size: 12px; color: #7a766f; margin-top: 2px;">{{ rapor.meta }}</div>
+          </div>
+
+          <sc-if value="{{ rapor.isUjian }}">
+            <div style="text-align: center; padding: 10px; border-radius: 10px; background: {{ rapor.lulusBg }}; margin-bottom: 14px;">
+              <span style="font-size: 18px; font-weight: 800; color: {{ rapor.lulusColor }}; letter-spacing: 0.04em;">{{ rapor.lulusLabel }}</span>
+            </div>
+          </sc-if>
+
+          <div style="display: flex; align-items: center; justify-content: center; gap: 16px; margin-bottom: 16px;">
+            <div style="text-align: center;">
+              <div style="font-size: 40px; font-weight: 800; color: {{ rapor.skorColor }}; line-height: 1;">{{ rapor.skor }}</div>
+              <div style="font-size: 11px; color: #a8a39a; font-weight: 600; margin-top: 2px;">dari 100 · {{ rapor.tierLabel }}</div>
+            </div>
+          </div>
+
+          <div style="display: flex; flex-direction: column; gap: 12px; margin-bottom: 18px;">
+            <sc-for list="{{ rapor.tracks }}" as="t" hint-placeholder-count="3">
+              <div style="background: #faf8f4; border: 1px solid #e8e4dc; border-radius: 14px; padding: 14px;">
+                <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 6px;">
+                  <span style="font-size: 12.5px; font-weight: 800; color: #1b1a17;">{{ t.label }}</span>
+                  <span style="margin-left: auto; font-size: 11px; font-weight: 700; color: {{ t.trendColor }};">{{ t.trendArrow }} rata-rata {{ t.avg }}</span>
+                </div>
+                <svg viewBox="0 0 {{ t.chartW }} {{ t.chartH }}" style="width: 100%; height: 88px; display: block; margin: 4px 0 2px;">
+                  <line x1="{{ t.padX }}" y1="{{ t.ambangY }}" x2="{{ t.chartPadRight }}" y2="{{ t.ambangY }}" stroke="#d8d3c8" stroke-width="1.5" stroke-dasharray="3,3" />
+                  <polyline points="{{ t.linePoints }}" fill="none" stroke="oklch(0.58 0.09 165)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" />
+                  <sc-for list="{{ t.sessions }}" as="sess" hint-placeholder-count="4">
+                    <circle cx="{{ sess.cx }}" cy="{{ sess.cy }}" r="{{ sess.r }}" fill="{{ sess.dotFill }}" stroke="#ffffff" stroke-width="1.5" />
+                  </sc-for>
+                </svg>
+                <div style="display: flex; justify-content: space-between; padding: 0 8px; margin-bottom: 10px;">
+                  <sc-for list="{{ t.sessions }}" as="sess" hint-placeholder-count="4">
+                    <span style="font-size: 9px; color: #a8a39a; font-weight: 600; width: 30px; text-align: center;">S{{ sess.no }}·{{ sess.score }}</span>
+                  </sc-for>
+                </div>
+                <div style="font-size: 11px; color: #5c5950; line-height: 1.4; border-top: 1px solid #e8e4dc; padding-top: 8px;">{{ t.insight }}</div>
+              </div>
+            </sc-for>
+          </div>
+
+          <div style="font-size: 10px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; color: #7a766f; margin-bottom: 8px;">Rincian kesalahan sesi ini</div>
+          <div style="display: flex; flex-direction: column; gap: 5px; margin-bottom: 16px;">
+            <sc-for list="{{ rapor.rincian }}" as="r" hint-placeholder-count="10">
+              <div style="display: flex; align-items: center; gap: 8px; font-size: 12px; padding: 5px 0; border-bottom: 1px solid #f4f2ed;">
+                <span style="flex: 1; color: #44423d;">{{ r.label }}</span>
+                <span style="font-size: 10px; font-weight: 700; color: {{ r.tagColor }};">{{ r.tag }}</span>
+                <span style="font-weight: 700; color: #1b1a17; font-variant-numeric: tabular-nums; min-width: 16px; text-align: right;">{{ r.count }}</span>
+              </div>
+            </sc-for>
+          </div>
+
+          <div style="font-size: 10px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; color: #7a766f; margin-bottom: 6px;">Catatan pengajar</div>
+          <div style="font-size: 12.5px; line-height: 1.55; color: #44423d; background: #faf8f4; border: 1px solid #e8e4dc; border-radius: 8px; padding: 10px 12px; margin-bottom: 18px;">{{ rapor.catatan }}</div>
+
+          <div style="display: flex; justify-content: space-between; gap: 12px; padding-top: 14px; border-top: 1px solid #e8e4dc;">
+            <div style="text-align: center; flex: 1;"><div style="height: 36px;"></div><div style="font-size: 10px; color: #a8a39a; border-top: 1px solid #d8d3c8; padding-top: 4px;">Pengajar</div></div>
+            <div style="text-align: center; flex: 1;"><div style="height: 36px;"></div><div style="font-size: 10px; color: #a8a39a; border-top: 1px solid #d8d3c8; padding-top: 4px;">Koordinator</div></div>
+          </div>
+        </div>
+      </div>
+      <div style="height: 16px;"></div>
+    </sc-if>
+
+  </div>
+  </sc-if>
+
+  <!-- ===================== KOORDINATOR ===================== -->
+  <sc-if value="{{ isKoordinator }}" hint-placeholder-val="{{ false }}">
+  <div style="max-width: 1180px; margin: 0 auto; padding: 20px 20px 40px;">
+
+    <!-- ===== K-HOME ===== -->
+    <sc-if value="{{ isKHome }}">
+      <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 18px; flex-wrap: wrap;">
+        <div>
+          <div style="font-size: 20px; font-weight: 700;">Dashboard Koordinator</div>
+          <div style="font-size: 13px; color: #7a766f; margin-top: 2px;">Ustzh. Rania · 6 halaqah binaan · Evaluasi QN Sesi 4 · Agustus 2026</div>
+        </div>
+        <div style="margin-left: auto; display: flex; gap: 8px;">
+          <button onClick="{{ goKSettings }}" style="height: 40px; padding: 0 14px; border-radius: 8px; border: 1px solid #d8d3c8; background: #ffffff; font: inherit; font-size: 13px; font-weight: 600; color: #1b1a17; cursor: pointer;" style-hover="background: #faf8f4;">⚙ Pengaturan</button>
+          <button style="height: 40px; padding: 0 14px; border-radius: 8px; border: 1px solid #d8d3c8; background: #ffffff; font: inherit; font-size: 13px; font-weight: 600; color: #1b1a17; cursor: pointer;" style-hover="background: #faf8f4;">Unduh rekap PDF</button>
+        </div>
+      </div>
+
+      <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 20px;">
+        <div style="background: #ffffff; border: 1px solid #e8e4dc; border-radius: 12px; padding: 14px 16px;">
+          <div style="font-size: 26px; font-weight: 700; line-height: 1;">6</div>
+          <div style="font-size: 12px; color: #7a766f; margin-top: 4px;">Halaqah binaan</div>
+        </div>
+        <div style="background: #ffffff; border: 1px solid #e8e4dc; border-radius: 12px; padding: 14px 16px;">
+          <div style="font-size: 26px; font-weight: 700; line-height: 1;">32<span style="font-size: 15px; color: #a8a39a;">/51</span></div>
+          <div style="font-size: 12px; color: #7a766f; margin-top: 4px;">Peserta sudah dinilai</div>
+        </div>
+        <div style="background: #ffffff; border: 1px solid #e8e4dc; border-radius: 12px; padding: 14px 16px;">
+          <div style="font-size: 26px; font-weight: 700; line-height: 1; color: oklch(0.40 0.10 150);">75</div>
+          <div style="font-size: 12px; color: #7a766f; margin-top: 4px;">Rata-rata skor</div>
+        </div>
+        <div style="background: #ffffff; border: 1px solid #e8e4dc; border-radius: 12px; padding: 14px 16px;">
+          <div style="font-size: 26px; font-weight: 700; line-height: 1; color: oklch(0.46 0.14 25);">6</div>
+          <div style="font-size: 12px; color: #7a766f; margin-top: 4px;">Peserta perlu perhatian</div>
+        </div>
+      </div>
+
+      <div style="background: #ffffff; border: 1px solid #e8e4dc; border-radius: 12px; overflow: hidden;">
+        <table style="width: 100%; border-collapse: separate; border-spacing: 0; font-size: 13px;">
+          <thead>
+            <tr>
+              <th style="text-align: left; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; color: #7a766f; padding: 10px 14px; background: #faf8f4; border-bottom: 1px solid #e8e4dc;">Halaqah</th>
+              <th style="text-align: left; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; color: #7a766f; padding: 10px 14px; background: #faf8f4; border-bottom: 1px solid #e8e4dc;">Pengajar</th>
+              <th style="text-align: left; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; color: #7a766f; padding: 10px 14px; background: #faf8f4; border-bottom: 1px solid #e8e4dc;">Kelengkapan</th>
+              <th style="text-align: center; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; color: #7a766f; padding: 10px 14px; background: #faf8f4; border-bottom: 1px solid #e8e4dc;">Rata-rata</th>
+              <th style="text-align: center; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; color: #7a766f; padding: 10px 14px; background: #faf8f4; border-bottom: 1px solid #e8e4dc;">Bermasalah</th>
+              <th style="text-align: left; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; color: #7a766f; padding: 10px 14px; background: #faf8f4; border-bottom: 1px solid #e8e4dc;">Lahn tersering</th>
+              <th style="text-align: right; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; color: #7a766f; padding: 10px 14px; background: #faf8f4; border-bottom: 1px solid #e8e4dc;">Aksi</th>
+            </tr>
+          </thead>
+          <tbody>
+            <sc-for list="{{ kHome.rows }}" as="h" hint-placeholder-count="6">
+              <tr style="border-bottom: 1px solid #e8e4dc;">
+                <td style="padding: 12px 14px;"><div style="font-weight: 700; color: #1b1a17;">{{ h.id }}</div><div style="font-size: 11px; color: #a8a39a; margin-top: 2px;">{{ h.sub }}</div></td>
+                <td style="padding: 12px 14px; color: #44423d;">{{ h.pengajar }}</td>
+                <td style="padding: 12px 14px;">
+                  <div style="display: flex; align-items: center; gap: 8px;">
+                    <div style="width: 64px; height: 6px; border-radius: 3px; background: #e8e4dc; overflow: hidden;"><div style="height: 100%; background: {{ h.progColor }}; width: {{ h.progPct }}%;"></div></div>
+                    <span style="font-size: 12px; color: #7a766f; white-space: nowrap;">{{ h.selesai }}/{{ h.total }}</span>
+                  </div>
+                </td>
+                <td style="padding: 12px 14px; text-align: center; font-weight: 700; color: {{ h.rataColor }};">{{ h.rataText }}</td>
+                <td style="padding: 12px 14px; text-align: center;">
+                  <sc-if value="{{ h.bermasalah }}"><span style="display: inline-flex; align-items: center; justify-content: center; min-width: 22px; height: 22px; border-radius: 999px; background: oklch(0.96 0.03 25); color: oklch(0.46 0.14 25); font-size: 12px; font-weight: 700;">{{ h.bermasalahN }}</span></sc-if>
+                  <sc-if value="{{ h.tanpaMasalah }}"><span style="color: #d8d3c8;">—</span></sc-if>
+                </td>
+                <td style="padding: 12px 14px; color: #7a766f;">{{ h.lahnTop }}</td>
+                <td style="padding: 12px 14px; text-align: right; white-space: nowrap;">
+                  <sc-if value="{{ h.showIngatkan }}"><button style="display: inline-flex; align-items: center; gap: 6px; height: 30px; padding: 0 10px; border-radius: 6px; font-size: 12px; font-weight: 600; border: none; background: oklch(0.70 0.13 75); color: #fff; cursor: pointer; margin-right: 6px;">Ingatkan</button></sc-if>
+                  <button onClick="{{ h.buka }}" style="display: inline-flex; align-items: center; gap: 6px; height: 30px; padding: 0 10px; border-radius: 6px; font-size: 12px; font-weight: 600; border: 1px solid #d8d3c8; background: #ffffff; color: #44423d; cursor: pointer;" style-hover="background: #faf8f4;">Detail</button>
+                </td>
+              </tr>
+            </sc-for>
+          </tbody>
+        </table>
+      </div>
+    </sc-if>
+
+    <!-- ===== K-SETTINGS ===== -->
+    <sc-if value="{{ isKSettings }}">
+      <button onClick="{{ backKHome }}" style="display: inline-flex; align-items: center; gap: 6px; height: 34px; padding: 0 12px; border-radius: 8px; border: 1px solid #d8d3c8; background: #ffffff; font: inherit; font-size: 12px; font-weight: 600; color: #44423d; cursor: pointer; margin-bottom: 14px;">← Dashboard</button>
+      <div style="font-size: 20px; font-weight: 700; margin-bottom: 4px;">Pengaturan Program</div>
+      <div style="font-size: 13px; color: #7a766f; margin-bottom: 18px;">Nama evaluasi, jumlah percobaan Ujian Akhir, dan jadwal pelaksanaan.</div>
+
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; max-width: 760px;">
+        <div style="background: #ffffff; border: 1px solid #e8e4dc; border-radius: 12px; padding: 16px;">
+          <div style="font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: #7a766f; margin-bottom: 12px;">Nama evaluasi berkala</div>
+          <div style="margin-bottom: 10px;">
+            <div style="font-size: 12px; font-weight: 600; color: #44423d; margin-bottom: 5px;">Track 1 (default: QN)</div>
+            <input type="text" value="{{ settings.namaQn }}" onChange="{{ settings.setNamaQn }}" style="width: 100%; height: 40px; padding: 0 12px; border: 1px solid #d8d3c8; border-radius: 8px; font: inherit; font-size: 14px;" />
+          </div>
+          <div>
+            <div style="font-size: 12px; font-weight: 600; color: #44423d; margin-bottom: 5px;">Track 2 (default: PB)</div>
+            <input type="text" value="{{ settings.namaPb }}" onChange="{{ settings.setNamaPb }}" style="width: 100%; height: 40px; padding: 0 12px; border: 1px solid #d8d3c8; border-radius: 8px; font: inherit; font-size: 14px;" />
+          </div>
+          <div style="font-size: 11px; color: #a8a39a; margin-top: 10px;">Berlaku untuk semua halaqah — 4 sesi tiap track, tiap level.</div>
+        </div>
+
+        <div style="background: #ffffff; border: 1px solid #e8e4dc; border-radius: 12px; padding: 16px;">
+          <div style="font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: #7a766f; margin-bottom: 12px;">Ujian Akhir — jumlah percobaan</div>
+          <div style="display: flex; gap: 8px;">
+            <sc-for list="{{ settings.attemptOptions }}" as="o" hint-placeholder-count="2">
+              <button onClick="{{ o.pick }}" style="height: 44px; padding: 0 18px; border-radius: 8px; border: 1.5px solid {{ o.bg }}; background: {{ o.bg }}; color: {{ o.fg }}; font: inherit; font-size: 14px; font-weight: 700; cursor: pointer;">{{ o.n }}x</button>
+            </sc-for>
+          </div>
+          <div style="font-size: 11px; color: #a8a39a; margin-top: 10px;">2x berarti peserta yang mengulang bisa mencoba lagi pada percobaan kedua.</div>
+        </div>
+
+        <div style="background: #ffffff; border: 1px solid #e8e4dc; border-radius: 12px; padding: 16px;">
+          <div style="font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: #7a766f; margin-bottom: 12px;">Jadwal {{ settings.namaQn }}</div>
+          <sc-for list="{{ settings.scheduleQn }}" as="d" hint-placeholder-count="4">
+            <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 8px;">
+              <span style="font-size: 12px; color: #44423d; width: 56px; flex-shrink: 0;">{{ d.label }}</span>
+              <input type="date" value="{{ d.value }}" onChange="{{ d.setVal }}" style="flex: 1; height: 38px; padding: 0 10px; border: 1px solid #d8d3c8; border-radius: 7px; font: inherit; font-size: 13px;" />
+            </div>
+          </sc-for>
+        </div>
+
+        <div style="background: #ffffff; border: 1px solid #e8e4dc; border-radius: 12px; padding: 16px;">
+          <div style="font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: #7a766f; margin-bottom: 12px;">Jadwal {{ settings.namaPb }}</div>
+          <sc-for list="{{ settings.schedulePb }}" as="d" hint-placeholder-count="4">
+            <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 8px;">
+              <span style="font-size: 12px; color: #44423d; width: 56px; flex-shrink: 0;">{{ d.label }}</span>
+              <input type="date" value="{{ d.value }}" onChange="{{ d.setVal }}" style="flex: 1; height: 38px; padding: 0 10px; border: 1px solid #d8d3c8; border-radius: 7px; font: inherit; font-size: 13px;" />
+            </div>
+          </sc-for>
+        </div>
+
+        <div style="background: #ffffff; border: 1px solid #e8e4dc; border-radius: 12px; padding: 16px; grid-column: 1 / -1;">
+          <div style="font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: #7a766f; margin-bottom: 12px;">Jadwal Ujian Akhir</div>
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px 16px;">
+            <sc-for list="{{ settings.scheduleUjian }}" as="d" hint-placeholder-count="2">
+              <div style="display: flex; align-items: center; gap: 10px;">
+                <span style="font-size: 12px; color: #44423d; width: 90px; flex-shrink: 0;">{{ d.label }}</span>
+                <input type="date" value="{{ d.value }}" onChange="{{ d.setVal }}" style="flex: 1; height: 38px; padding: 0 10px; border: 1px solid #d8d3c8; border-radius: 7px; font: inherit; font-size: 13px;" />
+              </div>
+            </sc-for>
+          </div>
+        </div>
+      </div>
+    </sc-if>
+
+    <!-- ===== K-HALAQAH DETAIL ===== -->
+    <sc-if value="{{ isKHalaqah }}">
+      <button onClick="{{ backKHome }}" style="display: inline-flex; align-items: center; gap: 6px; height: 34px; padding: 0 12px; border-radius: 8px; border: 1px solid #d8d3c8; background: #ffffff; font: inherit; font-size: 12px; font-weight: 600; color: #44423d; cursor: pointer; margin-bottom: 14px;">← Semua halaqah</button>
+
+      <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 18px; flex-wrap: wrap;">
+        <div>
+          <div style="font-size: 20px; font-weight: 700;">{{ kHalaqah.id }} <span style="font-size: 14px; font-weight: 500; color: #7a766f;">· {{ kHalaqah.sub }}</span></div>
+          <div style="font-size: 13px; color: #7a766f; margin-top: 2px;">Pengajar: {{ kHalaqah.pengajar }}</div>
+        </div>
+        <div style="margin-left: auto;">
+          <button style="height: 40px; padding: 0 14px; border-radius: 8px; border: 1px solid #d8d3c8; background: #ffffff; font: inherit; font-size: 13px; font-weight: 600; color: #1b1a17; cursor: pointer;" style-hover="background: #faf8f4;">Unduh laporan halaqah</button>
+        </div>
+      </div>
+
+      <div style="display: grid; grid-template-columns: 1.4fr 1fr; gap: 16px; align-items: start;">
+        <div style="background: #ffffff; border: 1px solid #e8e4dc; border-radius: 12px; overflow: hidden;">
+          <div style="padding: 12px 14px; font-size: 12px; font-weight: 700; color: #44423d; background: #faf8f4; border-bottom: 1px solid #e8e4dc; text-transform: uppercase; letter-spacing: 0.04em;">Peserta</div>
+          <sc-for list="{{ kHalaqah.peserta }}" as="p" hint-placeholder-count="8">
+            <div style="display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-bottom: 1px solid #e8e4dc;">
+              <div style="width: 28px; height: 28px; border-radius: 50%; background: #efece5; color: #44423d; display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 700; flex-shrink: 0;">{{ p.initial }}</div>
+              <span style="flex: 1; font-size: 13px; font-weight: 600; color: #1b1a17;">{{ p.nama }}</span>
+              <span style="font-size: 11px; color: #a8a39a;">{{ p.tierLabel }}</span>
+              <span style="font-size: 14px; font-weight: 800; color: {{ p.skorColor }}; font-variant-numeric: tabular-nums; min-width: 26px; text-align: right;">{{ p.skor }}</span>
+            </div>
+          </sc-for>
+        </div>
+
+        <div style="display: flex; flex-direction: column; gap: 14px;">
+          <div style="background: #ffffff; border: 1px solid #e8e4dc; border-radius: 12px; padding: 14px;">
+            <div style="font-size: 12px; font-weight: 700; color: #44423d; text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 12px;">Distribusi jenis kesalahan</div>
+            <sc-for list="{{ kHalaqah.distribusi }}" as="d" hint-placeholder-count="5">
+              <div style="margin-bottom: 9px;">
+                <div style="display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 4px;"><span style="color: #44423d; font-weight: 600;">{{ d.label }}</span><span style="color: #7a766f;">{{ d.pct }}%</span></div>
+                <div style="height: 6px; border-radius: 3px; background: #e8e4dc; overflow: hidden;"><div style="height: 100%; background: oklch(0.58 0.09 165); width: {{ d.pct }}%;"></div></div>
+              </div>
+            </sc-for>
+          </div>
+          <div style="background: oklch(0.96 0.03 25); border: 1px solid oklch(0.86 0.07 25); border-radius: 12px; padding: 14px;">
+            <div style="font-size: 12px; font-weight: 700; color: oklch(0.46 0.14 25); margin-bottom: 4px;">Perlu perhatian</div>
+            <div style="font-size: 12px; color: oklch(0.46 0.14 25); opacity: 0.85; line-height: 1.5;">{{ kHalaqah.catatanMasalah }}</div>
+          </div>
+        </div>
+      </div>
+    </sc-if>
+
+  </div>
+  </sc-if>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{}">
+const JALIY_DEFS = [['huruf', 'JK. Huruf'], ['harakat', 'JK. Harakat'], ['mad', 'JK. Mad'], ['tasydid', 'JK. Tasydid']];
+const KHAFIY_DEFS = [
+  ['izhar', 'JK. Izhar'], ['idghambighunnah', 'JK. Idgham Bighunnah'], ['idghambilaghunnah', 'JK. Idgham Bilaghunnah'],
+  ['idghammimi', 'JK. Idgham Mimi & Ghunnah'], ['iqlab', 'JK. Iqlab'], ['ikhfahakiki', 'JK. Ikhfa Hakiki'], ['ikhfasyafawi', 'JK. Ikhfa Syafawi'],
+];
+const ALL_DEFS = [...JALIY_DEFS, ...KHAFIY_DEFS];
+const AMBANG = 70;
+
+function scoreOf(counts) {
+  const j = JALIY_DEFS.reduce((a, [k]) => a + (counts[k] || 0), 0);
+  const kf = KHAFIY_DEFS.reduce((a, [k]) => a + (counts[k] || 0), 0);
+  return { skor: Math.max(0, 100 - j * 6 - kf * 2), jaliyCount: j, khafiyCount: kf };
+}
+function tierOf(skor) {
+  if (skor >= 90) return { label: 'Mumtaz', color: 'oklch(0.40 0.10 150)' };
+  if (skor >= 70) return { label: 'Standar', color: 'oklch(0.40 0.10 150)' };
+  if (skor >= 50) return { label: 'Cukup — di bawah standar', color: 'oklch(0.48 0.10 75)' };
+  return { label: 'Perlu pengulangan', color: 'oklch(0.46 0.14 25)' };
+}
+function initials(nama) { return nama.split(' ').slice(0, 2).map(w => w[0]).join('').toUpperCase(); }
+function emptyCounts() { const c = {}; ALL_DEFS.forEach(([k]) => c[k] = 0); return c; }
+function workKey(id, jenis, session) { return id + '|' + jenis + '|' + session; }
+function defaultWork() { return { counts: emptyCounts(), catatan: '', ayat: 142, done: false, confirmed: false }; }
+
+const PESERTA = [
+  { id: 'p1', nama: 'Abdurrahman Fatih', ketua: true },
+  { id: 'p2', nama: 'Faiz Ramadhan', ketua: false },
+  { id: 'p3', nama: 'Zaid Al-Ghifari', ketua: false },
+  { id: 'p4', nama: 'Yusuf Hakim', ketua: false },
+  { id: 'p5', nama: 'Ibrahim Malik', ketua: false },
+  { id: 'p6', nama: 'Hamzah Aditya', ketua: false },
+  { id: 'p7', nama: 'Umar Syahid', ketua: false },
+  { id: 'p8', nama: 'Bilal Rasyid', ketua: false },
+  { id: 'p9', nama: 'Salman Nasution', ketua: false },
+];
+
+const HALAQAH_LIST = [
+  { id: 'A-14', sub: 'Ikhwan · Mustawa 2', pengajar: 'Ust. Abdullah', total: 9, selesai: 3, rata: 84, bermasalah: 0, lahnTop: 'JK. Idgham Bighunnah' },
+  { id: 'A-09', sub: 'Ikhwan · Mustawa 1', pengajar: 'Ust. Faisal', total: 8, selesai: 8, rata: 68, bermasalah: 2, lahnTop: 'JK. Harakat' },
+  { id: 'B-03', sub: 'Akhwat · Mustawa 3', pengajar: 'Ustzh. Aisyah', total: 10, selesai: 0, rata: null, bermasalah: 0, lahnTop: '—' },
+  { id: 'B-07', sub: 'Akhwat · Mustawa 2', pengajar: 'Ustzh. Zahra', total: 9, selesai: 9, rata: 91, bermasalah: 0, lahnTop: 'JK. Ikhfa Syafawi' },
+  { id: 'A-22', sub: 'Ikhwan · Mustawa 4', pengajar: 'Ust. Hasan', total: 7, selesai: 4, rata: 76, bermasalah: 1, lahnTop: 'JK. Ikhfa Hakiki' },
+  { id: 'B-15', sub: 'Akhwat · Mustawa 1', pengajar: 'Ustzh. Maryam', total: 8, selesai: 8, rata: 58, bermasalah: 3, lahnTop: 'JK. Harakat' },
+];
+
+const B15_PESERTA = [
+  { nama: 'Hafshah Amalia', skor: 52 }, { nama: 'Ruqayyah Dewi', skor: 61 },
+  { nama: 'Ummu Kultsum', skor: 74 }, { nama: 'Khadijah Putri', skor: 49 },
+  { nama: 'Aminah Sari', skor: 72 }, { nama: 'Safiyyah Nur', skor: 66 },
+  { nama: 'Juwairiyah Fitri', skor: 55 }, { nama: 'Maimunah Sholeha', skor: 66 },
+];
+const SESSION = { qn: 4, pb: 2, ujian: 1 }; // sesi yang sedang berjalan per jenis (dari 4)
+const JENIS_LABEL = { qn: 'Evaluasi QN', pb: 'Evaluasi PB', ujian: 'Ujian Akhir' };
+const HIST = {
+  p1: { qn: [74, 79, 86, null], pb: [70, null, null, null], ujian: [null, null, null, null] },
+  p2: { qn: [88, 90, 93, null], pb: [85, null, null, null], ujian: [null, null, null, null] },
+  p3: { qn: [60, 65, 74, null], pb: [58, null, null, null], ujian: [null, null, null, null] },
+  p4: { qn: [65, 70, 77, null], pb: [60, null, null, null], ujian: [null, null, null, null] },
+  p5: { qn: [70, 74, 79, null], pb: [66, null, null, null], ujian: [null, null, null, null] },
+  p6: { qn: [55, 60, 66, null], pb: [50, null, null, null], ujian: [null, null, null, null] },
+  p7: { qn: [80, 83, 88, null], pb: [77, null, null, null], ujian: [null, null, null, null] },
+  p8: { qn: [62, 68, 73, null], pb: [59, null, null, null], ujian: [null, null, null, null] },
+  p9: { qn: [72, 76, 81, null], pb: [68, null, null, null], ujian: [null, null, null, null] },
+};
+const B15_DISTRIBUSI = [
+  { label: 'JK. Harakat', pct: 32 }, { label: 'JK. Idgham Bighunnah', pct: 24 },
+  { label: 'JK. Ikhfa Hakiki', pct: 18 }, { label: 'JK. Iqlab', pct: 14 }, { label: 'Lainnya', pct: 12 },
+];
+
+class Component extends DCLogic {
+  state = {
+    role: 'pengajar', screen: 'p-home', jenis: 'qn',
+    included: Object.fromEntries(PESERTA.map(p => [p.id, true])),
+    ayatMulai: 142, ayatSelesai: 157,
+    // work: setiap sesi pengisian disimpan terpisah per peserta+jenis+sesi (kunci 'id|jenis|sesi'),
+    // supaya beralih antar Evaluasi QN/PB/Ujian Akhir tidak saling menimpa data atau status "selesai".
+    work: {
+      'p1|qn|4': { counts: { ...emptyCounts(), huruf: 1, idghambighunnah: 3, ikhfahakiki: 2, iqlab: 1, ikhfasyafawi: 2 }, catatan: 'Perhatikan izhar pada Nun sukun.', ayat: 157, done: true, confirmed: false },
+      'p2|qn|4': { counts: { ...emptyCounts(), ikhfasyafawi: 1, idghammimi: 1 }, catatan: 'Bacaan sudah rapi, pertahankan.', ayat: 157, done: true, confirmed: false },
+      'p3|qn|4': { counts: { ...emptyCounts(), harakat: 1, mad: 1, idghambighunnah: 2, ikhfahakiki: 1, iqlab: 1 }, catatan: 'Ulangi tajwid Mad Wajib Muttasil.', ayat: 157, done: true, confirmed: false },
+    },
+    activeIdx: 3, waOpen: false, raporId: null, khalaqahId: null, editing: null, activeSession: 4,
+    trackNames: { qn: 'Evaluasi QN', pb: 'Evaluasi PB' }, ujianAttempts: 2,
+    schedule: {
+      qn: ['2026-05-10', '2026-06-10', '2026-07-10', '2026-08-20'],
+      pb: ['2026-05-15', '2026-06-15', '2026-07-15', '2026-08-25'],
+      ujian: ['2026-09-05', '2026-09-20'],
+    },
+  };
+
+  nav(screen) { this.setState({ screen }); }
+  getWork(id, jenis, session) { return this.state.work[workKey(id, jenis, session)] || defaultWork(); }
+  updateWork(id, jenis, session, patchFnOrObj) {
+    const key = workKey(id, jenis, session);
+    this.setState(s => {
+      const existing = s.work[key] || defaultWork();
+      const patch = typeof patchFnOrObj === 'function' ? patchFnOrObj(existing) : patchFnOrObj;
+      return { work: { ...s.work, [key]: { ...existing, ...patch } } };
+    });
+  }
+  bump(id, jenis, session, k, d) {
+    if (navigator.vibrate) navigator.vibrate(8);
+    this.updateWork(id, jenis, session, w => ({ counts: { ...w.counts, [k]: Math.max(0, (w.counts[k] || 0) + d) } }));
+  }
+  setCount(id, jenis, session, k, v) {
+    const n = Math.max(0, parseInt(v, 10) || 0);
+    this.updateWork(id, jenis, session, w => ({ counts: { ...w.counts, [k]: n } }));
+  }
+  setNote(id, jenis, session, v) { this.updateWork(id, jenis, session, { catatan: v }); }
+  setAyat(id, jenis, session, v) { this.updateWork(id, jenis, session, { ayat: v }); }
+  setSchedule(track, idx, val) {
+    this.setState(s => {
+      const arr = [...s.schedule[track]]; arr[idx] = val;
+      return { schedule: { ...s.schedule, [track]: arr } };
+    });
+  }
+
+  JALIY_SHADES = ['oklch(0.97 0.02 25)', 'oklch(0.93 0.05 25)', 'oklch(0.88 0.08 25)', 'oklch(0.82 0.11 25)', 'oklch(0.75 0.14 25)'];
+  JALIY_BORDERS = ['oklch(0.86 0.07 25)', 'oklch(0.80 0.09 25)', 'oklch(0.74 0.11 25)', 'oklch(0.68 0.13 25)', 'oklch(0.60 0.15 25)'];
+  KHAFIY_SHADES = ['#ffffff', 'oklch(0.96 0.02 85)', 'oklch(0.92 0.04 85)', 'oklch(0.87 0.06 85)', 'oklch(0.82 0.08 85)'];
+  KHAFIY_BORDERS = ['#e8e4dc', 'oklch(0.88 0.05 85)', 'oklch(0.84 0.07 85)', 'oklch(0.78 0.09 85)', 'oklch(0.72 0.11 85)'];
+
+  tileRow(pesertaId, jenis, session, k, l, shades, borders, textColor) {
+    const count = this.getWork(pesertaId, jenis, session).counts[k] || 0;
+    const i = Math.min(count, 4);
+    return {
+      key: k, label: l, count,
+      tileBg: shades[i], tileBorder: borders[i], textColor,
+      showMinus: count > 0,
+      tap: () => this.bump(pesertaId, jenis, session, k, 1),
+      minus: (e) => { e.stopPropagation(); this.bump(pesertaId, jenis, session, k, -1); },
+      setCount: (e) => {
+        const digits = String(e.target.value).replace(/[^0-9]/g, '');
+        this.setCount(pesertaId, jenis, session, k, digits === '' ? '0' : digits);
+      },
+      stop: (e) => e.stopPropagation(),
+    };
+  }
+
+  buildTrack(id, key, label, s, rRec, rSc) {
+    const hist = HIST[id][key];
+    const W = 260, H = 92, padX = 16, padY = 12;
+    const xs = [0, 1, 2, 3].map(i => padX + i * ((W - 2 * padX) / 3));
+    const yFor = (score) => padY + (1 - score / 100) * (H - 2 * padY);
+    const sessions = hist.map((v, i) => {
+      let score = v;
+      if (key === s.jenis && (i + 1) === s.activeSession && rRec.done) score = rSc.skor;
+      const filled = score != null;
+      const t = filled ? tierOf(score) : null;
+      return {
+        key: key + i, no: i + 1, score: filled ? score : '–', filled,
+        bg: filled ? `color-mix(in oklch, ${t.color} 16%, white)` : '#faf8f4',
+        border: filled ? t.color : '#d8d3c8', color: filled ? t.color : '#a8a39a',
+        cx: xs[i], cy: filled ? yFor(score) : H - padY, r: filled ? 5 : 3,
+        dotFill: filled ? t.color : '#d8d3c8',
+      };
+    });
+    const nums = sessions.filter(x => x.filled).map(x => x.score);
+    const avg = nums.length ? Math.round(nums.reduce((a, b) => a + b, 0) / nums.length) : null;
+    const trend = nums.length >= 2 ? nums[nums.length - 1] - nums[nums.length - 2] : 0;
+    const filledPts = sessions.filter(x => x.filled).map(x => x.cx + ',' + x.cy.toFixed(1)).join(' ');
+    let insight;
+    if (nums.length === 0) insight = 'Belum ada sesi tercatat.';
+    else if (nums.length === 1) insight = 'Sesi pertama: ' + nums[0] + ' — belum ada tren.';
+    else if (trend > 0) insight = 'Naik ' + trend + ' poin dari sesi sebelumnya.';
+    else if (trend < 0) insight = 'Turun ' + Math.abs(trend) + ' poin — perlu perhatian lebih.';
+    else insight = 'Stabil dibanding sesi sebelumnya.';
+    if (avg != null) insight += avg >= AMBANG ? ' Rata-rata di atas ambang standar.' : ' Rata-rata masih di bawah ambang standar (70).';
+    return {
+      key, label, sessions, avg: avg == null ? '–' : avg,
+      trendArrow: nums.length < 2 ? '' : trend > 0 ? '↑' : trend < 0 ? '↓' : '→',
+      trendColor: trend > 0 ? 'oklch(0.40 0.10 150)' : trend < 0 ? 'oklch(0.46 0.14 25)' : '#a8a39a',
+      chartW: W, chartH: H, ambangY: yFor(AMBANG).toFixed(1), padX, chartPadRight: W - padX,
+      linePoints: filledPts, insight,
+    };
+  }
+
+  fmtTgl(iso) {
+    if (!iso) return '—';
+    const d = new Date(iso + 'T00:00:00');
+    return d.toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' });
+  }
+
+  renderVals() {
+    const s = this.state;
+    const isUjian = s.jenis === 'ujian';
+    const ambangMustawa = 65;
+    const jl = isUjian ? 'Ujian Akhir' : s.trackNames[s.jenis];
+    const maxSessions = { qn: 4, pb: 4, ujian: s.ujianAttempts };
+
+    const daftarItems = PESERTA.map((p, i) => {
+      const rec = this.getWork(p.id, s.jenis, s.activeSession);
+      const sc = scoreOf(rec.counts);
+      const tier = tierOf(sc.skor);
+      const included = s.included[p.id];
+      return {
+        key: p.id, nama: p.nama, ketua: p.ketua ? ' 👑' : '', initial: initials(p.nama),
+        toggle: () => this.setState(st => ({ included: { ...st.included, [p.id]: !st.included[p.id] } })),
+        checkMark: included ? '✓' : '', checkBg: included ? 'oklch(0.58 0.09 165)' : '#ffffff',
+        checkBorder: included ? 'oklch(0.58 0.09 165)' : '#d8d3c8',
+        rowOpacity: included ? 1 : 0.45,
+        buka: () => this.setState({ activeIdx: i, screen: 'p-nilai' }),
+        statusText: !included ? 'Tidak hadir' : rec.done ? tier.label : 'Belum dinilai',
+        showSkor: included && rec.done, skor: sc.skor, skorColor: tier.color,
+      };
+    });
+    const includedItems = PESERTA.filter(p => s.included[p.id]);
+    const selesaiCount = includedItems.filter(p => this.getWork(p.id, s.jenis, s.activeSession).done).length;
+
+    const idx = s.activeIdx;
+    const activeP = PESERTA[idx];
+    const rec = this.getWork(activeP.id, s.jenis, s.activeSession);
+    const sc = scoreOf(rec.counts);
+    const tier = tierOf(sc.skor);
+    const jaliyRows = JALIY_DEFS.map(([k, l]) => this.tileRow(activeP.id, s.jenis, s.activeSession, k, l, this.JALIY_SHADES, this.JALIY_BORDERS, 'oklch(0.46 0.14 25)'));
+    const khafiyRows = KHAFIY_DEFS.map(([k, l]) => this.tileRow(activeP.id, s.jenis, s.activeSession, k, l, this.KHAFIY_SHADES, this.KHAFIY_BORDERS, 'oklch(0.48 0.10 75)'));
+    const ayatPct = Math.round(((rec.ayat - 142) / (157 - 142)) * 100);
+    const lulus = sc.skor >= ambangMustawa;
+
+    const ringPct = sc.skor;
+    const ringColor = tier.color;
+
+    const ringkasanItems = includedItems.filter(p => this.getWork(p.id, s.jenis, s.activeSession).done).map(p => {
+      const r = this.getWork(p.id, s.jenis, s.activeSession); const scc = scoreOf(r.counts); const t = tierOf(scc.skor);
+      return { key: p.id, nama: p.nama, initial: initials(p.nama), skor: scc.skor, skorColor: t.color, tierLabel: t.label,
+        lihat: () => this.setState({ raporId: p.id, screen: 'p-rapor' }) };
+    });
+    const scores = ringkasanItems.map(x => x.skor);
+    const rataRata = scores.length ? Math.round(scores.reduce((a, b) => a + b, 0) / scores.length) : 0;
+
+    const rId = s.raporId || activeP.id;
+    const rRec = this.getWork(rId, s.jenis, s.activeSession); const rPeserta = PESERTA.find(p => p.id === rId);
+    const rSc = scoreOf(rRec.counts); const rTier = tierOf(rSc.skor);
+    const rincian = ALL_DEFS.filter(([k]) => (rRec.counts[k] || 0) > 0).map(([k, l]) => ({
+      key: k, label: l, count: rRec.counts[k], tag: JALIY_DEFS.some(x => x[0] === k) ? 'Jaliy' : 'Khafiy',
+      tagColor: JALIY_DEFS.some(x => x[0] === k) ? 'oklch(0.46 0.14 25)' : 'oklch(0.48 0.10 75)',
+    }));
+
+    const kRows = HALAQAH_LIST.map(h => ({
+      key: h.id, id: h.id, sub: h.sub, pengajar: h.pengajar, total: h.total, selesai: h.selesai,
+      progPct: Math.round((h.selesai / h.total) * 100), progColor: h.selesai === h.total ? 'oklch(0.58 0.09 165)' : h.selesai === 0 ? '#d8d3c8' : 'oklch(0.78 0.10 80)',
+      rataText: h.rata == null ? '—' : h.rata, rataColor: h.rata == null ? '#a8a39a' : h.rata >= AMBANG ? 'oklch(0.40 0.10 150)' : 'oklch(0.46 0.14 25)',
+      bermasalah: h.bermasalah > 0, tanpaMasalah: h.bermasalah === 0, bermasalahN: h.bermasalah,
+      lahnTop: h.lahnTop, showIngatkan: h.selesai < h.total,
+      buka: () => this.setState({ khalaqahId: h.id, screen: 'k-halaqah' }),
+    }));
+
+    const khId = s.khalaqahId || 'B-15';
+    const khInfo = HALAQAH_LIST.find(h => h.id === khId) || HALAQAH_LIST[5];
+    const khPeserta = (khId === 'B-15' ? B15_PESERTA : PESERTA.map(p => ({ nama: p.nama, skor: 80 }))).map(p => {
+      const t = tierOf(p.skor);
+      return { key: p.nama, nama: p.nama, initial: initials(p.nama), skor: p.skor, skorColor: t.color, tierLabel: t.label };
+    });
+
+    return {
+      isPengajar: s.role === 'pengajar', isKoordinator: s.role === 'koordinator',
+      toPengajar: () => this.setState({ role: 'pengajar', screen: 'p-home' }),
+      toKoordinator: () => this.setState({ role: 'koordinator', screen: 'k-home' }),
+      roleTabPengajarBg: s.role === 'pengajar' ? '#ffffff' : 'transparent', roleTabPengajarFg: s.role === 'pengajar' ? '#1b1a17' : '#a8a39a',
+      roleTabKoordinatorBg: s.role === 'koordinator' ? '#ffffff' : 'transparent', roleTabKoordinatorFg: s.role === 'koordinator' ? '#1b1a17' : '#a8a39a',
+
+      isPHome: s.screen === 'p-home', isPSetup: s.screen === 'p-setup', isPDaftar: s.screen === 'p-daftar',
+      isPNilai: s.screen === 'p-nilai', isPRingkasan: s.screen === 'p-ringkasan', isPRapor: s.screen === 'p-rapor',
+      isKHome: s.screen === 'k-home', isKHalaqah: s.screen === 'k-halaqah', isKSettings: s.screen === 'k-settings',
+      goKSettings: () => this.setState({ screen: 'k-settings' }),
+
+      homeCards: [
+        { key: 'qn', icon: '📖', title: s.trackNames.qn, desc: 'Sesi ' + SESSION.qn + ' dari 4 · ' + this.fmtTgl(s.schedule.qn[SESSION.qn - 1]), bg: 'oklch(0.96 0.025 165)', border: 'oklch(0.88 0.045 165)',
+          dots: [1,2,3,4].map(i => ({ key: 'd'+i, color: i < SESSION.qn ? 'oklch(0.58 0.09 165)' : i === SESSION.qn ? 'oklch(0.78 0.10 80)' : '#e8e4dc' })),
+          start: () => this.setState({ jenis: 'qn', activeSession: SESSION.qn, screen: 'p-setup' }) },
+        { key: 'pb', icon: '📝', title: s.trackNames.pb, desc: 'Sesi ' + SESSION.pb + ' dari 4 · ' + this.fmtTgl(s.schedule.pb[SESSION.pb - 1]), bg: 'oklch(0.96 0.03 210)', border: 'oklch(0.87 0.05 210)',
+          dots: [1,2,3,4].map(i => ({ key: 'd'+i, color: i < SESSION.pb ? 'oklch(0.55 0.10 210)' : i === SESSION.pb ? 'oklch(0.78 0.10 80)' : '#e8e4dc' })),
+          start: () => this.setState({ jenis: 'pb', activeSession: SESSION.pb, screen: 'p-setup' }) },
+        { key: 'ujian', icon: '🎓', title: 'Ujian Akhir', desc: 'Sesi ' + SESSION.ujian + ' dari ' + s.ujianAttempts + ' · ' + this.fmtTgl(s.schedule.ujian[SESSION.ujian - 1]), bg: 'oklch(0.96 0.035 85)', border: 'oklch(0.88 0.07 82)',
+          dots: Array.from({ length: s.ujianAttempts }, (_, idx2) => idx2 + 1).map(i => ({ key: 'd'+i, color: i < SESSION.ujian ? 'oklch(0.58 0.09 165)' : i === SESSION.ujian ? 'oklch(0.78 0.10 80)' : '#e8e4dc' })),
+          start: () => this.setState({ jenis: 'ujian', activeSession: SESSION.ujian, screen: 'p-setup' }) },
+      ],
+      backHome: () => this.nav('p-home'), backSetup: () => this.nav('p-setup'),
+      backDaftar: () => this.nav('p-daftar'), backRingkasan: () => this.nav('p-ringkasan'),
+      backKHome: () => this.setState({ screen: 'k-home' }),
+
+      setup: {
+        judul: jl + ' — Setup', sesiLabel: 'Sesi ' + s.activeSession + ' dari ' + maxSessions[s.jenis] + ' · dijadwalkan ' + this.fmtTgl(s.schedule[s.jenis][s.activeSession - 1]),
+        isUjian, ayatMulai: s.ayatMulai, ayatSelesai: s.ayatSelesai,
+        sesiOptions: Array.from({ length: maxSessions[s.jenis] }, (_, i) => i + 1).map(n => ({
+          key: n, n, isOn: n === s.activeSession,
+          bg: n === s.activeSession ? '#1b1a17' : '#ffffff', fg: n === s.activeSession ? '#ffffff' : '#44423d',
+          pick: () => this.setState({ activeSession: n }),
+        })),
+        setAyatMulai: (e) => this.setState({ ayatMulai: e.target.value }),
+        setAyatSelesai: (e) => this.setState({ ayatSelesai: e.target.value }),
+        lanjut: () => this.nav('p-daftar'),
+      },
+
+      daftar: {
+        judul: jl, sub: 'Sesi ' + s.activeSession + ' dari ' + maxSessions[s.jenis] + ' · Al-Baqarah ' + s.ayatMulai + '–' + s.ayatSelesai,
+        items: daftarItems, selesai: selesaiCount, total: includedItems.length,
+        progressPct: includedItems.length ? Math.round((selesaiCount / includedItems.length) * 100) : 0,
+        tombolLabel: selesaiCount === includedItems.length && includedItems.length > 0 ? 'Lihat ringkasan sesi' : (selesaiCount === 0 ? 'Mulai menilai' : 'Lanjutkan menilai'),
+        mulai: () => {
+          if (selesaiCount === includedItems.length && includedItems.length > 0) { this.nav('p-ringkasan'); return; }
+          const nextIdx = PESERTA.findIndex(p => s.included[p.id] && !this.getWork(p.id, s.jenis, s.activeSession).done);
+          this.setState({ activeIdx: nextIdx >= 0 ? nextIdx : 0, screen: 'p-nilai' });
+        },
+      },
+
+      nilai: {
+        initial: initials(activeP.nama), nama: activeP.nama, pos: idx + 1, totalPeserta: PESERTA.length,
+        ayat: rec.ayat, ayatPct,
+        prevAyat: () => this.setAyat(activeP.id, s.jenis, s.activeSession, Math.max(142, (rec.ayat || 142) - 1)),
+        nextAyat: () => this.setAyat(activeP.id, s.jenis, s.activeSession, Math.min(157, (rec.ayat || 142) + 1)),
+        ringGradient: `conic-gradient(${ringColor} ${ringPct}%, #e8e4dc 0)`,
+        skor: sc.skor, skorColor: tier.color, tierLabel: tier.label,
+        hitungan: sc.jaliyCount + ' jaliy (−' + sc.jaliyCount * 6 + ') · ' + sc.khafiyCount + ' khafiy (−' + sc.khafiyCount * 2 + ')',
+        ambang: isUjian ? ambangMustawa : AMBANG,
+        isUjian, lulusLabel: lulus ? 'LULUS' : 'MENGULANG',
+        lulusBg: lulus ? 'oklch(0.96 0.035 150)' : 'oklch(0.96 0.03 25)', lulusBorder: lulus ? 'oklch(0.85 0.06 150)' : 'oklch(0.86 0.07 25)',
+        lulusColor: lulus ? 'oklch(0.40 0.10 150)' : 'oklch(0.46 0.14 25)',
+        confirmed: !!rec.confirmed, toggleConfirm: () => this.updateWork(activeP.id, s.jenis, s.activeSession, w => ({ confirmed: !w.confirmed })),
+        jaliy: jaliyRows, khafiy: khafiyRows,
+        catatan: rec.catatan, setCatatan: (e) => this.setNote(activeP.id, s.jenis, s.activeSession, e.target.value),
+        isFirst: idx === 0, prevPeserta: () => this.setState({ activeIdx: Math.max(0, idx - 1) }),
+        simpanDisabled: isUjian && !rec.confirmed,
+        simpanLabel: idx === PESERTA.length - 1 ? 'Simpan & selesai' : 'Simpan & peserta berikutnya →',
+        simpanLanjut: () => {
+          this.updateWork(activeP.id, s.jenis, s.activeSession, { done: true });
+          let nextIdx = -1;
+          for (let j = idx + 1; j < PESERTA.length; j++) { if (s.included[PESERTA[j].id]) { nextIdx = j; break; } }
+          if (nextIdx >= 0) this.setState({ activeIdx: nextIdx });
+          else this.nav('p-daftar');
+        },
+      },
+
+      ringkasan: {
+        rata: rataRata, standarCount: scores.filter(x => x >= AMBANG).length, bawahCount: scores.filter(x => x < AMBANG).length,
+        items: ringkasanItems,
+        waOpen: s.waOpen, openWa: () => this.setState({ waOpen: true }), closeWa: () => this.setState({ waOpen: false }),
+        waText: 'Rekap ' + jl + ' — Halaqah A-14\nAgustus 2026\n\n' + ringkasanItems.map(x => '• ' + x.nama + ': ' + x.skor).join('\n') + '\n\nRata-rata: ' + rataRata,
+        kirim: () => {}, kirimLabel: 'Kirim semua ke sistem', kirimDisabled: selesaiCount < includedItems.length,
+        offlineNote: selesaiCount < includedItems.length ? 'Beberapa peserta belum dinilai — belum bisa dikirim.' : 'Semua data tersimpan di HP, siap dikirim.',
+      },
+
+      rapor: {
+        nama: rPeserta.nama, meta: 'Halaqah A-14 · ' + jl + ' · Sesi ' + s.activeSession + ' · Agustus 2026',
+        isUjian, lulusLabel: rSc.skor >= ambangMustawa ? 'LULUS' : 'MENGULANG',
+        lulusBg: rSc.skor >= ambangMustawa ? 'oklch(0.96 0.035 150)' : 'oklch(0.96 0.03 25)',
+        lulusColor: rSc.skor >= ambangMustawa ? 'oklch(0.40 0.10 150)' : 'oklch(0.46 0.14 25)',
+        skor: rSc.skor, skorColor: rTier.color, tierLabel: rTier.label,
+        rincian: rincian.length ? rincian : [{ key: 'none', label: 'Tanpa kesalahan tercatat', count: '', tag: '', tagColor: '#a8a39a' }],
+        catatan: rRec.catatan || '—',
+        tracks: [
+          this.buildTrack(rId, 'qn', 'Progres ' + s.trackNames.qn, s, rRec, rSc),
+          this.buildTrack(rId, 'pb', 'Progres ' + s.trackNames.pb, s, rRec, rSc),
+          this.buildTrack(rId, 'ujian', 'Progres Ujian Akhir', s, rRec, rSc),
+        ],
+      },
+
+      settings: {
+        namaQn: s.trackNames.qn, namaPb: s.trackNames.pb,
+        setNamaQn: (e) => this.setState(st => ({ trackNames: { ...st.trackNames, qn: e.target.value } })),
+        setNamaPb: (e) => this.setState(st => ({ trackNames: { ...st.trackNames, pb: e.target.value } })),
+        attemptOptions: [1, 2].map(n => ({
+          key: n, n, bg: n === s.ujianAttempts ? '#1b1a17' : '#ffffff', fg: n === s.ujianAttempts ? '#ffffff' : '#44423d',
+          pick: () => this.setState({ ujianAttempts: n }),
+        })),
+        scheduleQn: [0, 1, 2, 3].map(i => ({ key: i, label: 'Sesi ' + (i + 1), value: s.schedule.qn[i], setVal: (e) => this.setSchedule('qn', i, e.target.value) })),
+        schedulePb: [0, 1, 2, 3].map(i => ({ key: i, label: 'Sesi ' + (i + 1), value: s.schedule.pb[i], setVal: (e) => this.setSchedule('pb', i, e.target.value) })),
+        scheduleUjian: Array.from({ length: s.ujianAttempts }, (_, i) => i).map(i => ({ key: i, label: 'Percobaan ' + (i + 1), value: s.schedule.ujian[i] || '', setVal: (e) => this.setSchedule('ujian', i, e.target.value) })),
+      },
+
+      kHome: { rows: kRows },
+      kHalaqah: {
+        id: khInfo.id, sub: khInfo.sub, pengajar: khInfo.pengajar, peserta: khPeserta,
+        distribusi: B15_DISTRIBUSI,
+        catatanMasalah: khInfo.bermasalah + ' peserta di bawah ambang standar (70). Kesalahan terbanyak: ' + khInfo.lahnTop + '. Pertimbangkan sesi remedial.',
+      },
+    };
+  }
+}
+</script>
+</body>
+</html>
