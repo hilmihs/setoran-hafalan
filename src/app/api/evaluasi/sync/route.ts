@@ -17,8 +17,30 @@ interface Row {
   [k: string]: unknown;
 }
 
-/** Terima hanya baris yang punya `id` + `nama` valid, tempel synced_at. */
-function prepare(rows: unknown): Record<string, unknown>[] {
+// Allowlist kolom per tabel mirror. Hanya kolom-kolom ini yang boleh disalin dari
+// payload sumber; sisanya diabaikan supaya caller tidak bisa menyetel kolom lain
+// (mis. flag internal) secara verbatim. `synced_at` selalu diset server.
+const COLS: Record<Mirror, readonly string[]> = {
+  eval_batch: ['id', 'nama', 'aktif'],
+  eval_pengajar: ['id', 'nama', 'gender', 'whatsapp'],
+  eval_halaqah: [
+    'id',
+    'nama',
+    'gender',
+    'mustawa',
+    'level',
+    'pengajar_id',
+    'batch_id',
+    'ambang_ujian',
+  ],
+  eval_peserta: ['id', 'nama', 'gender', 'halaqah_id', 'is_ketua', 'aktif', 'urutan'],
+};
+
+/**
+ * Terima hanya baris yang punya `id` + `nama` valid, pilih kolom sesuai allowlist
+ * tabel, lalu tempel `synced_at` (diset server).
+ */
+function prepare(rows: unknown, cols: readonly string[]): Record<string, unknown>[] {
   if (!Array.isArray(rows)) return [];
   const now = new Date().toISOString();
   const out: Record<string, unknown>[] = [];
@@ -26,13 +48,16 @@ function prepare(rows: unknown): Record<string, unknown>[] {
     if (!r || typeof r !== 'object') continue;
     if (typeof r.id !== 'string' || !r.id) continue;
     if (typeof r.nama !== 'string' || !r.nama) continue;
-    out.push({ ...r, synced_at: now });
+    const picked = Object.fromEntries(
+      cols.filter((c) => c in r).map((c) => [c, (r as Record<string, unknown>)[c]])
+    );
+    out.push({ ...picked, synced_at: now });
   }
   return out;
 }
 
 async function upsertMirror(table: Mirror, rows: unknown): Promise<number> {
-  const prepared = prepare(rows);
+  const prepared = prepare(rows, COLS[table]);
   if (prepared.length === 0) return 0;
   const { error } = await supabaseAdmin.from(table).upsert(prepared, { onConflict: 'id' });
   if (error) throw new Error(`${table}: ${error.message}`);

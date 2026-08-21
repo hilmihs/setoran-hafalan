@@ -61,6 +61,21 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Bukan halaqah Anda' }, { status: 403 });
     }
 
+    // Sesi yang sudah dikirim tidak boleh diubah lagi.
+    const { data: existing } = await supabaseAdmin
+      .from('evaluasi_sesi')
+      .select('status')
+      .eq('halaqah_id', halaqah_id)
+      .eq('jenis', jenis)
+      .eq('nomor_sesi', nomor_sesi)
+      .maybeSingle();
+    if (existing?.status === 'terkirim') {
+      return NextResponse.json(
+        { error: 'Sesi sudah dikirim, tidak bisa diubah' },
+        { status: 409 }
+      );
+    }
+
     const { error } = await supabaseAdmin.from('evaluasi_sesi').upsert(
       {
         halaqah_id,
