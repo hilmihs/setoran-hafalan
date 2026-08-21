@@ -9,7 +9,7 @@ import { maintenanceGate } from '@/lib/maintenance';
 const PROTECTED = [
   '/hits', '/observasi', '/matrix', '/kehadiran',
   '/2in1', '/penilaian', '/laporan', '/audit', '/akun', '/peserta',
-  '/shakwa/koordinator',
+  '/shakwa/koordinator', '/evaluasi',
 ];
 
 const SESSION_COOKIE = 'maahir-hits-session';
