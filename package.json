@@ -14,6 +14,8 @@
     "test-kajian": "tsx --env-file=.env.local scripts/test-kajian.ts",
     "test-ranking": "tsx --env-file=.env.local scripts/test-ranking.ts",
     "test-shakwa": "tsx --env-file=.env.local scripts/test-shakwa.ts",
+    "test-evaluasi": "tsx scripts/test-evaluasi.ts",
+    "seed-evaluasi": "tsx --env-file=.env.local scripts/seed-evaluasi.ts",
     "test-pengajuan": "tsx --env-file=.env.local scripts/test-hits-pengajuan.ts",
     "export-supabase": "tsx --env-file=.env.local scripts/export-supabase.ts",
     "test-derive": "tsx --env-file=.env.local scripts/test-derive-pertemuan.ts",
