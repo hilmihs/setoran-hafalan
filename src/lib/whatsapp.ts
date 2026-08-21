@@ -919,6 +919,66 @@ export function tplShakwaRekapHarian(args: {
   ].join('\n');
 }
 
+/**
+ * Ke ketua kelas: pengingat RINCI mengisi observasi — memuat daftar pertemuan
+ * yang belum diobservasi (tanggal + nomor pertemuan) dan tautan pengisian.
+ * Tanpa sapaan ustadz (ketua kelas = peserta).
+ */
+export function tplReminderKetuaKelasObservasiRinci(args: {
+  ketuaNama: string | null;
+  halaqahName: string;
+  pengajarName: string;
+  periodeLabel: string;
+  belumList: Array<{ tanggal: string; pertemuanNo: number | null }>;
+  isiUrl: string;
+}): string {
+  const daftar = args.belumList.length
+    ? args.belumList.map(
+        (p) => `• ${p.tanggal}${p.pertemuanNo ? ` — pertemuan ke-${p.pertemuanNo}` : ''}`
+      )
+    : ['• (semua pertemuan sudah terisi)'];
+  return [
+    `Assalamu'alaikum${args.ketuaNama ? ` ${args.ketuaNama}` : ''},`,
+    ``,
+    `Pengingat — observasi kelas *${args.halaqahName}* (pengajar ${args.pengajarName}) periode *${args.periodeLabel}* masih ada *${args.belumList.length}* pertemuan yang belum diisi:`,
+    ...daftar,
+    ``,
+    `Mohon segera lengkapi keterangan pengajar & latihan tiap pertemuan melalui tautan berikut:`,
+    args.isiUrl,
+    ``,
+    `Jazakumullahu khairan.`,
+  ].join('\n');
+}
+
+/**
+ * Rekap indisipliner HITS satu periode untuk ditempel ke grup koordinator —
+ * seluruh pengajar & insiden. `perPengajar` sudah diformat oleh pemanggil
+ * (satu baris per pengajar), supaya template tetap sederhana.
+ */
+export function tplHitsRekapInsidenGrup(args: {
+  periodeLabel: string;
+  genderLabel: string;
+  totalInsiden: number;
+  totalPengajar: number;
+  byBadge: { KMT: number; KBLA: number; JKG: number; TL: number };
+  belumDiputus: number;
+  perPengajar: string[];
+  dashboardUrl: string;
+}): string {
+  return [
+    `*Rekap Indisipliner HITS*`,
+    `Periode: ${args.periodeLabel} · ${args.genderLabel}`,
+    ``,
+    `Total insiden: *${args.totalInsiden}* (dari ${args.totalPengajar} pengajar)`,
+    `KMT ${args.byBadge.KMT} · KBLA ${args.byBadge.KBLA} · JKG ${args.byBadge.JKG} · TL ${args.byBadge.TL}`,
+    `Belum diputus: *${args.belumDiputus}*`,
+    ``,
+    ...(args.perPengajar.length ? ['Rincian per pengajar:', ...args.perPengajar] : ['(tidak ada insiden pada periode ini)']),
+    ``,
+    args.dashboardUrl,
+  ].join('\n');
+}
+
 /** Ke pengajar: konfirmasi/ingatkan data periode belum masuk. */
 export function tplReminderPengajarIsiData(args: {
   pengajarName: string;

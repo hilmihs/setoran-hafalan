@@ -267,6 +267,8 @@ export type PelanggaranItem = {
 
 export type InsidenDetail = {
   keteranganId: string;
+  /** id baris hits_tabayyun (untuk deep-link ke halaman putusan). null bila belum ada tabayyun. */
+  tabayyunId: string | null;
   halaqahId: string;
   halaqahName: string;
   tanggal: string;
@@ -374,6 +376,7 @@ export async function getInsidenDetailByPengajar(opts: {
       100
     ),
     fetchInChunks<{
+      id: string;
       keterangan_id: string;
       status: string;
       alasan_pengajar: string | null;
@@ -385,7 +388,7 @@ export async function getInsidenDetailByPengajar(opts: {
       (chunk) =>
         supabaseAdmin
           .from('hits_tabayyun')
-          .select('keterangan_id, status, alasan_pengajar, is_udzur_syari, keputusan_catatan, decided_at')
+          .select('id, keterangan_id, status, alasan_pengajar, is_udzur_syari, keputusan_catatan, decided_at')
           .in('keterangan_id', chunk),
       100
     ),
@@ -408,6 +411,7 @@ export async function getInsidenDetailByPengajar(opts: {
     const t = tabByKet.get(k.id);
     const item: InsidenDetail = {
       keteranganId: k.id,
+      tabayyunId: t?.id ?? null,
       halaqahId: k.halaqah_id,
       halaqahName: h.name,
       tanggal: k.tanggal,
@@ -527,4 +531,55 @@ export async function getNoDataActionInfo(rows: DisiplinAgg[]): Promise<Map<stri
     });
   }
   return result;
+}
+
+// ── Ketua kelas per halaqah (untuk tombol reminder observasi di ranking) ─────
+export type KetuaHalaqahInfo = {
+  nama: string | null;
+  wa: string | null;
+  gender: Gender | null;
+  magicToken: string | null;
+};
+
+/**
+ * Peta halaqahId → ketua kelas (nama, WA, gender, magic_token). Dipakai tombol
+ * "Ingatkan ketua" di dashboard ranking untuk pengajar yang observasinya belum
+ * lengkap. >1 ketua/halaqah → prioritas yang sudah login. Query dichunk (anti 414/cap).
+ */
+export async function getKetuaByHalaqah(
+  halaqahIds: string[]
+): Promise<Map<string, KetuaHalaqahInfo>> {
+  const out = new Map<string, KetuaHalaqahInfo>();
+  const ids = [...new Set(halaqahIds)];
+  if (!ids.length) return out;
+
+  const ketuaRows = await fetchInChunks<{
+    name: string;
+    whatsapp_number: string | null;
+    gender: Gender | null;
+    magic_token: string | null;
+    hits_halaqah_id: string | null;
+    last_login_at: string | null;
+  }>(ids, (chunk) =>
+    supabaseAdmin
+      .from('ketua_kelas')
+      .select('name, whatsapp_number, gender, magic_token, hits_halaqah_id, last_login_at')
+      .in('hits_halaqah_id', chunk)
+      .eq('active', true)
+  );
+
+  const loggedInSeen = new Map<string, boolean>();
+  for (const k of ketuaRows) {
+    if (!k.hits_halaqah_id) continue;
+    const loggedIn = !!k.last_login_at;
+    if (out.has(k.hits_halaqah_id) && !(loggedIn && !loggedInSeen.get(k.hits_halaqah_id))) continue;
+    out.set(k.hits_halaqah_id, {
+      nama: k.name,
+      wa: k.whatsapp_number,
+      gender: k.gender,
+      magicToken: k.magic_token,
+    });
+    loggedInSeen.set(k.hits_halaqah_id, loggedIn);
+  }
+  return out;
 }

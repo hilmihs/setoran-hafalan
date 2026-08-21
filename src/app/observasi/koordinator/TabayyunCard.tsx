@@ -28,7 +28,7 @@ export function TabayyunCard({ tabayyun: t }: Props) {
 
   if (decided) {
     return (
-      <div className="card-flat" style={{ padding: '12px 16px', marginBottom: 8, opacity: 0.6 }}>
+      <div id={`tab-${t.id}`} className="card-flat" style={{ padding: '12px 16px', marginBottom: 8, opacity: 0.6, scrollMarginTop: 80 }}>
         <div className="t-small" style={{ fontWeight: 600 }}>
           {t.pengajar_name} — {t.kelas_name}
         </div>
@@ -78,7 +78,7 @@ export function TabayyunCard({ tabayyun: t }: Props) {
   }
 
   return (
-    <div className="card-flat" style={{ padding: '14px 16px', marginBottom: 8 }}>
+    <div id={`tab-${t.id}`} className="card-flat" style={{ padding: '14px 16px', marginBottom: 8, scrollMarginTop: 80 }}>
       <div style={{ marginBottom: 8 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
           <div style={{ fontWeight: 600, marginBottom: 2 }}>{t.pengajar_name}</div>

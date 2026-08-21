@@ -2,7 +2,12 @@ import { Fragment } from 'react';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { requireKoordinatorKetuaKelas } from '@/lib/session';
-import { getNoDataActionInfo, type InsidenDetail } from '@/lib/hits-ranking';
+import {
+  getNoDataActionInfo,
+  getKetuaByHalaqah,
+  type InsidenDetail,
+  type KetuaHalaqahInfo,
+} from '@/lib/hits-ranking';
 import {
   getHitsKoordinatorRekap,
   parseRekapFilter,
@@ -17,8 +22,15 @@ import { GenderNavSelect } from '@/components/GenderNavSelect';
 import { MonthNavSelect } from '@/components/MonthNavSelect';
 import { WeekNavSelect } from '@/components/WeekNavSelect';
 import { NoteQuickAdd } from '@/components/NoteQuickAdd';
-import { buildWaMeUrl, tplReminderIsiKeterangan, tplReminderPengajarIsiData } from '@/lib/whatsapp';
+import {
+  buildWaMeUrl,
+  tplReminderIsiKeterangan,
+  tplReminderPengajarIsiData,
+  tplReminderKetuaKelasObservasiRinci,
+  tplHitsRekapInsidenGrup,
+} from '@/lib/whatsapp';
 import { absUrl } from '@/lib/url';
+import { SalinRekapButton } from '@/app/shakwa/koordinator/SalinRekapButton';
 import { monthOptionsSince } from '@/lib/month';
 import { weekStartMonday, formatWeekRangeShort, recentMondays } from '@/lib/week';
 import type { Gender } from '@/types/db';
@@ -65,12 +77,23 @@ const TGL_PENDEK = (t: string) => {
  * diobservasi dan mana yang belum. "Belum" mencakup baris pra-generate impor —
  * baris itu ada di DB tapi bukan hasil observasi siapa pun.
  */
-function CakupanObservasiRows({ c }: { c: CakupanPengajar }) {
-  const perHalaqah = new Map<string, PertemuanObservasi[]>();
+function CakupanObservasiRows({
+  c,
+  pengajarName,
+  periodeLabel,
+  ketuaByHalaqah,
+}: {
+  c: CakupanPengajar;
+  pengajarName: string;
+  periodeLabel: string;
+  ketuaByHalaqah: Map<string, KetuaHalaqahInfo>;
+}) {
+  // Kelompokkan per halaqah, tapi simpan halaqahId juga (untuk ketua & link isi).
+  const perHalaqah = new Map<string, { halaqahId: string; list: PertemuanObservasi[] }>();
   for (const p of c.pertemuan) {
-    const arr = perHalaqah.get(p.halaqahName) ?? [];
-    arr.push(p);
-    perHalaqah.set(p.halaqahName, arr);
+    const g = perHalaqah.get(p.halaqahName) ?? { halaqahId: p.halaqahId, list: [] };
+    g.list.push(p);
+    perHalaqah.set(p.halaqahName, g);
   }
   return (
     <details style={{ background: 'var(--surface-2, var(--surface-3))' }}>
@@ -81,9 +104,48 @@ function CakupanObservasiRows({ c }: { c: CakupanPengajar }) {
         )}
       </summary>
       <div style={{ padding: '8px 12px 12px' }}>
-        {[...perHalaqah.entries()].map(([nama, list]) => (
+        {[...perHalaqah.entries()].map(([nama, { halaqahId, list }]) => {
+          const belumList = list.filter((p) => p.status !== 'sudah');
+          const ketua = ketuaByHalaqah.get(halaqahId);
+          const waReminder =
+            belumList.length > 0 && ketua?.wa
+              ? buildWaMeUrl(
+                  ketua.wa,
+                  tplReminderKetuaKelasObservasiRinci({
+                    ketuaNama: ketua.nama,
+                    halaqahName: nama,
+                    pengajarName,
+                    periodeLabel,
+                    belumList: belumList.map((p) => ({ tanggal: p.tanggal, pertemuanNo: p.pertemuanNo })),
+                    isiUrl: ketua.magicToken
+                      ? absUrl(`/api/auth/magic-link?token=${ketua.magicToken}`)
+                      : absUrl('/hits/ketua'),
+                  })
+                )
+              : null;
+          return (
           <div key={nama} style={{ marginBottom: 8 }}>
-            <div className="t-tiny" style={{ color: 'var(--muted-2)', marginBottom: 4 }}>{nama}</div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4, flexWrap: 'wrap' }}>
+              <span className="t-tiny" style={{ color: 'var(--muted-2)' }}>{nama}</span>
+              {belumList.length > 0 && (
+                waReminder ? (
+                  <a
+                    href={waReminder}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="btn btn-wa btn-xs"
+                    style={{ height: 22, padding: '0 8px', fontSize: 10, gap: 4, whiteSpace: 'nowrap' }}
+                    title={`Ingatkan ketua kelas via WA — ${belumList.length} pertemuan belum diisi`}
+                  >
+                    {Icon.wa(11)} Ingatkan ketua ({belumList.length})
+                  </a>
+                ) : (
+                  <span className="t-tiny" style={{ color: 'var(--muted)' }}>
+                    (WA ketua belum ada)
+                  </span>
+                )
+              )}
+            </div>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
               {list.map((p) => {
                 const sudah = p.status === 'sudah';
@@ -115,7 +177,8 @@ function CakupanObservasiRows({ c }: { c: CakupanPengajar }) {
               })}
             </div>
           </div>
-        ))}
+          );
+        })}
         <p className="t-tiny" style={{ color: 'var(--muted-2)', marginTop: 6 }}>
           ✓ hijau = ketua kelas sudah mengisi keterangan · ○ merah = belum.
           Pelanggaran (TL/KMT/KBLA/JKG) hanya dihitung dari pertemuan yang sudah diobservasi
@@ -124,6 +187,16 @@ function CakupanObservasiRows({ c }: { c: CakupanPengajar }) {
       </div>
     </details>
   );
+}
+
+/**
+ * Deep-link ke halaman putusan tabayyun (/observasi/koordinator). `q` menyaring
+ * ke halaqah terkait; anchor #tab-<id> menggulir langsung ke kartu tabayyun-nya.
+ * Gender terkunci ke sesi koordinator di halaman tujuan, jadi tak perlu dikirim.
+ */
+function tabayyunHref(i: InsidenDetail): string | null {
+  if (!i.tabayyunId) return null;
+  return `/observasi/koordinator?statusTab=all&q=${encodeURIComponent(i.halaqahName)}#tab-${i.tabayyunId}`;
 }
 
 /** Rincian insiden KMT/KBLA/JKG/TL satu pengajar — alasan & putusan. */
@@ -192,7 +265,25 @@ function InsidenDetailRows({ list }: { list: InsidenDetail[] }) {
                   {i.alasanPengajar?.trim() || '—'}
                 </td>
                 <td className="t-tiny" style={{ maxWidth: 180 }}>
-                  <div>{putusanText(i)}</div>
+                  {(() => {
+                    const href = tabayyunHref(i);
+                    const perluTindak = i.status !== 'diputus';
+                    return href ? (
+                      <a
+                        href={href}
+                        style={{
+                          color: perluTindak ? 'var(--accent)' : 'inherit',
+                          textDecoration: 'none',
+                          fontWeight: perluTindak ? 600 : 400,
+                        }}
+                        title="Buka halaman tabayyun untuk menindak"
+                      >
+                        {putusanText(i)}{perluTindak ? ' →' : ''}
+                      </a>
+                    ) : (
+                      <div>{putusanText(i)}</div>
+                    );
+                  })()}
                   {i.keputusanCatatan?.trim() ? (
                     <div style={{ color: 'var(--muted-2)' }}>{i.keputusanCatatan}</div>
                   ) : null}
@@ -254,6 +345,13 @@ export default async function HitsKoordinatorPage({
   const noData = rekap.noData;
   const noDataAksi = await getNoDataActionInfo(noData);
 
+  // Ketua kelas per halaqah — untuk tombol "Ingatkan ketua" pada blok cakupan
+  // observasi (baris yang punya pertemuan belum diobservasi).
+  const cakupanHalaqahIds = [...cakupanByPengajar.values()].flatMap((c) =>
+    c.pertemuan.map((p) => p.halaqahId)
+  );
+  const ketuaByHalaqah = await getKetuaByHalaqah(cakupanHalaqahIds);
+
   // Sortir kolom (tinggi→rendah default). Tanpa sort → urutan ranking asli
   // (%on-time, lalu %stabilitas).
   const SORT_KEYS = ['pctOnTime', 'pctStabil', 'kmt', 'kbla', 'jkg', 'tidakLatihan', 'hutangSaldo', 'halaqahCount', 'pengajarNama'] as const;
@@ -307,6 +405,53 @@ export default async function HitsKoordinatorPage({
   const cnt = (n: number) => ({
     text: n > 0 ? String(n) : '—',
     color: n > 0 ? 'var(--merah-ink)' : 'var(--muted)',
+  });
+
+  // ── Teks rekap grup: SELURUH insiden periode ini (abaikan filter masalah/obs;
+  // gender ikut tampilan). insidenByPengajar sudah period+gender scoped & tak
+  // tersaring, jadi angka rekap tak menyusut mengikuti filter yang aktif. ──
+  const namaByPengajar = new Map<string, string>();
+  for (const r of [...rekap.ranked, ...rekap.noData]) namaByPengajar.set(r.pengajarId, r.pengajarNama);
+  const badgeTotal = { KMT: 0, KBLA: 0, JKG: 0, TL: 0 };
+  let totalInsidenRekap = 0;
+  let belumDiputusRekap = 0;
+  const perPengajarRekap: Array<{ nama: string; line: string; belum: number }> = [];
+  for (const [pid, list] of insidenByPengajar) {
+    if (!list.length) continue;
+    const perJenis: Record<string, number> = {};
+    let belum = 0;
+    for (const i of list) {
+      totalInsidenRekap += 1;
+      if (i.status !== 'diputus') { belum += 1; belumDiputusRekap += 1; }
+      for (const p of i.pelanggaran) {
+        perJenis[p.jenis] = (perJenis[p.jenis] ?? 0) + 1;
+        if (p.jenis === 'KMT') badgeTotal.KMT += 1;
+        else if (p.jenis === 'KBLA') badgeTotal.KBLA += 1;
+        else if (p.jenis === 'JKG') badgeTotal.JKG += 1;
+        else if (p.jenis === 'TIDAK_LATIHAN') badgeTotal.TL += 1;
+      }
+    }
+    const ringkas = (['KMT', 'KBLA', 'JKG', 'TIDAK_LATIHAN'] as const)
+      .filter((j) => perJenis[j])
+      .map((j) => `${JENIS_SHORT[j]}×${perJenis[j]}`)
+      .join(', ');
+    const nama = namaByPengajar.get(pid) ?? list[0].halaqahName;
+    perPengajarRekap.push({
+      nama,
+      belum,
+      line: `• ${nama} — ${ringkas || '—'}${belum ? ` · ${belum} nunggu putusan` : ''}`,
+    });
+  }
+  perPengajarRekap.sort((a, b) => b.belum - a.belum || a.nama.localeCompare(b.nama));
+  const rekapGrupTeks = tplHitsRekapInsidenGrup({
+    periodeLabel,
+    genderLabel,
+    totalInsiden: totalInsidenRekap,
+    totalPengajar: perPengajarRekap.length,
+    byBadge: badgeTotal,
+    belumDiputus: belumDiputusRekap,
+    perPengajar: perPengajarRekap.map((p) => p.line),
+    dashboardUrl: absUrl(`/hits/koordinator${genderFilter ? `?gender=${genderFilter}` : ''}`),
   });
 
   return (
@@ -378,6 +523,8 @@ export default async function HitsKoordinatorPage({
             >
               🖨 Cetak / PDF
             </Link>
+            {/* Teks rekap seluruh insiden periode ini — untuk ditempel ke grup koordinator. */}
+            <SalinRekapButton teks={rekapGrupTeks} />
           </div>
         </div>
 
@@ -578,7 +725,12 @@ export default async function HitsKoordinatorPage({
                         {cakupan && cakupan.total > 0 && (
                           <tr>
                             <td colSpan={10} style={{ padding: 0, borderTop: 0 }}>
-                              <CakupanObservasiRows c={cakupan} />
+                              <CakupanObservasiRows
+                                c={cakupan}
+                                pengajarName={r.pengajarNama}
+                                periodeLabel={periodeLabel}
+                                ketuaByHalaqah={ketuaByHalaqah}
+                              />
                             </td>
                           </tr>
                         )}
