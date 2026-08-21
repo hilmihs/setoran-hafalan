@@ -81,7 +81,8 @@ export async function POST(req: NextRequest) {
         halaqah_id,
         jenis,
         nomor_sesi,
-        tgl_jadwal: tgl_jadwal ?? null,
+        tgl_jadwal:
+          typeof tgl_jadwal === 'string' && tgl_jadwal.trim() !== '' ? tgl_jadwal : null,
         surat: surat ?? 'Al-Baqarah',
         ayat_mulai,
         ayat_selesai,

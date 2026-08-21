@@ -122,7 +122,14 @@ export function EvaluasiPengajarApp({ initial }: { initial: EvaluasiInitial }) {
   const [activeSession, setActiveSession] = useState<number>(initial.currentSession.qn);
   const [included, setIncluded] = useState<Record<string, boolean>>(() => {
     const out: Record<string, boolean> = {};
-    for (const p of peserta) out[p.id] = true;
+    // Rehidrasi kehadiran: default hadir (true), kecuali entri work untuk
+    // (jenis, sesi) awal peserta ini tercatat hadir === false.
+    const initJenis: Jenis = 'qn';
+    const initSession = initial.currentSession.qn;
+    for (const p of peserta) {
+      const w = initial.work[workKey(p.id, initJenis, initSession)];
+      out[p.id] = w?.hadir === false ? false : true;
+    }
     return out;
   });
   const [activeIdx, setActiveIdx] = useState(0);
@@ -185,7 +192,7 @@ export function EvaluasiPengajarApp({ initial }: { initial: EvaluasiInitial }) {
             halaqah_id: halaqah.id,
             jenis: j,
             nomor_sesi: session,
-            tgl_jadwal: config.jadwal[j]?.[session - 1] ?? null,
+            tgl_jadwal: config.jadwal?.[j]?.[session - 1] || null,
             surat: su.surat,
             ayat_mulai: su.ayatMulai,
             ayat_selesai: su.ayatSelesai,

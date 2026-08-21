@@ -86,10 +86,16 @@ export function PengaturanForm({ initial }: { initial: PengaturanInitial }) {
     }
     if (timerRef.current) clearTimeout(timerRef.current);
     timerRef.current = setTimeout(() => {
-      // Ujian attempts menentukan jumlah jadwal ujian yang dikirim.
-      const ujian = jadwal.ujian.slice(0, ujianAttempts);
-      while (ujian.length < ujianAttempts) ujian.push('');
-      save({ nama_qn: namaQn, nama_pb: namaPb, ujian_attempts: ujianAttempts, jadwal: { ...jadwal, ujian } });
+      // Normalisasi tiap array jadwal jadi array padat berisi string ('' atau
+      // 'YYYY-MM-DD') — cegah lubang/undefined yang di-serialize jadi null dan
+      // ditolak validDateArray di route config (400). Ujian attempts menentukan
+      // jumlah jadwal ujian yang dikirim.
+      const dense = (arr: string[], n: number): string[] =>
+        Array.from({ length: n }, (_, i) => arr[i] ?? '');
+      const qn = dense(jadwal.qn, 4);
+      const pb = dense(jadwal.pb, 4);
+      const ujian = dense(jadwal.ujian, ujianAttempts);
+      save({ nama_qn: namaQn, nama_pb: namaPb, ujian_attempts: ujianAttempts, jadwal: { qn, pb, ujian } });
     }, 700);
     return () => {
       if (timerRef.current) clearTimeout(timerRef.current);
