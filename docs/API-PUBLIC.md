@@ -411,15 +411,48 @@ if (res.status === 304) { /* pakai data lama */ }
 
 ### Rate limit — 429
 
-- Batas **120 request/menit per key**. Melewatinya → `429 rate_limited` dengan header
-  `Retry-After` (detik).
-- Ada juga **batas request berjalan**: maksimum 4 request `/api/v1/*` diproses
-  bersamaan. Request ke-5 menunggu paling lama 5 detik; kalau antrean tak lekas kosong,
-  ia juga dibalas `429` + `Retry-After`.
+Tiga lapis, semuanya **per key**. Melewati salah satunya → `429 rate_limited` +
+header `Retry-After` (detik).
 
-Perlakukan `429` dengan menghormati `Retry-After`: tunggu sesuai nilainya lalu coba
-lagi. Hindari mengirim banyak request berat (rekap / scan sebulan) secara serentak;
-lebih baik dijadwalkan berurutan.
+| Batas | Nilai | Jendela | `Retry-After` |
+|---|---|---|---|
+| **Burst** | 5 request/detik | 1 detik | `1` |
+| **Menit** | 120 request/menit | 60 detik | `2` |
+| **Inflight** | 4 request diproses bersamaan | — | `2` |
+
+- **Burst 5/detik** menolak lonjakan sub-detik (mis. `Promise.all` 50 request
+  sekaligus) walau totalnya masih di bawah 120/menit.
+- **Inflight**: request ke-5 yang bersamaan menunggu paling lama 5 detik; kalau
+  antrean tak lekas kosong, ia dibalas `429` + `Retry-After`.
+
+> 120/menit dan 5/detik itu **plafon darurat, bukan kecepatan jelajah**. Pemakaian
+> normal targetkan **≤1 call/menit per endpoint** (lihat "Hemat call" di bawah).
+
+### Hemat call — wajib dibaca
+
+Data segar tiap **60 detik** (rekap 5 menit). Memanggil lebih sering dari itu **tidak**
+memberi data baru — cuma membebani server. Pola yang benar:
+
+1. **Jangan poll < 60 detik** untuk endpoint yang sama. Cek `meta.umur_detik` untuk tahu
+   umur data yang sedang dilayani.
+2. **Pakai ETag.** Simpan `ETag`, kirim balik `If-None-Match`. `304` = gratis, tak ada
+   transfer body (lihat contoh di atas).
+3. **Backoff + jitter saat 429.** Jangan retry serempak (thundering herd):
+   ```js
+   let delay = Number(res.headers.get('Retry-After') ?? 2) * 1000;
+   for (let attempt = 0; attempt < 5; attempt++) {
+     await sleep(delay + Math.random() * 1000);   // + jitter acak ≤1s
+     const r = await fetch(url, { headers });
+     if (r.status !== 429) break;
+     delay = Math.min(delay * 2, 60_000);          // eksponensial, cap 60s
+   }
+   ```
+4. **Tarik banyak sekaligus, jangan loop per-item.** Pakai `limit` besar (maks 500) +
+   pagination — bukan N call kecil per santri/halaqah.
+5. **Delta polling.** Pakai filter `sejak` / rentang tanggal (§5) — tarik yang berubah
+   saja, bukan seluruh tabel tiap siklus.
+6. **Jadwalkan request berat berurutan.** Rekap / scan sebulan jangan diluncurkan
+   serentak; antre satu per satu.
 
 ### Maintenance
 
@@ -514,5 +547,7 @@ dari sistem sumber user.
 - Kolom sensitif WA/hash/token/audio **tidak pernah** keluar; `catatan`/`keterangan`
   keluar tapi **wajib** dijaga (§7).
 - Data bisa tertinggal ≤60 detik (rekap ≤5 menit); pakai `ETag` untuk hemat.
+- Rate limit per key: **5/detik**, **120/menit**, **4 inflight** → `429` + `Retry-After`.
+  Normal cukup **≤1 call/menit/endpoint**; jangan poll <60 detik, backoff+jitter saat 429 (§8).
 - **Untuk angka rekap, pakai route `rekap/*` — jangan hitung ulang sendiri (§9).**
 ```

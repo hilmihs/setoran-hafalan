@@ -1,4 +1,11 @@
-// cache.ts — cache respons di memori (LRU by insertion), rate limit, inflight limiter.
+// cache.ts — cache respons di memori (LRU by insertion), rate limit, burst cap, inflight limiter.
+//
+// Desain: state in-memory sengaja. `next-maahir` jalan sebagai SATU proses systemd di
+// satu VPS (bukan cluster/multi-instance) → tak perlu Redis; counter & cache akurat.
+// Respons per-key (cacheKey ikut scopes) → JANGAN pasang shared/CDN cache (nginx
+// proxy_cache) di depan /api/v1: keyed URL akan membocorkan data antar-key. `Cache-Control:
+// private` sudah mencegah proxy manapun menyimpannya. Kalau kelak scale-out >1 proses,
+// pindahkan cache+rate+burst ke store bersama (Redis/Upstash).
 import { apiEnv } from './env';
 
 const MAX_BYTES = 32 * 1024 * 1024;
