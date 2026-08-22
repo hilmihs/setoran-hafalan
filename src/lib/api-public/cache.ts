@@ -51,6 +51,18 @@ export function checkRateLimit(key: string, perMin: number): boolean {
   return true;
 }
 
+// --- burst cap per key, jendela 1s (tutup spike sub-detik yang lolos rate/menit) ---
+const burst = new Map<string, number[]>();
+export function __resetBurst(): void { burst.clear(); }
+export function checkBurst(key: string, perSec: number): boolean {
+  const now = Date.now();
+  const arr = (burst.get(key) ?? []).filter(t => now - t < 1_000);
+  if (arr.length >= perSec) { burst.set(key, arr); return false; }
+  arr.push(now);
+  burst.set(key, arr);
+  return true;
+}
+
 // --- inflight limiter ---
 let inflight = 0;
 const waiters: (() => void)[] = [];

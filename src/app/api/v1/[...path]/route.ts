@@ -4,13 +4,15 @@ import { getEntity } from '@/lib/api-public/registry';
 import { parseRequest, runEntity, scopeAllows, resolveKajianPresensi } from '@/lib/api-public/query';
 import { sanitize } from '@/lib/api-public/sanitize';
 import { ok, fail, handle } from '@/lib/api-public/respond';
-import { getCached, setCached, checkRateLimit, acquireInflight } from '@/lib/api-public/cache';
+import { getCached, setCached, checkRateLimit, checkBurst, acquireInflight } from '@/lib/api-public/cache';
 import { publicApiOn, apiEnv } from '@/lib/api-public/env';
 
 export const dynamic = 'force-dynamic';
 
 const ENTITY_TTL = 60;
 const MAX_INFLIGHT = Number(apiEnv('PUBLIC_API_MAX_INFLIGHT')) || 4;
+const RATE_PER_MIN = Number(apiEnv('PUBLIC_API_RATE_PER_MIN')) || 120;
+const BURST_PER_SEC = Number(apiEnv('PUBLIC_API_BURST_PER_SEC')) || 5;
 
 declare global {
   // eslint-disable-next-line no-var
@@ -27,8 +29,13 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ path: strin
     const auth = await verifyBearer(req.headers.get('authorization'));
     if (!auth.ok) return fail(auth.code, auth.message, auth.status);
 
-    if (!checkRateLimit(auth.client.id, 120)) {
-      const r = fail('rate_limited', 'Melewati batas 120/menit.', 429);
+    if (!checkBurst(auth.client.id, BURST_PER_SEC)) {
+      const r = fail('rate_limited', `Melewati batas ${BURST_PER_SEC}/detik.`, 429);
+      r.headers.set('Retry-After', '1');
+      return r;
+    }
+    if (!checkRateLimit(auth.client.id, RATE_PER_MIN)) {
+      const r = fail('rate_limited', `Melewati batas ${RATE_PER_MIN}/menit.`, 429);
       r.headers.set('Retry-After', '2');
       return r;
     }

@@ -3,7 +3,7 @@
  */
 import { sanitize } from '../src/lib/api-public/sanitize';
 import { generateKey, hashKey, __verifyRow, recordUsage, __drainUsage, __resetAuthCache } from '../src/lib/api-public/auth';
-import { getCached, setCached, __resetCache, checkRateLimit, __resetRate, acquireInflight } from '../src/lib/api-public/cache';
+import { getCached, setCached, __resetCache, checkRateLimit, __resetRate, checkBurst, __resetBurst, acquireInflight } from '../src/lib/api-public/cache';
 import { etagOf, fail, ok } from '../src/lib/api-public/respond';
 import { FORBIDDEN_COLUMNS, auditEntities, ENTITIES, getEntity } from '../src/lib/api-public/registry';
 import { parseRequest, scopeAllows } from '../src/lib/api-public/query';
@@ -118,6 +118,16 @@ function testRate() {
   check('120th allowed', last === true);
   check('121st blocked', checkRateLimit('key', 120) === false);
   check('other key independent', checkRateLimit('key2', 120) === true);
+}
+
+function testBurst() {
+  console.log('burst cap:');
+  __resetBurst();
+  let last = true;
+  for (let i = 0; i < 5; i++) last = checkBurst('key', 5);
+  check('5th allowed', last === true);
+  check('6th blocked', checkBurst('key', 5) === false);
+  check('other key independent', checkBurst('key2', 5) === true);
 }
 
 async function testInflight() {
@@ -267,6 +277,7 @@ async function main() {
   testUsageAccrual();
   testCache();
   testRate();
+  testBurst();
   await testInflight();
   testRespond();
   testRegistryAudit();
