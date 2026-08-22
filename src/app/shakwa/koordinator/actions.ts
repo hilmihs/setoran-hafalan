@@ -2,7 +2,7 @@
 
 import { revalidatePath } from 'next/cache';
 import { supabaseAdmin } from '@/lib/supabase-admin';
-import { requireKoordinator } from '@/lib/session';
+import { requireOneOfRoles } from '@/lib/session';
 import { logAudit } from '@/lib/audit';
 
 export type UbahShakwaResult = { ok?: boolean; error?: string };
@@ -14,7 +14,9 @@ export async function ubahStatusShakwa(
   _prev: UbahShakwaResult | undefined,
   fd: FormData
 ): Promise<UbahShakwaResult> {
-  const session = await requireKoordinator();
+  const session = await requireOneOfRoles(['koordinator', 'koordinator_ketua_kelas']);
+  const reviewerId =
+    session.role === 'koordinator' ? session.koordinator_id : session.koordinator_kk_id;
 
   const id = String(fd.get('id') ?? '');
   const status = String(fd.get('status') ?? '');
@@ -27,8 +29,8 @@ export async function ubahStatusShakwa(
     .update({
       status,
       catatan_reviewer: catatan || null,
-      reviewed_by_id: session.koordinator_id,
-      reviewed_by_role: 'koordinator',
+      reviewed_by_id: reviewerId,
+      reviewed_by_role: session.role,
       reviewed_at: new Date().toISOString(),
     })
     .eq('id', id);

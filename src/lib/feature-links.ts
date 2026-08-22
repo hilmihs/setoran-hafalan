@@ -134,7 +134,7 @@ export const FEATURE_LINKS: FeatureLink[] = [
     title: 'Rekap Shakwa',
     navLabel: 'Shakwa',
     description: 'Aduan & permintaan yang masuk lewat formulir Shakwa — rekap harian & tindak lanjut',
-    match: (a) => a.role === 'koordinator',
+    match: (a) => a.role === 'koordinator' || a.role === 'koordinator_ketua_kelas',
   },
   {
     href: '/shakwa',

@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { requireKoordinator } from '@/lib/session';
+import { requireOneOfRoles } from '@/lib/session';
 import { getShakwaRekap, countShakwaBelumDitangani, type ShakwaItem } from '@/lib/shakwa-rekap';
 import { signedLampiranUrls } from '@/lib/shakwa-storage';
 import { KATEGORI } from '@/lib/shakwa';
@@ -25,7 +25,7 @@ export default async function ShakwaKoordinatorPage({
 }: {
   searchParams: { tanggal?: string; dari?: string; sampai?: string; kategori?: string; status?: string; gender?: string; page?: string };
 }) {
-  await requireKoordinator();
+  await requireOneOfRoles(['koordinator', 'koordinator_ketua_kelas']);
 
   const hariIni = todayJakartaISO();
   const tanggal = DATE_RE.test(searchParams.tanggal ?? '') ? (searchParams.tanggal as string) : hariIni;
