@@ -185,13 +185,19 @@ export default function RapotUjianA4({ payload, qr, logoSrc }: Props) {
             <div style={{ padding: '9px 8px', textAlign: 'center' }}>Kontribusi</div>
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 110px 100px 120px', alignItems: 'center', fontSize: 12, borderBottom: '1px solid #e8e4dc' }}>
-            <div style={{ padding: '9px 14px', borderRight: CELL_BORDER }}>Evaluasi Berkala</div>
+            <div style={{ padding: '9px 14px', borderRight: CELL_BORDER }}>
+              Evaluasi Berkala
+              <div style={{ fontSize: 10, color: '#7a766f', marginTop: 1 }}>Rata-rata semua sesi QN &amp; PB</div>
+            </div>
             <div style={{ padding: '9px 8px', borderRight: CELL_BORDER, textAlign: 'center', fontWeight: 800, fontVariantNumeric: 'tabular-nums' }}>{nilaiOf(berkalaAvg)}</div>
             <div style={{ padding: '9px 8px', borderRight: CELL_BORDER, textAlign: 'center', fontVariantNumeric: 'tabular-nums' }}>30%</div>
             <div style={{ padding: '9px 8px', textAlign: 'center', fontVariantNumeric: 'tabular-nums' }}>{kontribBerkala == null ? '—' : num1(kontribBerkala)}</div>
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 110px 100px 120px', alignItems: 'center', fontSize: 12, borderBottom: '1px solid #d8d3c8' }}>
-            <div style={{ padding: '9px 14px', borderRight: CELL_BORDER }}>Ujian Akhir <span style={{ color: '#7a766f' }}>· skor Ujian PB</span></div>
+            <div style={{ padding: '9px 14px', borderRight: CELL_BORDER }}>
+              Ujian Akhir
+              <div style={{ fontSize: 10, color: '#7a766f', marginTop: 1 }}>Skor Ujian PB saja — Ujian QN tidak dihitung</div>
+            </div>
             <div style={{ padding: '9px 8px', borderRight: CELL_BORDER, textAlign: 'center', fontWeight: 800, fontVariantNumeric: 'tabular-nums' }}>{nilaiOf(pbSkor)}</div>
             <div style={{ padding: '9px 8px', borderRight: CELL_BORDER, textAlign: 'center', fontVariantNumeric: 'tabular-nums' }}>70%</div>
             <div style={{ padding: '9px 8px', textAlign: 'center', fontVariantNumeric: 'tabular-nums' }}>{kontribPb == null ? '—' : num1(kontribPb)}</div>
