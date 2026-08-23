@@ -17,6 +17,13 @@ pool:
 steps:
   - task: Bash@3
     displayName: "🔧 Generate exportable ENV from Variable Group"
+    # Secret variable Azure TIDAK muncul di `printenv` kecuali dipetakan eksplisit
+    # ke env task. Tanpa ini, ENV_AGENT_TOKEN/ENV_CRON_SECRET tak masuk maahir.env
+    # → runtime app tak punya token → sync web 500 & timer 401. Tambah var secret
+    # baru di sini juga.
+    env:
+      ENV_AGENT_TOKEN: $(ENV_AGENT_TOKEN)
+      ENV_CRON_SECRET: $(ENV_CRON_SECRET)
     inputs:
       targetType: "inline"
       script: |
