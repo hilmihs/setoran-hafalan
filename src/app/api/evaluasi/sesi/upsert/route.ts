@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase-admin';
 import { getSession } from '@/lib/session';
+import { evalPengajarIdFor } from '@/lib/evaluasi-pengajar';
 import { JENIS } from '@/lib/evaluasi';
 
 export const runtime = 'nodejs';
@@ -57,7 +58,8 @@ export async function POST(req: NextRequest) {
     if (!halaqah) {
       return NextResponse.json({ error: 'Halaqah tidak ditemukan' }, { status: 404 });
     }
-    if (halaqah.pengajar_id !== pengajar.pengajar_id) {
+    const evalPengajarId = await evalPengajarIdFor(pengajar.pengajar_id);
+    if (!evalPengajarId || halaqah.pengajar_id !== evalPengajarId) {
       return NextResponse.json({ error: 'Bukan halaqah Anda' }, { status: 403 });
     }
 
@@ -87,7 +89,7 @@ export async function POST(req: NextRequest) {
         ayat_mulai,
         ayat_selesai,
         ambang: ambang ?? 70,
-        dibuat_oleh: pengajar.pengajar_id,
+        dibuat_oleh: evalPengajarId,
         updated_at: new Date().toISOString(),
       },
       { onConflict: 'halaqah_id,jenis,nomor_sesi' }

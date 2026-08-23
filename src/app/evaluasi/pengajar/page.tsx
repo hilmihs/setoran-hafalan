@@ -1,5 +1,6 @@
 import { requirePengajar } from '@/lib/session';
 import { supabaseAdmin } from '@/lib/supabase-admin';
+import { evalPengajarIdFor } from '@/lib/evaluasi-pengajar';
 import { columnsToCounts, JENIS, type Jenis } from '@/lib/evaluasi';
 import { EvaluasiPengajarApp, type EvaluasiInitial, type EvWork } from './EvaluasiPengajarApp';
 
@@ -33,13 +34,18 @@ function currentSessionFor(jenis: Jenis, sesiList: SesiRow[], maxSessions: numbe
 export default async function EvaluasiPengajarPage() {
   const session = await requirePengajar();
 
-  // Halaqah pengajar (ambil yang pertama / primer).
-  const { data: halaqahRows } = await supabaseAdmin
-    .from('eval_halaqah')
-    .select('id, nama, gender, mustawa, ambang_ujian')
-    .eq('pengajar_id', session.pengajar_id)
-    .order('nama')
-    .limit(1);
+  // Mirror hilmihs mengidentifikasi pengajar lewat `wa:<nomor>`, bukan id maahir.
+  const evalPengajarId = await evalPengajarIdFor(session.pengajar_id);
+
+  // Halaqah pengajar (ambil yang pertama / primer). Tanpa WA cocok → tak ada.
+  const { data: halaqahRows } = evalPengajarId
+    ? await supabaseAdmin
+        .from('eval_halaqah')
+        .select('id, nama, gender, mustawa, ambang_ujian')
+        .eq('pengajar_id', evalPengajarId)
+        .order('nama')
+        .limit(1)
+    : { data: null };
 
   const halaqah = halaqahRows?.[0] ?? null;
 
