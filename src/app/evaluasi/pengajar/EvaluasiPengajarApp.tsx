@@ -54,6 +54,8 @@ export interface EvConfig {
 }
 export interface EvaluasiInitial {
   pengajarName: string;
+  /** Semua halaqah pengajar (untuk switcher bila >1). */
+  halaqahOptions: { id: string; nama: string }[];
   halaqah: {
     id: string;
     nama: string;
@@ -565,6 +567,23 @@ export function EvaluasiPengajarApp({ initial }: { initial: EvaluasiInitial }) {
                 <div style={{ fontSize: 11, color: '#7a766f', marginTop: 1 }}>{headerMeta}</div>
               </div>
             </div>
+
+            {initial.halaqahOptions.length > 1 && (
+              <div style={{ padding: '10px 16px 0' }}>
+                <label style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.04em', textTransform: 'uppercase', color: '#7a766f', display: 'block', marginBottom: 4 }}>
+                  Halaqah ({initial.halaqahOptions.length})
+                </label>
+                <select
+                  value={halaqah.id}
+                  onChange={(e) => { window.location.href = `/evaluasi/pengajar?halaqah=${encodeURIComponent(e.target.value)}`; }}
+                  style={{ width: '100%', padding: '10px 12px', borderRadius: 10, border: '1.5px solid #e8e4dc', background: '#ffffff', fontSize: 14, fontWeight: 600, color: '#1b1a17', cursor: 'pointer' }}
+                >
+                  {initial.halaqahOptions.map((h) => (
+                    <option key={h.id} value={h.id}>{h.nama}</option>
+                  ))}
+                </select>
+              </div>
+            )}
 
             <div style={{ padding: '18px 16px 0' }}>
               <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.04em', textTransform: 'uppercase', color: '#7a766f', marginBottom: 10 }}>

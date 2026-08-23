@@ -31,23 +31,30 @@ function currentSessionFor(jenis: Jenis, sesiList: SesiRow[], maxSessions: numbe
   return 1;
 }
 
-export default async function EvaluasiPengajarPage() {
+export default async function EvaluasiPengajarPage({
+  searchParams,
+}: {
+  searchParams: { halaqah?: string };
+}) {
   const session = await requirePengajar();
 
   // Mirror hilmihs mengidentifikasi pengajar lewat `wa:<nomor>`, bukan id maahir.
   const evalPengajarId = await evalPengajarIdFor(session.pengajar_id);
 
-  // Halaqah pengajar (ambil yang pertama / primer). Tanpa WA cocok → tak ada.
+  // SEMUA halaqah pengajar (bisa >1 lintas program). Tanpa WA cocok → tak ada.
   const { data: halaqahRows } = evalPengajarId
     ? await supabaseAdmin
         .from('eval_halaqah')
         .select('id, nama, gender, mustawa, ambang_ujian')
         .eq('pengajar_id', evalPengajarId)
         .order('nama')
-        .limit(1)
     : { data: null };
 
-  const halaqah = halaqahRows?.[0] ?? null;
+  const allHalaqah = halaqahRows ?? [];
+  // Pilih halaqah aktif via ?halaqah=<id>; fallback ke yang pertama.
+  const halaqah =
+    allHalaqah.find((h) => h.id === searchParams.halaqah) ?? allHalaqah[0] ?? null;
+  const halaqahOptions = allHalaqah.map((h) => ({ id: h.id as string, nama: h.nama as string }));
 
   if (!halaqah) {
     return (
@@ -140,6 +147,7 @@ export default async function EvaluasiPengajarPage() {
 
   const initial: EvaluasiInitial = {
     pengajarName: session.name,
+    halaqahOptions,
     halaqah: {
       id: halaqah.id as string,
       nama: halaqah.nama as string,
