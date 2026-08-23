@@ -755,6 +755,31 @@ export interface EvaluasiNilai {
   updated_at: string;
 }
 
+export interface EvalSyncRun {
+  id: string;
+  started_at: string;
+  finished_at: string | null;
+  source_generated_at: string | null;
+  counts: Record<string, { create?: number; update?: number; deactivate?: number }>;
+  status: 'running' | 'ok' | 'error';
+  error: string | null;
+}
+export interface EvalSyncStage {
+  id: string;
+  run_id: string;
+  entity: 'batch' | 'pengajar' | 'halaqah' | 'peserta';
+  op: 'create' | 'update' | 'deactivate';
+  entity_id: string;
+  before: Record<string, unknown> | null;
+  after: Record<string, unknown> | null;
+  flags: string[];
+  applied_at: string | null;
+  applied_by: string | null;
+  rejected: boolean;
+  rejected_by: string | null;
+  created_at: string;
+}
+
 // ========== Session types ==========
 
 export interface PesertaSession {

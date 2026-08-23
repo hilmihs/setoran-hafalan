@@ -16,6 +16,7 @@
     "test-shakwa": "tsx --env-file=.env.local scripts/test-shakwa.ts",
     "test-evaluasi": "tsx scripts/test-evaluasi.ts",
     "test-hilmihs": "tsx --env-file=.env.local scripts/test-hilmihs.ts",
+    "apply-migration": "tsx --env-file=.env.local scripts/apply-migration.ts",
     "seed-evaluasi": "tsx --env-file=.env.local scripts/seed-evaluasi.ts",
     "test-pengajuan": "tsx --env-file=.env.local scripts/test-hits-pengajuan.ts",
     "export-supabase": "tsx --env-file=.env.local scripts/export-supabase.ts",
