@@ -8,25 +8,24 @@ interface SetupProps {
   isUjian: boolean;
   ambangUjian: number;
   mustawa: number | null;
-  maxSessions: number;
+  /** Nomor sesi yang aktif (bisa dipilih). Untuk ujian, yang di-soft-delete tak masuk sini. */
+  sesiOptions: number[];
   activeSession: number;
   /** Label per sesi (index 0-based). Bila kosong → "Sesi N". Dipakai ujian akhir: "Ujian QN"/"Ujian PB". */
   sesiOptionLabels?: string[];
   pickSession: (n: number) => void;
-  surat: string;
-  setSurat: (v: string) => void;
-  ayatMulai: number;
-  setAyatMulai: (v: number) => void;
-  ayatSelesai: number;
-  setAyatSelesai: (v: number) => void;
+  /** Ujian only: nomor sesi yang sudah dihapus (untuk dipulihkan). */
+  deletedOptions?: number[];
+  /** Ujian only: hapus/pulihkan sesi. */
+  onToggleSesi?: (n: number, dihapus: boolean) => void;
+  /** Ringkasan materi read-only (silabus), mis. "Al-Baqarah 142–157". */
+  materiLine?: string;
   back: () => void;
   lanjut: () => void;
 }
 
-const SURAT_OPTIONS = ['Al-Baqarah', "Ali 'Imran", 'An-Nisa'];
-
 export function Setup(props: SetupProps) {
-  const sesiOptions = Array.from({ length: props.maxSessions }, (_, i) => i + 1);
+  const canDelete = !!props.onToggleSesi && props.sesiOptions.length > 1;
   return (
     <>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 16px', background: '#ffffff', borderBottom: '1px solid #e8e4dc' }}>
@@ -47,19 +46,51 @@ export function Setup(props: SetupProps) {
         <div style={{ background: '#ffffff', border: '1px solid #e8e4dc', borderRadius: 12, padding: 14 }}>
           <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.05em', textTransform: 'uppercase', color: '#7a766f', marginBottom: 10 }}>{props.isUjian ? 'Ujian yang mana?' : 'Evaluasi ke berapa?'}</div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 8 }}>
-            {sesiOptions.map((n) => {
+            {props.sesiOptions.map((n) => {
               const on = n === props.activeSession;
               return (
-                <button
-                  key={n}
-                  onClick={() => props.pickSession(n)}
-                  style={{ height: 44, borderRadius: 8, border: `1.5px solid ${on ? '#1b1a17' : '#ffffff'}`, background: on ? '#1b1a17' : '#ffffff', color: on ? '#ffffff' : '#44423d', font: 'inherit', fontSize: 14, fontWeight: 700, cursor: 'pointer' }}
-                >
-                  {props.sesiOptionLabels?.[n - 1] ?? `Sesi ${n}`}
-                </button>
+                <div key={n} style={{ position: 'relative' }}>
+                  <button
+                    onClick={() => props.pickSession(n)}
+                    style={{ width: '100%', height: 44, borderRadius: 8, border: `1.5px solid ${on ? '#1b1a17' : '#ffffff'}`, background: on ? '#1b1a17' : '#ffffff', color: on ? '#ffffff' : '#44423d', font: 'inherit', fontSize: 14, fontWeight: 700, cursor: 'pointer' }}
+                  >
+                    {props.sesiOptionLabels?.[n - 1] ?? `Sesi ${n}`}
+                  </button>
+                  {canDelete && (
+                    <button
+                      aria-label="Hapus sesi ini"
+                      title="Hapus sesi ini"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        props.onToggleSesi?.(n, true);
+                      }}
+                      style={{ position: 'absolute', top: -7, right: -7, width: 20, height: 20, borderRadius: 10, border: '1px solid #e8e4dc', background: '#ffffff', color: 'oklch(0.55 0.14 25)', fontSize: 12, lineHeight: '18px', cursor: 'pointer', padding: 0, boxShadow: '0 1px 2px rgba(0,0,0,0.08)' }}
+                    >
+                      ×
+                    </button>
+                  )}
+                </div>
               );
             })}
           </div>
+          {props.isUjian && !!props.deletedOptions?.length && (
+            <div style={{ marginTop: 10, display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+              {props.deletedOptions.map((n) => (
+                <button
+                  key={n}
+                  onClick={() => props.onToggleSesi?.(n, false)}
+                  style={{ height: 30, padding: '0 10px', borderRadius: 8, border: '1px dashed #d8d3c8', background: '#faf8f4', color: '#7a766f', font: 'inherit', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}
+                >
+                  ↩ Pulihkan {props.sesiOptionLabels?.[n - 1] ?? `Sesi ${n}`}
+                </button>
+              ))}
+            </div>
+          )}
+          {props.isUjian && (
+            <div style={{ fontSize: 11, color: '#a8a39a', marginTop: 10 }}>
+              Halaqah yang cukup satu ujian akhir bisa menghapus sesi yang tak dipakai. Minimal satu sesi harus tetap ada.
+            </div>
+          )}
         </div>
 
         {props.isUjian && (
@@ -71,44 +102,13 @@ export function Setup(props: SetupProps) {
           </div>
         )}
 
-        <div style={{ background: '#ffffff', border: '1px solid #e8e4dc', borderRadius: 12, padding: 14 }}>
-          <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.05em', textTransform: 'uppercase', color: '#7a766f', marginBottom: 10 }}>Materi · surat &amp; ayat</div>
-          <div style={{ marginBottom: 10 }}>
-            <div style={{ fontSize: 12, fontWeight: 600, color: '#44423d', marginBottom: 5 }}>Surat</div>
-            <select
-              value={props.surat}
-              onChange={(e) => props.setSurat(e.target.value)}
-              style={{ width: '100%', height: 44, padding: '0 14px', background: '#ffffff', border: '1px solid #d8d3c8', borderRadius: 8, font: 'inherit', fontSize: 14, color: '#1b1a17' }}
-            >
-              {SURAT_OPTIONS.map((s) => (
-                <option key={s} value={s}>{s}</option>
-              ))}
-            </select>
+        {props.materiLine && (
+          <div style={{ background: '#ffffff', border: '1px solid #e8e4dc', borderRadius: 12, padding: 14 }}>
+            <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.05em', textTransform: 'uppercase', color: '#7a766f', marginBottom: 4 }}>Materi · surat &amp; ayat</div>
+            <div style={{ fontSize: 14, fontWeight: 700 }}>{props.materiLine}</div>
+            <div style={{ fontSize: 11, color: '#a8a39a', marginTop: 6 }}>Mengikuti silabus pertemuan bulan ini.</div>
           </div>
-          <div style={{ display: 'flex', gap: 10 }}>
-            <div style={{ flex: 1 }}>
-              <div style={{ fontSize: 12, fontWeight: 600, color: '#44423d', marginBottom: 5 }}>Ayat mulai</div>
-              <input
-                type="number"
-                value={props.ayatMulai}
-                onChange={(e) => props.setAyatMulai(Math.max(1, parseInt(e.target.value, 10) || 1))}
-                className="ev-num"
-                style={{ width: '100%', height: 44, padding: '0 14px', background: '#ffffff', border: '1px solid #d8d3c8', borderRadius: 8, font: 'inherit', fontSize: 14, color: '#1b1a17', fontVariantNumeric: 'tabular-nums' }}
-              />
-            </div>
-            <div style={{ flex: 1 }}>
-              <div style={{ fontSize: 12, fontWeight: 600, color: '#44423d', marginBottom: 5 }}>Ayat selesai</div>
-              <input
-                type="number"
-                value={props.ayatSelesai}
-                onChange={(e) => props.setAyatSelesai(Math.max(1, parseInt(e.target.value, 10) || 1))}
-                className="ev-num"
-                style={{ width: '100%', height: 44, padding: '0 14px', background: '#ffffff', border: '1px solid #d8d3c8', borderRadius: 8, font: 'inherit', fontSize: 14, color: '#1b1a17', fontVariantNumeric: 'tabular-nums' }}
-              />
-            </div>
-          </div>
-          <div style={{ fontSize: 11, color: '#a8a39a', marginTop: 8 }}>Default mengikuti silabus pertemuan bulan ini — ubah bila perlu.</div>
-        </div>
+        )}
       </div>
 
       <div style={{ flex: 1 }} />

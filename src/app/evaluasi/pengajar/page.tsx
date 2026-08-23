@@ -16,6 +16,7 @@ interface SesiRow {
   ayat_selesai: number;
   ambang: number;
   status: string;
+  dihapus: boolean;
 }
 
 function maxSessionsFor(jenis: Jenis, ujianAttempts: number): number {
@@ -23,7 +24,7 @@ function maxSessionsFor(jenis: Jenis, ujianAttempts: number): number {
 }
 
 function currentSessionFor(jenis: Jenis, sesiList: SesiRow[], maxSessions: number): number {
-  const js = sesiList.filter((s) => s.jenis === jenis);
+  const js = sesiList.filter((s) => s.jenis === jenis && !s.dihapus);
   const drafts = js.filter((s) => s.status === 'draft');
   if (drafts.length) return Math.max(...drafts.map((s) => s.nomor_sesi));
   const sent = js.filter((s) => s.status === 'terkirim');
@@ -88,7 +89,7 @@ export default async function EvaluasiPengajarPage({
   // Sesi halaqah.
   const { data: sesiRowsRaw } = await supabaseAdmin
     .from('evaluasi_sesi')
-    .select('id, jenis, nomor_sesi, tgl_jadwal, surat, ayat_mulai, ayat_selesai, ambang, status')
+    .select('id, jenis, nomor_sesi, tgl_jadwal, surat, ayat_mulai, ayat_selesai, ambang, status, dihapus')
     .eq('halaqah_id', halaqah.id);
   const sesiRows = (sesiRowsRaw ?? []) as SesiRow[];
 
@@ -169,6 +170,7 @@ export default async function EvaluasiPengajarPage({
       ayat_selesai: s.ayat_selesai,
       ambang: s.ambang,
       status: s.status as 'draft' | 'terkirim',
+      dihapus: !!s.dihapus,
     })),
     work,
     currentSession,

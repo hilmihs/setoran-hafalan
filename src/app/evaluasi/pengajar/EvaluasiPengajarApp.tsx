@@ -18,7 +18,9 @@ import { Setup } from './screens/Setup';
 import { Daftar } from './screens/Daftar';
 import { Nilai } from './screens/Nilai';
 import { Ringkasan } from './screens/Ringkasan';
-import { Rapor } from './screens/Rapor';
+import RapotBerkala from './screens/RapotBerkala';
+import { RapotUjian } from './screens/RapotUjian';
+import { buildBerkalaPayload, buildUjianPayload, type SesiNilaiInput } from '@/lib/rapot';
 
 // ── Types shared with the RSC page ──
 export interface EvPeserta {
@@ -37,6 +39,7 @@ export interface EvSesi {
   ayat_selesai: number;
   ambang: number;
   status: 'draft' | 'terkirim';
+  dihapus: boolean;
 }
 export interface EvWork {
   counts: LahnCounts;
@@ -140,6 +143,7 @@ export function EvaluasiPengajarApp({ initial }: { initial: EvaluasiInitial }) {
   const [activeIdx, setActiveIdx] = useState(0);
   const [work, setWork] = useState<Record<string, EvWork>>(initial.work);
   const [raporId, setRaporId] = useState<string | null>(null);
+  const [terbitStatus, setTerbitStatus] = useState<'idle' | 'saving' | 'done' | 'error'>('idle');
   const [waOpen, setWaOpen] = useState(false);
   const [surat, setSurat] = useState('Al-Baqarah');
   const [ayatMulai, setAyatMulai] = useState<number>(142);
@@ -151,11 +155,21 @@ export function EvaluasiPengajarApp({ initial }: { initial: EvaluasiInitial }) {
     return out;
   });
   const [kirimStatus, setKirimStatus] = useState<SaveStatus>('idle');
+  // Sesi ujian yang di-soft-delete pengajar (per nomor_sesi).
+  const [ujianDihapus, setUjianDihapus] = useState<Set<number>>(
+    () => new Set(initial.sesiList.filter((s) => s.jenis === 'ujian' && s.dihapus).map((s) => s.nomor_sesi))
+  );
 
   const maxSessions: Record<Jenis, number> = {
     qn: 4,
     pb: 4,
     ujian: config.ujian_attempts,
+  };
+
+  // Nomor sesi yang bisa dipilih untuk sebuah jenis (ujian: tanpa yang dihapus).
+  const sesiOptionsFor = (j: Jenis): number[] => {
+    const all = Array.from({ length: maxSessions[j] }, (_, i) => i + 1);
+    return j === 'ujian' ? all.filter((n) => !ujianDihapus.has(n)) : all;
   };
 
   // Refs untuk baca state terbaru di dalam callback async (debounce).
@@ -327,7 +341,10 @@ export function EvaluasiPengajarApp({ initial }: { initial: EvaluasiInitial }) {
 
   // Mulai penilaian dari kartu home: set jenis+sesi, muat surat/ayat dari sesi bila ada.
   const startJenis = (j: Jenis) => {
-    const session = initial.currentSession[j];
+    const opts = sesiOptionsFor(j);
+    // Sesi awal: currentSession bila masih valid, selain itu opsi pertama.
+    const preferred = initial.currentSession[j];
+    const session = opts.includes(preferred) ? preferred : opts[0] ?? 1;
     const sesi = initial.sesiList.find((s) => s.jenis === j && s.nomor_sesi === session);
     setJenis(j);
     setActiveSession(session);
@@ -336,7 +353,8 @@ export function EvaluasiPengajarApp({ initial }: { initial: EvaluasiInitial }) {
     setSurat(sesi?.surat ?? 'Al-Baqarah');
     setAyatMulai(sesi?.ayat_mulai ?? 142);
     setAyatSelesai(sesi?.ayat_selesai ?? 157);
-    setScreen('p-daftar');
+    // Pengajar pilih sesi dulu (bisa hapus sesi ujian) sebelum daftar peserta.
+    setScreen('p-setup');
   };
 
   const pickSession = (n: number) => {
@@ -346,6 +364,39 @@ export function EvaluasiPengajarApp({ initial }: { initial: EvaluasiInitial }) {
       setSurat(sesi.surat);
       setAyatMulai(sesi.ayat_mulai);
       setAyatSelesai(sesi.ayat_selesai);
+    }
+  };
+
+  // Hapus / pulihkan satu sesi ujian akhir (optimistic).
+  const toggleSesiUjian = async (n: number, dihapus: boolean) => {
+    setUjianDihapus((prev) => {
+      const nx = new Set(prev);
+      if (dihapus) nx.add(n);
+      else nx.delete(n);
+      return nx;
+    });
+    // Bila sesi aktif ikut terhapus, pindah ke sesi ujian yang masih ada.
+    if (dihapus && jenis === 'ujian' && activeSession === n) {
+      const rest = Array.from({ length: maxSessions.ujian }, (_, i) => i + 1).filter(
+        (m) => m !== n && !ujianDihapus.has(m)
+      );
+      if (rest.length) setActiveSession(rest[0]);
+    }
+    try {
+      const res = await fetch('/api/evaluasi/sesi/hapus', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ halaqah_id: halaqah.id, nomor_sesi: n, dihapus }),
+      });
+      if (!res.ok) throw new Error('gagal');
+    } catch {
+      // Revert bila gagal.
+      setUjianDihapus((prev) => {
+        const nx = new Set(prev);
+        if (dihapus) nx.delete(n);
+        else nx.add(n);
+        return nx;
+      });
     }
   };
 
@@ -374,10 +425,12 @@ export function EvaluasiPengajarApp({ initial }: { initial: EvaluasiInitial }) {
   // Home cards.
   const dotColorsDone = { qn: 'oklch(0.58 0.09 165)', pb: 'oklch(0.55 0.10 210)', ujian: 'oklch(0.58 0.09 165)' };
   const homeCards = (['qn', 'pb', 'ujian'] as Jenis[]).map((j) => {
-    const cur = initial.currentSession[j];
-    const max = maxSessions[j];
+    const opts = sesiOptionsFor(j);
+    const max = opts.length;
+    const preferred = initial.currentSession[j];
+    const cur = opts.includes(preferred) ? preferred : opts[0] ?? 1;
     const sentKeyOf = (n: number) => sentSesi[`${j}|${n}`];
-    const dots = Array.from({ length: max }, (_, i) => i + 1).map((n) => ({
+    const dots = opts.map((n) => ({
       key: `d${n}`,
       color: sentKeyOf(n) || n < cur ? dotColorsDone[j] : n === cur ? 'oklch(0.78 0.10 80)' : '#e8e4dc',
     }));
@@ -387,7 +440,10 @@ export function EvaluasiPengajarApp({ initial }: { initial: EvaluasiInitial }) {
       key: j,
       icon: j === 'qn' ? '📖' : j === 'pb' ? '📝' : '🎓',
       title: trackName(j),
-      desc: `Sesi ${cur} dari ${max} · ${fmtTgl(config.jadwal[j]?.[cur - 1])}`,
+      desc:
+        j === 'ujian'
+          ? `${opts.length} sesi ujian · ${fmtTgl(config.jadwal[j]?.[cur - 1])}`
+          : `Sesi ${cur} dari ${max} · ${fmtTgl(config.jadwal[j]?.[cur - 1])}`,
       bg,
       border,
       dots,
@@ -472,6 +528,7 @@ export function EvaluasiPengajarApp({ initial }: { initial: EvaluasiInitial }) {
         tierLabel: t.label,
         lihat: () => {
           setRaporId(p.id);
+          setTerbitStatus('idle');
           setScreen('p-rapor');
         },
       };
@@ -510,33 +567,51 @@ export function EvaluasiPengajarApp({ initial }: { initial: EvaluasiInitial }) {
     }
   };
 
-  // Rapor (peserta terpilih).
+  // Rapot (peserta terpilih) — payload dari builder murni (identik dgn snapshot server).
   const rId = raporId ?? activeP.id;
   const rPeserta = peserta.find((p) => p.id === rId) ?? activeP;
-  const rRec = getWork(rId, jenis, activeSession);
-  const rSc = scoreOf(rRec.counts);
-  const rTier = tierOf(rSc.skor);
-  const rincian = [...JALIY, ...KHAFIY]
-    .filter((d) => (rRec.counts[d.key] || 0) > 0)
-    .map((d) => ({
-      key: d.key,
-      label: d.label,
-      count: rRec.counts[d.key],
-      tag: d.group === 'jaliy' ? 'Jaliy' : 'Khafiy',
-      tagColor: d.group === 'jaliy' ? 'oklch(0.46 0.14 25)' : 'oklch(0.48 0.10 75)',
-    }));
-  // Histori skor per jenis (untuk 3 track chart). Panjang 4 agar geometri sama.
-  const buildHistory = (j: Jenis): (number | null)[] =>
-    [1, 2, 3, 4].map((n) => {
-      const w = workRef.current[workKey(rId, j, n)];
-      if (!w || !w.done) return null;
-      return scoreOf(w.counts).skor;
-    });
-  const raporTracks = [
-    { jenis: 'qn' as Jenis, label: `Progres ${config.nama_qn}`, history: buildHistory('qn') },
-    { jenis: 'pb' as Jenis, label: `Progres ${config.nama_pb}`, history: buildHistory('pb') },
-    { jenis: 'ujian' as Jenis, label: 'Progres Ujian Akhir', history: buildHistory('ujian') },
-  ];
+  const assembleSesi = (pid: string): SesiNilaiInput[] => {
+    const out: SesiNilaiInput[] = [];
+    const push = (j: Jenis, maxN: number) => {
+      for (let n = 1; n <= maxN; n++) {
+        const w = getWork(pid, j, n);
+        const sesi = initial.sesiList.find((s) => s.jenis === j && s.nomor_sesi === n);
+        out.push({ jenis: j, nomor_sesi: n, counts: w.counts, catatan: w.catatan, tgl: sesi?.tgl_jadwal ?? null, done: w.done });
+      }
+    };
+    push('qn', 4);
+    push('pb', 4);
+    push('ujian', maxSessions.ujian);
+    return out;
+  };
+  const rIdentitas = {
+    peserta: rPeserta.nama,
+    halaqah: halaqah.nama,
+    level: halaqah.level,
+    mustawa: halaqah.mustawa,
+    gender: halaqah.gender,
+    batch: null as string | null,
+  };
+  const rSesi = assembleSesi(rId);
+  const rapotBerkala = buildBerkalaPayload(rIdentitas, initial.pengajarName, '', rSesi, config.nama_qn, config.nama_pb);
+  const rapotUjian = buildUjianPayload(rIdentitas, initial.pengajarName, '', rSesi);
+
+  const terbitkanRapot = async (jenis_rapot: 'berkala' | 'ujian') => {
+    setTerbitStatus('saving');
+    try {
+      const res = await fetch('/api/evaluasi/rapot/terbitkan', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ halaqah_id: halaqah.id, peserta_id: rId, jenis_rapot }),
+      });
+      const json = await res.json();
+      if (!res.ok || !json.token) throw new Error(json.error || 'gagal');
+      setTerbitStatus('done');
+      window.open(`/evaluasi/pengajar/rapot/${json.token}`, '_blank');
+    } catch {
+      setTerbitStatus('error');
+    }
+  };
 
   const shellStyle: React.CSSProperties = {
     maxWidth: 460,
@@ -648,7 +723,7 @@ export function EvaluasiPengajarApp({ initial }: { initial: EvaluasiInitial }) {
 
         {screen === 'p-setup' && (
           <Setup
-            judul={`${jl} — Setup`}
+            judul={`${jl} — Pilih sesi`}
             sesiLabel={
               isUjian
                 ? `${UJIAN_SESI_LABELS[activeSession - 1] ?? `Ujian ${activeSession}`} · dijadwalkan ${fmtTgl(config.jadwal[jenis]?.[activeSession - 1])}`
@@ -659,16 +734,17 @@ export function EvaluasiPengajarApp({ initial }: { initial: EvaluasiInitial }) {
             isUjian={isUjian}
             ambangUjian={halaqah.ambang_ujian}
             mustawa={halaqah.mustawa}
-            maxSessions={maxSessions[jenis]}
+            sesiOptions={sesiOptionsFor(jenis)}
             activeSession={activeSession}
             sesiOptionLabels={isUjian ? UJIAN_SESI_LABELS : undefined}
             pickSession={pickSession}
-            surat={surat}
-            setSurat={setSurat}
-            ayatMulai={ayatMulai}
-            setAyatMulai={setAyatMulai}
-            ayatSelesai={ayatSelesai}
-            setAyatSelesai={setAyatSelesai}
+            deletedOptions={
+              isUjian
+                ? Array.from({ length: maxSessions.ujian }, (_, i) => i + 1).filter((n) => ujianDihapus.has(n))
+                : undefined
+            }
+            onToggleSesi={isUjian ? toggleSesiUjian : undefined}
+            materiLine={`${surat} ${ayatMulai}–${ayatSelesai}`}
             back={() => nav('p-home')}
             lanjut={async () => {
               await ensureSesiId(jenis, activeSession);
@@ -680,7 +756,11 @@ export function EvaluasiPengajarApp({ initial }: { initial: EvaluasiInitial }) {
         {screen === 'p-daftar' && (
           <Daftar
             judul={jl}
-            sub={`Sesi ${activeSession} dari ${maxSessions[jenis]} · ${surat} ${ayatMulai}–${ayatSelesai}`}
+            sub={
+              isUjian
+                ? `${UJIAN_SESI_LABELS[activeSession - 1] ?? `Ujian ${activeSession}`} · ${surat} ${ayatMulai}–${ayatSelesai}`
+                : `Sesi ${activeSession} dari ${maxSessions[jenis]} · ${surat} ${ayatMulai}–${ayatSelesai}`
+            }
             items={daftarItems}
             selesai={selesaiCount}
             total={includedPeserta.length}
@@ -786,23 +866,22 @@ export function EvaluasiPengajarApp({ initial }: { initial: EvaluasiInitial }) {
           />
         )}
 
-        {screen === 'p-rapor' && (
-          <Rapor
-            nama={rPeserta.nama}
-            meta={`Halaqah ${halaqah.nama} · ${jl} · Sesi ${activeSession} · ${fmtBulan(config.jadwal[jenis]?.[activeSession - 1]) || ''}`}
-            isUjian={isUjian}
-            lulusLabel={rSc.skor >= halaqah.ambang_ujian ? 'LULUS' : 'MENGULANG'}
-            lulusBg={rSc.skor >= halaqah.ambang_ujian ? 'oklch(0.96 0.035 150)' : 'oklch(0.96 0.03 25)'}
-            lulusColor={rSc.skor >= halaqah.ambang_ujian ? 'oklch(0.40 0.10 150)' : 'oklch(0.46 0.14 25)'}
-            skor={rSc.skor}
-            skorColor={rTier.color}
-            tierLabel={rTier.label}
-            tracks={raporTracks}
-            rincian={rincian}
-            catatan={rRec.catatan || '—'}
-            back={() => nav('p-ringkasan')}
-          />
-        )}
+        {screen === 'p-rapor' &&
+          (isUjian ? (
+            <RapotUjian
+              payload={rapotUjian}
+              onBack={() => nav('p-ringkasan')}
+              onTerbitkan={() => terbitkanRapot('ujian')}
+              terbitStatus={terbitStatus}
+            />
+          ) : (
+            <RapotBerkala
+              payload={rapotBerkala}
+              onBack={() => nav('p-ringkasan')}
+              onTerbitkan={() => terbitkanRapot('berkala')}
+              terbitStatus={terbitStatus}
+            />
+          ))}
       </div>
     </div>
   );

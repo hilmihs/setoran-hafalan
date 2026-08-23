@@ -68,6 +68,47 @@ export function initials(nama: string): string {
   return nama.split(' ').slice(0, 2).map((w) => w[0] || '').join('').toUpperCase();
 }
 
+// --- Nilai akhir: 30% rata-rata evaluasi berkala (qn+pb) + 70% Ujian PB ---
+// Ujian QN (nomor_sesi 1) TIDAK dihitung ke nilai akhir; hanya catatan progres.
+export const BOBOT_BERKALA = 0.3;
+export const BOBOT_UJIAN_AKHIR = 0.7;
+export const AMBANG_LULUS_AKHIR = 70; // ambang lulus nilai akhir (fix)
+export const UJIAN_QN_SESI = 1;
+export const UJIAN_PB_SESI = 2;
+
+export interface NilaiAkhir {
+  nilai: number | null;      // null bila Ujian PB belum ada
+  berkalaAvg: number | null; // null bila belum ada sesi berkala yang dinilai
+  ujianPbSkor: number | null;
+  lengkap: boolean;          // berkalaAvg != null && ujianPbSkor != null
+  lulus: boolean | null;     // null bila nilai null
+}
+
+// berkalaScores = skor semua sesi qn+pb yang sudah dinilai (digabung, unweighted).
+export function nilaiAkhirOf(berkalaScores: number[], ujianPbSkor: number | null): NilaiAkhir {
+  const berkalaAvg = berkalaScores.length
+    ? Math.round(berkalaScores.reduce((a, b) => a + b, 0) / berkalaScores.length)
+    : null;
+  const nilai =
+    ujianPbSkor == null
+      ? null
+      : Math.round(BOBOT_BERKALA * (berkalaAvg ?? 0) + BOBOT_UJIAN_AKHIR * ujianPbSkor);
+  return {
+    nilai,
+    berkalaAvg,
+    ujianPbSkor,
+    lengkap: berkalaAvg != null && ujianPbSkor != null,
+    lulus: nilai == null ? null : nilai >= AMBANG_LULUS_AKHIR,
+  };
+}
+
+// Jumlahkan beberapa LahnCounts (akumulasi kesalahan lintas sesi untuk tabel rapot).
+export function sumCounts(list: LahnCounts[]): LahnCounts {
+  const out = emptyCounts();
+  for (const c of list) for (const d of ALL_LAHN) out[d.key] += c[d.key] || 0;
+  return out;
+}
+
 // Konversi antara counts (keyed) dan kolom DB (kh_/jk_).
 export function countsToColumns(counts: LahnCounts): Record<string, number> {
   const out: Record<string, number> = {};

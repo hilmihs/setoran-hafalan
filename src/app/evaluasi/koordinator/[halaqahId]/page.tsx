@@ -2,8 +2,9 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { requireKoordinator } from '@/lib/session';
 import { supabaseAdmin } from '@/lib/supabase-admin';
-import { ALL_LAHN, AMBANG, columnsToCounts, initials, tierOf } from '@/lib/evaluasi';
+import { ALL_LAHN, AMBANG, columnsToCounts, initials, tierOf, nilaiAkhirOf } from '@/lib/evaluasi';
 import { PrintButton } from '@/components/PrintButton';
+import RekapNilaiAkhir from './RekapNilaiAkhir';
 
 export const dynamic = 'force-dynamic';
 
@@ -93,6 +94,37 @@ export default async function KoordinatorHalaqahPage({
     };
   });
 
+  // Rekap nilai akhir (berkala + ujian) semua peserta.
+  const { data: allSesiRaw } = await supabaseAdmin
+    .from('evaluasi_sesi')
+    .select('id, jenis, nomor_sesi, dihapus')
+    .eq('halaqah_id', halaqah.id as string);
+  const allSesi = ((allSesiRaw ?? []) as { id: string; jenis: string; nomor_sesi: number; dihapus: boolean }[]).filter(
+    (s) => !s.dihapus
+  );
+  const sesiMeta = new Map(allSesi.map((s) => [s.id, s]));
+  const { data: allNilaiRaw } = await supabaseAdmin
+    .from('evaluasi_nilai')
+    .select('sesi_id, peserta_id, skor, done')
+    .in('sesi_id', allSesi.length ? allSesi.map((s) => s.id) : noId);
+  const allNilai = (allNilaiRaw ?? []) as { sesi_id: string; peserta_id: string; skor: number; done: boolean }[];
+  const rekapRows = pesertaList.map((p) => {
+    const mine = allNilai.filter((n) => n.peserta_id === (p.id as string) && n.done);
+    const berkala: number[] = [];
+    let ujianQn: number | null = null;
+    let ujianPb: number | null = null;
+    for (const n of mine) {
+      const m = sesiMeta.get(n.sesi_id);
+      if (!m) continue;
+      const skor = Number(n.skor) || 0;
+      if (m.jenis === 'qn' || m.jenis === 'pb') berkala.push(skor);
+      else if (m.jenis === 'ujian' && m.nomor_sesi === 1) ujianQn = skor;
+      else if (m.jenis === 'ujian' && m.nomor_sesi === 2) ujianPb = skor;
+    }
+    const na = nilaiAkhirOf(berkala, ujianPb);
+    return { nama: p.nama as string, berkalaAvg: na.berkalaAvg, ujianQn, ujianPb, nilaiAkhir: na.nilai, lulus: na.lulus };
+  });
+
   // Distribusi jenis kesalahan (baris done).
   const lahnSum = new Array(ALL_LAHN.length).fill(0);
   let bermasalah = 0;
@@ -161,6 +193,10 @@ export default async function KoordinatorHalaqahPage({
           <div className="no-print" style={{ marginLeft: 'auto' }}>
             <PrintButton label="Unduh laporan" />
           </div>
+        </div>
+
+        <div style={{ marginBottom: 18 }}>
+          <RekapNilaiAkhir halaqahNama={halaqah.nama as string} rows={rekapRows} />
         </div>
 
         <div
