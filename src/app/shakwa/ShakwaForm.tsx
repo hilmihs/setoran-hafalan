@@ -344,7 +344,13 @@ export function ShakwaForm({
                       </div>
                       <div>
                         <label className="t-tiny" htmlFor={`izin-menit-${idx}`} style={{ color: 'var(--muted-2)' }}>
-                          {jenisDef?.butuhTanggalGanti ? 'Tanggal ganti' : 'Jumlah menit'}
+                          {jenisDef?.butuhTanggalGanti
+                            ? 'Jadwal Kelas Pengganti'
+                            : jenisDef?.value === 'KMT'
+                              ? 'Lama Terlambat (menit)'
+                              : jenisDef?.value === 'KBLA'
+                                ? 'Lama KBLA (menit)'
+                                : 'Jumlah menit'}
                         </label>
                         {jenisDef?.butuhTanggalGanti ? (
                           <input

@@ -288,15 +288,20 @@ export async function kirimShakwa(
           nama,
           halaqahLabel,
           isi,
-          rincian: rincianIzin.map((r) =>
-            [
-              r.tanggal,
-              IZIN_JENIS_LABEL[r.jenis],
-              r.menit != null ? `${r.menit} menit` : null,
-              r.jadwalGanti ? `diganti ${r.jadwalGanti}` : null,
-            ]
+          rincian: rincianIzin.map((r) => {
+            const menitTxt =
+              r.menit == null
+                ? null
+                : r.jenis === 'KMT'
+                  ? `telat ${r.menit} menit`
+                  : r.jenis === 'KBLA'
+                    ? `berakhir ${r.menit} menit lebih awal`
+                    : `${r.menit} menit`;
+            const gantiTxt = r.jadwalGanti ? `ganti ke ${r.jadwalGanti}` : null;
+            return [r.tanggal, IZIN_JENIS_LABEL[r.jenis], menitTxt, gantiTxt]
               .filter(Boolean)
-              .join(' · ')
+              .join(' · ');
+          }
           ),
         })
       )
