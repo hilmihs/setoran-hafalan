@@ -1,0 +1,177 @@
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
+## What this is
+
+Maahir — an internal platform (deployed at `maahir.muhajirproject.org`) for a Qur'an
+education program. Started as weekly memorization submission ("setoran hafalan") with
+musyrif review, and grew into a multi-module system: HITS teacher competency scoring
+(Matrix Skill Guru), Evaluasi Halaqah, attendance (kehadiran), observasi, shakwa
+(complaints), reports, and a read-only public API. Domain language is Indonesian —
+match it when naming things and writing UI/comments.
+
+## Commands
+
+```bash
+npm run dev          # Next dev server (localhost:3000)
+npm run build        # next build + postbuild (copies static/public into .next/standalone)
+npm run lint         # eslint (next lint)
+npm run typecheck    # tsc --noEmit — run this after any TS change; there is no test runner
+npm run apply-migration   # apply supabase/migrations/*.sql to the DB in DATABASE_URL
+```
+
+The `test-*` and `seed-*` scripts in `package.json` are standalone `tsx` scripts
+(`scripts/*.ts`), **not** a test framework. Run one directly, e.g.
+`npm run test-ranking`, `npm run seed`. Most load `.env.local` via `--env-file`;
+a few don't (check the script entry). "Run a single test" = run that one npm script.
+
+### `npm run db` hits PRODUCTION
+
+`npm run db "<SQL>"` is a thin CLI over the admin HTTP endpoint (`/api/admin/db`),
+targeting `ADMIN_API_URL` / `NEXT_PUBLIC_APP_URL` — **the live production app**, not
+local Postgres. Writes need `--confirm` (bare run only previews `wouldAffect`). For
+local dev/seed work, use a local `DATABASE_URL` + the `supabaseAdmin` client, not `npm run db`.
+
+The endpoint (`src/app/api/admin/db/route.ts` → `runAdminSql`) gates by
+`ADMIN_DB_API=on` (else 404), Bearer `ADMIN_API_TOKEN`, and every statement is audited.
+READ (`SELECT`/`WITH`/`EXPLAIN`) runs in a `READ ONLY` tx capped at 1000 rows; WRITE
+rolls back unless `confirm:true`. If `npm run db` dies with `fetch failed`, prod is just
+slow (node `fetch` aborts connect at ~10s) — retry, or `curl --max-time 60` the same
+endpoint.
+
+## Architecture
+
+### Postgres direct — `supabaseAdmin` is a shim, not Supabase
+
+Despite the name, this app **no longer uses Supabase** (no PostgREST/GoTrue/Storage).
+It talks straight to PostgreSQL 17 via `node-postgres` and stores audio on the local
+filesystem. To avoid rewriting ~568 call-sites, `src/lib/supabase-admin.ts` exports a
+`supabaseAdmin` object whose query-builder API mirrors supabase-js, implemented in
+`src/lib/pg-shim.ts` (over `pg-core.ts`) and `src/lib/pg-storage.ts` (filesystem).
+
+- Supported: `.from().select/insert/update/upsert/delete`, filters
+  (`eq/neq/in/gte/lte/gt/lt/is/ilike`), `order/limit/range`, `single/maybeSingle`,
+  embedded to-one joins (`alias:fk_col(cols)`), `.select()` after mutation → RETURNING.
+- **Not** supported (throws clearly if used): `.rpc`, to-many embeds, `.or`,
+  filtering on embedded columns.
+- `supabaseAdmin` is server-only — never import it into client components.
+- Audio lives at `${STORAGE_DIR}/${bucket}/...`, served via `/api/audio` with signed
+  URLs derived from `SESSION_SECRET`.
+
+Env: `DATABASE_URL`, `STORAGE_DIR`, `SESSION_SECRET`, `NEXT_PUBLIC_APP_URL` (see
+`.env.example`). `next.config.js` sets `output: 'standalone'` and a 60mb server-action
+body limit for audio uploads.
+
+### Auth & multi-role (`src/lib/session.ts`, `access.ts`, `roles.ts`)
+
+Custom auth: iron-session cookie + bcrypt, no external auth service. The unit of
+identity is a **WhatsApp number**, and one WA can hold several roles at once.
+`loadAccessesForWa()` queries all role tables in parallel and returns every active
+role; the session stores `accesses[]`. When >1 role exists the user sees a feature
+selector. Roles: `peserta`, `musyrif`, `koordinator`, `koordinator_kehadiran`
+(restricted), `syaikh`, `pengajar` (+ `is_ketua`), `ketua_kelas`,
+`koordinator_ketua_kelas`. `ROLE_LANDING` maps each role to its landing page;
+`requireRole`/`requirePengajar`/etc. guard server pages and redirect (not 500) on
+mismatch. Admin can impersonate ("login as") — see `impersonator` in session +
+`admin-impersonate.ts`.
+
+**Superadmin is not a role** — it's a hardcoded WA allowlist `SUPERADMIN_WAS`
+(`src/lib/constants.ts`). `requireAdmin()`/`isSuperadmin()` (`admin-guard.ts`) check
+the logged-in WA against it; `getAdminActor()` attributes audit to the real admin even
+mid-impersonation. **RLS** is enabled on every table (`0005_*`, legacy real-Supabase
+era) but effectively bypassed — the app connects as a raw pg superuser, so access
+control lives entirely in app code (guards + the api-public sanitizer). Never rely on
+RLS for authorization here.
+
+Gender separation (ikhwan/akhwat) is enforced in layers: URL routing, per-query
+`gender` filters, and DB triggers.
+
+### App structure
+
+- `src/app/<module>/<role>/` — pages grouped by feature module then role
+  (e.g. `hits/koordinator`, `evaluasi/pengajar`, `2in1/musyrif`). `2in1/` is the
+  combined setoran+attendance flow; other top-level dirs are the newer modules
+  (`hits`, `evaluasi`, `kehadiran`, `observasi`, `shakwa`, `matrix`, `laporan`, `admin`).
+- `src/app/api/` — route handlers. Most business logic lives in `src/lib/*.ts`
+  (one file per concern; `hits-*.ts`, `maahir-*.ts`, `evaluasi*.ts`, `shakwa*.ts`,
+  `laporan*.ts`, `matrix-*.ts`). Keep route handlers thin, put logic in `lib`.
+- `src/types/db.ts` — hand-maintained types mirroring the DB schema and session shapes.
+- Path alias `@/*` → `src/*`.
+- **Mutations = Server Actions** (`'use server'`, usually `actions.ts` per route dir),
+  not API routes. API routes are reserved for audio serving, the public `v1` API, the
+  admin SQL endpoint, health, and a few sync/setoran handlers.
+
+### Subsystem map
+
+Each module is `src/app/<module>/<role>/` + a cluster of `src/lib/<prefix>-*.ts`.
+
+| Module | Purpose | Routes | Key lib |
+|---|---|---|---|
+| 2in1 (setoran) | Hafalan/tilawah recording + attendance | `2in1/`, `musyrif`, `syaikh`, `peserta` | `attendance.ts`, `laporan.ts`, `setoran-target.ts`, `week.ts` |
+| HITS soft-skill (`hits_*`) | Halaqah, pertemuan, pengajuan, ranking, disiplin/hutang | `hits/*` | ~30 `hits-*.ts` (`hits-ranking`, `hits-rekap`, `hits-pertemuan`, `hits-pengajuan`) |
+| Observasi ketua kelas | Class-monitor observation (new = `hits_keterangan_harian`) | `observasi/{ketua-kelas,koordinator}`, `hits/{ketua,koordinator}` | `hits-observasi.ts`, `hits-observasi-cakupan.ts` |
+| Matrix skill guru (`matrix_*`) | Teacher-skill indicator matrix (recomputed) | `matrix/koordinator` | `matrix-compute.ts`, `matrix-indicators.ts` |
+| Maahir (laporan/SP/pemutihan) | Reporting, warning letters (SP), attendance whitewash | `laporan`, `2in1/maahir-mandiri` | `maahir-sp.ts`, `maahir-rekap.ts`, `maahir-pemutihan*.ts` |
+| Shakwa | Public complaint/izin form + koordinator dashboard | `shakwa/*` | `shakwa.ts`, `shakwa-izin.ts`, `shakwa-rekap.ts` |
+| Evaluasi | Halaqah/pengajar evaluation (fed by hilmihs `eval_*`) | `evaluasi/{koordinator,pengajar}` | `evaluasi.ts`, `evaluasi-pengajar.ts` |
+| Admin | Superadmin SQL console, users, audit, api-keys | `admin/*` | `admin-db.ts`, `admin-crud*.ts`, `admin-users.ts` |
+
+### Public read-only API (`/api/v1/[...path]`)
+
+Registry-driven, outbound read-only (`GET` only), server-to-server (no CORS).
+`src/lib/api-public/registry.ts` declares each entity (table, columns, filters, scope
+`maahir`|`hits`). Bearer key auth (`k_live_...`), per-key scopes, rate/burst limits,
+and TTL cache all live in `api-public/`. A `FORBIDDEN_COLUMNS` allowlist audit runs at
+module load and throws if any entity exposes secrets (WA numbers, hashes, tokens,
+audio URLs, free-text notes) — when adding an entity/column, respect this. Docs:
+`docs/API-PUBLIC.md`.
+
+### HITS Google Sheets sync (`src/lib/hits-sync.ts`, `hits-sheets.ts`)
+
+HITS halaqah/kaldik/peserta data is pulled from **published-to-web Google Sheets** as
+CSV (`/export?format=csv&gid=`, no service account). `syncBatch(batchId)` upserts into
+`hits_*` tables — **sheet = source of truth**, keyed by stable name; rows absent from
+the sheet get `active=false`. Runs **manually per-batch** from
+`/hits/koordinator/validasi` (there is no all-batch cron; the daily systemd timer is
+hilmihs/evaluasi, not this). `source='manual'` rows are immune to reconciliation;
+curated columns (`level`, `pengajar_*`, `is_ketua`, `ketua_wa`) are never overwritten —
+but **`active` IS overwritten**.
+
+- **There is no `status`/`selesai` column on `hits_halaqah`.** "Berjalan vs selesai" =
+  the `active` bool. Koordinator coverage (`hits-observasi-cakupan.ts`) only counts
+  `active=true` halaqah with a `pengajar_id`, scoped per month.
+- **Gotcha:** setting a halaqah `active=false` manually **reverts to `true` on the next
+  sync of its batch** if it still appears in the sheet. To retire a halaqah durably,
+  also remove/deactivate it from the sheet (or its `hits_sheet_source`).
+
+### hilmihs sync (`src/lib/hilmihs/`)
+
+Pulls master data from the separate `hilmihs.web.id` agent API (a **different** API —
+Bearer `AGENT_TOKEN`, docs `docs/API_hilmihswebid.md`) into local mirror tables
+(`eval_*`) that drive Evaluasi Halaqah. Triggered by `/api/evaluasi/sync/pull`
+(protected by `CRON_SECRET`, called from a VPS systemd timer) → `apply`. Pengajar are
+matched to eval halaqah by WA number, not maahir id.
+
+### Deploy (Azure Pipelines → self-hosted VPS)
+
+`azure-pipelines.yml` builds on `main`, ships env + build to the VPS over SSH/SCP, and
+runs under systemd unit `next-maahir.service`. Runtime env comes from an Azure Variable
+Group (prefix `ENV_`) written to `maahir.env` and wired in via a systemd
+`EnvironmentFile` drop-in. **Gotcha:** Azure *secret* variables don't appear in
+`printenv` unless explicitly mapped into the task `env:` — a new secret var must be
+added there too, or the app boots without it. Manual server setup: `HANDOFF.md`.
+
+### Migrations
+
+`supabase/migrations/NNNN_*.sql`, sequential. Apply one file with
+`npm run apply-migration -- supabase/migrations/NNNN_name.sql` (runs against
+`DATABASE_URL`; for prod, feed the SQL through `npm run db --confirm` instead —
+strip the file's own `begin;`/`commit;` since the admin endpoint wraps its own tx).
+Schema-touching changes need a new migration file **and** matching updates to
+`src/types/db.ts`.
+
+**Gotcha — number collisions:** parallel feature branches have already produced
+duplicate prefixes (two `0052_*` exist: `evaluasi_sesi_dihapus` + `evaluasi_sync`).
+Apply order among same-numbered files isn't guaranteed, so never rely on it — and
+`ls supabase/migrations/ | tail -1` before picking the next number (next is `0053`).
