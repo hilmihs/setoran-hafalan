@@ -130,6 +130,20 @@ export const FEATURE_LINKS: FeatureLink[] = [
     match: (a) => a.role === 'pengajar',
   },
   {
+    href: '/evaluasi/pengajar',
+    title: 'Evaluasi Halaqah',
+    navLabel: 'Evaluasi Halaqah',
+    description: 'Nilai bacaan Qur’an peserta per sesi — hitung Lahn (tajwid) & skor',
+    match: (a) => a.role === 'pengajar',
+  },
+  {
+    href: '/evaluasi/koordinator',
+    title: 'Rekap Evaluasi Halaqah',
+    navLabel: 'Rekap Evaluasi',
+    description: 'Dashboard evaluasi bacaan Qur’an — rekap skor & Lahn lintas halaqah',
+    match: (a) => a.role === 'koordinator',
+  },
+  {
     href: '/shakwa/koordinator',
     title: 'Rekap Shakwa',
     navLabel: 'Shakwa',
