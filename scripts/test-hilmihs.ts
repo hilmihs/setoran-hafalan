@@ -45,6 +45,13 @@ eq(
   mapHalaqah('dpq', { halaqahId: 9, name: 'X', pengajar: null, guruPhone: null, level: null, gender: 2, type: null }).pengajar_id,
   null, 'halaqah guruPhone null → pengajar_id null'
 );
+// gender halaqah utamakan nama (source dpq kirim gender=1 utk "DPQ AKHWAT")
+eq(mapHalaqah('dpq', { halaqahId: 181, name: 'DPQ AKHWAT 01', pengajar: null, guruPhone: null, level: null, gender: 1, type: null }).gender,
+   'akhwat', 'halaqah gender dari nama AKHWAT (override source)');
+eq(mapHalaqah('dpq', { halaqahId: 180, name: 'DPQ IKHWAN 01', pengajar: null, guruPhone: null, level: null, gender: 2, type: null }).gender,
+   'ikhwan', 'halaqah gender dari nama IKHWAN (override source)');
+eq(mapHalaqah('x', { halaqahId: 1, name: 'HITS 006', pengajar: null, guruPhone: null, level: null, gender: 2, type: null }).gender,
+   'akhwat', 'halaqah gender fallback ke source bila nama tak sebut gender');
 
 // ── diff ──
 // current mirror: 1 pengajar (butuh update nama), 1 hilang (deactivate)

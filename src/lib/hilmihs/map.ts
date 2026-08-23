@@ -39,12 +39,23 @@ export function mapPengajar(slug: string, r: SrcPengajar): MirrorPengajar {
   };
 }
 
+/**
+ * Gender halaqah: utamakan petunjuk dari NAMA (mengandung "AKHWAT"/"IKHWAN"),
+ * baru jatuh ke gender numerik source. Source dpq mengirim gender=1 untuk semua
+ * halaqah termasuk yang bernama "DPQ AKHWAT" — nama lebih dapat dipercaya.
+ */
+export function genderHalaqah(nama: string, srcGender: SrcGender): Gender {
+  if (/\bakhwat\b/i.test(nama)) return 'akhwat';
+  if (/\bikhwan\b/i.test(nama)) return 'ikhwan';
+  return konvGender(srcGender);
+}
+
 export function mapHalaqah(slug: string, r: SrcHalaqah): MirrorHalaqah {
   const wa = normalizeWaOrNull(r.guruPhone);
   return {
     id: prefixId(slug, r.halaqahId),
     nama: r.name,
-    gender: konvGender(r.gender),
+    gender: genderHalaqah(r.name, r.gender),
     level: r.level ?? null,
     pengajar_id: wa ? `wa:${wa}` : (r.pengajar ? `nm:${slug}:${r.pengajar}` : null),
     batch_id: slug,
