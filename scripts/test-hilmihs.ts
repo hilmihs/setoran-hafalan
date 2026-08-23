@@ -4,6 +4,7 @@ import {
   konvGender, pengajarId, prefixId, normalizeWaOrNull,
   mapPengajar, mapHalaqah, mapPeserta, mapBatch,
 } from '@/lib/hilmihs/map';
+import { diffEntity } from '@/lib/hilmihs/diff';
 
 let failed = 0;
 function eq(actual: unknown, expected: unknown, label: string) {
@@ -44,6 +45,27 @@ eq(
   mapHalaqah('dpq', { halaqahId: 9, name: 'X', pengajar: null, guruPhone: null, level: null, gender: 2, type: null }).pengajar_id,
   null, 'halaqah guruPhone null → pengajar_id null'
 );
+
+// ── diff ──
+// current mirror: 1 pengajar (butuh update nama), 1 hilang (deactivate)
+const cur = [
+  { id: 'wa:628111', nama: 'Lama', gender: 'ikhwan', whatsapp: '628111', aktif: true },
+  { id: 'wa:628999', nama: 'Hilang', gender: 'ikhwan', whatsapp: '628999', aktif: true },
+];
+const fetched = [
+  { id: 'wa:628111', nama: 'Baru', gender: 'ikhwan', whatsapp: '628111' }, // update
+  { id: 'wa:628222', nama: 'Fresh', gender: 'ikhwan', whatsapp: '628222' }, // create
+];
+const d = diffEntity('pengajar', fetched, cur, ['nama', 'gender', 'whatsapp']);
+eq(d.map((x) => `${x.op}:${x.entity_id}`).sort(),
+   ['create:wa:628222', 'deactivate:wa:628999', 'update:wa:628111'],
+   'diff ops');
+const upd = d.find((x) => x.op === 'update')!;
+eq([upd.before?.nama, upd.after?.nama], ['Lama', 'Baru'], 'diff before/after');
+// tak ada perubahan → tak ada baris
+eq(diffEntity('pengajar', [{ id: 'wa:628111', nama: 'Baru', gender: 'ikhwan', whatsapp: '628111' }],
+     [{ id: 'wa:628111', nama: 'Baru', gender: 'ikhwan', whatsapp: '628111', aktif: true }],
+     ['nama', 'gender', 'whatsapp']).length, 0, 'diff no-op');
 
 if (failed) { console.error(`\n${failed} FAILED`); process.exit(1); }
 console.log('\nAll hilmihs tests passed.');
