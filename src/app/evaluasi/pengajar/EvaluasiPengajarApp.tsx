@@ -744,7 +744,6 @@ export function EvaluasiPengajarApp({ initial }: { initial: EvaluasiInitial }) {
                 : undefined
             }
             onToggleSesi={isUjian ? toggleSesiUjian : undefined}
-            materiLine={`${surat} ${ayatMulai}–${ayatSelesai}`}
             back={() => nav('p-home')}
             lanjut={async () => {
               await ensureSesiId(jenis, activeSession);
@@ -758,8 +757,8 @@ export function EvaluasiPengajarApp({ initial }: { initial: EvaluasiInitial }) {
             judul={jl}
             sub={
               isUjian
-                ? `${UJIAN_SESI_LABELS[activeSession - 1] ?? `Ujian ${activeSession}`} · ${surat} ${ayatMulai}–${ayatSelesai}`
-                : `Sesi ${activeSession} dari ${maxSessions[jenis]} · ${surat} ${ayatMulai}–${ayatSelesai}`
+                ? `${UJIAN_SESI_LABELS[activeSession - 1] ?? `Ujian ${activeSession}`}`
+                : `Sesi ${activeSession} dari ${maxSessions[jenis]}`
             }
             items={daftarItems}
             selesai={selesaiCount}

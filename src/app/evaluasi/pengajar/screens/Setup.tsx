@@ -18,8 +18,6 @@ interface SetupProps {
   deletedOptions?: number[];
   /** Ujian only: hapus/pulihkan sesi. */
   onToggleSesi?: (n: number, dihapus: boolean) => void;
-  /** Ringkasan materi read-only (silabus), mis. "Al-Baqarah 142–157". */
-  materiLine?: string;
   back: () => void;
   lanjut: () => void;
 }
@@ -102,13 +100,6 @@ export function Setup(props: SetupProps) {
           </div>
         )}
 
-        {props.materiLine && (
-          <div style={{ background: '#ffffff', border: '1px solid #e8e4dc', borderRadius: 12, padding: 14 }}>
-            <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.05em', textTransform: 'uppercase', color: '#7a766f', marginBottom: 4 }}>Materi · surat &amp; ayat</div>
-            <div style={{ fontSize: 14, fontWeight: 700 }}>{props.materiLine}</div>
-            <div style={{ fontSize: 11, color: '#a8a39a', marginTop: 6 }}>Mengikuti silabus pertemuan bulan ini.</div>
-          </div>
-        )}
       </div>
 
       <div style={{ flex: 1 }} />
