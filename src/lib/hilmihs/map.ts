@@ -60,7 +60,7 @@ export function mapHalaqah(slug: string, r: SrcHalaqah): MirrorHalaqah {
     pengajar_id: wa ? `wa:${wa}` : (r.pengajar ? `nm:${slug}:${r.pengajar}` : null),
     batch_id: slug,
     mustawa: null,
-    ambang_ujian: 65,
+    ambang_ujian: 70,
   };
 }
 

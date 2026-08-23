@@ -33,7 +33,7 @@ export const LAHN_BY_COLUMN: Record<string, LahnDef> =
   Object.fromEntries(ALL_LAHN.map((d) => [d.column, d]));
 
 export const AMBANG = 70;                // ambang standar global
-export const AMBANG_UJIAN_DEFAULT = 65;  // default lulus Ujian Akhir (mockup)
+export const AMBANG_UJIAN_DEFAULT = 70;  // default lulus Ujian Akhir (70%)
 export const JENIS = ['qn', 'pb', 'ujian'] as const;
 export type Jenis = (typeof JENIS)[number];
 

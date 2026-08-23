@@ -26,7 +26,7 @@ export default async function KoordinatorHalaqahPage({
 
   const { data: halaqah } = await supabaseAdmin
     .from('eval_halaqah')
-    .select('id, nama, gender, mustawa, pengajar_id')
+    .select('id, nama, gender, mustawa, level, pengajar_id')
     .eq('id', params.halaqahId)
     .maybeSingle();
 
@@ -122,9 +122,11 @@ export default async function KoordinatorHalaqahPage({
   const topLahn = sorted.length > 0 ? sorted[0].label : '—';
   const catatanMasalah = `${bermasalah} peserta di bawah ambang standar (${AMBANG}). Kesalahan terbanyak: ${topLahn}. Pertimbangkan sesi remedial.`;
 
+  const level = (halaqah.level as string | null) ?? null;
   const mustawa = halaqah.mustawa as number | null;
   const genderLabel = gender === 'ikhwan' ? 'Ikhwan' : 'Akhwat';
-  const sub = mustawa != null ? `${genderLabel} · Mustawa ${mustawa}` : genderLabel;
+  const levelText = level ?? (mustawa != null ? `Mustawa ${mustawa}` : null);
+  const sub = levelText ? `${genderLabel} · ${levelText}` : genderLabel;
 
   return (
     <main style={{ minHeight: '100vh' }}>

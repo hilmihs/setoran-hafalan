@@ -61,6 +61,7 @@ export interface EvaluasiInitial {
     nama: string;
     gender: Gender;
     mustawa: number | null;
+    level: string | null;
     ambang_ujian: number;
     pesertaCount: number;
   };
@@ -95,6 +96,8 @@ export interface Tile {
 }
 
 const JENIS_SHORT: Record<Jenis, string> = { qn: 'QN', pb: 'PB', ujian: 'Ujian' };
+// Ujian akhir bukan sesi berurutan — dua ujian terpisah: QN & PB.
+const UJIAN_SESI_LABELS = ['Ujian QN', 'Ujian PB'];
 
 function genderLabel(g: Gender): string {
   return g === 'ikhwan' ? 'Ikhwan' : 'Akhwat';
@@ -328,10 +331,12 @@ export function EvaluasiPengajarApp({ initial }: { initial: EvaluasiInitial }) {
     const sesi = initial.sesiList.find((s) => s.jenis === j && s.nomor_sesi === session);
     setJenis(j);
     setActiveSession(session);
+    // Surat/ayat tak lagi dipilih pengajar — pakai default sesi (silabus). Sesi
+    // tetap dibuat lazy oleh ensureSesiId saat nilai pertama disimpan.
     setSurat(sesi?.surat ?? 'Al-Baqarah');
     setAyatMulai(sesi?.ayat_mulai ?? 142);
     setAyatSelesai(sesi?.ayat_selesai ?? 157);
-    setScreen('p-setup');
+    setScreen('p-daftar');
   };
 
   const pickSession = (n: number) => {
@@ -363,7 +368,8 @@ export function EvaluasiPengajarApp({ initial }: { initial: EvaluasiInitial }) {
 
   const activeP = peserta[activeIdx] ?? peserta[0];
 
-  const headerMeta = `${halaqah.nama} · ${genderLabel(halaqah.gender)} · Mustawa ${halaqah.mustawa ?? '—'} · ${halaqah.pesertaCount} peserta`;
+  const levelLabel = halaqah.level ?? (halaqah.mustawa != null ? `Mustawa ${halaqah.mustawa}` : '—');
+  const headerMeta = `${halaqah.nama} · ${genderLabel(halaqah.gender)} · ${levelLabel} · ${halaqah.pesertaCount} peserta`;
 
   // Home cards.
   const dotColorsDone = { qn: 'oklch(0.58 0.09 165)', pb: 'oklch(0.55 0.10 210)', ujian: 'oklch(0.58 0.09 165)' };
@@ -643,14 +649,19 @@ export function EvaluasiPengajarApp({ initial }: { initial: EvaluasiInitial }) {
         {screen === 'p-setup' && (
           <Setup
             judul={`${jl} — Setup`}
-            sesiLabel={`Sesi ${activeSession} dari ${maxSessions[jenis]} · dijadwalkan ${fmtTgl(config.jadwal[jenis]?.[activeSession - 1])}`}
-            halaqahLine={`${halaqah.nama} · ${genderLabel(halaqah.gender)} · Mustawa ${halaqah.mustawa ?? '—'}`}
+            sesiLabel={
+              isUjian
+                ? `${UJIAN_SESI_LABELS[activeSession - 1] ?? `Ujian ${activeSession}`} · dijadwalkan ${fmtTgl(config.jadwal[jenis]?.[activeSession - 1])}`
+                : `Sesi ${activeSession} dari ${maxSessions[jenis]} · dijadwalkan ${fmtTgl(config.jadwal[jenis]?.[activeSession - 1])}`
+            }
+            halaqahLine={`${halaqah.nama} · ${genderLabel(halaqah.gender)} · ${levelLabel}`}
             pesertaCount={halaqah.pesertaCount}
             isUjian={isUjian}
             ambangUjian={halaqah.ambang_ujian}
             mustawa={halaqah.mustawa}
             maxSessions={maxSessions[jenis]}
             activeSession={activeSession}
+            sesiOptionLabels={isUjian ? UJIAN_SESI_LABELS : undefined}
             pickSession={pickSession}
             surat={surat}
             setSurat={setSurat}
@@ -681,7 +692,7 @@ export function EvaluasiPengajarApp({ initial }: { initial: EvaluasiInitial }) {
                 ? 'Mulai menilai'
                 : 'Lanjutkan menilai'
             }
-            back={() => nav('p-setup')}
+            back={() => nav('p-home')}
             mulai={() => {
               if (selesaiCount === includedPeserta.length && includedPeserta.length > 0) {
                 nav('p-ringkasan');

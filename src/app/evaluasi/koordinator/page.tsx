@@ -33,7 +33,7 @@ export default async function KoordinatorEvaluasiPage() {
   // Halaqah binaan (per gender).
   const { data: halaqahRaw } = await supabaseAdmin
     .from('eval_halaqah')
-    .select('id, nama, gender, mustawa, pengajar_id')
+    .select('id, nama, gender, mustawa, level, pengajar_id')
     .eq('gender', gender)
     .order('nama');
   const halaqahList = halaqahRaw ?? [];
@@ -149,9 +149,11 @@ export default async function KoordinatorEvaluasiPage() {
     const rata = a && a.selesai > 0 ? Math.round(a.skorSum / a.selesai) : null;
     const bermasalah = a?.bermasalah ?? 0;
     const lahnTop = a ? topLahnLabel(a.lahn) : '—';
+    const level = (h.level as string | null) ?? null;
     const mustawa = h.mustawa as number | null;
     const genderLabel = gender === 'ikhwan' ? 'Ikhwan' : 'Akhwat';
-    const sub = mustawa != null ? `${genderLabel} · Mustawa ${mustawa}` : genderLabel;
+    const levelText = level ?? (mustawa != null ? `Mustawa ${mustawa}` : null);
+    const sub = levelText ? `${genderLabel} · ${levelText}` : genderLabel;
     return {
       id: hid,
       nama: h.nama as string,

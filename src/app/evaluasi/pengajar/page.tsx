@@ -45,7 +45,7 @@ export default async function EvaluasiPengajarPage({
   const { data: halaqahRows } = evalPengajarId
     ? await supabaseAdmin
         .from('eval_halaqah')
-        .select('id, nama, gender, mustawa, ambang_ujian')
+        .select('id, nama, gender, mustawa, level, ambang_ujian')
         .eq('pengajar_id', evalPengajarId)
         .order('nama')
     : { data: null };
@@ -153,7 +153,8 @@ export default async function EvaluasiPengajarPage({
       nama: halaqah.nama as string,
       gender: halaqah.gender,
       mustawa: (halaqah.mustawa as number | null) ?? null,
-      ambang_ujian: (halaqah.ambang_ujian as number) ?? 65,
+      level: (halaqah.level as string | null) ?? null,
+      ambang_ujian: (halaqah.ambang_ujian as number) ?? 70,
       pesertaCount: peserta.length,
     },
     config,

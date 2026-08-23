@@ -33,7 +33,7 @@ eq(
 );
 eq(
   mapHalaqah('hits-regular', { halaqahId: 54, name: 'HITS 006', pengajar: 'Abdul Hakim', guruPhone: '81331732974', level: 'HITS Lanjutan', gender: 1, type: 'online' }),
-  { id: 'hits-regular:54', nama: 'HITS 006', gender: 'ikhwan', level: 'HITS Lanjutan', pengajar_id: 'wa:6281331732974', batch_id: 'hits-regular', mustawa: null, ambang_ujian: 65 },
+  { id: 'hits-regular:54', nama: 'HITS 006', gender: 'ikhwan', level: 'HITS Lanjutan', pengajar_id: 'wa:6281331732974', batch_id: 'hits-regular', mustawa: null, ambang_ujian: 70 },
   'mapHalaqah'
 );
 eq(

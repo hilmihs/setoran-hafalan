@@ -10,6 +10,8 @@ interface SetupProps {
   mustawa: number | null;
   maxSessions: number;
   activeSession: number;
+  /** Label per sesi (index 0-based). Bila kosong → "Sesi N". Dipakai ujian akhir: "Ujian QN"/"Ujian PB". */
+  sesiOptionLabels?: string[];
   pickSession: (n: number) => void;
   surat: string;
   setSurat: (v: string) => void;
@@ -43,7 +45,7 @@ export function Setup(props: SetupProps) {
         </div>
 
         <div style={{ background: '#ffffff', border: '1px solid #e8e4dc', borderRadius: 12, padding: 14 }}>
-          <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.05em', textTransform: 'uppercase', color: '#7a766f', marginBottom: 10 }}>Evaluasi ke berapa?</div>
+          <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.05em', textTransform: 'uppercase', color: '#7a766f', marginBottom: 10 }}>{props.isUjian ? 'Ujian yang mana?' : 'Evaluasi ke berapa?'}</div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 8 }}>
             {sesiOptions.map((n) => {
               const on = n === props.activeSession;
@@ -53,7 +55,7 @@ export function Setup(props: SetupProps) {
                   onClick={() => props.pickSession(n)}
                   style={{ height: 44, borderRadius: 8, border: `1.5px solid ${on ? '#1b1a17' : '#ffffff'}`, background: on ? '#1b1a17' : '#ffffff', color: on ? '#ffffff' : '#44423d', font: 'inherit', fontSize: 14, fontWeight: 700, cursor: 'pointer' }}
                 >
-                  Sesi {n}
+                  {props.sesiOptionLabels?.[n - 1] ?? `Sesi ${n}`}
                 </button>
               );
             })}
