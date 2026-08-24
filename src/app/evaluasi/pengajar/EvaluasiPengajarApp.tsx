@@ -143,8 +143,9 @@ export function EvaluasiPengajarApp({ initial }: { initial: EvaluasiInitial }) {
     return out;
   });
   const [kirimStatus, setKirimStatus] = useState<SaveStatus>('idle');
-  // Cetak PDF dari kartu riwayat: buka ringkasan sesi tsb lalu window.print().
-  const [pendingPrint, setPendingPrint] = useState(false);
+  // Cetak PDF rinci dari kartu riwayat: menu pilih peserta → render rapot → print.
+  const [pdfMenu, setPdfMenu] = useState<{ jenis: Jenis; nomor: number } | null>(null);
+  const [printReq, setPrintReq] = useState<{ jenis: Jenis; ids: string[] } | null>(null);
   // Sesi ujian yang di-soft-delete pengajar (per nomor_sesi).
   const [ujianDihapus, setUjianDihapus] = useState<Set<number>>(
     () => new Set(initial.sesiList.filter((s) => s.jenis === 'ujian' && s.dihapus).map((s) => s.nomor_sesi))
@@ -312,15 +313,15 @@ export function EvaluasiPengajarApp({ initial }: { initial: EvaluasiInitial }) {
     };
   }, [flushSaves]);
 
-  // Setelah ringkasan sesi ter-render (dipicu kartu riwayat), buka dialog cetak.
+  // Setelah overlay rapot rinci ter-render (dipicu menu PDF riwayat), buka dialog cetak.
   useEffect(() => {
-    if (!pendingPrint || screen !== 'p-ringkasan') return;
+    if (!printReq) return;
     const id = requestAnimationFrame(() => {
       window.print();
-      setPendingPrint(false);
+      setPrintReq(null);
     });
     return () => cancelAnimationFrame(id);
-  }, [pendingPrint, screen]);
+  }, [printReq]);
 
   const updateWork = useCallback(
     (
@@ -523,12 +524,15 @@ export function EvaluasiPengajarApp({ initial }: { initial: EvaluasiInitial }) {
   const homeCards = (['qn', 'pb', 'ujian'] as Jenis[]).map((j) => {
     const opts = sesiOptionsFor(j);
     const max = opts.length;
-    const preferred = initial.currentSession[j];
-    const cur = opts.includes(preferred) ? preferred : opts[0] ?? 1;
     const sentKeyOf = (n: number) => sentSesi[`${j}|${n}`];
+    const preferred = initial.currentSession[j];
+    // Sesi berjalan = sesi terkecil yang belum terkirim (live), fallback ke server.
+    // Label & titik dibaca dari sumber sama (sentSesi) supaya tak divergen.
+    const firstUnsent = opts.find((n) => !sentKeyOf(n));
+    const cur = firstUnsent ?? (opts.includes(preferred) ? preferred : opts[opts.length - 1] ?? 1);
     const dots = opts.map((n) => ({
       key: `d${n}`,
-      color: sentKeyOf(n) || n < cur ? dotColorsDone[j] : n === cur ? 'oklch(0.78 0.10 80)' : '#e8e4dc',
+      color: sentKeyOf(n) ? dotColorsDone[j] : n === cur ? 'oklch(0.78 0.10 80)' : '#e8e4dc',
     }));
     const bg = j === 'qn' ? 'oklch(0.96 0.025 165)' : j === 'pb' ? 'oklch(0.96 0.03 210)' : 'oklch(0.96 0.035 85)';
     const border = j === 'qn' ? 'oklch(0.88 0.045 165)' : j === 'pb' ? 'oklch(0.87 0.05 210)' : 'oklch(0.88 0.07 82)';
@@ -549,7 +553,7 @@ export function EvaluasiPengajarApp({ initial }: { initial: EvaluasiInitial }) {
 
   // Riwayat: sesi terkirim.
   const riwayat = initial.sesiList
-    .filter((s) => s.status === 'terkirim')
+    .filter((s) => sentSesi[`${s.jenis}|${s.nomor_sesi}`])
     .sort((a, b) => (a.jenis === b.jenis ? a.nomor_sesi - b.nomor_sesi : a.jenis.localeCompare(b.jenis)))
     .map((s) => {
       const rows = peserta
@@ -693,6 +697,23 @@ export function EvaluasiPengajarApp({ initial }: { initial: EvaluasiInitial }) {
   const rapotBerkala = buildBerkalaPayload(rIdentitas, initial.pengajarName, '', rSesi, config.nama_qn, config.nama_pb);
   const rapotUjian = buildUjianPayload(rIdentitas, initial.pengajarName, '', rSesi, halaqah.ambang_ujian);
 
+  // Rapot rinci sembarang peserta (untuk cetak PDF dari menu riwayat).
+  const buildRapotFor = (pid: string, jns: Jenis) => {
+    const nama = peserta.find((p) => p.id === pid)?.nama ?? '';
+    const idn = { peserta: nama, halaqah: halaqah.nama, level: halaqah.level, mustawa: halaqah.mustawa, gender: halaqah.gender, batch: null as string | null };
+    const sesi = assembleSesi(pid);
+    return jns === 'ujian'
+      ? { kind: 'ujian' as const, payload: buildUjianPayload(idn, initial.pengajarName, '', sesi, halaqah.ambang_ujian) }
+      : { kind: 'berkala' as const, payload: buildBerkalaPayload(idn, initial.pengajarName, '', sesi, config.nama_qn, config.nama_pb) };
+  };
+  // Daftar peserta yang dinilai (done+hadir) pada sesi menu PDF aktif.
+  const pdfPeserta = pdfMenu
+    ? peserta.filter((p) => {
+        const w = getWork(p.id, pdfMenu.jenis, pdfMenu.nomor);
+        return w.done && w.hadir !== false;
+      })
+    : [];
+
   const terbitkanRapot = async (jenis_rapot: 'berkala' | 'ujian') => {
     if (cobaRef.current) return; // Mode Coba: tak menerbitkan rapot resmi.
     setTerbitStatus('saving');
@@ -720,6 +741,24 @@ export function EvaluasiPengajarApp({ initial }: { initial: EvaluasiInitial }) {
     flexDirection: 'column',
     boxShadow: '0 0 0 1px #e8e4dc',
   };
+
+  // Overlay cetak: render rapot rinci tiap peserta terpilih, lalu useEffect memicu print.
+  if (printReq) {
+    const built = printReq.ids.map((pid) => ({ pid, ...buildRapotFor(pid, printReq.jenis) }));
+    return (
+      <div className="eval-print-wrap" style={{ minHeight: '100vh', background: '#fff' }}>
+        {built.map((b, i) => (
+          <div key={b.pid} style={{ breakAfter: i < built.length - 1 ? 'page' : 'auto', pageBreakAfter: i < built.length - 1 ? 'always' : 'auto' }}>
+            {b.kind === 'ujian' ? (
+              <RapotUjian payload={b.payload} onBack={() => setPrintReq(null)} onTerbitkan={() => {}} />
+            ) : (
+              <RapotBerkala payload={b.payload} onBack={() => setPrintReq(null)} onTerbitkan={() => {}} />
+            )}
+          </div>
+        ))}
+      </div>
+    );
+  }
 
   return (
     <div style={{ minHeight: '100vh', background: '#f4f2ed' }}>
@@ -848,12 +887,7 @@ export function EvaluasiPengajarApp({ initial }: { initial: EvaluasiInitial }) {
                         </div>
                       </div>
                       <button
-                        onClick={() => {
-                          setJenis(r.jenis);
-                          setActiveSession(r.nomor);
-                          setPendingPrint(true);
-                          nav('p-ringkasan');
-                        }}
+                        onClick={() => setPdfMenu({ jenis: r.jenis, nomor: r.nomor })}
                         style={{ height: 28, padding: '0 10px', borderRadius: 7, border: '1px solid #d8d3c8', background: '#ffffff', font: 'inherit', fontSize: 11, fontWeight: 600, color: '#44423d', cursor: 'pointer' }}
                       >
                         PDF
@@ -1023,6 +1057,53 @@ export function EvaluasiPengajarApp({ initial }: { initial: EvaluasiInitial }) {
             />
           ))}
       </div>
+
+      {pdfMenu && (
+        <div
+          onClick={() => setPdfMenu(null)}
+          style={{ position: 'fixed', inset: 0, zIndex: 50, background: 'rgba(20,18,14,0.45)', display: 'flex', alignItems: 'flex-end', justifyContent: 'center' }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{ width: '100%', maxWidth: 460, background: '#ffffff', borderRadius: '18px 18px 0 0', padding: '16px 16px 22px', maxHeight: '80vh', overflowY: 'auto' }}
+          >
+            <div style={{ width: 36, height: 4, borderRadius: 2, background: '#e0dcd2', margin: '0 auto 14px' }} />
+            <div style={{ fontSize: 14, fontWeight: 800, marginBottom: 2 }}>Unduh rapor rinci</div>
+            <div style={{ fontSize: 11.5, color: '#a8a39a', marginBottom: 14 }}>
+              {JENIS_SHORT[pdfMenu.jenis]} Sesi {pdfMenu.nomor} · pilih peserta atau semua
+            </div>
+            {pdfPeserta.length === 0 ? (
+              <div style={{ fontSize: 12.5, color: '#a8a39a', padding: '8px 0 4px' }}>Belum ada peserta yang dinilai pada sesi ini.</div>
+            ) : (
+              <>
+                {pdfPeserta.map((p) => (
+                  <button
+                    key={p.id}
+                    onClick={() => {
+                      setPrintReq({ jenis: pdfMenu.jenis, ids: [p.id] });
+                      setPdfMenu(null);
+                    }}
+                    style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%', textAlign: 'left', padding: '11px 4px', border: 'none', borderBottom: '1px solid #f0ede6', background: 'transparent', font: 'inherit', fontSize: 13, fontWeight: 600, color: '#1b1a17', cursor: 'pointer' }}
+                  >
+                    <span style={{ width: 26, height: 26, borderRadius: '50%', background: '#efece5', color: '#44423d', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10.5, fontWeight: 700, flexShrink: 0 }}>{initials(p.nama)}</span>
+                    {p.nama}
+                  </button>
+                ))}
+                <button
+                  onClick={() => {
+                    setPrintReq({ jenis: pdfMenu.jenis, ids: pdfPeserta.map((p) => p.id) });
+                    setPdfMenu(null);
+                  }}
+                  className="ev-dark"
+                  style={{ width: '100%', height: 46, marginTop: 14, borderRadius: 10, border: 'none', background: 'oklch(0.58 0.09 165)', font: 'inherit', fontSize: 13.5, fontWeight: 700, color: '#ffffff', cursor: 'pointer' }}
+                >
+                  ⬇ Semua peserta ({pdfPeserta.length}) · rinci
+                </button>
+              </>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
