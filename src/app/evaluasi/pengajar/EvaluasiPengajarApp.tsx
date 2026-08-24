@@ -259,7 +259,6 @@ export function EvaluasiPengajarApp({ initial }: { initial: EvaluasiInitial }) {
             sesi_id: sesiId,
             peserta_id: id,
             hadir,
-            ayat_terakhir: w.ayat,
             counts: w.counts,
             catatan: w.catatan,
             confirmed: w.confirmed,
@@ -592,9 +591,6 @@ export function EvaluasiPengajarApp({ initial }: { initial: EvaluasiInitial }) {
   const khafiyRows = KHAFIY.map((d) =>
     tileRow(activeP.id, jenis, activeSession, d.key, d.label, KHAFIY_SHADES, KHAFIY_BORDERS, 'oklch(0.48 0.10 75)')
   );
-  const ayatVal = nilaiRec.ayat ?? ayatMulai;
-  const ayatSpan = Math.max(1, ayatSelesai - ayatMulai);
-  const ayatPct = Math.min(100, Math.max(0, Math.round(((ayatVal - ayatMulai) / ayatSpan) * 100)));
   const lulus = nilaiSc.skor >= ambangJenis;
 
   // Ringkasan.
@@ -648,6 +644,7 @@ export function EvaluasiPengajarApp({ initial }: { initial: EvaluasiInitial }) {
       if (!res.ok) throw new Error('kirim failed');
       setSentSesi((prev) => ({ ...prev, [currentSesiKey]: true }));
       setKirimStatus('saved');
+      nav('p-home'); // terkirim → kembali ke awal
     } catch {
       setKirimStatus('error');
     }
@@ -917,15 +914,6 @@ export function EvaluasiPengajarApp({ initial }: { initial: EvaluasiInitial }) {
             nama={activeP.nama}
             pos={activeIdx + 1}
             totalPeserta={peserta.length}
-            surat={surat}
-            ayat={ayatVal}
-            ayatPct={ayatPct}
-            prevAyat={() =>
-              updateWork(activeP.id, jenis, activeSession, { ayat: Math.max(ayatMulai, ayatVal - 1) })
-            }
-            nextAyat={() =>
-              updateWork(activeP.id, jenis, activeSession, { ayat: Math.min(ayatSelesai, ayatVal + 1) })
-            }
             ringGradient={`conic-gradient(${nilaiTier.color} ${nilaiSc.skor}%, #e8e4dc 0)`}
             skor={nilaiSc.skor}
             skorColor={nilaiTier.color}

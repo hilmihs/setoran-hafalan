@@ -6,11 +6,6 @@ interface NilaiProps {
   nama: string;
   pos: number;
   totalPeserta: number;
-  surat: string;
-  ayat: number;
-  ayatPct: number;
-  prevAyat: () => void;
-  nextAyat: () => void;
   ringGradient: string;
   skor: number;
   skorColor: string;
@@ -67,19 +62,6 @@ export function Nilai(props: NilaiProps) {
 
       <div style={{ padding: '14px 16px 0' }}>
         <div style={{ borderRadius: 20, padding: 16, background: 'linear-gradient(150deg, oklch(0.97 0.02 165), oklch(0.945 0.03 165))', border: '1px solid oklch(0.88 0.045 165)' }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, marginBottom: 14 }}>
-            <div>
-              <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'oklch(0.46 0.09 165)' }}>Sedang di ayat</div>
-              <div style={{ fontSize: 15, fontWeight: 800, marginTop: 2, color: '#1b1a17' }}>{props.surat} <span style={{ fontVariantNumeric: 'tabular-nums' }}>{props.ayat}</span></div>
-            </div>
-            <div style={{ display: 'flex', gap: 6 }}>
-              <button onClick={props.prevAyat} className="ev-step" style={{ width: 34, height: 34, borderRadius: 10, border: 'none', background: '#ffffff', font: 'inherit', fontSize: 16, fontWeight: 700, color: '#44423d', cursor: 'pointer', boxShadow: '0 1px 2px rgba(20,18,14,0.08)' }}>−</button>
-              <button onClick={props.nextAyat} className="ev-step" style={{ width: 34, height: 34, borderRadius: 10, border: 'none', background: '#1b1a17', font: 'inherit', fontSize: 16, fontWeight: 700, color: '#ffffff', cursor: 'pointer' }}>+</button>
-            </div>
-          </div>
-          <div style={{ position: 'relative', height: 4, borderRadius: 2, background: 'oklch(0.88 0.045 165)', marginBottom: 16 }}>
-            <div style={{ position: 'absolute', top: -3, width: 10, height: 10, borderRadius: '50%', background: '#1b1a17', border: '2px solid #ffffff', left: `${props.ayatPct}%`, transform: 'translateX(-50%)' }} />
-          </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
             <div style={{ position: 'relative', width: 84, height: 84, borderRadius: '50%', flexShrink: 0, background: props.ringGradient, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
               <div style={{ width: 68, height: 68, borderRadius: '50%', background: '#fbfaf7', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
