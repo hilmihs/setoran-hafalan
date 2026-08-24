@@ -45,9 +45,12 @@ eq(tujuanDari('evaluasi'), null, 'evaluasi tanpa WA');
 eq(tujuanDari('modul_kurikulum'), null, 'modul & kurikulum tanpa WA');
 eq(tujuanDari('cerita_menarik'), null, 'cerita menarik tanpa WA');
 
-eq(normalizeWhatsApp(TUJUAN_WA.koordinator_pengajar.nomor), '6281280683665', 'nomor koordinator pengajar');
-eq(normalizeWhatsApp(TUJUAN_WA.koordinator_peserta.nomor), '6281994771197', 'nomor koordinator peserta');
-eq(normalizeWhatsApp(TUJUAN_WA.tali_kasih.nomor), '6289673092288', 'nomor tali kasih');
+eq(normalizeWhatsApp(TUJUAN_WA.koordinator_pengajar.ikhwan.nomor), '6285271760094', 'nomor koordinator pengajar ikhwan');
+eq(normalizeWhatsApp(TUJUAN_WA.koordinator_pengajar.akhwat.nomor), '6281280683665', 'nomor koordinator pengajar akhwat');
+eq(normalizeWhatsApp(TUJUAN_WA.koordinator_peserta.ikhwan.nomor), '6281280630437', 'nomor koordinator peserta ikhwan');
+eq(normalizeWhatsApp(TUJUAN_WA.koordinator_peserta.akhwat.nomor), '6281994771197', 'nomor koordinator peserta akhwat');
+eq(normalizeWhatsApp(TUJUAN_WA.tali_kasih.ikhwan.nomor), '6287748055645', 'nomor tali kasih ikhwan');
+eq(normalizeWhatsApp(TUJUAN_WA.tali_kasih.akhwat.nomor), '6289673092288', 'nomor tali kasih akhwat');
 
 eq(HALAQAH_OPTIONS.length, 8, 'ada 8 pilihan halaqoh');
 eq(HALAQAH_OPTIONS[0], 'HITS JANUARI', 'halaqoh pertama');

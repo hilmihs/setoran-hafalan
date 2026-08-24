@@ -11,7 +11,7 @@ import {
   kategoriDef,
   nomorTiket,
   HALAQAH_OPTIONS,
-  TUJUAN_WA,
+  tujuanWa,
   IZIN_JENIS,
   IZIN_JENIS_LABEL,
   MAX_LAMPIRAN,
@@ -278,7 +278,7 @@ export async function kirimShakwa(
     });
   }
 
-  const tujuan = def.waTujuan ? TUJUAN_WA[def.waTujuan] : null;
+  const tujuan = def.waTujuan ? tujuanWa(def.waTujuan, gender as Gender) : null;
   const waUrl = tujuan
     ? buildWaMeUrl(
         tujuan.nomor,

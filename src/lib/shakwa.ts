@@ -6,6 +6,8 @@
 // akan menghasilkan formulir dan rekap yang tak sepakat soal kategori apa saja
 // yang ada.
 
+import type { Gender } from '@/types/db';
+
 export type ShakwaKategori =
   | 'evaluasi'
   | 'pengajar'
@@ -218,20 +220,50 @@ export const IZIN_JENIS_LABEL: Record<ShakwaIzinJenis, string> = Object.fromEntr
  * Nomor tujuan WA per kategori. Konstanta supaya perubahannya terekam di git;
  * ENV disediakan untuk ganti cepat tanpa deploy saat pemegang nomor berganti.
  */
-export const TUJUAN_WA: Record<ShakwaTujuan, { nama: string; nomor: string }> = {
+export type TujuanWaEntry = { nama: string; nomor: string };
+
+/**
+ * Nomor tujuan WA per kategori × gender. Semua tujuan dipisah ikhwan/akhwat
+ * supaya laporan diarahkan ke koordinator sesuai gender pelapor.
+ * ENV disediakan untuk ganti cepat tanpa deploy saat pemegang nomor berganti.
+ */
+export const TUJUAN_WA: Record<ShakwaTujuan, Record<Gender, TujuanWaEntry>> = {
   koordinator_pengajar: {
-    nama: process.env.SHAKWA_NAMA_KOORDINATOR_PENGAJAR || 'Koordinator Pengajar',
-    nomor: process.env.SHAKWA_WA_KOORDINATOR_PENGAJAR || '081280683665',
+    ikhwan: {
+      nama: process.env.SHAKWA_NAMA_KOORDINATOR_PENGAJAR_IKHWAN || 'Faisal Fajar',
+      nomor: process.env.SHAKWA_WA_KOORDINATOR_PENGAJAR_IKHWAN || '085271760094',
+    },
+    akhwat: {
+      nama: process.env.SHAKWA_NAMA_KOORDINATOR_PENGAJAR_AKHWAT || 'Umi Hidayati',
+      nomor: process.env.SHAKWA_WA_KOORDINATOR_PENGAJAR_AKHWAT || '081280683665',
+    },
   },
   koordinator_peserta: {
-    nama: process.env.SHAKWA_NAMA_KOORDINATOR_PESERTA || 'Koordinator Peserta',
-    nomor: process.env.SHAKWA_WA_KOORDINATOR_PESERTA || '081994771197',
+    ikhwan: {
+      nama: process.env.SHAKWA_NAMA_KOORDINATOR_PESERTA_IKHWAN || 'Adam Malik',
+      nomor: process.env.SHAKWA_WA_KOORDINATOR_PESERTA_IKHWAN || '081280630437',
+    },
+    akhwat: {
+      nama: process.env.SHAKWA_NAMA_KOORDINATOR_PESERTA_AKHWAT || 'Talida Jihan Nabila',
+      nomor: process.env.SHAKWA_WA_KOORDINATOR_PESERTA_AKHWAT || '081994771197',
+    },
   },
   tali_kasih: {
-    nama: process.env.SHAKWA_NAMA_TALI_KASIH || 'Tim Tali Kasih',
-    nomor: process.env.SHAKWA_WA_TALI_KASIH || '089673092288',
+    ikhwan: {
+      nama: process.env.SHAKWA_NAMA_TALI_KASIH_IKHWAN || 'Ustadz Ahmad Syukri',
+      nomor: process.env.SHAKWA_WA_TALI_KASIH_IKHWAN || '087748055645',
+    },
+    akhwat: {
+      nama: process.env.SHAKWA_NAMA_TALI_KASIH_AKHWAT || 'Layla',
+      nomor: process.env.SHAKWA_WA_TALI_KASIH_AKHWAT || '089673092288',
+    },
   },
 };
+
+/** Nomor & nama koordinator tujuan sesuai gender pelapor. */
+export function tujuanWa(tujuan: ShakwaTujuan, gender: Gender): TujuanWaEntry {
+  return TUJUAN_WA[tujuan][gender];
+}
 
 /** Teks panduan kategori di kepala formulir — sama dengan formulir asal. */
 export const PANDUAN_KATEGORI: Array<{ judul: string; poin: string[] }> = [
