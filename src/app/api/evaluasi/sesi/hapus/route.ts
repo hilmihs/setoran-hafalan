@@ -51,7 +51,7 @@ export async function POST(req: NextRequest) {
     // Sesi yang sudah dikirim tidak boleh dihapus.
     const { data: existing } = await supabaseAdmin
       .from('evaluasi_sesi')
-      .select('status')
+      .select('id, status')
       .eq('halaqah_id', halaqah_id)
       .eq('jenis', 'ujian')
       .eq('nomor_sesi', nomor_sesi)
@@ -89,26 +89,40 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    const { error } = await supabaseAdmin.from('evaluasi_sesi').upsert(
-      {
+    const now = new Date().toISOString();
+    if (existing) {
+      // Row sudah ada → cukup toggle flag; JANGAN upsert (upsert tanpa surat/ayat
+      // akan mereset silabus ke default DB → sesi hantu Al-Baqarah 142-157).
+      const { error } = await supabaseAdmin
+        .from('evaluasi_sesi')
+        .update({ dihapus, updated_at: now })
+        .eq('id', existing.id);
+      if (error) {
+        console.error('[sesi/hapus] update gagal:', error.message);
+        return NextResponse.json({ error: 'Gagal memperbarui sesi' }, { status: 500 });
+      }
+    } else if (dihapus) {
+      // Belum ada row & ingin menghapus → buat penanda terhapus (tombstone).
+      // dihapus=true shg tak pernah ditampilkan; silabus asli diisi klien via
+      // sesi/upsert saat sesi benar-benar dijadwalkan.
+      const { error } = await supabaseAdmin.from('evaluasi_sesi').insert({
         halaqah_id,
         jenis: 'ujian',
         nomor_sesi,
-        dihapus,
+        dihapus: true,
         dibuat_oleh: evalPengajarId,
-        updated_at: new Date().toISOString(),
-      },
-      { onConflict: 'halaqah_id,jenis,nomor_sesi' }
-    );
-    if (error) {
-      return NextResponse.json({ error: error.message }, { status: 500 });
+        updated_at: now,
+      });
+      if (error) {
+        console.error('[sesi/hapus] insert tombstone gagal:', error.message);
+        return NextResponse.json({ error: 'Gagal menghapus sesi' }, { status: 500 });
+      }
     }
+    // else: memulihkan sesi yang belum pernah ada → no-op.
 
     return NextResponse.json({ ok: true });
   } catch (e: unknown) {
-    return NextResponse.json(
-      { error: e instanceof Error ? e.message : 'Internal error' },
-      { status: 500 }
-    );
+    console.error('[sesi/hapus] error:', e instanceof Error ? e.message : e);
+    return NextResponse.json({ error: 'Gagal memproses sesi' }, { status: 500 });
   }
 }

@@ -1,5 +1,7 @@
 'use client';
 
+import { useState } from 'react';
+
 interface DaftarItem {
   key: string;
   nama: string;
@@ -27,9 +29,11 @@ interface DaftarProps {
   tombolLabel: string;
   back: () => void;
   mulai: () => void;
+  onReset?: () => void;
 }
 
 export function Daftar(props: DaftarProps) {
+  const [confirmReset, setConfirmReset] = useState(false);
   return (
     <>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 16px', background: '#ffffff', borderBottom: '1px solid #e8e4dc' }}>
@@ -38,7 +42,30 @@ export function Daftar(props: DaftarProps) {
           <div style={{ fontSize: 15, fontWeight: 700 }}>{props.judul}</div>
           <div style={{ fontSize: 11, color: '#7a766f' }}>{props.sub}</div>
         </div>
-        <button style={{ height: 34, padding: '0 12px', borderRadius: 8, border: '1px solid #d8d3c8', background: '#ffffff', font: 'inherit', fontSize: 12, fontWeight: 600, color: '#44423d', cursor: 'pointer', whiteSpace: 'nowrap' }}>Unduh PDF</button>
+        {props.onReset && !confirmReset && (
+          <button
+            onClick={() => setConfirmReset(true)}
+            style={{ height: 34, padding: '0 12px', borderRadius: 8, border: '1px solid oklch(0.85 0.08 25)', background: '#ffffff', font: 'inherit', fontSize: 12, fontWeight: 600, color: 'oklch(0.46 0.14 25)', cursor: 'pointer', whiteSpace: 'nowrap' }}
+          >
+            Reset
+          </button>
+        )}
+        {props.onReset && confirmReset && (
+          <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+            <button
+              onClick={() => { props.onReset?.(); setConfirmReset(false); }}
+              style={{ height: 34, padding: '0 12px', borderRadius: 8, border: 'none', background: 'oklch(0.55 0.16 25)', font: 'inherit', fontSize: 12, fontWeight: 700, color: '#fff', cursor: 'pointer', whiteSpace: 'nowrap' }}
+            >
+              Ya, reset
+            </button>
+            <button
+              onClick={() => setConfirmReset(false)}
+              style={{ height: 34, padding: '0 10px', borderRadius: 8, border: '1px solid #e8e4dc', background: '#fff', font: 'inherit', fontSize: 12, fontWeight: 600, color: '#44423d', cursor: 'pointer' }}
+            >
+              Batal
+            </button>
+          </div>
+        )}
       </div>
 
       <div style={{ padding: '12px 16px 0' }}>

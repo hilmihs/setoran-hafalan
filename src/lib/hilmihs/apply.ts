@@ -24,11 +24,20 @@ export async function applyStages(stageIds: string[], actor: string): Promise<{ 
   for (const entity of ORDER) {
     for (const r of rows.filter((x) => x.entity === entity)) {
       const table = TABLE[entity];
+      let opError: string | null = null;
       if (r.op === 'deactivate') {
-        await supabaseAdmin.from(table).update({ aktif: false, synced_at: now }).eq('id', r.entity_id);
+        const { error } = await supabaseAdmin.from(table).update({ aktif: false, synced_at: now }).eq('id', r.entity_id);
+        opError = error?.message ?? null;
       } else {
         // create / update: upsert baris mirror dari `after` (+ synced_at).
-        await supabaseAdmin.from(table).upsert({ ...(r.after as object), synced_at: now }, { onConflict: 'id' });
+        const { error } = await supabaseAdmin.from(table).upsert({ ...(r.after as object), synced_at: now }, { onConflict: 'id' });
+        opError = error?.message ?? null;
+      }
+      // Jangan tandai applied bila mirror gagal ditulis (mis. langgar FK) — kalau
+      // ditandai, koordinator mengira sync mendarat padahal mirror parsial.
+      if (opError) {
+        console.error(`[hilmihs/apply] ${entity} ${r.entity_id} gagal:`, opError);
+        continue;
       }
       await supabaseAdmin.from('eval_sync_stage')
         .update({ applied_at: now, applied_by: actor }).eq('id', r.id);

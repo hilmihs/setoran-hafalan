@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import type { Gender } from '@/types/db';
 import {
   scoreOf,
@@ -128,18 +128,6 @@ export function EvaluasiPengajarApp({ initial }: { initial: EvaluasiInitial }) {
   const [screen, setScreen] = useState<Screen>('p-home');
   const [jenis, setJenis] = useState<Jenis>('qn');
   const [activeSession, setActiveSession] = useState<number>(initial.currentSession.qn);
-  const [included, setIncluded] = useState<Record<string, boolean>>(() => {
-    const out: Record<string, boolean> = {};
-    // Rehidrasi kehadiran: default hadir (true), kecuali entri work untuk
-    // (jenis, sesi) awal peserta ini tercatat hadir === false.
-    const initJenis: Jenis = 'qn';
-    const initSession = initial.currentSession.qn;
-    for (const p of peserta) {
-      const w = initial.work[workKey(p.id, initJenis, initSession)];
-      out[p.id] = w?.hadir === false ? false : true;
-    }
-    return out;
-  });
   const [activeIdx, setActiveIdx] = useState(0);
   const [work, setWork] = useState<Record<string, EvWork>>(initial.work);
   const [raporId, setRaporId] = useState<string | null>(null);
@@ -175,14 +163,20 @@ export function EvaluasiPengajarApp({ initial }: { initial: EvaluasiInitial }) {
   // Refs untuk baca state terbaru di dalam callback async (debounce).
   const workRef = useRef(work);
   workRef.current = work;
-  const includedRef = useRef(included);
-  includedRef.current = included;
+  // Mode Coba: eksperimen tanpa menyentuh server. Snapshot work saat ON → restore saat OFF.
+  const [coba, setCoba] = useState(false);
+  const cobaRef = useRef(coba);
+  cobaRef.current = coba;
+  const cobaSnapshot = useRef<{ work: Record<string, EvWork>; ujianDihapus: Set<number> } | null>(null);
   const sesiIdRef = useRef<Record<string, string>>(
     Object.fromEntries(initial.sesiList.map((s) => [`${s.jenis}|${s.nomor_sesi}`, s.id]))
   );
   const setupRef = useRef({ surat, ayatMulai, ayatSelesai });
   setupRef.current = { surat, ayatMulai, ayatSelesai };
   const timers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
+  // Thunk simpan tertunda per key — dipakai flushSaves() agar edit dalam jendela
+  // debounce tak hilang saat pindah peserta / tutup tab (L1).
+  const pendingSaves = useRef<Record<string, () => void>>({});
 
   const getWork = useCallback(
     (id: string, j: Jenis, session: number): EvWork => {
@@ -190,6 +184,13 @@ export function EvaluasiPengajarApp({ initial }: { initial: EvaluasiInitial }) {
       return workRef.current[workKey(id, j, session)] ?? defaultWork(sesi?.ayat_mulai ?? ayatMulai);
     },
     [initial.sesiList, ayatMulai]
+  );
+
+  // Kehadiran = satu-satunya sumber kebenaran: work.hadir per (id, jenis, sesi).
+  // Menghindari bug lama di mana `included` per-peserta bocor lintas sesi.
+  const isIncluded = useCallback(
+    (id: string) => getWork(id, jenis, activeSession).hadir !== false,
+    [getWork, jenis, activeSession]
   );
 
   const setStatus = useCallback((key: string, st: SaveStatus) => {
@@ -203,6 +204,10 @@ export function EvaluasiPengajarApp({ initial }: { initial: EvaluasiInitial }) {
       const cached = sesiIdRef.current[skey];
       if (cached) return cached;
       try {
+        // Silabus: utamakan default sesi (j, session) dari sesiList — bukan
+        // setupRef (layar aktif) — agar save tertunda utk sesi lain tak salah
+        // silabus. Fallback ke setupRef hanya utk sesi yang belum ada di silabus.
+        const known = initial.sesiList.find((s) => s.jenis === j && s.nomor_sesi === session);
         const su = setupRef.current;
         const res = await fetch('/api/evaluasi/sesi/upsert', {
           method: 'POST',
@@ -212,9 +217,9 @@ export function EvaluasiPengajarApp({ initial }: { initial: EvaluasiInitial }) {
             jenis: j,
             nomor_sesi: session,
             tgl_jadwal: config.jadwal?.[j]?.[session - 1] || null,
-            surat: su.surat,
-            ayat_mulai: su.ayatMulai,
-            ayat_selesai: su.ayatSelesai,
+            surat: known?.surat ?? su.surat,
+            ayat_mulai: known?.ayat_mulai ?? su.ayatMulai,
+            ayat_selesai: known?.ayat_selesai ?? su.ayatSelesai,
             ambang: j === 'ujian' ? halaqah.ambang_ujian : AMBANG,
           }),
         });
@@ -226,20 +231,25 @@ export function EvaluasiPengajarApp({ initial }: { initial: EvaluasiInitial }) {
         return null;
       }
     },
-    [halaqah.id, halaqah.ambang_ujian, config.jadwal]
+    [halaqah.id, halaqah.ambang_ujian, config.jadwal, initial.sesiList]
   );
 
   // Simpan satu baris nilai ke server (optimistic; tidak memblokir navigasi).
   const saveNilai = useCallback(
     async (id: string, j: Jenis, session: number, override: { done?: boolean; hadir?: boolean } = {}) => {
       const key = workKey(id, j, session);
+      // Mode Coba: jangan sentuh server; state lokal sudah terupdate via updateWork.
+      if (cobaRef.current) {
+        setStatus(key, 'saved');
+        return;
+      }
       const sesiId = await ensureSesiId(j, session);
       if (!sesiId) {
         setStatus(key, 'error');
         return;
       }
       const w = getWork(id, j, session);
-      const hadir = override.hadir ?? includedRef.current[id] !== false;
+      const hadir = override.hadir ?? w.hadir !== false;
       setStatus(key, 'saving');
       try {
         const res = await fetch('/api/evaluasi/nilai/upsert', {
@@ -270,18 +280,51 @@ export function EvaluasiPengajarApp({ initial }: { initial: EvaluasiInitial }) {
       const key = workKey(id, j, session);
       setStatus(key, 'idle');
       if (timers.current[key]) clearTimeout(timers.current[key]);
-      timers.current[key] = setTimeout(() => saveNilai(id, j, session), 700);
+      pendingSaves.current[key] = () => saveNilai(id, j, session);
+      timers.current[key] = setTimeout(() => {
+        delete pendingSaves.current[key];
+        saveNilai(id, j, session);
+      }, 700);
     },
     [saveNilai, setStatus]
   );
 
+  // Segera jalankan semua simpan tertunda (pindah peserta/sesi, tutup tab).
+  const flushSaves = useCallback(() => {
+    for (const key of Object.keys(pendingSaves.current)) {
+      if (timers.current[key]) clearTimeout(timers.current[key]);
+      const thunk = pendingSaves.current[key];
+      delete pendingSaves.current[key];
+      thunk?.();
+    }
+  }, []);
+
+  useEffect(() => {
+    const onHide = () => {
+      if (document.visibilityState === 'hidden') flushSaves();
+    };
+    window.addEventListener('beforeunload', flushSaves);
+    document.addEventListener('visibilitychange', onHide);
+    return () => {
+      window.removeEventListener('beforeunload', flushSaves);
+      document.removeEventListener('visibilitychange', onHide);
+    };
+  }, [flushSaves]);
+
   const updateWork = useCallback(
-    (id: string, j: Jenis, session: number, patch: Partial<EvWork>, opts: { save?: boolean } = { save: true }) => {
+    (
+      id: string,
+      j: Jenis,
+      session: number,
+      patch: Partial<EvWork> | ((existing: EvWork) => Partial<EvWork>),
+      opts: { save?: boolean } = { save: true }
+    ) => {
       const key = workKey(id, j, session);
       setWork((prev) => {
         const sesi = initial.sesiList.find((s) => s.jenis === j && s.nomor_sesi === session);
         const existing = prev[key] ?? defaultWork(sesi?.ayat_mulai ?? ayatMulai);
-        return { ...prev, [key]: { ...existing, ...patch } };
+        const p = typeof patch === 'function' ? patch(existing) : patch;
+        return { ...prev, [key]: { ...existing, ...p } };
       });
       if (opts.save !== false) scheduleSave(id, j, session);
     },
@@ -291,10 +334,12 @@ export function EvaluasiPengajarApp({ initial }: { initial: EvaluasiInitial }) {
   const bump = useCallback(
     (id: string, j: Jenis, session: number, k: string, d: number) => {
       if (typeof navigator !== 'undefined' && navigator.vibrate) navigator.vibrate(8);
-      const cur = getWork(id, j, session).counts[k] || 0;
-      updateWork(id, j, session, { counts: { ...getWork(id, j, session).counts, [k]: Math.max(0, cur + d) } });
+      // Hitung count berikutnya DI DALAM updater — cegah tap cepat kehilangan increment.
+      updateWork(id, j, session, (existing) => ({
+        counts: { ...existing.counts, [k]: Math.max(0, (existing.counts[k] || 0) + d) },
+      }));
     },
-    [getWork, updateWork]
+    [updateWork]
   );
   const setCount = useCallback(
     (id: string, j: Jenis, session: number, k: string, v: string) => {
@@ -337,10 +382,49 @@ export function EvaluasiPengajarApp({ initial }: { initial: EvaluasiInitial }) {
     };
   }
 
-  const nav = (s: Screen) => setScreen(s);
+  // Toggle Mode Coba. ON → snapshot work bersih; OFF → buang eksperimen, kembalikan.
+  const toggleCoba = () => {
+    if (!coba) {
+      flushSaves(); // pastikan simpanan asli tuntas dulu
+      cobaSnapshot.current = { work: workRef.current, ujianDihapus: new Set(ujianDihapus) };
+      setCoba(true);
+    } else {
+      if (cobaSnapshot.current) {
+        setWork(cobaSnapshot.current.work);
+        setUjianDihapus(cobaSnapshot.current.ujianDihapus);
+      }
+      cobaSnapshot.current = null;
+      setStatuses({});
+      setCoba(false);
+    }
+  };
+
+  // Reset semua nilai sesi (jenis+sesi) aktif. Mode Coba → lokal saja.
+  const resetSesi = () => {
+    setWork((prev) => {
+      const next = { ...prev };
+      for (const p of peserta) delete next[workKey(p.id, jenis, activeSession)];
+      return next;
+    });
+    setStatuses({});
+    if (cobaRef.current) return;
+    const sesiId = sesiIdRef.current[`${jenis}|${activeSession}`];
+    if (!sesiId) return; // sesi belum pernah dibuat → tak ada di server
+    void fetch('/api/evaluasi/nilai/reset', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ sesi_id: sesiId }),
+    });
+  };
+
+  const nav = (s: Screen) => {
+    flushSaves();
+    setScreen(s);
+  };
 
   // Mulai penilaian dari kartu home: set jenis+sesi, muat surat/ayat dari sesi bila ada.
   const startJenis = (j: Jenis) => {
+    flushSaves();
     const opts = sesiOptionsFor(j);
     // Sesi awal: currentSession bila masih valid, selain itu opsi pertama.
     const preferred = initial.currentSession[j];
@@ -358,6 +442,7 @@ export function EvaluasiPengajarApp({ initial }: { initial: EvaluasiInitial }) {
   };
 
   const pickSession = (n: number) => {
+    flushSaves();
     const sesi = initial.sesiList.find((s) => s.jenis === jenis && s.nomor_sesi === n);
     setActiveSession(n);
     if (sesi) {
@@ -382,6 +467,7 @@ export function EvaluasiPengajarApp({ initial }: { initial: EvaluasiInitial }) {
       );
       if (rest.length) setActiveSession(rest[0]);
     }
+    if (cobaRef.current) return; // Mode Coba: perubahan sesi lokal saja.
     try {
       const res = await fetch('/api/evaluasi/sesi/hapus', {
         method: 'POST',
@@ -401,10 +487,9 @@ export function EvaluasiPengajarApp({ initial }: { initial: EvaluasiInitial }) {
   };
 
   const toggleIncluded = (id: string) => {
-    const next = !(included[id] !== false);
-    setIncluded((prev) => ({ ...prev, [id]: next }));
-    // Best-effort: rekam kehadiran agar "kirim" bisa mengecualikan yang tidak hadir.
-    void saveNilai(id, jenis, activeSession, { hadir: next });
+    const next = !isIncluded(id);
+    // Simpan hadir ke work (sumber kebenaran) + persist; per (jenis, sesi) aktif.
+    updateWork(id, jenis, activeSession, { hadir: next });
   };
 
   // ── Derived values (mirror renderVals) ──
@@ -414,7 +499,7 @@ export function EvaluasiPengajarApp({ initial }: { initial: EvaluasiInitial }) {
   const jl = trackName(jenis);
   const ambangJenis = isUjian ? halaqah.ambang_ujian : AMBANG;
 
-  const includedPeserta = peserta.filter((p) => included[p.id] !== false);
+  const includedPeserta = peserta.filter((p) => isIncluded(p.id));
   const selesaiCount = includedPeserta.filter((p) => getWork(p.id, jenis, activeSession).done).length;
 
   const activeP = peserta[activeIdx] ?? peserta[0];
@@ -475,7 +560,7 @@ export function EvaluasiPengajarApp({ initial }: { initial: EvaluasiInitial }) {
     const rec = getWork(p.id, jenis, activeSession);
     const sc = scoreOf(rec.counts);
     const tier = tierOf(sc.skor);
-    const inc = included[p.id] !== false;
+    const inc = isIncluded(p.id);
     return {
       key: p.id,
       nama: p.nama,
@@ -547,6 +632,7 @@ export function EvaluasiPengajarApp({ initial }: { initial: EvaluasiInitial }) {
   const alreadySent = !!sentSesi[currentSesiKey];
 
   const kirim = async () => {
+    if (cobaRef.current) return; // Mode Coba: tak mengirim ke koordinator.
     setKirimStatus('saving');
     const sesiId = await ensureSesiId(jenis, activeSession);
     if (!sesiId) {
@@ -576,7 +662,7 @@ export function EvaluasiPengajarApp({ initial }: { initial: EvaluasiInitial }) {
       for (let n = 1; n <= maxN; n++) {
         const w = getWork(pid, j, n);
         const sesi = initial.sesiList.find((s) => s.jenis === j && s.nomor_sesi === n);
-        out.push({ jenis: j, nomor_sesi: n, counts: w.counts, catatan: w.catatan, tgl: sesi?.tgl_jadwal ?? null, done: w.done });
+        out.push({ jenis: j, nomor_sesi: n, counts: w.counts, catatan: w.catatan, tgl: sesi?.tgl_jadwal ?? null, done: w.done, hadir: w.hadir });
       }
     };
     push('qn', 4);
@@ -594,9 +680,10 @@ export function EvaluasiPengajarApp({ initial }: { initial: EvaluasiInitial }) {
   };
   const rSesi = assembleSesi(rId);
   const rapotBerkala = buildBerkalaPayload(rIdentitas, initial.pengajarName, '', rSesi, config.nama_qn, config.nama_pb);
-  const rapotUjian = buildUjianPayload(rIdentitas, initial.pengajarName, '', rSesi);
+  const rapotUjian = buildUjianPayload(rIdentitas, initial.pengajarName, '', rSesi, halaqah.ambang_ujian);
 
   const terbitkanRapot = async (jenis_rapot: 'berkala' | 'ujian') => {
+    if (cobaRef.current) return; // Mode Coba: tak menerbitkan rapot resmi.
     setTerbitStatus('saving');
     try {
       const res = await fetch('/api/evaluasi/rapot/terbitkan', {
@@ -636,6 +723,25 @@ export function EvaluasiPengajarApp({ initial }: { initial: EvaluasiInitial }) {
         .ev-ghost:hover { background: #faf8f4 !important; }
         .ev-num::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
       `}</style>
+      {coba && (
+        <div
+          style={{
+            position: 'sticky',
+            top: 0,
+            zIndex: 40,
+            background: 'oklch(0.95 0.05 85)',
+            borderBottom: '1px solid oklch(0.85 0.09 85)',
+            color: 'oklch(0.42 0.09 75)',
+            textAlign: 'center',
+            padding: '8px 12px',
+            fontSize: 12,
+            fontWeight: 800,
+            letterSpacing: '0.03em',
+          }}
+        >
+          🧪 MODE COBA — perubahan TIDAK disimpan
+        </div>
+      )}
       <div style={shellStyle}>
         {screen === 'p-home' && (
           <>
@@ -647,6 +753,25 @@ export function EvaluasiPengajarApp({ initial }: { initial: EvaluasiInitial }) {
                 <div style={{ fontSize: 15, fontWeight: 700, lineHeight: 1.2 }}>{initial.pengajarName}</div>
                 <div style={{ fontSize: 11, color: '#7a766f', marginTop: 1 }}>{headerMeta}</div>
               </div>
+              <button
+                type="button"
+                onClick={toggleCoba}
+                title="Mode Coba: eksperimen tanpa menyimpan"
+                style={{
+                  flexShrink: 0,
+                  padding: '7px 12px',
+                  borderRadius: 999,
+                  border: `1.5px solid ${coba ? 'oklch(0.75 0.12 85)' : '#e8e4dc'}`,
+                  background: coba ? 'oklch(0.95 0.05 85)' : '#ffffff',
+                  color: coba ? 'oklch(0.42 0.09 75)' : '#7a766f',
+                  font: 'inherit',
+                  fontSize: 12,
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                }}
+              >
+                {coba ? '🧪 Coba: ON' : 'Mode Coba'}
+              </button>
             </div>
 
             {initial.halaqahOptions.length > 1 && (
@@ -778,11 +903,12 @@ export function EvaluasiPengajarApp({ initial }: { initial: EvaluasiInitial }) {
                 return;
               }
               const nextIdx = peserta.findIndex(
-                (p) => included[p.id] !== false && !getWork(p.id, jenis, activeSession).done
+                (p) => isIncluded(p.id) && !getWork(p.id, jenis, activeSession).done
               );
               setActiveIdx(nextIdx >= 0 ? nextIdx : 0);
               setScreen('p-nilai');
             }}
+            onReset={resetSesi}
           />
         )}
 
@@ -820,7 +946,10 @@ export function EvaluasiPengajarApp({ initial }: { initial: EvaluasiInitial }) {
             catatan={nilaiRec.catatan}
             setCatatan={(v) => updateWork(activeP.id, jenis, activeSession, { catatan: v })}
             isFirst={activeIdx === 0}
-            prevPeserta={() => setActiveIdx(Math.max(0, activeIdx - 1))}
+            prevPeserta={() => {
+              flushSaves();
+              setActiveIdx(Math.max(0, activeIdx - 1));
+            }}
             simpanDisabled={isUjian && !nilaiRec.confirmed}
             simpanLabel={activeIdx === peserta.length - 1 ? 'Simpan & selesai' : 'Simpan & peserta berikutnya →'}
             status={statuses[workKey(activeP.id, jenis, activeSession)] ?? 'idle'}
@@ -829,7 +958,7 @@ export function EvaluasiPengajarApp({ initial }: { initial: EvaluasiInitial }) {
               void saveNilai(activeP.id, jenis, activeSession, { done: true });
               let nextIdx = -1;
               for (let j = activeIdx + 1; j < peserta.length; j++) {
-                if (included[peserta[j].id] !== false) {
+                if (isIncluded(peserta[j].id)) {
                   nextIdx = j;
                   break;
                 }

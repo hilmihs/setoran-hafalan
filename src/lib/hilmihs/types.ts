@@ -54,7 +54,7 @@ export interface MirrorBatch { id: string; nama: string; aktif: boolean }
 export interface MirrorPengajar { id: string; nama: string; gender: Gender; whatsapp: string | null }
 export interface MirrorHalaqah {
   id: string; nama: string; gender: Gender; level: string | null;
-  pengajar_id: string | null; batch_id: string; mustawa: number | null; ambang_ujian: number;
+  pengajar_id: string | null; batch_id: string; mustawa: number | null;
 }
 export interface MirrorPeserta {
   id: string; nama: string; gender: Gender; halaqah_id: string;

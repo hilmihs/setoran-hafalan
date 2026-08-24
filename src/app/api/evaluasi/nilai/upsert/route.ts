@@ -88,14 +88,13 @@ export async function POST(req: NextRequest) {
     );
 
     if (error) {
-      return NextResponse.json({ error: error.message }, { status: 500 });
+      console.error('[nilai/upsert] gagal:', error.message);
+      return NextResponse.json({ error: 'Gagal menyimpan nilai' }, { status: 500 });
     }
 
     return NextResponse.json({ ok: true, skor });
   } catch (e: unknown) {
-    return NextResponse.json(
-      { error: e instanceof Error ? e.message : 'Internal error' },
-      { status: 500 }
-    );
+    console.error('[nilai/upsert] error:', e instanceof Error ? e.message : e);
+    return NextResponse.json({ error: 'Gagal menyimpan nilai' }, { status: 500 });
   }
 }

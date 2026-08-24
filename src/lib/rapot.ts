@@ -12,6 +12,7 @@ import {
   sumCounts,
   nilaiAkhirOf,
   AMBANG_LULUS_AKHIR,
+  AMBANG_UJIAN_DEFAULT,
   UJIAN_QN_SESI,
   UJIAN_PB_SESI,
   type Jenis,
@@ -26,6 +27,7 @@ export interface SesiNilaiInput {
   catatan: string;
   tgl: string | null; // tgl_jadwal ISO (yyyy-mm-dd) atau null
   done: boolean;
+  hadir?: boolean; // default true; sesi dgn hadir===false tak dihitung ke rapot
 }
 
 export interface RapotIdentitas {
@@ -102,27 +104,29 @@ function trackShort(j: Jenis): string {
 // Skor semua sesi berkala (qn+pb) yang done — dasar rata-rata 30%.
 function berkalaScores(sesi: SesiNilaiInput[]): number[] {
   return sesi
-    .filter((s) => (s.jenis === 'qn' || s.jenis === 'pb') && s.done)
+    .filter((s) => (s.jenis === 'qn' || s.jenis === 'pb') && s.done && s.hadir !== false)
     .map((s) => scoreOf(s.counts).skor);
 }
 
 function buildTrack(sesi: SesiNilaiInput[], jenis: 'qn' | 'pb', namaTrack?: string): RapotTrackSnap {
   const rows = sesi.filter((s) => s.jenis === jenis);
   const history: (number | null)[] = [1, 2, 3, 4].map((n) => {
-    const r = rows.find((s) => s.nomor_sesi === n && s.done);
+    const r = rows.find((s) => s.nomor_sesi === n && s.done && s.hadir !== false);
     return r ? scoreOf(r.counts).skor : null;
   });
   const filled = history.filter((v): v is number => v != null);
   const rata = filled.length ? Math.round(filled.reduce((a, b) => a + b, 0) / filled.length) : null;
   const catatan = rows
-    .filter((s) => s.done && s.catatan.trim())
+    .filter((s) => s.done && s.hadir !== false && s.catatan.trim())
     .sort((a, b) => a.nomor_sesi - b.nomor_sesi)
     .map((s) => ({ label: `${trackShort(jenis)} S${s.nomor_sesi}`, tgl: s.tgl, teks: s.catatan.trim() }));
   return { jenis, label: namaTrack ?? TRACK_LABEL[jenis], rata, history, catatan };
 }
 
 function akumulasiLahn(sesi: SesiNilaiInput[]): RapotLahnRow[] {
-  const done = sesi.filter((s) => (s.jenis === 'qn' || s.jenis === 'pb') && s.done).map((s) => s.counts);
+  const done = sesi
+    .filter((s) => (s.jenis === 'qn' || s.jenis === 'pb') && s.done && s.hadir !== false)
+    .map((s) => s.counts);
   const total = sumCounts(done);
   return ALL_LAHN.map((d) => ({ key: d.key, label: d.label, group: d.group, count: total[d.key] || 0 }))
     .filter((r) => r.count > 0)
@@ -159,7 +163,7 @@ export function buildBerkalaPayload(
 }
 
 function ujianSnap(sesi: SesiNilaiInput[], nomor: number, label: string, ambang: number): RapotUjianSnap | null {
-  const r = sesi.find((s) => s.jenis === 'ujian' && s.nomor_sesi === nomor && s.done);
+  const r = sesi.find((s) => s.jenis === 'ujian' && s.nomor_sesi === nomor && s.done && s.hadir !== false);
   if (!r) return null;
   const sc = scoreOf(r.counts);
   return {
@@ -180,10 +184,12 @@ export function buildUjianPayload(
   penerbit: string,
   tanggal: string,
   sesi: SesiNilaiInput[],
-  ambang = AMBANG_LULUS_AKHIR,
+  // Ambang lulus PER-SESI ujian (QN/PB) = halaqah.ambang_ujian; harus sama dgn
+  // layar Nilai pengajar. Ambang NILAI AKHIR tetap fix AMBANG_LULUS_AKHIR (70).
+  ambangSesi = AMBANG_UJIAN_DEFAULT,
 ): RapotPayload {
-  const qn = ujianSnap(sesi, UJIAN_QN_SESI, 'Ujian QN', ambang);
-  const pb = ujianSnap(sesi, UJIAN_PB_SESI, 'Ujian PB', ambang);
+  const qn = ujianSnap(sesi, UJIAN_QN_SESI, 'Ujian QN', ambangSesi);
+  const pb = ujianSnap(sesi, UJIAN_PB_SESI, 'Ujian PB', ambangSesi);
   const na = nilaiAkhirOf(berkalaScores(sesi), pb?.skor ?? null);
   const rincian = ALL_LAHN.map((d) => ({
     key: d.key,
@@ -195,7 +201,7 @@ export function buildUjianPayload(
   return {
     jenis_rapot: 'ujian',
     identitas,
-    ambang,
+    ambang: AMBANG_LULUS_AKHIR, // ambang nilai akhir (fix 70), ditampilkan di halaman verifikasi
     tanggal,
     penerbit,
     ujian: {

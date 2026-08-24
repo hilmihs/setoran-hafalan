@@ -79,8 +79,8 @@ export default function RapotUjianA4({ payload, qr, logoSrc }: Props) {
   const statusColor = lulus ? GREEN : RED;
   const statusText = lulus ? 'LULUS' : 'MENGULANG';
   const statusKet = lulus
-    ? 'Memenuhi ambang kelulusan (70) pada Ujian PB.'
-    : 'Belum memenuhi ambang kelulusan (70) pada Ujian PB.';
+    ? 'Memenuhi ambang kelulusan nilai akhir (70).'
+    : 'Belum memenuhi ambang kelulusan nilai akhir (70).';
 
   const berkalaAvg = uj.berkalaAvg;
   const pbSkor = uj.ujianPbSkor;
@@ -108,12 +108,11 @@ export default function RapotUjianA4({ payload, qr, logoSrc }: Props) {
 
   // Tabel hasil ujian (QN & PB)
   const ujiRow = (snap: RapotUjianSnap | null, jenisLabel: string) => {
-    const gridCols = '150px 150px 78px 78px 66px 1fr';
+    const gridCols = '1fr 78px 78px 66px 150px';
     if (!snap) {
       return (
         <div style={{ display: 'grid', gridTemplateColumns: gridCols, alignItems: 'center', fontSize: 12, borderBottom: '1px solid #e8e4dc' }}>
           <div style={{ padding: '9px 14px', borderRight: CELL_BORDER, fontWeight: 700 }}>{jenisLabel}</div>
-          <div style={{ padding: '9px 10px', borderRight: CELL_BORDER, color: '#a8a39a' }}>—</div>
           <div style={{ padding: '9px 8px', borderRight: CELL_BORDER, textAlign: 'center', color: '#a8a39a' }}>—</div>
           <div style={{ padding: '9px 8px', borderRight: CELL_BORDER, textAlign: 'center', color: '#a8a39a' }}>—</div>
           <div style={{ padding: '9px 8px', borderRight: CELL_BORDER, textAlign: 'center', color: '#a8a39a' }}>—</div>
@@ -125,7 +124,6 @@ export default function RapotUjianA4({ payload, qr, logoSrc }: Props) {
     return (
       <div style={{ display: 'grid', gridTemplateColumns: gridCols, alignItems: 'center', fontSize: 12, borderBottom: '1px solid #e8e4dc' }}>
         <div style={{ padding: '9px 14px', borderRight: CELL_BORDER, fontWeight: 700 }}>{jenisLabel}</div>
-        <div style={{ padding: '9px 10px', borderRight: CELL_BORDER, color: '#44423d' }}>{fmtTgl(snap.tgl)}</div>
         <div style={{ padding: '9px 8px', borderRight: CELL_BORDER, textAlign: 'center', fontVariantNumeric: 'tabular-nums' }}>{snap.jaliy}</div>
         <div style={{ padding: '9px 8px', borderRight: CELL_BORDER, textAlign: 'center', fontVariantNumeric: 'tabular-nums' }}>{snap.khafiy}</div>
         <div style={{ padding: '9px 8px', borderRight: CELL_BORDER, textAlign: 'center', fontWeight: 800, fontVariantNumeric: 'tabular-nums' }}>{nilaiOf(snap.skor)}</div>
@@ -215,9 +213,8 @@ export default function RapotUjianA4({ payload, qr, logoSrc }: Props) {
         {/* B. Nilai ujian akhir */}
         <div style={SECTION_LABEL}>B. Nilai ujian akhir</div>
         <div style={{ border: '1px solid #d8d3c8', borderRadius: 8, overflow: 'hidden', marginBottom: 18 }}>
-          <div style={{ display: 'grid', gridTemplateColumns: '150px 150px 78px 78px 66px 1fr', alignItems: 'center', ...HEAD }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 78px 78px 66px 150px', alignItems: 'center', ...HEAD }}>
             <div style={{ padding: '9px 14px', borderRight: '1px solid #d8d3c8' }}>Jenis ujian</div>
-            <div style={{ padding: '9px 10px', borderRight: '1px solid #d8d3c8' }}>Tanggal</div>
             <div style={{ padding: '9px 8px', borderRight: '1px solid #d8d3c8', textAlign: 'center' }}>Jaliy</div>
             <div style={{ padding: '9px 8px', borderRight: '1px solid #d8d3c8', textAlign: 'center' }}>Khafiy</div>
             <div style={{ padding: '9px 8px', borderRight: '1px solid #d8d3c8', textAlign: 'center' }}>Skor</div>
@@ -225,16 +222,14 @@ export default function RapotUjianA4({ payload, qr, logoSrc }: Props) {
           </div>
           {ujiRow(uj.qn, 'Ujian QN')}
           {ujiRow(uj.pb, 'Ujian PB')}
-          <div style={{ display: 'grid', gridTemplateColumns: '150px 150px 78px 78px 66px 1fr', alignItems: 'center', fontSize: 12, background: '#efece5' }}>
-            <div style={{ padding: '10px 14px', borderRight: '1px solid #d8d3c8', gridColumn: '1 / span 2', fontWeight: 800 }}>Dipakai untuk nilai akhir · Ujian PB</div>
-            <div style={{ padding: '10px 8px', borderRight: '1px solid #d8d3c8' }}></div>
-            <div style={{ padding: '10px 8px', borderRight: '1px solid #d8d3c8' }}></div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 78px 78px 66px 150px', alignItems: 'center', fontSize: 12, background: '#efece5' }}>
+            <div style={{ padding: '10px 14px', borderRight: '1px solid #d8d3c8', gridColumn: '1 / span 3', fontWeight: 800 }}>Dipakai untuk nilai akhir · Ujian PB</div>
             <div style={{ padding: '10px 8px', borderRight: '1px solid #d8d3c8', textAlign: 'center', fontWeight: 800, fontSize: 14, color: statusColor, fontVariantNumeric: 'tabular-nums' }}>{nilaiOf(pbSkor)}</div>
             <div style={{ padding: '10px 14px', fontWeight: 800, color: statusColor }}>{statusText}</div>
           </div>
         </div>
         <div style={{ fontSize: 10, color: '#a8a39a' }}>
-          Skor = 100 − (Lahn Jaliy × 6) − (Lahn Khafiy × 2). Ambang lulus 70. Nilai akhir = 30% Evaluasi Berkala + 70% Ujian PB.
+          Skor = 100 − (Lahn Jaliy × 6) − (Lahn Khafiy × 2). Nilai akhir = 30% Evaluasi Berkala + 70% Ujian PB (ambang lulus nilai akhir 70).
         </div>
 
         {/* QR + tanda tangan */}

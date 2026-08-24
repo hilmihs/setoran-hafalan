@@ -17,21 +17,6 @@ const HIJAU_BORDER = 'oklch(0.85 0.06 150)';
 const JALIY_C = 'oklch(0.46 0.14 25)';
 const KHAFIY_C = 'oklch(0.48 0.10 75)';
 
-const BULAN = [
-  'Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun',
-  'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des',
-];
-
-function formatTgl(iso: string | null): string {
-  if (!iso) return '';
-  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso);
-  if (!m) return iso;
-  const [, y, mo, d] = m;
-  const bi = Number(mo) - 1;
-  const bl = bi >= 0 && bi < 12 ? BULAN[bi] : mo;
-  return `${Number(d)} ${bl} ${y}`;
-}
-
 function tombolLabel(status: Props['terbitStatus']): string {
   switch (status) {
     case 'saving':
@@ -248,6 +233,7 @@ export default function RapotBerkala({ payload, onBack, onTerbitkan, terbitStatu
                 {rata ?? '—'}
               </div>
               <div style={{ fontSize: 10, color: HIJAU_TUA, marginTop: 5, fontWeight: 600 }}>Rata-rata</div>
+              <div style={{ fontSize: 8.5, color: '#a8a39a', marginTop: 2 }}>rata semua sesi dinilai</div>
             </div>
             <div
               style={{
@@ -374,7 +360,6 @@ export default function RapotBerkala({ payload, onBack, onTerbitkan, terbitStatu
                   >
                     <div style={{ fontSize: 10, fontWeight: 700, color: '#a8a39a', marginBottom: 2 }}>
                       {c.label}
-                      {c.tgl ? ` · ${formatTgl(c.tgl)}` : ''}
                     </div>
                     <div style={{ fontSize: 12, lineHeight: 1.5, color: '#44423d' }}>{c.teks}</div>
                   </div>

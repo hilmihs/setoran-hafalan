@@ -9,15 +9,6 @@ interface RapotUjianProps {
   terbitStatus?: 'idle' | 'saving' | 'done' | 'error';
 }
 
-const BULAN = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
-
-function fmtTgl(iso: string | null): string {
-  if (!iso) return '—';
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return iso;
-  return `${d.getUTCDate()} ${BULAN[d.getUTCMonth()]} ${d.getUTCFullYear()}`;
-}
-
 function cell(v: number | null): string {
   return v == null || v === 0 ? '–' : String(v);
 }
@@ -44,13 +35,13 @@ function SnapCard({ snap }: { snap: RapotUjianSnap }) {
     >
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ fontSize: 12.5, fontWeight: 700, color: '#1b1a17' }}>
-          {snap.label} — {snap.lulus ? 'LULUS' : '—'}
+          {snap.label} — {snap.lulus === false ? 'MENGULANG' : 'LULUS'}
         </div>
         <div style={{ fontSize: 11, color: '#7a766f', marginTop: 1 }}>
-          {fmtTgl(snap.tgl)} · {snap.jaliy} jaliy · {snap.khafiy} khafiy
+          {snap.jaliy} jaliy · {snap.khafiy} khafiy
         </div>
       </div>
-      <span style={{ fontSize: 18, fontWeight: 800, color: HIJAU, fontVariantNumeric: 'tabular-nums' }}>
+      <span style={{ fontSize: 18, fontWeight: 800, color: snap.lulus === false ? 'oklch(0.46 0.14 25)' : HIJAU, fontVariantNumeric: 'tabular-nums' }}>
         {snap.skor ?? '–'}
       </span>
     </div>
@@ -82,11 +73,14 @@ export function RapotUjian({ payload, onBack, onTerbitkan, terbitStatus = 'idle'
   if (id.mustawa != null) metaParts.push(`Level ${id.mustawa}`);
   const meta = metaParts.join(' · ');
 
-  const tgls = [u.qn?.tgl, u.pb?.tgl].filter((t): t is string => !!t).map(fmtTgl);
-  const tglLine = tgls.length ? `Ujian ${tgls.join(' & ')}` : null;
-
-  const status = u.lulus === true ? 'LULUS' : u.lulus === false ? 'MENGULANG' : 'Belum ada ujian PB';
+  // Penyebab null bisa: PB belum ada, ATAU PB ada tapi berkala kosong. Bedakan.
+  const nullReason = hasPb ? 'Belum ada nilai berkala' : 'Belum ada ujian PB';
+  const status = u.lulus === true ? 'LULUS' : u.lulus === false ? 'MENGULANG' : nullReason;
   const showNilai = u.lulus != null && u.nilaiAkhir != null;
+  // Warna banner ikut status — jangan hijau untuk MENGULANG.
+  const stColor = u.lulus === true ? HIJAU : u.lulus === false ? 'oklch(0.46 0.14 25)' : '#7a766f';
+  const stBg = u.lulus === true ? BANNER_BG : u.lulus === false ? 'oklch(0.96 0.04 25)' : '#f4f2ed';
+  const stBorder = u.lulus === true ? BANNER_BORDER : u.lulus === false ? 'oklch(0.85 0.08 25)' : '#e8e4dc';
 
   const berkalaAvg = u.berkalaAvg ?? 0;
   const ujianPbSkor = u.ujianPbSkor ?? 0;
@@ -100,7 +94,8 @@ export function RapotUjian({ payload, onBack, onTerbitkan, terbitStatus = 'idle'
   else if (terbitStatus === 'done') btnLabel = '✓ Terbit';
   else if (terbitStatus === 'error') btnLabel = 'Gagal · ulangi';
 
-  const btnDisabled = saving || !hasPb;
+  // Selaras dgn guard server: butuh PB DAN nilai akhir (berkala ada) sebelum terbit.
+  const btnDisabled = saving || !hasPb || u.nilaiAkhir == null;
 
   const gridCols = '1fr 46px 40px 40px';
 
@@ -135,15 +130,15 @@ export function RapotUjian({ payload, onBack, onTerbitkan, terbitStatus = 'idle'
         <div style={{ background: '#ffffff', border: '1px solid #e8e4dc', borderRadius: 16, padding: '0 0 22px', boxShadow: '0 1px 2px rgba(20,18,14,0.04), 0 6px 24px -8px rgba(20,18,14,0.10)', overflow: 'hidden' }}>
 
           {/* Banner */}
-          <div style={{ background: BANNER_BG, borderBottom: `1px solid ${BANNER_BORDER}`, padding: '20px 18px', textAlign: 'center' }}>
-            <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: HIJAU, opacity: 0.8 }}>
+          <div style={{ background: stBg, borderBottom: `1px solid ${stBorder}`, padding: '20px 18px', textAlign: 'center' }}>
+            <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: stColor, opacity: 0.8 }}>
               Hasil Ujian Akhir{id.mustawa != null ? ` Level ${id.mustawa}` : ''}
             </div>
-            <div style={{ fontSize: u.lulus == null ? 18 : 34, fontWeight: 800, letterSpacing: '0.06em', color: HIJAU, lineHeight: 1.15, marginTop: 6 }}>
+            <div style={{ fontSize: u.lulus == null ? 18 : 34, fontWeight: 800, letterSpacing: '0.06em', color: stColor, lineHeight: 1.15, marginTop: 6 }}>
               {status}
             </div>
             {showNilai && (
-              <div style={{ fontSize: 12, color: HIJAU, opacity: 0.85, marginTop: 4 }}>
+              <div style={{ fontSize: 12, color: stColor, opacity: 0.85, marginTop: 4 }}>
                 Nilai akhir {u.nilaiAkhir} · ambang lulus {ambang}
               </div>
             )}
@@ -153,15 +148,14 @@ export function RapotUjian({ payload, onBack, onTerbitkan, terbitStatus = 'idle'
           <div style={{ padding: '20px 18px 0', textAlign: 'center' }}>
             <div style={{ fontSize: 17, fontWeight: 800 }}>{id.peserta}</div>
             <div style={{ fontSize: 12, color: '#7a766f', marginTop: 2 }}>{meta}</div>
-            {tglLine && <div style={{ fontSize: 11, color: '#a8a39a', marginTop: 2 }}>{tglLine}</div>}
           </div>
 
           {/* Donut + breakdown */}
           {showNilai && (
             <div style={{ display: 'flex', alignItems: 'center', gap: 18, padding: '20px 18px' }}>
-              <div style={{ position: 'relative', width: 120, height: 120, borderRadius: '50%', flexShrink: 0, background: `conic-gradient(${HIJAU} ${u.nilaiAkhir}%, #e8e4dc 0)`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <div style={{ position: 'relative', width: 120, height: 120, borderRadius: '50%', flexShrink: 0, background: `conic-gradient(${stColor} ${u.nilaiAkhir}%, #e8e4dc 0)`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                 <div style={{ width: 96, height: 96, borderRadius: '50%', background: '#ffffff', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
-                  <span style={{ fontSize: 34, fontWeight: 800, lineHeight: 1, color: HIJAU, fontVariantNumeric: 'tabular-nums' }}>{u.nilaiAkhir}</span>
+                  <span style={{ fontSize: 34, fontWeight: 800, lineHeight: 1, color: stColor, fontVariantNumeric: 'tabular-nums' }}>{u.nilaiAkhir}</span>
                   <span style={{ fontSize: 9, fontWeight: 700, color: '#a8a39a', marginTop: 2 }}>/ 100</span>
                 </div>
               </div>

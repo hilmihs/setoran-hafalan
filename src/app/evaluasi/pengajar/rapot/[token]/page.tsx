@@ -7,6 +7,7 @@ import type { RapotPayload } from '@/lib/rapot';
 import RapotBerkalaA4 from '../RapotBerkalaA4';
 import RapotUjianA4 from '../RapotUjianA4';
 import PrintButton from '../PrintButton';
+import CabutButton from '../CabutButton';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -59,7 +60,7 @@ export default async function RapotPengajarPage({
 
   const { data: row } = await supabaseAdmin
     .from('evaluasi_rapot')
-    .select('token, halaqah_id, payload')
+    .select('token, halaqah_id, payload, status')
     .eq('token', token)
     .maybeSingle();
 
@@ -80,11 +81,18 @@ export default async function RapotPengajarPage({
 
   const payload = row.payload as RapotPayload;
 
-  // URL verifikasi absolut + QR.
-  const h = await headers();
-  const host = h.get('host');
-  const proto = host?.includes('localhost') ? 'http' : 'https';
-  const verifyUrl = proto + '://' + host + '/evaluasi/rapot/cek/' + token;
+  // URL verifikasi absolut + QR. Pakai NEXT_PUBLIC_APP_URL sbg basis kanonik agar
+  // QR selalu menunjuk domain publik walau dicetak dari host lain (LAN/preview).
+  const base = (process.env.NEXT_PUBLIC_APP_URL || '').replace(/\/$/, '');
+  let verifyUrl: string;
+  if (base) {
+    verifyUrl = `${base}/evaluasi/rapot/cek/${token}`;
+  } else {
+    const h = await headers();
+    const host = h.get('host');
+    const proto = host?.includes('localhost') ? 'http' : 'https';
+    verifyUrl = `${proto}://${host}/evaluasi/rapot/cek/${token}`;
+  }
   const qr = await qrSvgDataUri(verifyUrl);
 
   return (
@@ -92,12 +100,30 @@ export default async function RapotPengajarPage({
       <style>
         {'@page{size:A4;margin:0} @media print{.noprint{display:none}} body{background:#fff}'}
       </style>
+      {(row.status as string | undefined) && row.status !== 'aktif' && (
+        <div
+          style={{
+            background: 'oklch(0.96 0.04 25)',
+            border: '1px solid oklch(0.85 0.08 25)',
+            color: 'oklch(0.46 0.14 25)',
+            textAlign: 'center',
+            fontWeight: 800,
+            fontSize: 13,
+            padding: '10px 14px',
+          }}
+        >
+          {row.status === 'dicabut'
+            ? 'RAPOT DICABUT — TIDAK BERLAKU'
+            : 'RAPOT DIGANTIKAN — ADA VERSI TERBARU'}
+        </div>
+      )}
       {payload.jenis_rapot === 'berkala' ? (
         <RapotBerkalaA4 payload={payload} qr={qr} logoSrc="/logo-mpt.png" />
       ) : (
         <RapotUjianA4 payload={payload} qr={qr} logoSrc="/logo-mpt.png" />
       )}
       <PrintButton />
+      <CabutButton token={token} status={(row.status as string | undefined) ?? 'aktif'} />
     </div>
   );
 }

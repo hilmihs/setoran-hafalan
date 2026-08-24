@@ -2,7 +2,7 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { requireKoordinator } from '@/lib/session';
 import { supabaseAdmin } from '@/lib/supabase-admin';
-import { ALL_LAHN, AMBANG, columnsToCounts, initials, tierOf, nilaiAkhirOf } from '@/lib/evaluasi';
+import { ALL_LAHN, AMBANG, columnsToCounts, initials, tierOf, nilaiAkhirOf, UJIAN_QN_SESI, UJIAN_PB_SESI } from '@/lib/evaluasi';
 import { PrintButton } from '@/components/PrintButton';
 import RekapNilaiAkhir from './RekapNilaiAkhir';
 
@@ -13,6 +13,7 @@ interface NilaiRow extends Record<string, unknown> {
   peserta_id: string;
   skor: number;
   done: boolean;
+  hadir: boolean;
 }
 
 const TOP_N = 5;
@@ -71,7 +72,7 @@ export default async function KoordinatorHalaqahPage({
   const { data: nilaiRaw } = await supabaseAdmin
     .from('evaluasi_nilai')
     .select(
-      'sesi_id, peserta_id, skor, done, ' +
+      'sesi_id, peserta_id, skor, done, hadir, ' +
         'jk_huruf, jk_harakat, jk_mad, jk_tasydid, kh_izhar, kh_idgham_bighunnah, kh_idgham_bilaghunnah, kh_idgham_mimi, kh_iqlab, kh_ikhfa_hakiki, kh_ikhfa_syafawi'
     )
     .in('sesi_id', currentSesi ? [currentSesi.id] : noId);
@@ -81,7 +82,7 @@ export default async function KoordinatorHalaqahPage({
   // Peserta list dengan tier & skor.
   const peserta = pesertaList.map((p) => {
     const n = nilaiByPeserta.get(p.id as string);
-    const done = !!n?.done;
+    const done = !!n?.done && n?.hadir !== false;
     const skor = done ? Number(n?.skor) || 0 : null;
     const tier = skor != null ? tierOf(skor) : null;
     return {
@@ -105,11 +106,12 @@ export default async function KoordinatorHalaqahPage({
   const sesiMeta = new Map(allSesi.map((s) => [s.id, s]));
   const { data: allNilaiRaw } = await supabaseAdmin
     .from('evaluasi_nilai')
-    .select('sesi_id, peserta_id, skor, done')
+    .select('sesi_id, peserta_id, skor, done, hadir')
     .in('sesi_id', allSesi.length ? allSesi.map((s) => s.id) : noId);
-  const allNilai = (allNilaiRaw ?? []) as { sesi_id: string; peserta_id: string; skor: number; done: boolean }[];
+  const allNilai = (allNilaiRaw ?? []) as { sesi_id: string; peserta_id: string; skor: number; done: boolean; hadir: boolean }[];
   const rekapRows = pesertaList.map((p) => {
-    const mine = allNilai.filter((n) => n.peserta_id === (p.id as string) && n.done);
+    // Selaras dgn rapot resmi: hanya sesi done & hadir yang dihitung.
+    const mine = allNilai.filter((n) => n.peserta_id === (p.id as string) && n.done && n.hadir !== false);
     const berkala: number[] = [];
     let ujianQn: number | null = null;
     let ujianPb: number | null = null;
@@ -118,8 +120,8 @@ export default async function KoordinatorHalaqahPage({
       if (!m) continue;
       const skor = Number(n.skor) || 0;
       if (m.jenis === 'qn' || m.jenis === 'pb') berkala.push(skor);
-      else if (m.jenis === 'ujian' && m.nomor_sesi === 1) ujianQn = skor;
-      else if (m.jenis === 'ujian' && m.nomor_sesi === 2) ujianPb = skor;
+      else if (m.jenis === 'ujian' && m.nomor_sesi === UJIAN_QN_SESI) ujianQn = skor;
+      else if (m.jenis === 'ujian' && m.nomor_sesi === UJIAN_PB_SESI) ujianPb = skor;
     }
     const na = nilaiAkhirOf(berkala, ujianPb);
     return { nama: p.nama as string, berkalaAvg: na.berkalaAvg, ujianQn, ujianPb, nilaiAkhir: na.nilai, lulus: na.lulus };
@@ -129,7 +131,7 @@ export default async function KoordinatorHalaqahPage({
   const lahnSum = new Array(ALL_LAHN.length).fill(0);
   let bermasalah = 0;
   for (const n of nilaiRows) {
-    if (!n.done) continue;
+    if (!n.done || n.hadir === false) continue;
     if ((Number(n.skor) || 0) < AMBANG) bermasalah += 1;
     const counts = columnsToCounts(n);
     ALL_LAHN.forEach((d, i) => {

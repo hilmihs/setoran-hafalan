@@ -89,10 +89,13 @@ export function nilaiAkhirOf(berkalaScores: number[], ujianPbSkor: number | null
   const berkalaAvg = berkalaScores.length
     ? Math.round(berkalaScores.reduce((a, b) => a + b, 0) / berkalaScores.length)
     : null;
+  // Nilai akhir hanya sah bila KEDUA komponen ada. Kalau berkala kosong, jangan
+  // perlakukan sebagai 0 (itu diam-diam memotong nilai maksimum ke 70) — kembalikan
+  // null supaya tak bisa diterbitkan/ditampilkan sebagai angka menyesatkan.
   const nilai =
-    ujianPbSkor == null
+    ujianPbSkor == null || berkalaAvg == null
       ? null
-      : Math.round(BOBOT_BERKALA * (berkalaAvg ?? 0) + BOBOT_UJIAN_AKHIR * ujianPbSkor);
+      : Math.round(BOBOT_BERKALA * berkalaAvg + BOBOT_UJIAN_AKHIR * ujianPbSkor);
   return {
     nilai,
     berkalaAvg,

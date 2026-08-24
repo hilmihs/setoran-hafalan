@@ -251,7 +251,7 @@ export default function RapotBerkalaA4({ payload, qr, logoSrc }: Props): ReactEl
       <div style={{ fontSize: 9.5, color: '#a8a39a', marginBottom: 'auto' }}>
         J = Lahn Jaliy (−6/kesalahan) · K = Lahn Khafiy (−2/kesalahan) · Skor = 100 − 6J − 2K ·
         ambang standar 70. Predikat: Mumtaz ≥ 90 · Standar ≥ 70 · Cukup ≥ 50 · Perlu pengulangan
-        &lt; 50.
+        &lt; 50. Rata-rata keseluruhan = rata semua sesi dinilai (dibobot jumlah sesi, bukan per-track).
       </div>
 
       <div

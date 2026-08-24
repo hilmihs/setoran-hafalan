@@ -1,4 +1,4 @@
-import { AMBANG_LULUS_AKHIR } from '@/lib/evaluasi';
+import { AMBANG_LULUS_AKHIR, initials } from '@/lib/evaluasi';
 
 // Palet (selaras dgn modul Evaluasi Halaqah)
 const HIJAU_TXT = 'oklch(0.40 0.10 150)';
@@ -27,13 +27,6 @@ const GRID = '1fr 88px 88px 88px 96px 156px';
 
 function fmt(n: number | null): string {
   return n === null || Number.isNaN(n) ? '–' : String(Math.round(n));
-}
-
-function initials(nama: string): string {
-  const parts = nama.trim().split(/\s+/).filter(Boolean);
-  if (parts.length === 0) return '–';
-  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
-  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
 }
 
 function StatusPill({ lulus }: { lulus: boolean | null }) {

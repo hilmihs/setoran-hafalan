@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import crypto from 'crypto';
 import { supabaseAdmin } from '@/lib/supabase-admin';
+import { getPool } from '@/lib/pg-core';
 import { getSession } from '@/lib/session';
 import { evalPengajarIdFor } from '@/lib/evaluasi-pengajar';
-import { columnsToCounts, type Jenis } from '@/lib/evaluasi';
+import { columnsToCounts, UJIAN_PB_SESI, type Jenis } from '@/lib/evaluasi';
 import {
   buildBerkalaPayload,
   buildUjianPayload,
@@ -46,7 +47,7 @@ export async function POST(req: NextRequest) {
     // --- Halaqah + verifikasi kepemilikan pengajar ---
     const { data: halaqah } = await supabaseAdmin
       .from('eval_halaqah')
-      .select('id, pengajar_id, nama, gender, mustawa, level, batch_id')
+      .select('id, pengajar_id, nama, gender, mustawa, level, batch_id, ambang_ujian')
       .eq('id', halaqah_id)
       .maybeSingle();
     if (!halaqah) {
@@ -60,11 +61,15 @@ export async function POST(req: NextRequest) {
     // --- Peserta ---
     const { data: peserta } = await supabaseAdmin
       .from('eval_peserta')
-      .select('id, nama')
+      .select('id, nama, halaqah_id')
       .eq('id', peserta_id)
       .maybeSingle();
     if (!peserta) {
       return NextResponse.json({ error: 'Peserta tidak ditemukan' }, { status: 404 });
+    }
+    // Peserta wajib milik halaqah ini — cegah snapshot lintas-halaqah.
+    if (peserta.halaqah_id !== halaqah_id) {
+      return NextResponse.json({ error: 'Peserta bukan anggota halaqah ini' }, { status: 403 });
     }
 
     // --- Batch (opsional) ---
@@ -120,8 +125,37 @@ export async function POST(req: NextRequest) {
         catatan: (nilaiRow?.catatan as string | undefined) ?? '',
         tgl: (row.tgl_jadwal as string | null) ?? null,
         done: !!nilaiRow?.done,
+        hadir: nilaiRow ? (nilaiRow.hadir as boolean | undefined) !== false : true,
       };
     });
+
+    // --- Guard kelengkapan sebelum terbit (server-side, jangan andalkan client) ---
+    const adaBerkala = sesi.some(
+      (x) => (x.jenis === 'qn' || x.jenis === 'pb') && x.done && x.hadir !== false
+    );
+    if (jenis_rapot === 'ujian') {
+      const adaPb = sesi.some(
+        (x) => x.jenis === 'ujian' && x.nomor_sesi === UJIAN_PB_SESI && x.done && x.hadir !== false
+      );
+      if (!adaPb) {
+        return NextResponse.json(
+          { error: 'Ujian PB belum dinilai — rapot ujian belum bisa diterbitkan' },
+          { status: 400 }
+        );
+      }
+      // Nilai akhir = 30% berkala + 70% PB — tanpa berkala, nilai akhir tak sah.
+      if (!adaBerkala) {
+        return NextResponse.json(
+          { error: 'Belum ada nilai berkala — nilai akhir belum bisa dihitung' },
+          { status: 400 }
+        );
+      }
+    } else if (!adaBerkala) {
+      return NextResponse.json(
+        { error: 'Belum ada sesi berkala yang dinilai — rapot belum bisa diterbitkan' },
+        { status: 400 }
+      );
+    }
 
     // --- Identitas & meta terbit ---
     const identitas: RapotIdentitas = {
@@ -139,7 +173,7 @@ export async function POST(req: NextRequest) {
     const payload =
       jenis_rapot === 'berkala'
         ? buildBerkalaPayload(identitas, penerbit, tanggal, sesi, namaQn, namaPb)
-        : buildUjianPayload(identitas, penerbit, tanggal, sesi);
+        : buildUjianPayload(identitas, penerbit, tanggal, sesi, halaqah.ambang_ujian as number);
 
     // --- Kolom ringkas untuk query cepat ---
     let nilai_akhir: number | null = null;
@@ -157,28 +191,49 @@ export async function POST(req: NextRequest) {
 
     const token = crypto.randomBytes(16).toString('hex');
 
-    const { error } = await supabaseAdmin.from('evaluasi_rapot').insert({
-      token,
-      halaqah_id,
-      peserta_id,
-      jenis_rapot,
-      nilai_akhir,
-      berkala_avg,
-      ujian_pb_skor,
-      lulus,
-      ambang: 70,
-      payload,
-      diterbitkan_oleh: evalPengajarId,
-    });
-    if (error) {
-      return NextResponse.json({ error: error.message }, { status: 500 });
+    // --- Terbitkan ulang = supersede, ATOMIK dalam 1 transaksi ---
+    // demote rapot aktif lama → insert baru (aktif) → tautkan superseded_by.
+    // Dijalankan via client pg langsung (shim tak punya tx) supaya dua terbit
+    // paralel ter-serialisasi oleh row-lock, bukan bergantung index sbg jaring.
+    const client = await getPool().connect();
+    try {
+      await client.query('BEGIN');
+      const demoted = await client.query(
+        `update evaluasi_rapot set status = 'digantikan'
+           where peserta_id = $1 and halaqah_id = $2 and jenis_rapot = $3 and status = 'aktif'
+         returning id`,
+        [peserta_id, halaqah_id, jenis_rapot]
+      );
+      const oldId = (demoted.rows[0]?.id as string | undefined) ?? null;
+
+      const ins = await client.query(
+        `insert into evaluasi_rapot
+           (token, halaqah_id, peserta_id, jenis_rapot, nilai_akhir, berkala_avg,
+            ujian_pb_skor, lulus, ambang, payload, diterbitkan_oleh)
+         values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10::jsonb,$11)
+         returning id`,
+        [
+          token, halaqah_id, peserta_id, jenis_rapot, nilai_akhir, berkala_avg,
+          ujian_pb_skor, lulus, payload.ambang, JSON.stringify(payload), evalPengajarId,
+        ]
+      );
+      const newId = ins.rows[0].id as string;
+
+      if (oldId) {
+        await client.query(`update evaluasi_rapot set superseded_by = $1 where id = $2`, [newId, oldId]);
+      }
+      await client.query('COMMIT');
+    } catch (txErr) {
+      await client.query('ROLLBACK').catch(() => {});
+      console.error('[terbitkan] tx gagal:', txErr instanceof Error ? txErr.message : txErr);
+      return NextResponse.json({ error: 'Gagal menerbitkan rapot' }, { status: 500 });
+    } finally {
+      client.release();
     }
 
     return NextResponse.json({ ok: true, token });
   } catch (e: unknown) {
-    return NextResponse.json(
-      { error: e instanceof Error ? e.message : 'Internal error' },
-      { status: 500 }
-    );
+    console.error('[terbitkan] error:', e instanceof Error ? e.message : e);
+    return NextResponse.json({ error: 'Gagal menerbitkan rapot' }, { status: 500 });
   }
 }

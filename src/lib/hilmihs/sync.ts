@@ -11,7 +11,7 @@ import type {
 const COMPARE: Record<MirrorEntity, string[]> = {
   batch: ['nama', 'aktif'],
   pengajar: ['nama', 'gender', 'whatsapp'],
-  halaqah: ['nama', 'gender', 'level', 'pengajar_id', 'batch_id', 'ambang_ujian'],
+  halaqah: ['nama', 'gender', 'level', 'pengajar_id', 'batch_id'],
   peserta: ['nama', 'gender', 'halaqah_id', 'urutan'],
 };
 
