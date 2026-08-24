@@ -143,6 +143,8 @@ export function EvaluasiPengajarApp({ initial }: { initial: EvaluasiInitial }) {
     return out;
   });
   const [kirimStatus, setKirimStatus] = useState<SaveStatus>('idle');
+  // Cetak PDF dari kartu riwayat: buka ringkasan sesi tsb lalu window.print().
+  const [pendingPrint, setPendingPrint] = useState(false);
   // Sesi ujian yang di-soft-delete pengajar (per nomor_sesi).
   const [ujianDihapus, setUjianDihapus] = useState<Set<number>>(
     () => new Set(initial.sesiList.filter((s) => s.jenis === 'ujian' && s.dihapus).map((s) => s.nomor_sesi))
@@ -309,6 +311,16 @@ export function EvaluasiPengajarApp({ initial }: { initial: EvaluasiInitial }) {
       document.removeEventListener('visibilitychange', onHide);
     };
   }, [flushSaves]);
+
+  // Setelah ringkasan sesi ter-render (dipicu kartu riwayat), buka dialog cetak.
+  useEffect(() => {
+    if (!pendingPrint || screen !== 'p-ringkasan') return;
+    const id = requestAnimationFrame(() => {
+      window.print();
+      setPendingPrint(false);
+    });
+    return () => cancelAnimationFrame(id);
+  }, [pendingPrint, screen]);
 
   const updateWork = useCallback(
     (
@@ -547,6 +559,8 @@ export function EvaluasiPengajarApp({ initial }: { initial: EvaluasiInitial }) {
       const avg = scores.length ? Math.round(scores.reduce((a, b) => a + b, 0) / scores.length) : null;
       return {
         key: s.id,
+        jenis: s.jenis,
+        nomor: s.nomor_sesi,
         label: `${JENIS_SHORT[s.jenis]} Sesi ${s.nomor_sesi} — ${fmtBulan(s.tgl_jadwal)}`,
         hadirCount: rows.length,
         total: peserta.length,
@@ -833,7 +847,17 @@ export function EvaluasiPengajarApp({ initial }: { initial: EvaluasiInitial }) {
                           {r.hadirCount}/{r.total} peserta · rata-rata {r.avg ?? '—'}
                         </div>
                       </div>
-                      <button style={{ height: 28, padding: '0 10px', borderRadius: 7, border: '1px solid #d8d3c8', background: '#ffffff', font: 'inherit', fontSize: 11, fontWeight: 600, color: '#44423d', cursor: 'pointer' }}>PDF</button>
+                      <button
+                        onClick={() => {
+                          setJenis(r.jenis);
+                          setActiveSession(r.nomor);
+                          setPendingPrint(true);
+                          nav('p-ringkasan');
+                        }}
+                        style={{ height: 28, padding: '0 10px', borderRadius: 7, border: '1px solid #d8d3c8', background: '#ffffff', font: 'inherit', fontSize: 11, fontWeight: 600, color: '#44423d', cursor: 'pointer' }}
+                      >
+                        PDF
+                      </button>
                     </div>
                   ))}
                 </div>
