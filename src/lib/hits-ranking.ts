@@ -13,7 +13,11 @@ import {
   isPelanggaranStabilitas,
   type PelanggaranRingkas,
 } from '@/lib/hits-pelanggaran-kategori';
-import { computeHutangForHalaqahList } from '@/lib/hits-hutang';
+import {
+  computeHutangForHalaqahList,
+  HUTANG_ANCHOR,
+  type HutangRincian,
+} from '@/lib/hits-hutang';
 import { berasalDariIzin } from '@/lib/shakwa-izin';
 import type { Gender } from '@/types/db';
 
@@ -84,6 +88,22 @@ export function rankFromAggregates(aggs: DisiplinAgg[]): DisiplinRankRow[] {
   return rows;
 }
 
+/** Satu baris asal hutang: pertemuan yang menimbulkan debit + status pelunasannya. */
+export type HutangRincianPengajar = HutangRincian & {
+  halaqahId: string;
+  halaqahName: string;
+};
+
+export type DisiplinRankingHasil = {
+  rows: DisiplinRankRow[];
+  /**
+   * Asal-usul kolom "Hutang (mnt)": per pengajar, daftar pertemuan pembentuk
+   * debit beserta pembayarannya. Urut tanggal naik — sama dengan urutan alokasi
+   * FIFO, jadi baris "lunas" selalu di atas baris "belum".
+   */
+  hutangByPengajar: Map<string, HutangRincianPengajar[]>;
+};
+
 /**
  * Ranking disiplin semua pengajar aktif di [start,end). Halaqah tanpa
  * pengajar_id di-skip (tak bisa diagregat). Hutang = saldo kumulatif (F2),
@@ -93,16 +113,16 @@ export async function getDisiplinRanking(opts: {
   start: string; // 'YYYY-MM-DD' inklusif
   end: string;   // 'YYYY-MM-DD' eksklusif
   gender?: Gender;
-}): Promise<DisiplinRankRow[]> {
+}): Promise<DisiplinRankingHasil> {
   let hq = supabaseAdmin
     .from('hits_halaqah')
-    .select('id, pengajar_id, pengajar_nama_sheet, gender')
+    .select('id, name, pengajar_id, pengajar_nama_sheet, gender')
     .eq('active', true)
     .not('pengajar_id', 'is', null);
   if (opts.gender) hq = hq.eq('gender', opts.gender);
   const { data: halaqahList } = await hq;
   const halaqah = halaqahList ?? [];
-  if (!halaqah.length) return [];
+  if (!halaqah.length) return { rows: [], hutangByPengajar: new Map() };
 
   const halaqahIds = halaqah.map((h) => h.id as string);
   const halaqahToPengajar = new Map(halaqah.map((h) => [h.id as string, h.pengajar_id as string]));
@@ -224,6 +244,24 @@ export async function getDisiplinRanking(opts: {
   // hutang kumulatif per halaqah (F2, bulk) → jumlah per pengajar
   const hutangMap = await computeHutangForHalaqahList(halaqahIds);
 
+  // Rincian asal hutang, dirakit dari peta yang SAMA dengan angka kolomnya —
+  // kalau dihitung ulang di query terpisah, saldo di tabel dan rinciannya bisa
+  // beda saat ada pembayaran masuk di antara dua query.
+  const halaqahNama = new Map(halaqah.map((h) => [h.id as string, (h.name as string) ?? '—']));
+  const hutangByPengajar = new Map<string, HutangRincianPengajar[]>();
+  for (const [hid, h] of hutangMap) {
+    const pid = halaqahToPengajar.get(hid);
+    if (!pid || !h.rincian.length) continue;
+    const arr = hutangByPengajar.get(pid) ?? [];
+    for (const r of h.rincian) {
+      arr.push({ ...r, halaqahId: hid, halaqahName: halaqahNama.get(hid) ?? '—' });
+    }
+    hutangByPengajar.set(pid, arr);
+  }
+  for (const arr of hutangByPengajar.values()) {
+    arr.sort((a, b) => (a.tanggal < b.tanggal ? -1 : a.tanggal > b.tanggal ? 1 : 0));
+  }
+
   const aggs: DisiplinAgg[] = [...meta.entries()].map(([pid, m]) => {
     const a = agg.get(pid) ?? zero();
     const hutang = m.halaqahIds.reduce((s, hid) => s + (hutangMap.get(hid)?.saldo ?? 0), 0);
@@ -246,8 +284,14 @@ export async function getDisiplinRanking(opts: {
       hutangSaldo: hutang,
     };
   });
-  return rankFromAggregates(aggs);
+  return { rows: rankFromAggregates(aggs), hutangByPengajar };
 }
+
+/** Teks satu-baris rumus hutang — dipakai layar, cetak, & XLSX supaya seragam. */
+export const HUTANG_RUMUS =
+  `KMT: menit−5 (toleransi 5 mnt) · KBLA: menit penuh · JKG: 90 mnt/pertemuan · ` +
+  `BADAL & TL: 0. Hanya pertemuan sejak ${HUTANG_ANCHOR}. ` +
+  `Saldo = debit − pembayaran (diinput ketua kelas), KUMULATIF lintas-waktu — bukan hanya periode ini.`;
 
 // ── Rincian insiden indisipliner per pengajar (KMT/KBLA/JKG/BADAL/TL) ───────
 // Dipakai dashboard ranking: baris angka KMT/KBLA/JKG/TL bisa dibuka untuk

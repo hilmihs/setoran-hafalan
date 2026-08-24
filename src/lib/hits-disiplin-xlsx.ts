@@ -1,10 +1,12 @@
 // Workbook "Ranking Disiplin Pengajar" — cerminan halaman /hits/koordinator.
-// Tiga sheet: Ranking, Rincian Insiden, Cakupan Observasi. Dipisah dari route
-// agar bisa diuji mandiri (pola sama dengan kehadiran-matrix-xlsx.ts).
+// Lima sheet: Ranking, Rincian Insiden, Cakupan Observasi, Rincian Hutang,
+// Cara Baca. Dipisah dari route agar bisa diuji mandiri (pola sama dengan
+// kehadiran-matrix-xlsx.ts).
 
 import ExcelJS from 'exceljs';
 import type { HitsKoordinatorRekap } from '@/lib/hits-koordinator-rekap';
-import type { InsidenDetail } from '@/lib/hits-ranking';
+import { HUTANG_RUMUS, type InsidenDetail, type HutangRincianPengajar } from '@/lib/hits-ranking';
+import { HUTANG_ANCHOR, JKG_MENIT, TOLERANSI_KMT } from '@/lib/hits-hutang';
 
 const C = {
   title: 'FF0F5132', head: 'FFDCFCE7', headInk: 'FF14532D',
@@ -19,6 +21,12 @@ const JENIS_LABEL: Record<string, string> = {
   JKG: 'Jadwal Kelas Ganti',
   BADAL: 'Pengajar digantikan (badal)',
   TIDAK_LATIHAN: 'Tidak memberikan latihan',
+};
+
+const HUTANG_STATUS_LABEL: Record<HutangRincianPengajar['status'], string> = {
+  belum: 'Belum dibayar',
+  sebagian: 'Dibayar sebagian',
+  lunas: 'Lunas',
 };
 
 const STATUS_LABEL: Record<InsidenDetail['status'], string> = {
@@ -111,8 +119,16 @@ export async function buildHitsDisiplinWorkbook(rekap: HitsKoordinatorRekap) {
     // %On-Time & %Stabil dipisah (rapat Agustus 2026) — dulu satu kolom %KBBS
     // yang meleburkan telat, durasi, pindah hari, dan badal jadi satu angka.
     const KOLOM = ['#', 'Pengajar', 'Gender', 'Halaqah', '%On-Time', 'On-time', 'Dinilai on-time', '%Stabil', 'Non-libur', 'KMT', 'KBLA', 'JKG', 'TL', 'Hutang (menit)'];
-    judul(ws, 'Ranking Disiplin Pengajar', sub, KOLOM.length);
+    judul(
+      ws,
+      'Ranking Disiplin Pengajar',
+      `${sub} · Hutang (menit) KUMULATIF sejak ${HUTANG_ANCHOR} — bukan periode ini; asalnya di sheet "Rincian Hutang"`,
+      KOLOM.length
+    );
     headerRow(ws, 4, KOLOM);
+    // Rumus hutang menempel di header kolomnya sendiri — pembaca file tak punya
+    // tooltip seperti di layar, jadi tanpa ini angkanya tak bisa ditelusuri.
+    ws.getCell(4, 14).note = HUTANG_RUMUS;
 
     let baris = 5;
     rekap.ranked.forEach((r, idx) => {
@@ -271,6 +287,114 @@ export async function buildHitsDisiplinWorkbook(rekap: HitsKoordinatorRekap) {
     ws.columns.forEach((col, i) => {
       col.width = [28, 9, 9, 9, 11, 60][i] ?? 16;
       col.alignment = { vertical: 'top', horizontal: i === 0 || i === 5 ? 'left' : 'center' };
+    });
+  }
+
+  // ── Sheet 4: Rincian hutang menit ─────────────────────────────────
+  // Asal-usul kolom "Hutang (menit)" di sheet Ranking: pertemuan mana yang
+  // menimbulkan debit, berapa sudah dibayar, dan sisanya. Cakupannya KUMULATIF
+  // (sejak HUTANG_ANCHOR), beda dengan sheet lain yang di-scope periode.
+  {
+    const ws = wb.addWorksheet('Rincian Hutang', {
+      pageSetup: { orientation: 'landscape', fitToPage: true, fitToWidth: 1, fitToHeight: 0 },
+    });
+    const KOLOM = ['Pengajar', 'Tanggal', 'Halaqah', 'Jenis', 'Debit (mnt)', 'Dibayar (mnt)', 'Sisa (mnt)', 'Status'];
+    judul(
+      ws,
+      'Rincian Hutang Menit',
+      `Kumulatif sejak ${HUTANG_ANCHOR} (BUKAN ${rekap.periodeLabel}) · ${rekap.genderLabel} · ${HUTANG_RUMUS}`,
+      KOLOM.length
+    );
+    headerRow(ws, 4, KOLOM);
+
+    let baris = 5;
+    let idx = 0;
+    for (const r of [...rekap.ranked, ...rekap.noData]) {
+      const daftar = rekap.hutangByPengajar.get(r.pengajarId) ?? [];
+      for (const h of daftar) {
+        const row = ws.getRow(baris);
+        row.values = [
+          r.pengajarNama,
+          h.tanggal,
+          h.halaqahName,
+          JENIS_LABEL[h.jenis] ?? h.jenis,
+          h.debit,
+          h.terbayar,
+          h.sisa,
+          HUTANG_STATUS_LABEL[h.status],
+        ];
+        if (h.sisa > 0) row.getCell(7).font = { bold: true, color: { argb: C.bad } };
+        row.getCell(8).font = {
+          color: { argb: h.status === 'lunas' ? C.ok : h.status === 'sebagian' ? C.warn : C.bad },
+        };
+        garis(ws, baris, KOLOM.length, idx % 2 === 1);
+        baris++;
+        idx++;
+      }
+      if (daftar.length > 1) {
+        // Subtotal per pengajar — tanpa ini pembaca harus menjumlah manual untuk
+        // mencocokkan dengan kolom Hutang (menit) di sheet Ranking.
+        const row = ws.getRow(baris);
+        row.values = [
+          `Total ${r.pengajarNama}`, '', '', '',
+          daftar.reduce((s, h) => s + h.debit, 0),
+          daftar.reduce((s, h) => s + h.terbayar, 0),
+          daftar.reduce((s, h) => s + h.sisa, 0),
+          `saldo = ${r.hutangSaldo} mnt`,
+        ];
+        for (let c = 1; c <= KOLOM.length; c++) row.getCell(c).font = { bold: true, color: { argb: C.ink } };
+        garis(ws, baris, KOLOM.length, false);
+        baris++;
+        idx = 0;
+      }
+    }
+    if (baris === 5) {
+      ws.getCell(5, 1).value = `Tak ada hutang menit tercatat (sejak ${HUTANG_ANCHOR}).`;
+      ws.getCell(5, 1).font = { color: { argb: C.muted } };
+    }
+
+    ws.columns.forEach((col, i) => {
+      col.width = [28, 12, 24, 26, 12, 13, 11, 17][i] ?? 14;
+      col.alignment = { vertical: 'middle', horizontal: i === 0 || i === 2 || i === 3 ? 'left' : 'center' };
+    });
+  }
+
+  // ── Sheet 5: Cara baca ────────────────────────────────────────────
+  {
+    const ws = wb.addWorksheet('Cara Baca');
+    const KOLOM = ['Kolom / istilah', 'Sumber & rumus'];
+    judul(ws, 'Cara Baca Angka', sub, KOLOM.length);
+    headerRow(ws, 4, KOLOM);
+
+    const ISI: Array<[string, string]> = [
+      ['Cakupan periode', `Semua kolom di sheet Ranking di-scope ${rekap.periodeLabel} (${rekap.start} s.d. sebelum ${rekap.end}) KECUALI Hutang (menit).`],
+      ['%On-Time', 'Persen pertemuan tepat jam — tanpa KMT (>5 menit) / KBLA. Pertemuan yang dipindah hari (JKG) atau dibadalkan TIDAK masuk penyebut.'],
+      ['%Stabil', 'Persen pertemuan yang berjalan sesuai jadwal — tanpa JKG (pindah hari) / BADAL (dialihkan ke pengganti), atas semua pertemuan non-libur.'],
+      ['KMT / KBLA / JKG / TL', 'Jumlah INSIDEN pada periode ini (satu pertemuan bisa >1 insiden). Sumber: input ketua kelas di /hits/ketua → tabel hits_pelanggaran.'],
+      ['Hutang (menit)', HUTANG_RUMUS],
+      ['— debit KMT', `max(0, menit terlambat − ${TOLERANSI_KMT}). Toleransi ${TOLERANSI_KMT} menit tidak berhutang.`],
+      ['— debit KBLA', 'Menit penuh kelas berakhir lebih awal, tanpa toleransi.'],
+      ['— debit JKG', `${JKG_MENIT} menit per pertemuan yang dipindah (1 pertemuan = ${JKG_MENIT} menit). JKG hasil impor lama (tanpa opsi ganti/cicil) tidak berhutang.`],
+      ['— debit BADAL & TL', 'Nol. Keduanya menurunkan %Stabil / dihitung sebagai insiden, tapi tidak menambah hutang menit.'],
+      ['— pembayaran', 'Diinput ketua kelas bersama keterangan pertemuan, di-cap ke saldo (tak bisa lebih bayar), dialokasikan FIFO ke pertemuan terlama.'],
+      ['— anchor', `Hanya pertemuan pada/sesudah ${HUTANG_ANCHOR} yang berhutang. Pelanggaran sebelum tanggal itu tidak dihitung.`],
+      ['— cakupan halaqah', 'Dijumlah dari semua halaqah aktif pengajar ybs (lintas batch), bukan hanya halaqah yang punya insiden pada periode ini.'],
+      ['Rincian Hutang (sheet)', 'Baris pembentuk saldo di atas: tanggal, halaqah, jenis, debit, dibayar, sisa. Jumlah kolom Sisa per pengajar = angka Hutang (menit) di sheet Ranking.'],
+      ['Cakupan Observasi (sheet)', 'Berapa pertemuan periode ini yang sudah diisi ketua kelas. Pelanggaran hanya terhitung dari pertemuan yang sudah diobservasi dan tanggalnya sudah lewat.'],
+    ];
+    let baris = 5;
+    ISI.forEach(([k, v], i) => {
+      const row = ws.getRow(baris);
+      row.values = [k, v];
+      row.getCell(1).font = { bold: !k.startsWith('—'), color: { argb: C.ink } };
+      row.getCell(2).alignment = { wrapText: true, vertical: 'top' };
+      row.getCell(1).alignment = { wrapText: true, vertical: 'top', indent: k.startsWith('—') ? 1 : 0 };
+      garis(ws, baris, KOLOM.length, i % 2 === 1);
+      baris++;
+    });
+
+    ws.columns.forEach((col, i) => {
+      col.width = i === 0 ? 26 : 110;
     });
   }
 

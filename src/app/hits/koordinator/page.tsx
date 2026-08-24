@@ -5,8 +5,10 @@ import { requireKoordinatorKetuaKelas } from '@/lib/session';
 import {
   getNoDataActionInfo,
   getKetuaByHalaqah,
+  HUTANG_RUMUS,
   type InsidenDetail,
   type KetuaHalaqahInfo,
+  type HutangRincianPengajar,
 } from '@/lib/hits-ranking';
 import {
   getHitsKoordinatorRekap,
@@ -297,6 +299,89 @@ function InsidenDetailRows({ list }: { list: InsidenDetail[] }) {
   );
 }
 
+const HUTANG_STATUS_LABEL: Record<HutangRincianPengajar['status'], string> = {
+  belum: 'Belum dibayar',
+  sebagian: 'Dibayar sebagian',
+  lunas: 'Lunas',
+};
+
+/** Warna badge status pelunasan — lunas hijau, sebagian kuning, belum merah. */
+function hutangStatusStyle(s: HutangRincianPengajar['status']) {
+  if (s === 'lunas') return { background: 'var(--hijau-tint)', borderColor: 'var(--hijau-line)', color: 'var(--hijau-ink)' };
+  if (s === 'sebagian') return { background: 'var(--kuning-tint)', borderColor: 'var(--kuning-line)', color: 'var(--kuning-ink)' };
+  return { background: 'var(--merah-tint)', borderColor: 'var(--merah-line)', color: 'var(--merah-ink)' };
+}
+
+/**
+ * Asal-usul kolom "Hutang (mnt)": pertemuan mana yang menimbulkan debit, berapa
+ * sudah dibayar, dan sisanya. Dipisah dari rincian insiden karena cakupannya
+ * beda — hutang kumulatif sejak anchor, insiden hanya periode yang dipilih.
+ */
+function HutangDetailRows({ list }: { list: HutangRincianPengajar[] }) {
+  const debit = list.reduce((s, i) => s + i.debit, 0);
+  const bayar = list.reduce((s, i) => s + i.terbayar, 0);
+  const sisa = list.reduce((s, i) => s + i.sisa, 0);
+  return (
+    <details style={{ background: 'var(--surface-2, var(--surface-3))' }}>
+      <summary
+        className="t-tiny"
+        style={{ cursor: 'pointer', padding: '6px 12px', color: 'var(--muted-2)' }}
+        title={HUTANG_RUMUS}
+      >
+        ▸ Asal hutang menit — debit <strong>{debit}</strong> · dibayar <strong>{bayar}</strong> ·{' '}
+        <span style={{ color: sisa > 0 ? 'var(--merah-ink)' : 'var(--hijau-ink)' }}>
+          sisa <strong>{sisa}</strong> mnt
+        </span>{' '}
+        dari {list.length} pertemuan
+      </summary>
+      <div style={{ padding: '0 12px 12px' }}>
+        <table className="k-table" style={{ width: '100%' }}>
+          <thead>
+            <tr>
+              <th style={{ width: 92 }}>Tanggal</th>
+              <th>Halaqah</th>
+              <th style={{ width: 120 }}>Jenis</th>
+              <th style={{ width: 70, textAlign: 'right' }}>Debit</th>
+              <th style={{ width: 70, textAlign: 'right' }}>Dibayar</th>
+              <th style={{ width: 70, textAlign: 'right' }}>Sisa</th>
+              <th style={{ width: 130 }}>Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            {list.map((i) => (
+              <tr key={i.keterangan_id}>
+                <td className="t-tiny" style={{ whiteSpace: 'nowrap' }}>{i.tanggal}</td>
+                <td className="t-tiny">{i.halaqahName}</td>
+                <td className="t-tiny" title={JENIS_LABEL[i.jenis] ?? i.jenis}>
+                  {JENIS_SHORT[i.jenis] ?? i.jenis}
+                </td>
+                <td className="t-mono t-tiny" style={{ textAlign: 'right' }}>{i.debit}</td>
+                <td className="t-mono t-tiny" style={{ textAlign: 'right', color: 'var(--muted-2)' }}>
+                  {i.terbayar || '—'}
+                </td>
+                <td
+                  className="t-mono t-tiny"
+                  style={{ textAlign: 'right', color: i.sisa > 0 ? 'var(--merah-ink)' : 'var(--muted)' }}
+                >
+                  {i.sisa || '—'}
+                </td>
+                <td>
+                  <span className="badge" style={hutangStatusStyle(i.status)}>
+                    {HUTANG_STATUS_LABEL[i.status]}
+                  </span>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        <p className="t-tiny" style={{ color: 'var(--muted-2)', marginTop: 6 }}>
+          {HUTANG_RUMUS} Pembayaran dialokasikan FIFO — pertemuan terlama dilunasi lebih dulu.
+        </p>
+      </div>
+    </details>
+  );
+}
+
 export default async function HitsKoordinatorPage({
   searchParams,
 }: {
@@ -341,6 +426,7 @@ export default async function HitsKoordinatorPage({
   const periodeLabel = rekap.periodeLabel;
   const insidenByPengajar = rekap.insidenByPengajar;
   const cakupanByPengajar = rekap.cakupanByPengajar;
+  const hutangByPengajar = rekap.hutangByPengajar;
   const ranked = [...rekap.ranked];
   const noData = rekap.noData;
   const noDataAksi = await getNoDataActionInfo(noData);
@@ -550,6 +636,10 @@ export default async function HitsKoordinatorPage({
                   <strong>%Stabil</strong> (kelas tak dipindah/dibadalkan), lalu{' '}
                   <strong>hutang menit</strong> (saldo tertunggak). Lintas-batch, per pengajar.
                 </p>
+                <p className="t-tiny" style={{ color: 'var(--muted-2)', marginTop: 6, maxWidth: 620 }}>
+                  Kolom <strong>Hutang (mnt)</strong> = {HUTANG_RUMUS} Buka baris “Asal hutang menit”
+                  di bawah tiap pengajar untuk melihat pertemuan pembentuknya.
+                </p>
                 <p className="t-tiny" style={{ color: 'var(--muted)', marginTop: 8 }}>
                   {mode === 'minggu' ? 'Mingguan' : 'Bulanan'} · {periodeLabel} · {genderLabel} ·{' '}
                   {filterAktif(filter)
@@ -666,7 +756,7 @@ export default async function HitsKoordinatorPage({
                         <th style={{ textAlign: 'right' }} title="Kelas Berakhir Lebih Awal"><a href={sortHref('kbla')} style={{ color: 'inherit', textDecoration: 'none', cursor: 'pointer', whiteSpace: 'nowrap' }}>KBLA{arrow('kbla')}</a></th>
                         <th style={{ textAlign: 'right' }} title="Jadwal Kelas Ganti"><a href={sortHref('jkg')} style={{ color: 'inherit', textDecoration: 'none', cursor: 'pointer', whiteSpace: 'nowrap' }}>JKG{arrow('jkg')}</a></th>
                         <th style={{ textAlign: 'right' }} title="Tidak memberikan latihan"><a href={sortHref('tidakLatihan')} style={{ color: 'inherit', textDecoration: 'none', cursor: 'pointer', whiteSpace: 'nowrap' }}>TL{arrow('tidakLatihan')}</a></th>
-                        <th style={{ textAlign: 'right' }}><a href={sortHref('hutangSaldo')} style={{ color: 'inherit', textDecoration: 'none', cursor: 'pointer', whiteSpace: 'nowrap' }}>Hutang (mnt){arrow('hutangSaldo')}</a></th>
+                        <th style={{ textAlign: 'right' }} title={HUTANG_RUMUS}><a href={sortHref('hutangSaldo')} style={{ color: 'inherit', textDecoration: 'none', cursor: 'pointer', whiteSpace: 'nowrap' }}>Hutang (mnt){arrow('hutangSaldo')}</a></th>
                         <th style={{ textAlign: 'right' }}><a href={sortHref('halaqahCount')} style={{ color: 'inherit', textDecoration: 'none', cursor: 'pointer', whiteSpace: 'nowrap' }}>Halaqah{arrow('halaqahCount')}</a></th>
                       </tr>
                     </thead>
@@ -674,6 +764,7 @@ export default async function HitsKoordinatorPage({
                       {ranked.map((r) => {
                         const insiden = insidenByPengajar.get(r.pengajarId) ?? [];
                         const cakupan = cakupanByPengajar.get(r.pengajarId);
+                        const hutang = hutangByPengajar.get(r.pengajarId) ?? [];
                         return (
                         <Fragment key={r.pengajarId}>
                         <tr>
@@ -741,6 +832,13 @@ export default async function HitsKoordinatorPage({
                             </td>
                           </tr>
                         )}
+                        {hutang.length > 0 && (
+                          <tr>
+                            <td colSpan={10} style={{ padding: 0, borderTop: 0 }}>
+                              <HutangDetailRows list={hutang} />
+                            </td>
+                          </tr>
+                        )}
                         </Fragment>
                         );
                       })}
@@ -788,7 +886,7 @@ export default async function HitsKoordinatorPage({
                                     {r.pengajarNama}
                                   </a>
                                   {r.hutangSaldo > 0 ? (
-                                    <div className="t-tiny" style={{ color: 'var(--merah-ink)' }}>
+                                    <div className="t-tiny" style={{ color: 'var(--merah-ink)' }} title={HUTANG_RUMUS}>
                                       hutang {r.hutangSaldo} mnt
                                     </div>
                                   ) : null}

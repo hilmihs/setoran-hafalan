@@ -8,6 +8,7 @@ import {
   filterLabel,
   type HitsMode,
 } from '@/lib/hits-koordinator-rekap';
+import { HUTANG_RUMUS } from '@/lib/hits-ranking';
 import { weekStartMonday } from '@/lib/week';
 import type { Gender } from '@/types/db';
 import { PrintButton } from '@/components/PrintButton';
@@ -117,7 +118,7 @@ export default async function CetakHitsKoordinatorPage({
             <th title="Kelas Berakhir Lebih Awal">KBLA</th>
             <th title="Jadwal Kelas Ganti">JKG</th>
             <th title="Tidak memberikan latihan">TL</th>
-            <th>Hutang (mnt)</th>
+            <th title={HUTANG_RUMUS}>Hutang (mnt)</th>
           </tr>
         </thead>
         <tbody>
@@ -161,6 +162,10 @@ export default async function CetakHitsKoordinatorPage({
           ))}
         </tbody>
       </table>
+      {/* Kertas tak punya tooltip — rumus hutang dicetak sebagai catatan kaki. */}
+      <p className="t-tiny" style={{ color: 'var(--muted-2)', marginTop: 6 }}>
+        <strong>Hutang (mnt)</strong> = {HUTANG_RUMUS}
+      </p>
 
       {/* ── Rincian insiden ── */}
       <div className="blok" style={{ marginTop: 20 }}>

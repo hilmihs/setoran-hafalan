@@ -5,7 +5,13 @@
 // sedikit saja, angka di layar dan di file tak akan cocok dan koordinator tak
 // punya cara menebak mana yang benar.
 
-import { getDisiplinRanking, getInsidenDetailByPengajar, type DisiplinRankRow, type InsidenDetail } from '@/lib/hits-ranking';
+import {
+  getDisiplinRanking,
+  getInsidenDetailByPengajar,
+  type DisiplinRankRow,
+  type InsidenDetail,
+  type HutangRincianPengajar,
+} from '@/lib/hits-ranking';
 import { getCakupanObservasi, type CakupanPengajar } from '@/lib/hits-observasi-cakupan';
 import { weekBounds, formatWeekRangeShort } from '@/lib/week';
 import type { Gender } from '@/types/db';
@@ -43,6 +49,8 @@ export type HitsKoordinatorRekap = {
   noData: DisiplinRankRow[];
   insidenByPengajar: Map<string, InsidenDetail[]>;
   cakupanByPengajar: Map<string, CakupanPengajar>;
+  /** Asal-usul kolom Hutang (mnt): pertemuan pembentuk debit + pembayarannya. */
+  hutangByPengajar: Map<string, HutangRincianPengajar[]>;
   filter: RekapFilter;
   /** Hitungan SEBELUM penyaringan — dipakai angka di chip filter. */
   counts: RekapCounts;
@@ -114,7 +122,7 @@ export async function getHitsKoordinatorRekap(opts: {
     mode === 'minggu' ? weekBounds(week) : rentangBulan(month);
   const periodeLabel = mode === 'minggu' ? formatWeekRangeShort(week) : month;
 
-  const rows = await getDisiplinRanking({ start, end, gender });
+  const { rows, hutangByPengajar } = await getDisiplinRanking({ start, end, gender });
   const insidenByPengajar = await getInsidenDetailByPengajar({ start, end, gender });
   const cakupanByPengajar = await getCakupanObservasi({ start, end, gender });
 
@@ -151,6 +159,7 @@ export async function getHitsKoordinatorRekap(opts: {
     noData: rows.filter((r) => r.rank === null && lolos(r)),
     insidenByPengajar,
     cakupanByPengajar,
+    hutangByPengajar,
     filter,
     counts,
   };
