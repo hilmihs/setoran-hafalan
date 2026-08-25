@@ -1,7 +1,7 @@
 import { supabaseAdmin } from './supabase-admin';
 import { fetchAllRows } from './supabase-page';
 import type { KajianRow } from './hits-kajian';
-import type { HitsKajianLibur } from '@/types/db';
+import type { Gender, HitsKajianLibur } from '@/types/db';
 
 /** Semua baris presensi sejak anchor (untuk rekap & panel tindak). Paginasi (bisa >1000 baris). */
 export async function loadKajianRows(anchor: string): Promise<KajianRow[]> {
@@ -35,20 +35,33 @@ export async function loadKajianLibur(): Promise<HitsKajianLibur[]> {
   return (data ?? []) as HitsKajianLibur[];
 }
 
-/** Daftar WA + nama ketua aktif (dedup per WA). Sumber kebenaran: ketua_kelas. */
-export async function loadKetuaWaList(): Promise<{ ketua_wa: string; nama: string; halaqah: string[] }[]> {
-  const { data } = await supabaseAdmin
+export interface KetuaWaEntry {
+  ketua_wa: string;
+  nama: string;
+  gender: Gender;
+  halaqah: string[];
+}
+
+/**
+ * Daftar WA + nama ketua aktif (dedup per WA). Sumber kebenaran: ketua_kelas.
+ * @param gender bila diisi, hanya ketua bergender itu (pemisahan ikhwan/akhwat).
+ */
+export async function loadKetuaWaList(gender?: Gender): Promise<KetuaWaEntry[]> {
+  let q = supabaseAdmin
     .from('ketua_kelas')
-    .select('whatsapp_number, name, hits_halaqah:hits_halaqah_id(name)')
+    .select('whatsapp_number, name, gender, hits_halaqah:hits_halaqah_id(name)')
     .eq('active', true)
     .not('whatsapp_number', 'is', null);
-  const map = new Map<string, { ketua_wa: string; nama: string; halaqah: string[] }>();
+  if (gender) q = q.eq('gender', gender);
+  const { data } = await q;
+  const map = new Map<string, KetuaWaEntry>();
   for (const r of data ?? []) {
     const wa = (r as { whatsapp_number: string }).whatsapp_number;
     if (!wa) continue;
     const nama = (r as { name: string | null }).name ?? '(ketua)';
+    const g = (r as { gender: Gender }).gender;
     const hq = (r as unknown as { hits_halaqah: { name: string } | null }).hits_halaqah?.name;
-    const cur = map.get(wa) ?? { ketua_wa: wa, nama, halaqah: [] };
+    const cur = map.get(wa) ?? { ketua_wa: wa, nama, gender: g, halaqah: [] };
     if (hq && !cur.halaqah.includes(hq)) cur.halaqah.push(hq);
     map.set(wa, cur);
   }

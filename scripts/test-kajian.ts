@@ -1,7 +1,7 @@
 // Uji fungsi murni presensi Kajian Adab. Jalankan: npm run test-kajian
 import {
   sundaysInRange, deriveTerlambat, statusOnCheckin, deriveKajianState,
-  computeKajianRekap, type KajianRow, KAJIAN_GHOSTING_DAYS,
+  computeKajianRekap, monthsInRange, monthBounds, type KajianRow, KAJIAN_GHOSTING_DAYS,
 } from '@/lib/hits-kajian';
 
 let failed = 0;
@@ -67,6 +67,33 @@ eq(
   )[0],
   { ketua_wa: 'x', hadir: 1, terlambat: 0, izin: 0, sakit: 1, alpa: 0, belumIsi: 0, totalSesi: 2, persen: 50 },
   'rekap: Sakit dihitung, persen=1/2=50 (sakit tak masuk numerator)'
+);
+
+// --- monthsInRange / monthBounds (filter bulan rekap) ---
+eq(monthsInRange('2025-11-30', '2026-02-03'), ['2026-02','2026-01','2025-12','2025-11'],
+   'bulan anchor..today, terbaru dulu, lintas tahun');
+eq(monthsInRange('2026-01-04', '2026-01-25'), ['2026-01'], 'satu bulan saja');
+eq(monthBounds('2026-02'), { start: '2026-02-01', end: '2026-02-28' }, 'Feb 2026 (non-kabisat) -> 28');
+eq(monthBounds('2024-02'), { start: '2024-02-01', end: '2024-02-29' }, 'Feb 2024 (kabisat) -> 29');
+eq(monthBounds('2026-12'), { start: '2026-12-01', end: '2026-12-31' }, 'Des 2026 -> 31');
+
+// --- computeKajianRekap dgn periodEnd (rekap per bulan) ---
+const rowsBulan: KajianRow[] = [
+  R({ tanggal: '2026-01-04', status: 'Hadir' }),
+  R({ tanggal: '2026-01-25', status: 'Izin' }),
+  R({ tanggal: '2026-02-01', status: 'Hadir' }),
+];
+eq(
+  computeKajianRekap(rowsBulan, new Set<string>(), ['w'], '2026-01-01', '2026-02-10',
+    '2026-02-11T00:00:00.000Z', '2026-01-31')[0],
+  { ketua_wa: 'w', hadir: 1, terlambat: 0, izin: 1, sakit: 0, alpa: 0, belumIsi: 2, totalSesi: 4, persen: 25 },
+  'periodEnd batasi ke Jan: 4 Minggu, sesi Feb tak dihitung'
+);
+// periodEnd di masa depan di-clamp ke today (sesi mendatang tak pernah dihitung)
+eq(
+  computeKajianRekap(rowsBulan, new Set<string>(), ['w'], '2026-02-01', '2026-02-10',
+    '2026-02-11T00:00:00.000Z', '2026-02-28')[0].totalSesi,
+  2, 'periodEnd > today di-clamp: hanya 1 & 8 Feb'
 );
 
 eq(KAJIAN_GHOSTING_DAYS, 3, 'konstanta countdown 3 hari');

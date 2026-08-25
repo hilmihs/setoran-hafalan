@@ -25,6 +25,26 @@ export function sundaysInRange(start: string, end: string): string[] {
   return datesInRange(start, end).filter((d) => dayIndexOf(d) === SUNDAY);
 }
 
+/** Daftar bulan 'YYYY-MM' dari anchor s/d today, urut menurun (terbaru dulu). */
+export function monthsInRange(anchor: string, today: string): string[] {
+  const out: string[] = [];
+  const end = today.slice(0, 7);
+  let cur = anchor.slice(0, 7);
+  while (cur <= end) {
+    out.push(cur);
+    const [y, m] = cur.split('-').map(Number);
+    cur = m === 12 ? `${y + 1}-01` : `${y}-${String(m + 1).padStart(2, '0')}`;
+  }
+  return out.reverse();
+}
+
+/** Batas tanggal [start, end] untuk satu bulan 'YYYY-MM'. */
+export function monthBounds(bulan: string): { start: string; end: string } {
+  const [y, m] = bulan.split('-').map(Number);
+  const lastDay = new Date(Date.UTC(y, m, 0)).getUTCDate();
+  return { start: `${bulan}-01`, end: `${bulan}-${String(lastDay).padStart(2, '0')}` };
+}
+
 /** true bila waktu check-in (ISO) melewati 16:00 WIB pada tanggal sesi. */
 export function deriveTerlambat(checkinIso: string, tanggal: string): boolean {
   const [h, m] = KAJIAN_MULAI.split(':').map(Number);
@@ -95,6 +115,8 @@ export interface KajianRekap {
  * @param anchor Minggu pertama dihitung (YYYY-MM-DD).
  * @param today hari ini WIB.
  * @param nowIso waktu sekarang ISO.
+ * @param periodEnd batas akhir periode (YYYY-MM-DD) bila rekap dibatasi per bulan;
+ *                  di-clamp ke today (sesi mendatang tak pernah dihitung).
  */
 export function computeKajianRekap(
   rows: KajianRow[],
@@ -102,9 +124,11 @@ export function computeKajianRekap(
   ketuaWaList: string[],
   anchor: string,
   today: string,
-  nowIso: string
+  nowIso: string,
+  periodEnd?: string
 ): KajianRekap[] {
-  const sesi = sundaysInRange(anchor, today).filter((d) => d <= today && !liburSet.has(d));
+  const end = periodEnd && periodEnd < today ? periodEnd : today;
+  const sesi = sundaysInRange(anchor, end).filter((d) => !liburSet.has(d));
   const byKey = new Map<string, KajianRow>();
   for (const r of rows) byKey.set(`${r.ketua_wa}|${r.tanggal}`, r);
 
