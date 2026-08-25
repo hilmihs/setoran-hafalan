@@ -1,5 +1,6 @@
 'use client';
 import { useState, useTransition } from 'react';
+import { Icon } from '@/components/icons';
 import { remindKajianKetua } from './actions';
 
 export type TindakItem = {
@@ -19,19 +20,59 @@ export function KajianTindakPanel({ items }: { items: TindakItem[] }) {
     });
   }
 
-  if (!items.length) return <p className="text-sm text-gray-500">Tak ada yang perlu ditindak.</p>;
+  if (!items.length) {
+    return (
+      <div className="card-flat" style={{ padding: '24px 20px', textAlign: 'center' }}>
+        <p className="t-small" style={{ color: 'var(--muted-2)' }}>Tak ada yang perlu ditindak.</p>
+      </div>
+    );
+  }
+
   return (
-    <div className="space-y-2">
-      {msg && <p className="text-sm text-gray-700">{msg}</p>}
+    <div>
+      {/* dirender tanpa syarat sejak mount: live region yang baru dibuat tak diumumkan */}
+      <p
+        className="t-small"
+        role="status"
+        aria-live="polite"
+        style={{ color: 'var(--ink-2)', marginBottom: msg ? 8 : 0, minHeight: msg ? undefined : 0 }}
+      >
+        {msg ?? ''}
+      </p>
       {items.map((it, i) => (
-        <div key={i} className="flex items-center justify-between rounded border p-2 text-sm">
+        <div
+          key={i}
+          className="card-flat"
+          style={{
+            padding: '10px 14px', marginBottom: 6,
+            borderLeft: `3px solid ${it.state === 'alpa' ? 'var(--merah)' : 'var(--kuning)'}`,
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+            gap: 10, flexWrap: 'wrap',
+          }}
+        >
           <div>
-            <b>{it.namaKetua}</b> · {it.tanggalWib}
-            {it.state === 'alpa'
-              ? <span className="ml-2 text-red-600">Alpa</span>
-              : <span className="ml-2 text-amber-600">Belum isi{it.sisaHari != null ? ` · sisa ${it.sisaHari} hari` : ''}</span>}
+            <div style={{ fontWeight: 600, color: 'var(--ink)' }}>{it.namaKetua}</div>
+            <div className="t-small" style={{ color: 'var(--muted)' }}>{it.tanggalWib}</div>
           </div>
-          <button disabled={pending} onClick={() => remind(it)} className="px-2 py-1 rounded bg-emerald-600 text-white disabled:opacity-50">Reminder</button>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            {it.state === 'alpa' ? (
+              <span className="badge badge-merah"><span className="dot" />Alpa</span>
+            ) : (
+              <span className="badge badge-kuning">
+                <span className="dot" />
+                Belum isi{it.sisaHari != null ? ` · sisa ${it.sisaHari} hari` : ''}
+              </span>
+            )}
+            <button
+              type="button"
+              className="act-btn wa"
+              disabled={pending}
+              aria-label={`Kirim reminder ke ${it.namaKetua} untuk ${it.tanggalWib}`}
+              onClick={() => remind(it)}
+            >
+              {Icon.wa(11)} Reminder
+            </button>
+          </div>
         </div>
       ))}
     </div>

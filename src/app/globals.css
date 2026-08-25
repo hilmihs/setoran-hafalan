@@ -455,6 +455,103 @@ html, body {
 .k-table .nm { font-weight: 600; color: var(--ink); }
 .k-table .sub { font-size: 11px; color: var(--muted); margin-top: 2px; }
 
+/* ===== Rekap Kajian Adab — tabel + header sortable =====
+   Semua di-scope ke .kj-* supaya nol dampak ke pemakai .k-table lain.
+   Utility .sr-only datang dari Tailwind, tidak didefinisikan ulang di sini. */
+.k-table.kj-table tbody td { padding: 9px 14px; }
+
+/* Kolom angka: rata kanan + digit sejajar */
+.kj-table th.kj-num, .kj-table td.kj-num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Sel nama = th scope="row"; jangan mewarisi gaya thead */
+.kj-table tbody th.kj-ketua {
+  font-weight: inherit;
+  font-size: inherit;
+  text-transform: none;
+  letter-spacing: normal;
+  color: inherit;
+  border-bottom: 1px solid var(--line);
+  vertical-align: middle;
+  padding: 9px 14px;
+}
+.kj-table tbody tr:last-child th.kj-ketua { border-bottom: none; }
+
+/* Header sortable: padding pindah ke button agar seluruh sel jadi target klik */
+.k-table thead th.kj-th { padding: 0; }
+.kj-sort-th {
+  display: flex; align-items: center; gap: 6px;
+  width: 100%; min-height: 40px;
+  padding: 10px 12px;
+  font: inherit; font-size: 11px; font-weight: 600;
+  text-transform: uppercase; letter-spacing: 0.04em;
+  color: var(--muted);
+  background: none; border: 0; cursor: pointer;
+  text-align: left; user-select: none;
+}
+.k-table thead th.kj-num .kj-sort-th { justify-content: flex-end; text-align: right; }
+.kj-sort-th:hover { color: var(--ink-2); background: var(--surface-3); }
+.kj-sort-th:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;      /* negatif: outline luar terpotong .table-scroll */
+  border-radius: 4px;
+}
+/* --muted, bukan --muted-2: indikator non-teks butuh kontras >=3:1 (WCAG 1.4.11) */
+.kj-sort-ind { font-size: 10px; color: var(--muted); }
+.kj-table th[aria-sort="ascending"] .kj-sort-th,
+.kj-table th[aria-sort="descending"] .kj-sort-th { color: var(--ink); }
+.kj-table th[aria-sort="ascending"] .kj-sort-ind,
+.kj-table th[aria-sort="descending"] .kj-sort-ind { color: var(--accent-2); }
+/* header non-sticky yang sedang difokus harus menang atas kolom Ketua sticky */
+.kj-table thead th.kj-th:focus-within { position: relative; z-index: 4; }
+
+/* Kolom Ketua menempel saat tabel digeser horizontal.
+   width (bukan max-width) — max-width diabaikan pada table-cell auto layout. */
+.kj-table th.kj-ketua, .kj-table td.kj-ketua {
+  position: sticky; left: 0; z-index: 1;
+  background: var(--surface);
+  min-width: 170px; width: 210px;
+  overflow-wrap: anywhere;
+  text-align: left;
+  box-shadow: 1px 0 0 var(--line);
+}
+.kj-table thead th.kj-ketua { z-index: 3; background: var(--surface-2); }
+/* sel sticky punya background sendiri → hover baris tak menembusnya */
+.kj-table tbody tr:hover th.kj-ketua { background: var(--surface-2); }
+
+/* Cegah swipe horizontal memicu gestur "back" browser */
+.kj-scroll { overscroll-behavior-x: contain; }
+/* wrapper scroll punya tabIndex; outline luar akan terpotong .card-flat */
+.kj-scroll:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+
+/* Dropdown urut khusus layar sempit */
+.kj-sort-mobile { display: none; }
+
+/* Input sekala filter-bar (34px/13px) — .input terlalu besar (44px/15px),
+   .chip-select membawa ikon chevron yang salah untuk input teks. */
+.kj-input {
+  height: 34px;
+  padding: 0 12px;
+  border-radius: 8px;
+  border: 1px solid var(--line-2);
+  background: var(--surface);
+  font-size: 13px;
+  color: var(--ink);
+}
+.kj-input::placeholder { color: var(--muted-2); }
+.kj-input:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+@media (max-width: 640px) {
+  /* .k-table.kj-table (0-2-2) supaya menang atas .k-table tbody td di media query global */
+  .k-table.kj-table tbody td,
+  .k-table.kj-table tbody th.kj-ketua { padding: 8px 10px; }
+  .kj-table th.kj-ketua, .kj-table td.kj-ketua { min-width: 130px; width: 140px; }
+  .kj-sort-th { padding: 8px 10px; }   /* min-height 40px tetap: target sentuh */
+  .kj-sort-mobile { display: inline-flex; }
+}
+
 .nilai-trio { display: inline-flex; gap: 4px; }
 .nilai-trio .d {
   width: 10px; height: 10px; border-radius: 3px; background: var(--line);

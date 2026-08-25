@@ -6,9 +6,13 @@ import {
   computeKajianRekap, deriveKajianState, sundaysInRange, monthsInRange, monthBounds,
   KAJIAN_GHOSTING_DAYS, type KajianRow,
 } from '@/lib/hits-kajian';
+import Link from 'next/link';
+import { Icon } from '@/components/icons';
+import { StatCard } from '@/components/ui/StatCard';
+import { SectionHeader } from '@/components/ui/SectionHeader';
 import { KajianTindakPanel, type TindakItem } from './KajianTindakPanel';
 import { KajianLiburPanel } from './KajianLiburPanel';
-import { KajianFilterBar } from './KajianFilterBar';
+import { KajianRekapPanel, type KajianRekapRow } from './KajianRekapPanel';
 
 export const dynamic = 'force-dynamic';
 const MS_PER_DAY = 86_400_000;
@@ -39,6 +43,7 @@ export default async function KajianKoordinatorPage({ searchParams }: { searchPa
 
   const ketua = await loadKetuaWaList(viewGender);
   const waList = ketua.map((k) => k.ketua_wa);
+  const metaByWa = new Map(ketua.map((k) => [k.ketua_wa, k]));
   const namaByWa = new Map(ketua.map((k) => [k.ketua_wa, k.nama]));
 
   const liburRows = await loadKajianLibur();
@@ -62,6 +67,25 @@ export default async function KajianKoordinatorPage({ searchParams }: { searchPa
   const rekapStart = periode ? (periode.start > anchor ? periode.start : anchor) : anchor;
   const rekap = computeKajianRekap(rows, liburSet, waList, rekapStart, today, nowIso, periode?.end);
   const totalSesi = rekap[0]?.totalSesi ?? 0;
+  // Sesi yang benar-benar sudah lewat harinya. computeKajianRekap ikut menghitung
+  // sesi hari-ini sejak 00:00, jadi tanpa ini badge "belum pernah lapor" menuduh
+  // semua ketua pada Ahad pagi sebelum kajian mulai.
+  const sesiLewat = sundaysInRange(rekapStart, periode?.end && periode.end < today ? periode.end : today)
+    .filter((d) => !liburSet.has(d) && d < today).length;
+  const sumBelum = rekap.reduce((s, r) => s + r.belumIsi, 0);
+  const sumAlpa = rekap.reduce((s, r) => s + r.alpa, 0);
+
+  // Ratakan untuk client component: Map tak boleh menyeberang boundary React Flight.
+  const rekapRows: KajianRekapRow[] = rekap.map((r) => {
+    const m = metaByWa.get(r.ketua_wa);
+    return {
+      ketuaWa: r.ketua_wa,
+      nama: m?.nama ?? '(ketua)',
+      halaqah: (m?.halaqah ?? []).join(', '),
+      hadir: r.hadir, terlambat: r.terlambat, izin: r.izin, sakit: r.sakit,
+      alpa: r.alpa, belumIsi: r.belumIsi, totalSesi: r.totalSesi, persen: r.persen,
+    };
+  });
 
   const sesi = sundaysInRange(anchor, today).filter((d) => !liburSet.has(d));
   const byKey = new Map(rows.map((r) => [`${r.ketua_wa}|${r.tanggal}`, r]));
@@ -84,65 +108,87 @@ export default async function KajianKoordinatorPage({ searchParams }: { searchPa
   tindak.sort((a, b) => (a.tanggal < b.tanggal ? 1 : -1));
 
   return (
-    <main className="max-w-4xl mx-auto p-4 space-y-6">
-      <div>
-        <h1 className="text-xl font-bold">Presensi Kajian Adab — Koordinator</h1>
-        <p className="text-sm text-gray-600">
-          {session.name} — {viewGender === 'ikhwan' ? 'Ikhwan' : 'Akhwat'} — {today}
-        </p>
-      </div>
+    <main style={{ minHeight: '100vh' }}>
+      <div style={{ maxWidth: 1000, margin: '0 auto' }}>
+        <div className="page" style={{ paddingTop: 20 }}>
 
-      <KajianFilterBar
-        bulan={bulan}
-        bulanOptions={bulanOptions}
-        gender={viewGender}
-        showGender={superadmin}
-      />
+          <div className="topbar">
+            <div className="wordmark"><span className="mark">M</span> Kajian Adab</div>
+            <Link href="/observasi/koordinator" className="back">{Icon.back(12)} Kembali</Link>
+          </div>
 
-      <section>
-        <h2 className="font-semibold mb-2">
-          Rekap per Ketua
-          <span className="ml-2 font-normal text-sm text-gray-500">
-            {bulan ? labelBulan(bulan) : 'semua periode'} · {totalSesi} sesi · {waList.length} ketua
-          </span>
-        </h2>
-        {waList.length === 0 && (
-          <p className="text-sm text-gray-500">Belum ada ketua kelas aktif untuk gender ini.</p>
-        )}
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm border">
-            <thead className="bg-gray-50"><tr>
-              <th className="text-left p-2">Ketua</th><th className="p-2">Hadir</th><th className="p-2">Telat</th>
-              <th className="p-2">Izin</th><th className="p-2">Sakit</th><th className="p-2">Alpa</th>
-              <th className="p-2">Belum</th><th className="p-2">%</th>
-            </tr></thead>
-            <tbody>
-              {rekap.map((r) => (
-                <tr key={r.ketua_wa} className="border-t">
-                  <td className="p-2 text-left">{namaByWa.get(r.ketua_wa)}</td>
-                  <td className="p-2 text-center">{r.hadir}</td><td className="p-2 text-center">{r.terlambat}</td>
-                  <td className="p-2 text-center">{r.izin}</td><td className="p-2 text-center">{r.sakit}</td>
-                  <td className="p-2 text-center">{r.alpa}</td><td className="p-2 text-center">{r.belumIsi}</td>
-                  <td className="p-2 text-center font-semibold">{r.persen}%</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          <h1 className="t-h1" style={{ marginBottom: 4 }}>Presensi Kajian Adab</h1>
+          <p className="t-small" style={{ color: 'var(--muted-2)', marginBottom: superadmin ? 8 : 14 }}>
+            {session.name} — {viewGender === 'ikhwan' ? 'Ikhwan' : 'Akhwat'} — {today}
+          </p>
+
+          {superadmin && (
+            <div style={{ display: 'flex', gap: 8, marginBottom: 14 }}>
+              <a
+                href={`?gender=ikhwan${bulan ? `&bulan=${bulan}` : ''}`}
+                className={`btn btn-sm ${viewGender === 'ikhwan' ? '' : 'btn-ghost'}`}
+                style={{ textDecoration: 'none' }}
+                aria-current={viewGender === 'ikhwan' ? 'page' : undefined}
+              >
+                Ikhwan
+              </a>
+              <a
+                href={`?gender=akhwat${bulan ? `&bulan=${bulan}` : ''}`}
+                className={`btn btn-sm ${viewGender === 'akhwat' ? '' : 'btn-ghost'}`}
+                style={{ textDecoration: 'none' }}
+                aria-current={viewGender === 'akhwat' ? 'page' : undefined}
+              >
+                Akhwat
+              </a>
+            </div>
+          )}
+
+          <div className="matrix-stat-grid" style={{ marginBottom: 6 }}>
+            <StatCard mono value={totalSesi} label="Sesi" sub={bulan ? labelBulan(bulan) : 'semua periode'} />
+            <StatCard mono value={waList.length} label="Ketua kelas aktif" />
+            <StatCard
+              mono value={sumBelum} label="Belum dilapor" sub="slot sesi"
+              valueColor={sumBelum > 0 ? 'var(--kuning-ink)' : undefined}
+              dotColor="var(--kuning)"
+            />
+            <StatCard
+              mono value={sumAlpa} label="Alpa" sub="slot sesi"
+              valueColor={sumAlpa > 0 ? 'var(--merah-ink)' : undefined}
+              dotColor="var(--merah)"
+            />
+          </div>
+
+          <SectionHeader
+            as="h2"
+            title="Rekap per Ketua"
+            right={`${totalSesi} sesi · ${waList.length} ketua`}
+            style={{ marginTop: 18 }}
+          />
+          <KajianRekapPanel
+            rows={rekapRows}
+            totalSesi={totalSesi}
+            sesiLewat={sesiLewat}
+            bulan={bulan}
+            bulanOptions={bulanOptions}
+            genderParam={superadmin ? viewGender : ''}
+          />
+
+          <SectionHeader
+            as="h2"
+            title="Perlu Ditindak"
+            right={<span className="badge badge-neutral"><span className="dot" />tak ikut filter periode</span>}
+          />
+          <KajianTindakPanel items={tindak} />
+
+          <details style={{ marginTop: 18 }}>
+            <summary className="t-tiny" style={{ cursor: 'pointer' }}>Libur Kajian</summary>
+            <div style={{ marginTop: 10 }}>
+              <KajianLiburPanel libur={liburRows} />
+            </div>
+          </details>
+
         </div>
-      </section>
-
-      <section>
-        <h2 className="font-semibold mb-2">
-          Perlu Ditindak
-          <span className="ml-2 font-normal text-sm text-gray-500">semua periode, tak ikut filter bulan</span>
-        </h2>
-        <KajianTindakPanel items={tindak} />
-      </section>
-
-      <section>
-        <h2 className="font-semibold mb-2">Libur Kajian</h2>
-        <KajianLiburPanel libur={liburRows} />
-      </section>
+      </div>
     </main>
   );
 }
