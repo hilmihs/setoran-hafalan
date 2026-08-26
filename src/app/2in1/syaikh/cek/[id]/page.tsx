@@ -1,6 +1,5 @@
 import Link from 'next/link';
-import { redirect } from 'next/navigation';
-import { getSession } from '@/lib/session';
+import { requireSyaikh } from '@/lib/session';
 import { supabaseAdmin } from '@/lib/supabase-admin';
 import { signedAudioUrl } from '@/lib/storage';
 import { CekForm, type RekamanView } from '@/components/CekForm';
@@ -14,11 +13,9 @@ import { submitCekSyaikh } from './actions';
 export const dynamic = 'force-dynamic';
 
 export default async function SyaikhCekPage({ params }: { params: { id: string } }) {
-  const s = await getSession();
-  if (!s.session || s.session.role !== 'syaikh') {
-    redirect('/');
-  }
-  const syaikhGender = s.session.gender;
+  // Lewat accesses, bukan role aktif — lihat catatan di /2in1/syaikh/page.tsx.
+  const akses = await requireSyaikh();
+  const syaikhGender = akses.gender;
 
   const { data: setoran } = await supabaseAdmin
     .from('setoran_musyrif')

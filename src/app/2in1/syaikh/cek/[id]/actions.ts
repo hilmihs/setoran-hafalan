@@ -6,6 +6,7 @@ import {
   JENIS_REKAMAN,
   JENIS_REKAMAN_LABEL,
   type NilaiRekaman,
+  type SyaikhSession,
 } from '@/types/db';
 import { buildWaMeUrl, tplSyaikhFeedbackToMusyrif } from '@/lib/whatsapp';
 import { logAudit } from '@/lib/audit';
@@ -21,11 +22,16 @@ export async function submitCekSyaikh(
   formData: FormData
 ): Promise<CekResult> {
   const s = await getSession();
-  if (!s.session || s.session.role !== 'syaikh') {
+  // Cari akses syaikh di SELURUH role, bukan cuma role yang sedang aktif —
+  // pemegang banyak role (syaikh + koordinator + pengajar) tetap boleh menilai.
+  const akses = (s.accesses ?? (s.session ? [s.session] : [])).find(
+    (a) => a.role === 'syaikh'
+  ) as SyaikhSession | undefined;
+  if (!akses) {
     return { error: 'Anda harus login sebagai Syaikh/Ustadzah.' };
   }
-  const syaikhId = s.session.syaikh_id;
-  const syaikhGender = s.session.gender;
+  const syaikhId = akses.syaikh_id;
+  const syaikhGender = akses.gender;
   const setoranId = String(formData.get('setoran_id') ?? '');
   if (!setoranId) return { error: 'setoran_id wajib.' };
 
@@ -93,7 +99,8 @@ export async function submitCekSyaikh(
   const waUrl = buildWaMeUrl(musyrif.whatsapp_number, waText);
 
   await logAudit({
-    actor: s.session,
+    // Akses syaikh yang benar-benar dipakai menilai, bukan role aktif di sesi.
+    actor: akses,
     action: 'cek.submit_syaikh',
     targetTable: 'setoran_musyrif',
     targetId: setoranId,

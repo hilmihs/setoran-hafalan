@@ -1,6 +1,5 @@
 import Link from 'next/link';
-import { redirect } from 'next/navigation';
-import { getSession } from '@/lib/session';
+import { requireSyaikh } from '@/lib/session';
 import { supabaseAdmin } from '@/lib/supabase-admin';
 import { currentCycleStart, formatCycleDeadline, formatCycleRange, cyclesOfMonth, currentYearMonth } from '@/lib/week';
 import { formatCycleRangeShort } from '@/lib/week';
@@ -36,10 +35,12 @@ type SetoranMusyrifRow = {
 };
 
 export default async function SyaikhDashboard() {
-  const s = await getSession();
-  if (!s.session || s.session.role !== 'syaikh') redirect('/');
-  const syaikhId = s.session.syaikh_id;
-  const syaikhGender = s.session.gender;
+  // requireSyaikh membaca SELURUH accesses, bukan cuma role yang sedang aktif.
+  // Cek `s.session.role !== 'syaikh'` menendang pemegang banyak role (mis.
+  // syaikh + koordinator + pengajar) ke '/' begitu role aktifnya bukan syaikh.
+  const akses = await requireSyaikh();
+  const syaikhId = akses.syaikh_id;
+  const syaikhGender = akses.gender;
   const titel = syaikhTitle(syaikhGender);
 
   const cycle = currentCycleStart();
@@ -252,11 +253,11 @@ export default async function SyaikhDashboard() {
               className="avatar"
               style={{ background: 'var(--accent-tint)', color: 'var(--accent-2)' }}
             >
-              <Initials name={s.session.name} />
+              <Initials name={akses.name} />
             </div>
             <div style={{ flex: 1 }}>
               <div style={{ fontSize: 12, color: 'var(--muted)' }}>{titel}</div>
-              <div style={{ fontSize: 16, fontWeight: 600 }}>{s.session.name}</div>
+              <div style={{ fontSize: 16, fontWeight: 600 }}>{akses.name}</div>
             </div>
             <span className="pekan-tag">
               <span className="dot" />
