@@ -732,10 +732,11 @@ export function EvaluasiPengajarApp({ initial }: { initial: EvaluasiInitial }) {
     }
   };
 
+  // Tinggi shell dipasang lewat class `.ev-shell` (100vh → 100dvh) supaya di
+  // browser mobile bertoolbar-bawah dasar shell tak tertelan toolbar.
   const shellStyle: React.CSSProperties = {
     maxWidth: 460,
     margin: '0 auto',
-    minHeight: '100vh',
     background: '#f4f2ed',
     display: 'flex',
     flexDirection: 'column',
@@ -763,6 +764,7 @@ export function EvaluasiPengajarApp({ initial }: { initial: EvaluasiInitial }) {
   return (
     <div style={{ minHeight: '100vh', background: '#f4f2ed' }}>
       <style>{`
+        .ev-shell { min-height: 100vh; min-height: 100dvh; }
         .ev-press { transition: transform 0.06s ease; }
         .ev-press:active { transform: scale(0.96); }
         .ev-tile:active { transform: scale(0.95); }
@@ -792,7 +794,7 @@ export function EvaluasiPengajarApp({ initial }: { initial: EvaluasiInitial }) {
           🧪 MODE COBA — perubahan TIDAK disimpan
         </div>
       )}
-      <div style={shellStyle}>
+      <div className="ev-shell" style={shellStyle}>
         {screen === 'p-home' && (
           <>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '14px 16px', background: '#ffffff', borderBottom: '1px solid #e8e4dc' }}>

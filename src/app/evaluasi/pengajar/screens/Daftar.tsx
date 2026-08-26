@@ -90,7 +90,7 @@ export function Daftar(props: DaftarProps) {
       </div>
 
       <div style={{ flex: 1 }} />
-      <div style={{ position: 'sticky', bottom: 0, background: '#ffffff', borderTop: '1px solid #e8e4dc', padding: '12px 16px 18px', marginTop: 16 }}>
+      <div style={{ position: 'sticky', bottom: 0, background: '#ffffff', borderTop: '1px solid #e8e4dc', padding: '12px 16px calc(18px + env(safe-area-inset-bottom))', marginTop: 16 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
           <div style={{ flex: 1, height: 6, borderRadius: 3, background: '#e8e4dc', overflow: 'hidden' }}>
             <div style={{ height: '100%', borderRadius: 3, background: 'oklch(0.58 0.09 165)', width: `${props.progressPct}%` }} />

@@ -68,7 +68,7 @@ export function Ringkasan(props: RingkasanProps) {
       </div>
 
       <div style={{ flex: 1 }} />
-      <div className="no-print" style={{ position: 'sticky', bottom: 0, background: '#ffffff', borderTop: '1px solid #e8e4dc', padding: '12px 16px 18px', marginTop: 18 }}>
+      <div className="no-print" style={{ position: 'sticky', bottom: 0, background: '#ffffff', borderTop: '1px solid #e8e4dc', padding: '12px 16px calc(18px + env(safe-area-inset-bottom))', marginTop: 18 }}>
         <button onClick={props.kirim} disabled={props.kirimDisabled} style={{ width: '100%', height: 50, borderRadius: 8, border: 'none', background: '#1b1a17', color: '#ffffff', font: 'inherit', fontSize: 15, fontWeight: 600, cursor: props.kirimDisabled ? 'not-allowed' : 'pointer', opacity: props.kirimDisabled ? 0.55 : 1 }}>{props.kirimLabel}</button>
         <div style={{ textAlign: 'center', fontSize: 11, color: '#a8a39a', marginTop: 8 }}>{props.offlineNote}</div>
       </div>

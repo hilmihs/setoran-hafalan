@@ -103,7 +103,16 @@ export function Setup(props: SetupProps) {
       </div>
 
       <div style={{ flex: 1 }} />
-      <div style={{ padding: '10px 16px 20px' }}>
+      <div
+        style={{
+          position: 'sticky',
+          bottom: 0,
+          background: '#ffffff',
+          borderTop: '1px solid #e8e4dc',
+          padding: '10px 16px calc(20px + env(safe-area-inset-bottom))',
+          marginTop: 16,
+        }}
+      >
         <button
           onClick={props.lanjut}
           className="ev-dark"
