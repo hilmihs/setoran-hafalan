@@ -20,7 +20,7 @@ export const MATRIX_BLOK_ORDER: readonly MatrixBlok[] = [
 
 export const MATRIX_BLOK_LABEL: Record<MatrixBlok, string> = {
   takhassus: 'Peserta Takhassus',
-  tahfizh: 'Peserta Halaqah Tahfizh',
+  tahfizh: "Peserta Tahfidzul Qur'an",
   talaqqi: 'Peserta Talaqqi / Alumni / lainnya',
   lintas: 'Lintas jenis (anggota ≥2 blok)',
   tanpa_kelas: 'Tanpa kelas Maahir',
@@ -28,8 +28,9 @@ export const MATRIX_BLOK_LABEL: Record<MatrixBlok, string> = {
 
 export const MATRIX_BLOK_KETERANGAN: Record<MatrixBlok, string> = {
   takhassus: 'Anggota kelas Maahir Takhassus.',
-  tahfizh: 'Anggota kelas Maahir Tahfizhul Quran.',
-  talaqqi: 'Anggota kelas Maahir selain Takhassus & Tahfizh (Talaqqi, Alumni, dll).',
+  tahfizh: "Anggota kelas Maahir Tahfidzul Qur'an 1 & 2.",
+  talaqqi:
+    'Anggota kelas Maahir selain Takhassus & Tahfidz (Talaqqi, Alumni, Maahir 6A/6B, Intensif, dll).',
   lintas: 'Terdaftar di lebih dari satu jenis kelas — tak bisa dimasukkan satu blok.',
   tanpa_kelas: 'Tak punya keanggotaan kelas Maahir yang aktif pada bulan ini.',
 };
@@ -44,13 +45,18 @@ function normal(name: string): string {
 /**
  * Jenis kelas dari NAMANYA — tak ada kolom penanda di `program_kelas`.
  * Urutan cek penting: 'Takhassus' diperiksa lebih dulu, sisanya yang bukan
- * Takhassus/Tahfizh jatuh ke 'talaqqi' (termasuk Alumni & kelas lain-lain).
- * 'tahfiz' sengaja tanpa 'h' supaya ejaan 'Tahfizul'/'Tahfizhul' sama-sama kena.
+ * Takhassus/Tahfizh jatuh ke 'talaqqi' (termasuk Alumni, Maahir 6A/6B,
+ * Intensif, & kelas lain-lain).
+ *
+ * Ejaannya beragam: kelas asli di DB tertulis "Maahir Tahfidzul Qur'an 1/2"
+ * (d-z), sementara orang juga menulis 'Tahfizul'/'Tahfizhul'/'Tahfizh'. Karena
+ * itu pencocokan berhenti di prefiks 'tahfi' saja — semua variannya berawal
+ * begitu, dan tak ada kata lain di nama kelas yang mengandungnya.
  */
 export function jenisKelasMaahir(name: string): JenisKelasMaahir {
   const n = normal(name);
   if (n.includes('takhassus') || n.includes('takhasus')) return 'takhassus';
-  if (n.includes('tahfiz')) return 'tahfizh';
+  if (n.includes('tahfi')) return 'tahfizh';
   return 'talaqqi';
 }
 

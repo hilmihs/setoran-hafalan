@@ -313,15 +313,23 @@ function RankedRow({
   rank,
   globalRank,
   showGlobal,
+  highlightRank,
   ym,
 }: {
   item: MatrixListItem;
   rank: number | null;
   globalRank: number | null;
   showGlobal: boolean;
+  /**
+   * Peringkat yang menentukan sorotan emas. Default = nomor yang tampil, tapi
+   * dalam mode blok diisi peringkat skor global supaya sorotannya tetap sama
+   * dengan tiga orang di podium — bukan tiga teratas blok pertama.
+   */
+  highlightRank?: number | null;
   ym: string;
 }) {
-  const isTop3 = rank !== null && rank <= 3;
+  const sorot = highlightRank !== undefined ? highlightRank : rank;
+  const isTop3 = sorot !== null && sorot <= 3;
   return (
     <Link
       href={`/2in1/koordinator/matrix/${item.id}?bulan=${ym}`}
@@ -651,16 +659,22 @@ export function MatrixDashboard({
 
   const showGlobalCaption = gender !== 'all';
 
-  // Blok baru dipasang untuk ikhwan (akhwat menyusul). Nomor di badge tetap
-  // peringkat global ikhwan — bukan 1..N per blok — jadi angkanya memang
-  // melompat di dalam satu blok, dan pengajar tanpa matrix tampil '—'.
+  // Blok baru dipasang untuk ikhwan (akhwat menyusul). Nomor di badge = urutan
+  // baca dari atas ke bawah dan BERJALAN lintas blok: Takhassus 1..9, blok
+  // Tahfizh lanjut dari 10, dst. Peringkat skor global tetap ditampilkan di
+  // baris kedua ('global #N') karena keduanya beda arti.
   const blocked = gender === 'ikhwan' && filtered.some((it) => it.blok !== null);
 
   const groups = useMemo(() => {
     if (!blocked) return null;
+    let no = 0;
     return MATRIX_BLOK_ORDER.map((blok) => ({
       blok,
-      items: sorted.filter((it) => (it.blok ?? 'tanpa_kelas') === blok),
+      // Yang belum punya skor sama sekali tak diberi nomor (tampil '—') supaya
+      // tak ikut menggeser hitungan orang-orang yang sudah dinilai.
+      items: sorted
+        .filter((it) => (it.blok ?? 'tanpa_kelas') === blok)
+        .map((it) => ({ it, no: it.total === null ? null : ++no })),
     })).filter((g) => g.items.length > 0);
   }, [blocked, sorted]);
 
@@ -734,18 +748,20 @@ export function MatrixDashboard({
       ) : groups ? (
         <>
           <p className="t-tiny" style={{ color: 'var(--muted-2)', paddingLeft: 4, marginBottom: 4 }}>
-            Nomor = peringkat global ikhwan, jadi boleh melompat di dalam blok.
+            Nomor urut berjalan lintas blok: Takhassus dulu, lalu Tahfizh, baru
+            sisanya. Angka dalam kurung = peringkat skor se-ikhwan.
           </p>
           {groups.map((g) => (
             <div key={g.blok}>
               <BlokHeader blok={g.blok} count={g.items.length} />
-              {g.items.map((it) => (
+              {g.items.map(({ it, no }) => (
                 <RankedRow
                   key={it.id}
                   item={it}
-                  rank={it.ranking}
+                  rank={no}
                   globalRank={it.ranking}
-                  showGlobal={false}
+                  showGlobal
+                  highlightRank={it.ranking}
                   ym={ym}
                 />
               ))}

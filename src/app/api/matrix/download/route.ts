@@ -238,7 +238,11 @@ export async function GET(req: NextRequest) {
 
   const sheet = wb.addWorksheet('Matrix Skill');
   sheet.columns = [
-    { header: 'Rank', key: 'rank', width: 6 },
+    // 'No' = nomor urut baca, berjalan lintas blok (Takhassus dulu, lalu
+    // Tahfizh, dst) persis seperti di layar. 'Peringkat Skor' = peringkat
+    // global per gender dari matrix_rekap — dua hal berbeda, jadi dua kolom.
+    { header: 'No', key: 'no', width: 6 },
+    { header: 'Peringkat Skor', key: 'rank', width: 14 },
     { header: 'Nama', key: 'nama', width: 28 },
     // Kolom gender selalu ada: saat unduhan mencakup kedua gender (mode 'all'),
     // tanpa ini baris ikhwan dan akhwat tak bisa dibedakan.
@@ -273,8 +277,9 @@ export async function GET(req: NextRequest) {
   sheet.views = [{ state: 'frozen', ySplit: 1 }];
   sheet.autoFilter = { from: { row: 1, column: 1 }, to: { row: 1, column: sheet.columns.length } };
 
-  // Urut blok dulu, baru peringkat — mengikuti tampilan layar. Di dalam satu
-  // blok nomornya tetap peringkat global (per gender), jadi angkanya melompat.
+  // Urut blok dulu, baru peringkat — mengikuti tampilan layar. Kolom 'No'
+  // diisi belakangan mengikuti urutan hasil sort ini, jadi nomornya rapat
+  // 1..N dan berjalan lintas blok.
   // Pengajar yang matrix-nya belum ada (ranking null) ditaruh paling bawah tiap
   // blok, diurutkan menurut nama, supaya yang belum dinilai tak menyusup ke atas.
   const urut = [...(pengajarList ?? [])].sort((a, b) => {
@@ -288,9 +293,11 @@ export async function GET(req: NextRequest) {
     return ra - rb || a.name.localeCompare(b.name);
   });
 
+  let nomorUrut = 0;
   for (const p of urut) {
     const m = matrixByPengajar.get(p.id);
     sheet.addRow({
+      no: m?.ranking != null ? ++nomorUrut : '',
       rank: m?.ranking ?? '',
       nama: p.name,
       gender: p.gender === 'ikhwan' ? 'Ikhwan' : 'Akhwat',
