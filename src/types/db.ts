@@ -190,6 +190,9 @@ export interface Pengajar {
   kelompok_id: string;
   is_ketua: boolean;
   musyrif_id: string | null;
+  // Override id eval_pengajar (mirror hilmihs, 'wa:<nomor>'). null = cocokkan
+  // otomatis lewat whatsapp_number — lihat evaluasi-pengajar.ts.
+  eval_pengajar_id: string | null;
   active: boolean;
   last_login_at: string | null;
   created_at: string;
