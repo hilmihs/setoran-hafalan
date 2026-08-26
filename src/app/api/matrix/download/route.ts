@@ -3,6 +3,8 @@ import ExcelJS from 'exceljs';
 import { getSession } from '@/lib/session';
 import { supabaseAdmin } from '@/lib/supabase-admin';
 import { INDIKATOR } from '@/lib/matrix-indicators';
+import { acuanTanggalBlok, getBlokPengajar } from '@/lib/matrix-blok-data';
+import { MATRIX_BLOK_LABEL, MATRIX_BLOK_ORDER } from '@/lib/matrix-blok';
 
 const KAT_SHORT: Record<string, string> = { hard: 'Hard Skill', inspeksi: 'Inspeksi', soft: 'Soft Skill' };
 const XLSX_MIME = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
@@ -47,7 +49,7 @@ export async function GET(req: NextRequest) {
 
   let pq = supabaseAdmin
     .from('pengajar')
-    .select('id, name, gender, kelompok_id, active')
+    .select('id, name, gender, whatsapp_number, kelompok_id, active')
     .neq('matrix_exclude', true); // guru observasi-saja (mis. DPQ) tak masuk matrix
   if (gender !== 'all') pq = pq.eq('gender', gender);
   if (kelompokId) pq = pq.eq('kelompok_id', kelompokId);
@@ -63,6 +65,20 @@ export async function GET(req: NextRequest) {
     : { data: [] };
 
   const matrixByPengajar = new Map((matrixData ?? []).map((m) => [m.pengajar_id, m]));
+
+  // Blok ranking — sama persis dgn yang tampil di /2in1/koordinator/matrix,
+  // dan seperti di sana baru dipasang untuk ikhwan.
+  const blokMap = await getBlokPengajar(
+    (pengajarList ?? [])
+      .filter((p) => p.gender === 'ikhwan')
+      .map((p) => ({ id: p.id as string, whatsapp_number: (p.whatsapp_number as string | null) ?? null })),
+    acuanTanggalBlok(bulan)
+  );
+  const urutanBlok = new Map(MATRIX_BLOK_ORDER.map((b, i) => [b, i]));
+  const blokIndex = (id: string) => {
+    const b = blokMap.get(id);
+    return b ? urutanBlok.get(b) ?? 99 : 99; // akhwat / belum diblok → paling bawah
+  };
 
   // ── Mode "belum lengkap" (?incomplete=1): hanya pengajar dgn ≥1 indikator kosong,
   //    + kolom rincian bagian yang belum terisi (dikelompokkan per kategori) + halaqah.
@@ -227,6 +243,8 @@ export async function GET(req: NextRequest) {
     // Kolom gender selalu ada: saat unduhan mencakup kedua gender (mode 'all'),
     // tanpa ini baris ikhwan dan akhwat tak bisa dibedakan.
     { header: 'Gender', key: 'gender', width: 10 },
+    // Blok ranking (ikhwan). Kosong utk akhwat selama pemblokan belum dipasang.
+    { header: 'Blok', key: 'blok', width: 26 },
     { header: 'Kelompok', key: 'kelompok', width: 18 },
     { header: 'Aktif', key: 'active', width: 8 },
     { header: 'Bacaan', key: 'bacaan', width: 8 },
@@ -255,11 +273,13 @@ export async function GET(req: NextRequest) {
   sheet.views = [{ state: 'frozen', ySplit: 1 }];
   sheet.autoFilter = { from: { row: 1, column: 1 }, to: { row: 1, column: sheet.columns.length } };
 
-  // Urut peringkat, bukan abjad — kolom pertama sheet ini memang Rank, jadi
-  // daftar yang tersusun menurut nama membuat angkanya terbaca acak. Pengajar
-  // yang matrix-nya belum ada (ranking null) ditaruh paling bawah, diurutkan
-  // menurut nama, supaya yang belum dinilai tak menyusup ke deretan atas.
+  // Urut blok dulu, baru peringkat — mengikuti tampilan layar. Di dalam satu
+  // blok nomornya tetap peringkat global (per gender), jadi angkanya melompat.
+  // Pengajar yang matrix-nya belum ada (ranking null) ditaruh paling bawah tiap
+  // blok, diurutkan menurut nama, supaya yang belum dinilai tak menyusup ke atas.
   const urut = [...(pengajarList ?? [])].sort((a, b) => {
+    const bi = blokIndex(a.id) - blokIndex(b.id);
+    if (bi !== 0) return bi;
     const ra = (matrixByPengajar.get(a.id)?.ranking as number | null | undefined) ?? null;
     const rb = (matrixByPengajar.get(b.id)?.ranking as number | null | undefined) ?? null;
     if (ra === null && rb === null) return a.name.localeCompare(b.name);
@@ -274,6 +294,10 @@ export async function GET(req: NextRequest) {
       rank: m?.ranking ?? '',
       nama: p.name,
       gender: p.gender === 'ikhwan' ? 'Ikhwan' : 'Akhwat',
+      blok: (() => {
+        const b = blokMap.get(p.id);
+        return b ? MATRIX_BLOK_LABEL[b] : '';
+      })(),
       kelompok: kelompokMap.get(p.kelompok_id ?? '') ?? '',
       active: p.active ? 'Ya' : 'Tidak',
       bacaan: m?.skor_bacaan ?? '',

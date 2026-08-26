@@ -3,6 +3,12 @@
 import { useMemo, useState } from 'react';
 import Link from 'next/link';
 import { Initials } from '@/components/icons';
+import {
+  MATRIX_BLOK_KETERANGAN,
+  MATRIX_BLOK_LABEL,
+  MATRIX_BLOK_ORDER,
+  type MatrixBlok,
+} from '@/lib/matrix-blok';
 
 export type MatrixListItem = {
   id: string;
@@ -16,6 +22,8 @@ export type MatrixListItem = {
   ranking: number | null;
   deltaTotal: number | null;
   deltaRank: number | null;
+  /** null = belum diblok (akhwat). Daftar tampil rata seperti sebelumnya. */
+  blok: MatrixBlok | null;
 };
 
 type SortKey = 'total' | 'hard' | 'ped' | 'soft';
@@ -308,12 +316,12 @@ function RankedRow({
   ym,
 }: {
   item: MatrixListItem;
-  rank: number;
+  rank: number | null;
   globalRank: number | null;
   showGlobal: boolean;
   ym: string;
 }) {
-  const isTop3 = rank <= 3;
+  const isTop3 = rank !== null && rank <= 3;
   return (
     <Link
       href={`/2in1/koordinator/matrix/${item.id}?bulan=${ym}`}
@@ -348,7 +356,7 @@ function RankedRow({
             padding: '2px 0',
           }}
         >
-          {rank}
+          {rank ?? '—'}
         </div>
 
         {/* Avatar */}
@@ -414,6 +422,34 @@ function RankedRow({
         </div>
       </div>
     </Link>
+  );
+}
+
+/* ─── BlokHeader ─────────────────────────────────────────── */
+function BlokHeader({ blok, count }: { blok: MatrixBlok; count: number }) {
+  return (
+    <div
+      style={{
+        display: 'flex',
+        alignItems: 'baseline',
+        flexWrap: 'wrap',
+        gap: 8,
+        margin: '16px 0 8px',
+        paddingLeft: 4,
+        borderTop: '1px solid var(--line)',
+        paddingTop: 10,
+      }}
+    >
+      <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--ink)' }}>
+        {MATRIX_BLOK_LABEL[blok]}
+      </span>
+      <span className="t-mono" style={{ fontSize: 11, color: 'var(--muted-2)' }}>
+        {count} pengajar
+      </span>
+      <span style={{ fontSize: 10, color: 'var(--muted-2)', marginLeft: 'auto' }}>
+        {MATRIX_BLOK_KETERANGAN[blok]}
+      </span>
+    </div>
   );
 }
 
@@ -615,6 +651,19 @@ export function MatrixDashboard({
 
   const showGlobalCaption = gender !== 'all';
 
+  // Blok baru dipasang untuk ikhwan (akhwat menyusul). Nomor di badge tetap
+  // peringkat global ikhwan — bukan 1..N per blok — jadi angkanya memang
+  // melompat di dalam satu blok, dan pengajar tanpa matrix tampil '—'.
+  const blocked = gender === 'ikhwan' && filtered.some((it) => it.blok !== null);
+
+  const groups = useMemo(() => {
+    if (!blocked) return null;
+    return MATRIX_BLOK_ORDER.map((blok) => ({
+      blok,
+      items: sorted.filter((it) => (it.blok ?? 'tanpa_kelas') === blok),
+    })).filter((g) => g.items.length > 0);
+  }, [blocked, sorted]);
+
   return (
     <div
       style={{
@@ -682,6 +731,27 @@ export function MatrixDashboard({
         <p className="t-small" style={{ color: 'var(--muted-2)', padding: 12 }}>
           Tidak ada pengajar sesuai filter.
         </p>
+      ) : groups ? (
+        <>
+          <p className="t-tiny" style={{ color: 'var(--muted-2)', paddingLeft: 4, marginBottom: 4 }}>
+            Nomor = peringkat global ikhwan, jadi boleh melompat di dalam blok.
+          </p>
+          {groups.map((g) => (
+            <div key={g.blok}>
+              <BlokHeader blok={g.blok} count={g.items.length} />
+              {g.items.map((it) => (
+                <RankedRow
+                  key={it.id}
+                  item={it}
+                  rank={it.ranking}
+                  globalRank={it.ranking}
+                  showGlobal={false}
+                  ym={ym}
+                />
+              ))}
+            </div>
+          ))}
+        </>
       ) : (
         sorted.map((it, idx) => (
           <RankedRow

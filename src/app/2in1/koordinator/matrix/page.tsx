@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { requireOneOfRoles } from '@/lib/session';
 import { supabaseAdmin } from '@/lib/supabase-admin';
 import { syncMatrixIfStale, type MatrixRow } from '@/lib/matrix-compute';
+import { acuanTanggalBlok, getBlokPengajar } from '@/lib/matrix-blok-data';
 import { MatrixDashboard, type MatrixListItem } from '@/components/matrix/MatrixDashboard';
 import { Initials } from '@/components/icons';
 
@@ -37,7 +38,7 @@ export default async function Matrix2in1Page({
   // Fetch pengajar metadata
   const { data: pengajarList } = await supabaseAdmin
     .from('pengajar')
-    .select('id, name, gender, kelompok:kelompok_id(name)')
+    .select('id, name, gender, whatsapp_number, kelompok:kelompok_id(name)')
     .eq('active', true)
     .neq('matrix_exclude', true); // guru observasi-saja (mis. DPQ) tak masuk matrix
   const pengajarMap = new Map(
@@ -47,6 +48,14 @@ export default async function Matrix2in1Page({
       kelompok: (p.kelompok as unknown as { name: string } | null)?.name ?? '—',
     }])
   );
+
+  // Blok ranking — baru untuk ikhwan (akhwat menyusul), jadi hanya pengajar
+  // ikhwan yang dipetakan; sisanya null dan tampil sebagai satu daftar seperti
+  // sebelumnya.
+  const pengajarIkhwan = (pengajarList ?? [])
+    .filter((p) => p.gender === 'ikhwan')
+    .map((p) => ({ id: p.id as string, whatsapp_number: (p.whatsapp_number as string | null) ?? null }));
+  const blokMap = await getBlokPengajar(pengajarIkhwan, acuanTanggalBlok(ym));
 
   // Query snapshot bulan lalu — read-only, JANGAN recompute
   const { data: prevRows } = await supabaseAdmin
@@ -91,6 +100,7 @@ export default async function Matrix2in1Page({
         ranking,
         deltaTotal,
         deltaRank,
+        blok: blokMap.get(r.pengajar_id) ?? null,
       } satisfies MatrixListItem;
     })
     .filter((it): it is MatrixListItem => it !== null);
