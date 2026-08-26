@@ -115,6 +115,7 @@ export default async function HitsKetuaPage({
               latihan_diberikan: k.latihan_diberikan,
               status_latihan: k.status_latihan,
               semua_selesai: k.semua_selesai,
+              pengajar_on_cam: k.pengajar_on_cam,
               catatan: k.catatan,
               editable: k.editable,
               pelanggaran: (pelByKet.get(k.id) ?? []).map((p) => ({

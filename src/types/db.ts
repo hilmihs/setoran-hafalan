@@ -397,6 +397,9 @@ export interface HitsKeteranganHarian {
   latihan_diberikan: boolean | null;
   status_latihan: HitsStatusLatihan | null;
   semua_selesai: boolean | null;
+  // Status on-cam pengajar saat KBM (sumber Kepatuhan SOP Teknis di matrix).
+  // null = tak berlaku (libur / JKG / BADAL) atau belum diobservasi.
+  pengajar_on_cam: boolean | null;
   catatan: string | null;
   diisi_by_role: string;
   diisi_by_id: string;

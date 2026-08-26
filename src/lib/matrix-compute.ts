@@ -28,6 +28,7 @@ import {
   type KeteranganNilaiFields,
 } from '@/lib/hits-observasi';
 import { cyclesOfMonth } from '@/lib/week';
+import { KATEGORI_BOBOT } from '@/lib/matrix-indicators';
 import { JENIS_REKAMAN } from '@/types/db';
 
 // Bulan ≥ anchor ini dihitung live dari sumber data. Bulan < anchor (mis. 2026-05)
@@ -304,7 +305,7 @@ export async function computeMatrixForMonth(yearMonth: string): Promise<MatrixRo
   const keteranganAll = await fetchInChunks(halaqahIds, (chunk) =>
     supabaseAdmin
       .from('hits_keterangan_harian')
-      .select(`id, halaqah_id, kondisi, latihan_diberikan, semua_selesai, status_latihan, ${KETERANGAN_NILAI_COLS}`)
+      .select(`id, halaqah_id, kondisi, latihan_diberikan, semua_selesai, status_latihan, pengajar_on_cam, ${KETERANGAN_NILAI_COLS}`)
       .gte('tanggal', monthStart)
       .lt('tanggal', nextMonth)
       .in('halaqah_id', chunk)
@@ -354,6 +355,10 @@ export async function computeMatrixForMonth(yearMonth: string): Promise<MatrixRo
   // syarat penilaian Komitmen Jadwal, karena penyebut disiplin waktu kini bisa 0
   // (mis. semua pertemuannya JKG/BADAL) tanpa berarti datanya kosong.
   const hitsDataByPengajar = new Map<string, number>();
+  // Kepatuhan SOP Teknis = %pertemuan pengajar on-cam saat KBM. Hanya dihitung
+  // pada pertemuan yang benar dibawakan pengajar asli (bukan JKG/BADAL) & sudah
+  // diobservasi (pengajar_on_cam terisi). null = tak masuk penyebut.
+  const onCamByPengajar = new Map<string, { onCam: number; total: number }>();
   for (const k of keteranganList ?? []) {
     const pgId = pengajarOfHalaqah.get(k.halaqah_id);
     if (!pgId) continue;
@@ -366,6 +371,14 @@ export async function computeMatrixForMonth(yearMonth: string): Promise<MatrixRo
       d.total += 1;
       if (!(pelByKet.get(k.id as string) ?? []).some(isPelanggaranOnTime)) d.baik += 1;
       disiplinByPengajar.set(pgId, d);
+
+      const onCam = (k as { pengajar_on_cam?: boolean | null }).pengajar_on_cam;
+      if (onCam !== null && onCam !== undefined) {
+        const o = onCamByPengajar.get(pgId) ?? { onCam: 0, total: 0 };
+        o.total += 1;
+        if (onCam === true) o.onCam += 1;
+        onCamByPengajar.set(pgId, o);
+      }
     }
 
     // PTML = pengajar sudah memberi tugas, hanya pesertanya yang belum
@@ -435,6 +448,10 @@ export async function computeMatrixForMonth(yearMonth: string): Promise<MatrixRo
     const disp = disiplinByPengajar.get(pg.id);
     const skorKedisiplinan = disp && disp.total > 0 ? pctTo4(disp.baik / disp.total) : null;
 
+    // Kepatuhan SOP Teknis = %on-cam saat KBM (sumber: hits_keterangan_harian).
+    const oc = onCamByPengajar.get(pg.id);
+    const skorKepatuhanSop = oc && oc.total > 0 ? pctTo4(oc.onCam / oc.total) : null;
+
     const lat = latihanByPengajar.get(pg.id);
     // %latihan mandiri beres (report ketua kelas HITS). Dipakai Tanggung Jawab,
     // dan sebagai fallback Evaluasi & Penguasaan bila ketua kelompok belum isi.
@@ -475,12 +492,13 @@ export async function computeMatrixForMonth(yearMonth: string): Promise<MatrixRo
       // performa latihan mandiri (report ketua kelas).
       skor_evaluasi_penguasaan: ped?.skor_evaluasi_penguasaan ?? skorLatihan,
     };
-    // Manajemen Halaqah & Kepatuhan SOP dipindah ke Soft Skill per keputusan
-    // rapat Agustus 2026 — sumber datanya tetap Penilaian Pedagogis / inspeksi
-    // kelas, yang berubah hanya pengelompokan & rata-rata kategorinya.
+    // Manajemen Halaqah dipindah ke Soft Skill per keputusan rapat Agustus 2026
+    // (sumber tetap Penilaian Pedagogis). Kepatuhan SOP Teknis kini dihitung dari
+    // status on-cam pengajar di hits_keterangan_harian (bukan lagi input manual
+    // penilaian_pedagogis.skor_kepatuhan_sop yang tak pernah terisi).
     const soft = {
       skor_manajemen_halaqah: manajemenGabung,
-      skor_kepatuhan_sop: ped?.skor_kepatuhan_sop ?? null,
+      skor_kepatuhan_sop: skorKepatuhanSop,
       skor_kedisiplinan_waktu: skorKedisiplinan,
       skor_komitmen_jadwal: skorKomitmen,
       skor_tanggung_jawab: skorTanggungJawab,
@@ -496,7 +514,13 @@ export async function computeMatrixForMonth(yearMonth: string): Promise<MatrixRo
     ]);
     const rataInspeksi = avg(Object.values(inspeksi));
     const rataSoft = avg(Object.values(soft));
-    const rataAll = avg([rataHard, rataInspeksi, rataSoft]);
+    // Bobot keseluruhan (rapat Agustus 2026): Hard 40% · Observasi/Soft 40% ·
+    // Inspeksi 20%. Kategori null di-skip beserta bobotnya (renormalisasi).
+    const rataAll = weightedAvg([
+      { v: rataHard, w: KATEGORI_BOBOT.hard },
+      { v: rataSoft, w: KATEGORI_BOBOT.soft },
+      { v: rataInspeksi, w: KATEGORI_BOBOT.inspeksi },
+    ]);
 
     return {
       pengajar_id: pg.id,

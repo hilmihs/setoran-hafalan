@@ -227,6 +227,16 @@ export async function submitKeteranganHarian(
   if (!isLibur && latihanDiberikan === false) jenisList.push('TIDAK_LATIHAN');
   const kondisi: HitsKondisi = isLibur ? 'LIBUR' : primaryKondisi(jenisList);
 
+  // Kepatuhan SOP Teknis: status on-cam pengajar. Hanya berlaku (wajib) saat KBM
+  // dibawakan pengajar asli — bukan libur, bukan JKG/BADAL (pengajar diganti/pindah
+  // hari). Selain itu disimpan null (tak masuk penilaian).
+  const kbmHeld = !isLibur && !jenisList.includes('JKG') && !jenisList.includes('BADAL');
+  const onCamRaw = String(fd.get('pengajar_on_cam') ?? '');
+  if (kbmHeld && onCamRaw !== 'true' && onCamRaw !== 'false') {
+    return { error: 'Status On Cam pengajar wajib diisi saat kelas berlangsung.' };
+  }
+  const pengajarOnCam = kbmHeld ? onCamRaw === 'true' : null;
+
   const { data: saved, error } = await supabaseAdmin
     .from('hits_keterangan_harian')
     .upsert(
@@ -238,6 +248,7 @@ export async function submitKeteranganHarian(
         kondisi,
         // KMT (kelas mulai terlambat) implikasikan terlambat=true utk kompat lama.
         terlambat: jenisList.includes('KMT'),
+        pengajar_on_cam: pengajarOnCam,
         latihan_diberikan: latihanDiberikan,
         status_latihan: finalStatus,
         semua_selesai: semuaSelesai,

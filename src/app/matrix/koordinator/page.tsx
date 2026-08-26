@@ -10,7 +10,7 @@ import { MatrixRekapAspek } from '@/components/matrix/MatrixRekapAspek';
 import Link from 'next/link';
 import { computeRiskPengajar, levelColor, levelLabel, type RiskResult } from '@/lib/risk';
 import { syncMatrixIfStale, isLiveMatrixMonth } from '@/lib/matrix-compute';
-import { INDIKATOR, scoreColor, type IndikatorKey } from '@/lib/matrix-indicators';
+import { INDIKATOR, scoreColor, KATEGORI_BOBOT, type IndikatorKey } from '@/lib/matrix-indicators';
 import type { Gender } from '@/types/db';
 
 export const dynamic = 'force-dynamic';
@@ -300,6 +300,25 @@ export default async function MatrixKoordinatorPage({
 
           {withMatrix.length > 0 && (
             <>
+              <div
+                className="card-flat"
+                style={{
+                  padding: '14px 18px', marginBottom: 16, borderRadius: 10,
+                  borderLeft: '4px solid var(--accent)', background: 'var(--accent-tint)',
+                }}
+              >
+                <p className="t-small" style={{ fontWeight: 600, marginBottom: 4 }}>
+                  ℹ️ Pembobotan nilai keseluruhan (berlaku sejak Agustus 2026)
+                </p>
+                <p className="t-small" style={{ color: 'var(--muted)', margin: 0 }}>
+                  Rata-rata keseluruhan kini berbobot: <strong>Hard Skill {Math.round(KATEGORI_BOBOT.hard * 100)}%</strong> ·{' '}
+                  <strong>Observasi (Soft Skill) {Math.round(KATEGORI_BOBOT.soft * 100)}%</strong> ·{' '}
+                  <strong>Inspeksi {Math.round(KATEGORI_BOBOT.inspeksi * 100)}%</strong>. Kategori yang belum
+                  terisi di-skip beserta bobotnya (dinormalisasi ulang). <strong>Kepatuhan SOP Teknis</strong> kini
+                  dihitung dari status <strong>On Cam</strong> pengajar yang direkam ketua kelas per pertemuan —
+                  bukan lagi input pedagogis manual.
+                </p>
+              </div>
               <MatrixRekapAspek rows={withMatrix} />
               <MatrixTable rows={rows} month={selectedMonth} gender={gender} />
             </>

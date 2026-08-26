@@ -24,6 +24,7 @@ export type SlotKeterangan = {
   latihan_diberikan: boolean | null;
   status_latihan: HitsStatusLatihan | null;
   semua_selesai: boolean | null;
+  pengajar_on_cam: boolean | null;
   catatan: string | null;
   editable: boolean;
   pelanggaran: SlotPelanggaran[];
@@ -144,6 +145,8 @@ export function HitsKetuaForm({ halaqahId, halaqahName, pengajarName, slots: ini
   // form kosong) — hilangkan ambiguitas laporan halaqah.
   const [kbbs, setKbbs] = useState(false);
   const [latihanDiberikan, setLatihanDiberikan] = useState(true);
+  // Kepatuhan SOP Teknis: status on-cam pengajar. null = belum dipilih.
+  const [onCam, setOnCam] = useState<boolean | null>(null);
   const [statusLatihan, setStatusLatihan] = useState<HitsStatusLatihan>('SML');
   const [catatan, setCatatan] = useState('');
   const [bayarMenit, setBayarMenit] = useState('');
@@ -177,6 +180,7 @@ export function HitsKetuaForm({ halaqahId, halaqahName, pengajarName, slots: ini
     const noViol = !PEL_JENIS.some((j) => draft[j].on);
     setKbbs(!!k && k.kondisi !== 'LIBUR' && noViol && latGiven);
     setStatusLatihan(k?.status_latihan ?? 'SML');
+    setOnCam(k?.pengajar_on_cam ?? null);
     setCatatan(k?.catatan ?? '');
     setBayarMenit('');
     setEditingKey(slotKey(slot));
@@ -229,6 +233,11 @@ export function HitsKetuaForm({ halaqahId, halaqahName, pengajarName, slots: ini
     if (!libur && !kbbs && !anyPel) {
       return { ok: false, err: 'Pilih "KBBS" (kelas berjalan baik) atau centang minimal 1 pelanggaran.' };
     }
+    // On Cam wajib saat KBM dibawakan pengajar asli (bukan libur/JKG/BADAL).
+    const kbmHeld = !libur && !pel.JKG.on && !pel.BADAL.on;
+    if (kbmHeld && onCam === null) {
+      return { ok: false, err: 'Pilih status "Pengajar On Cam?" (Ya / Tidak).' };
+    }
     const fd = new FormData();
     fd.set('halaqah_id', halaqahId);
     fd.set('pertemuan_no', String(editing.pertemuanNo));
@@ -237,6 +246,7 @@ export function HitsKetuaForm({ halaqahId, halaqahName, pengajarName, slots: ini
     fd.set('libur', String(libur));
     fd.set('latihan_diberikan', String(!libur && latihanDiberikan));
     fd.set('status_latihan', statusLatihan);
+    fd.set('pengajar_on_cam', kbmHeld ? String(onCam) : '');
     fd.set('catatan', catatan);
 
     const payload: Array<Record<string, unknown>> = [];
@@ -291,12 +301,14 @@ export function HitsKetuaForm({ halaqahId, halaqahName, pengajarName, slots: ini
           badal_nama: j === 'BADAL' ? pel.BADAL.badal_nama.trim() : null,
           badal_mulai: j === 'BADAL' ? pel.BADAL.badal_mulai : null,
         }));
+        const kbmHeld = !libur && !pel.JKG.on && !pel.BADAL.on;
         const updated: SlotKeterangan = {
           kondisi,
           terlambat: list.includes('KMT'),
           latihan_diberikan: libur ? null : latihanDiberikan,
           status_latihan: !libur && latihanDiberikan ? statusLatihan : null,
           semua_selesai: !libur && latihanDiberikan ? statusLatihan === 'SML' : null,
+          pengajar_on_cam: kbmHeld ? onCam : null,
           catatan: catatan || null,
           editable: true,
           pelanggaran: pelList,
@@ -491,6 +503,31 @@ export function HitsKetuaForm({ halaqahId, halaqahName, pengajarName, slots: ini
               ))}
             </div>
           </div>
+
+          {!pel.JKG.on && !pel.BADAL.on && (
+            <div style={{ marginBottom: 14 }}>
+              <label className="field-label">Pengajar On Cam saat KBM? <span style={{ color: 'var(--merah-ink)' }}>*</span></label>
+              <p className="t-tiny" style={{ color: 'var(--muted-2)', marginBottom: 8 }}>
+                Kepatuhan SOP Teknis — apakah kamera pengajar menyala selama kelas berlangsung.
+              </p>
+              <div style={{ display: 'flex', gap: 8 }}>
+                {[true, false].map((v) => (
+                  <button
+                    type="button" key={String(v)}
+                    onClick={() => setOnCam(v)}
+                    style={{
+                      flex: 1, padding: '10px', borderRadius: 8, cursor: 'pointer',
+                      border: `1px solid ${onCam === v ? 'var(--accent)' : 'var(--line-2)'}`,
+                      background: onCam === v ? 'var(--accent-tint)' : 'transparent',
+                      fontWeight: 500, fontSize: 13,
+                    }}
+                  >
+                    {v ? 'Ya, On Cam' : 'Tidak (Off Cam)'}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
 
           {latihanDiberikan && (
             <div style={{ marginBottom: 14 }}>

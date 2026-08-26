@@ -56,6 +56,15 @@ export const KATEGORI_STANDAR: Record<Kategori, number> = {
   soft: 4,
 };
 
+// Bobot kategori untuk rata_rata_keseluruhan (keputusan rapat Agustus 2026):
+// Hard Skill 40% · Observasi (soft) 40% · Inspeksi 20%. Kategori yang kosong
+// (null) di-skip beserta bobotnya — sisanya dinormalisasi ulang (weightedAvg).
+export const KATEGORI_BOBOT: Record<Kategori, number> = {
+  hard: 0.4,
+  soft: 0.4,
+  inspeksi: 0.2,
+};
+
 export const STANDAR_KESELURUHAN = 3.67;
 
 // Bobot hard skill — total 8 porsi. Null di-skip beserta bobotnya saat hitung
