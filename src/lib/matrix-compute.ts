@@ -28,6 +28,7 @@ import {
   type KeteranganNilaiFields,
 } from '@/lib/hits-observasi';
 import { cyclesOfMonth } from '@/lib/week';
+import { getLiburDatesForKelas } from '@/lib/maahir-libur';
 import { KATEGORI_BOBOT } from '@/lib/matrix-indicators';
 import { JENIS_REKAMAN } from '@/types/db';
 
@@ -257,10 +258,27 @@ export async function computeMatrixForMonth(yearMonth: string): Promise<MatrixRo
   }
   const { data: pertemuanList } = await supabaseAdmin
     .from('pertemuan_program')
-    .select('id, program')
+    .select('id, program, tanggal, program_kelas_id')
     .gte('tanggal', monthStart)
     .lt('tanggal', nextMonth);
   const programOfPertemuan = new Map((pertemuanList ?? []).map((p) => [p.id, p.program]));
+  // Libur = tidak berpengaruh. Pertemuan pada tanggal libur kelasnya dikeluarkan
+  // dari kehadiran matrix — sumber libur sama dengan rekap presensi peserta
+  // (program_kelas_libur), jadi libur At-Tibyan/Maahir tidak menurunkan
+  // skor_kehadiran pengajar. Dulu kehadiran dihitung mentah tanpa cek libur.
+  //
+  // Kuncinya program_kelas_id, BUKAN kelas_id: kolom kelas_id itu FK lama ke
+  // tabel `kelas` (halaqah setoran) yang sejak 0020 nullable, sedangkan
+  // program_kelas_libur di-key per program_kelas — sama seperti maahir-rekap.ts.
+  const kelasIdsPertemuan = [
+    ...new Set((pertemuanList ?? []).map((p) => p.program_kelas_id as string).filter(Boolean)),
+  ];
+  const liburByKelas = await getLiburDatesForKelas(kelasIdsPertemuan, monthStart, nextMonth);
+  const liburPertemuan = new Set(
+    (pertemuanList ?? [])
+      .filter((p) => liburByKelas.get(p.program_kelas_id as string)?.has(p.tanggal as string))
+      .map((p) => p.id as string)
+  );
   const pertemuanIds = (pertemuanList ?? []).map((p) => p.id as string);
   const kehadiranList = await fetchInChunks(pertemuanIds, (chunk) =>
     supabaseAdmin
@@ -272,6 +290,7 @@ export async function computeMatrixForMonth(yearMonth: string): Promise<MatrixRo
   // anggota_id → program → {hadir, total}
   const kehadiranByAnggota = new Map<string, Map<string, { hadir: number; total: number }>>();
   for (const k of kehadiranList ?? []) {
+    if (liburPertemuan.has(k.pertemuan_id)) continue; // libur → tak dihitung
     const program = programOfPertemuan.get(k.pertemuan_id);
     if (!program || !k.anggota_id) continue;
     const perProgram = kehadiranByAnggota.get(k.anggota_id) ?? new Map();
