@@ -169,6 +169,15 @@ export const KATEGORI: ShakwaKategoriDef[] = [
   },
 ];
 
+/**
+ * Pseudo-kategori khusus formulir: lupa password bukan laporan yang perlu
+ * ditindaklanjuti koordinator, pelapor hanya butuh halaman resetnya. Sengaja di
+ * luar KATEGORI supaya nilainya tak pernah masuk tabel `shakwa`, rekap harian,
+ * maupun API publik — formulir cuma mengalihkan ke LUPA_PASSWORD_PATH.
+ */
+export const KATEGORI_LUPA_PASSWORD = 'lupa_password';
+export const LUPA_PASSWORD_PATH = '/lupa-password';
+
 export const KATEGORI_BY_VALUE: Record<ShakwaKategori, ShakwaKategoriDef> = Object.fromEntries(
   KATEGORI.map((k) => [k.value, k])
 ) as Record<ShakwaKategori, ShakwaKategoriDef>;
@@ -326,6 +335,12 @@ export const PANDUAN_KATEGORI: Array<{ judul: string; poin: string[] }> = [
     poin: [
       'Belum Memiliki Rekening CIMB: pengajar belum memasukkan atau belum punya rekening penampung.',
       'Laporan lainnya.',
+    ],
+  },
+  {
+    judul: '9. Lupa Password',
+    poin: [
+      'Tak perlu mengisi formulir ini — pilih kategori "Lupa Password" lalu buka halaman resetnya.',
     ],
   },
 ];

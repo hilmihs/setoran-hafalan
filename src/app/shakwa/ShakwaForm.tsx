@@ -4,6 +4,8 @@ import { useState, useTransition } from 'react';
 import { kirimShakwa, type KirimShakwaResult } from './actions';
 import {
   KATEGORI,
+  KATEGORI_LUPA_PASSWORD,
+  LUPA_PASSWORD_PATH,
   HALAQAH_OPTIONS,
   IZIN_JENIS,
   MAX_LAMPIRAN,
@@ -47,7 +49,8 @@ export function ShakwaForm({
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
-  const def = kategori ? kategoriDef(kategori) : null;
+  const lupaPassword = kategori === KATEGORI_LUPA_PASSWORD;
+  const def = kategori && !lupaPassword ? kategoriDef(kategori) : null;
   const terkunci = !!def?.butuhLogin && !isPengajar;
 
   function ubahRincian(idx: number, patch: Partial<RincianRow>) {
@@ -192,22 +195,41 @@ export function ShakwaForm({
               {k.butuhLogin ? ' (perlu masuk sebagai pengajar)' : ''}
             </option>
           ))}
+          <option value={KATEGORI_LUPA_PASSWORD}>Lupa Password</option>
         </select>
       </div>
 
-      <div style={{ marginBottom: 18 }}>
-        <label style={labelStyle} htmlFor="shakwa-halaqah">
-          Halaqoh <span style={{ color: 'var(--merah-ink)' }}>*</span>
-        </label>
-        <select id="shakwa-halaqah" name="halaqah_label" required className="input" style={{ width: '100%' }}>
-          <option value="">— pilih —</option>
-          {HALAQAH_OPTIONS.map((h) => (
-            <option key={h} value={h}>
-              {h}
-            </option>
-          ))}
-        </select>
-      </div>
+      {lupaPassword && (
+        <div
+          className="card-flat"
+          style={{ padding: '14px 16px', borderLeft: '3px solid var(--kuning)', marginBottom: 16 }}
+        >
+          <div style={{ fontWeight: 600, marginBottom: 4 }}>Lupa password tak perlu lewat formulir ini</div>
+          <p className="t-small" style={{ color: 'var(--muted-2)', marginBottom: 10 }}>
+            Reset password bisa Anda ajukan sendiri di halaman khusus — lebih cepat daripada
+            menunggu tindak lanjut koordinator.
+          </p>
+          <a href={LUPA_PASSWORD_PATH} className="btn btn-primary" style={{ textDecoration: 'none' }}>
+            Buka halaman Lupa Password
+          </a>
+        </div>
+      )}
+
+      {!lupaPassword && (
+        <div style={{ marginBottom: 18 }}>
+          <label style={labelStyle} htmlFor="shakwa-halaqah">
+            Halaqoh <span style={{ color: 'var(--merah-ink)' }}>*</span>
+          </label>
+          <select id="shakwa-halaqah" name="halaqah_label" required className="input" style={{ width: '100%' }}>
+            <option value="">— pilih —</option>
+            {HALAQAH_OPTIONS.map((h) => (
+              <option key={h} value={h}>
+                {h}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
 
       {terkunci && def && (
         <div
@@ -435,9 +457,11 @@ export function ShakwaForm({
         </div>
       )}
 
-      <button type="submit" className="btn btn-primary" disabled={pending || !def || terkunci}>
-        {pending ? 'Mengirim…' : 'Kirim Laporan'}
-      </button>
+      {!lupaPassword && (
+        <button type="submit" className="btn btn-primary" disabled={pending || !def || terkunci}>
+          {pending ? 'Mengirim…' : 'Kirim Laporan'}
+        </button>
+      )}
       <p className="t-tiny" style={{ color: 'var(--muted-2)', marginTop: 10 }}>
         Semoga Allah mudahkan.
       </p>
