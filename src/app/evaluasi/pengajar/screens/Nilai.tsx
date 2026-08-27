@@ -135,6 +135,34 @@ export function Nilai(props: NilaiProps) {
 
       <div style={{ height: 110 }} />
       <div style={{ position: 'sticky', bottom: 0, background: '#ffffff', borderTop: '1px solid #e8e4dc', padding: '10px 16px 14px' }}>
+        {/* Gerbang ujian: konfirmasi kelulusan wajib sebelum simpan. Kotak centang
+            aslinya di kartu rekomendasi (jauh di atas, kelewat saat menggulir), jadi
+            tombol tampak "terkunci" tanpa sebab. Salinannya ditaruh di sini supaya
+            alasannya kebaca dan bisa dicentang di tempat. */}
+        {props.isUjian && props.simpanDisabled && (
+          <label
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 8,
+              marginBottom: 8,
+              padding: '9px 11px',
+              borderRadius: 10,
+              background: props.lulusBg,
+              border: `1px solid ${props.lulusBorder}`,
+              color: props.lulusColor,
+              fontSize: 12,
+              lineHeight: 1.35,
+              cursor: 'pointer',
+            }}
+          >
+            <input type="checkbox" checked={props.confirmed} onChange={props.toggleConfirm} />
+            <span>
+              Centang untuk mengonfirmasi hasil <strong>{props.lulusLabel}</strong> — tombol simpan
+              terbuka setelah dikonfirmasi.
+            </span>
+          </label>
+        )}
         <div style={{ display: 'flex', gap: 8 }}>
           <button onClick={props.prevPeserta} disabled={props.isFirst} className="ev-ghost" style={{ width: 50, height: 48, borderRadius: 8, border: '1px solid #d8d3c8', background: '#ffffff', font: 'inherit', fontSize: 16, color: '#1b1a17', cursor: props.isFirst ? 'not-allowed' : 'pointer', opacity: props.isFirst ? 0.5 : 1 }}>←</button>
           <button onClick={props.simpanLanjut} disabled={props.simpanDisabled} className="ev-dark" style={{ flex: 1, height: 48, borderRadius: 8, border: 'none', background: '#1b1a17', color: '#ffffff', font: 'inherit', fontSize: 15, fontWeight: 600, cursor: props.simpanDisabled ? 'not-allowed' : 'pointer', opacity: props.simpanDisabled ? 0.5 : 1 }}>{props.simpanLabel}</button>
