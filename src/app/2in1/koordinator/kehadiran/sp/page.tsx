@@ -4,6 +4,7 @@ import { getSession } from '@/lib/session';
 import {
   getMaahirSP,
   PROGRAM_START,
+  SP_START_UMUM,
   type PemutihanRingkas,
   type Penetapan,
   type SPLevel,
@@ -131,6 +132,10 @@ export default async function PendataanSPPage({
               <p className="t-tiny" style={{ color: 'var(--muted-2)', marginTop: 2 }}>
                 Dihitung s/d {tanggalLabel(cutoff)}
                 {dariTampilan ? ` · hanya yang kena SP sejak ${tanggalLabel(dariTampilan)}` : ''}.
+              </p>
+              <p className="t-tiny" style={{ color: 'var(--muted-2)', marginTop: 2 }}>
+                Akumulasi dimulai {tanggalLabel(SP_START_UMUM)} — kecuali Maahir 6A &amp; 6B Ikhwan
+                yang tetap dihitung sejak {tanggalLabel(PROGRAM_START)}.
               </p>
             </div>
             <GenderNavSelect value={genderFilter ?? ''} />
@@ -284,7 +289,10 @@ export default async function PendataanSPPage({
 
           <p className="t-tiny" style={{ color: 'var(--muted-2)', marginTop: 12 }}>
             SP 3 = melebihi batas → kandidat diberhentikan dari program Maahir. Angka kumulatif sejak
-            program mulai s/d {tanggalLabel(cutoff)}; tanggal libur, sesi di luar rentang
+            awal akumulasi kelas masing-masing ({tanggalLabel(SP_START_UMUM)}, kecuali Maahir 6A
+            &amp; 6B Ikhwan sejak {tanggalLabel(PROGRAM_START)}) s/d {tanggalLabel(cutoff)};
+            pelanggaran sebelum tanggal itu tetap tampil di Rekap Kehadiran tapi tak berbobot SP.
+            Tanggal libur, sesi di luar rentang
             keanggotaan, dan sesi yang diputihkan tak dihitung. Kolom Penetapan menunjukkan tanggal
             pertemuan yang membuat hitungannya menembus tiap ambang — ikut bergeser bila koordinator
             memutihkan sesi. Filter <strong>Sampai tanggal</strong> memotong perhitungan di tanggal

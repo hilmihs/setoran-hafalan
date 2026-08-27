@@ -9,6 +9,9 @@
 // melaporkan angka berbeda dari Rekap Kehadiran yang memang menggabung keduanya
 // — peserta dengan tiga izin At-Tibyan terbaca "izin 0" di sini. Rekap dijadikan
 // acuan; 'muallim_najih' tetap di luar.
+//
+// Awal akumulasi berbeda per kelas — lihat `spMulaiKelas`: hanya Maahir 6A & 6B
+// Ikhwan yang menumpuk sejak PROGRAM_START, kelas lain mulai 1 Agustus 2026.
 
 import { supabaseAdmin } from '@/lib/supabase-admin';
 import { getLiburDatesForKelas } from '@/lib/maahir-libur';
@@ -25,6 +28,30 @@ import type { Gender } from '@/types/db';
 
 // Anchor rentang libur (program Maahir mulai ~awal 2026).
 export const PROGRAM_START = '2026-01-01';
+
+/**
+ * Awal akumulasi SP untuk kelas pada umumnya. Hanya Maahir 6A & 6B Ikhwan yang
+ * tetap dihitung sejak PROGRAM_START; kelas lain baru mulai menumpuk SP dari
+ * tanggal ini — pelanggaran sebelumnya tak lagi berbobot SP (tetap terbaca di
+ * Rekap Kehadiran, yang tak memakai batas ini).
+ *
+ * Batasnya tanggal kalender 1 Agustus, bukan awal periode 28 Juli: pertemuan
+ * 28–31 Juli 2026 sengaja di luar hitungan.
+ */
+export const SP_START_UMUM = '2026-08-01';
+
+/**
+ * Sejak kapan SP kelas ini menumpuk. Pencocokan lewat nama + gender, bukan id,
+ * supaya tak ada UUID produksi yang tertanam di kode; polanya longgar agar
+ * "Maahir 6A - Ikhwan" tetap terkenali kalau kelak ditulis "Maahir 6A Ikhwan".
+ * Kelas 6A/6B AKHWAT adalah kelas lain — tersaring oleh syarat gender.
+ */
+export function spMulaiKelas(name: string, gender: Gender): string {
+  const kumulatifPenuh = gender === 'ikhwan' && /^\s*maahir\s*6\s*[ab]\b/i.test(name);
+  return kumulatifPenuh ? PROGRAM_START : SP_START_UMUM;
+}
+
+const maxTgl = (a: string, b: string) => (a > b ? a : b);
 
 /** Sesi yang ikut menentukan SP. `muallim_najih` sengaja di luar. */
 export const SP_PROGRAMS = ['kelas_maahir', 'at_tibyan'] as const;
@@ -205,34 +232,49 @@ export async function getMaahirSP(opts?: {
   // Bulan berjalan belum selesai — jangan mengklaim data s/d tanggal 27 kalau
   // hari ini masih tanggal 10.
   const today = batas < hariIni ? batas : hariIni;
-  const mulai = opts?.bulan ? periodeStartDate(opts.bulan) : PROGRAM_START;
-  // Saringan tampilan, bukan batas hitung — abaikan bila mendahului awal data
-  // atau melewati cutoff, supaya tak diam-diam mengosongkan daftar.
-  const dariTampilan =
-    opts?.dari && opts.dari > mulai && opts.dari <= today ? opts.dari : null;
+  const mulaiWindow = opts?.bulan ? periodeStartDate(opts.bulan) : PROGRAM_START;
 
   let kq = supabaseAdmin.from('program_kelas').select('id, name, gender');
   if (opts?.gender) kq = kq.eq('gender', opts.gender);
   const { data: kelasRows } = await kq;
   const kelasList = (kelasRows ?? []) as Array<{ id: string; name: string; gender: Gender }>;
+  // Batas awal per kelas: yang paling ketat antara jendela laporan dan awal
+  // akumulasi SP kelas tsb. `mulai` yang dilaporkan ke UI = yang paling awal
+  // di antaranya, supaya label "dihitung sejak …" tak mengklaim lebih luas
+  // dari data yang benar-benar ikut untuk kelas mana pun.
+  const mulaiByKelas = new Map(
+    kelasList.map((k) => [k.id, maxTgl(mulaiWindow, spMulaiKelas(k.name, k.gender))])
+  );
+  const mulai = kelasList.length
+    ? [...mulaiByKelas.values()].reduce((a, b) => (a < b ? a : b))
+    : mulaiWindow;
+  // Saringan tampilan, bukan batas hitung — abaikan bila mendahului awal data
+  // atau melewati cutoff, supaya tak diam-diam mengosongkan daftar.
+  const dariTampilan =
+    opts?.dari && opts.dari > mulai && opts.dari <= today ? opts.dari : null;
+
   if (!kelasList.length) return emptySP(today, mulai, !!opts?.bulan, dariTampilan);
   const kelasById = new Map(kelasList.map((k) => [k.id, k]));
   const kelasIds = kelasList.map((k) => k.id);
 
-  const { data: pertRows } = await supabaseAdmin
+  const { data: pertRowsRaw } = await supabaseAdmin
     .from('pertemuan_program')
     .select('id, program_kelas_id, program, tanggal')
     .in('program_kelas_id', kelasIds)
     .in('program', SP_PROGRAMS as unknown as string[])
     .gte('tanggal', mulai)
     .lte('tanggal', today);
+  // Query dibatasi `mulai` (batas terlonggar); penyaringan tepatnya per kelas.
+  const pertRows = (pertRowsRaw ?? []).filter(
+    (p) => (p.tanggal as string) >= (mulaiByKelas.get(p.program_kelas_id as string) ?? mulai)
+  );
   const pertById = new Map(
-    (pertRows ?? []).map((p) => [
+    pertRows.map((p) => [
       p.id as string,
       { kelasId: p.program_kelas_id as string, tanggal: p.tanggal as string },
     ])
   );
-  const pertIds = (pertRows ?? []).map((p) => p.id as string);
+  const pertIds = pertRows.map((p) => p.id as string);
   if (!pertIds.length) return emptySP(today, mulai, !!opts?.bulan, dariTampilan);
 
   const liburByKelas = await getLiburDatesForKelas(kelasIds, mulai, today);
@@ -305,7 +347,7 @@ export async function getMaahirSP(opts?: {
     if (!p) continue;
     if (liburByKelas.get(p.kelasId)?.has(p.tanggal)) continue; // anulir libur
     const per = periodeByAnggota.get(k.anggota_id);
-    if (per && !dalamPeriode(per, p.tanggal, mulai, today)) continue;
+    if (per && !dalamPeriode(per, p.tanggal, mulaiByKelas.get(p.kelasId) ?? mulai, today)) continue;
 
     const tambah = (m: Map<string, Tally>) => {
       let t = m.get(k.anggota_id as string);
@@ -602,8 +644,13 @@ export async function getSPDetail(anggotaId: string): Promise<SPDetail | null> {
     const p = pertById.get(k.pertemuan_id);
     if (!p) continue;
     if (liburByKelas.get(p.program_kelas_id)?.has(p.tanggal)) continue;
+    // Batas awal akumulasi SP kelas ybs — sejalan dengan getMaahirSP, kalau tidak
+    // rincian akan menampilkan pelanggaran yang tak ikut membentuk SP di daftar.
+    const kelas = kelasById.get(p.program_kelas_id);
+    const mulaiKelas = kelas ? spMulaiKelas(kelas.name, kelas.gender) : PROGRAM_START;
+    if (p.tanggal < mulaiKelas) continue;
     const per = periodeByAnggota.get(k.anggota_id);
-    if (per && !dalamPeriode(per, p.tanggal, PROGRAM_START, today)) continue;
+    if (per && !dalamPeriode(per, p.tanggal, mulaiKelas, today)) continue;
     const status: 'izin' | 'alpa' | null =
       k.status === 'izin' ? 'izin' : k.status === 'hadir' || k.status === 'terlambat' || k.status === 'sakit' ? null : 'alpa';
     if (!status) continue;
