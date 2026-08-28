@@ -66,6 +66,20 @@ async function pastikanFolder(path: string): Promise<string | null> {
 }
 
 export async function POST(req: NextRequest) {
+  try {
+    return await tangani(req);
+  } catch (e) {
+    // Tanpa akses SSH, log systemd tak terbaca — pesan galat dipulangkan ke
+    // pemanggil (endpoint ini sudah dijaga token admin, jadi bukan kebocoran).
+    console.error('[admin/haqibah] error:', e);
+    return NextResponse.json(
+      { ok: false, error: e instanceof Error ? `${e.name}: ${e.message}` : String(e) },
+      { status: 500 }
+    );
+  }
+}
+
+async function tangani(req: NextRequest) {
   if (!enabled()) return NextResponse.json({ error: 'not_found' }, { status: 404 });
   if (!tokenOk(req)) return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
 
