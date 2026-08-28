@@ -20,7 +20,7 @@ import {
   hapusFileMeta,
   ambilFile,
 } from '@/lib/haqibah';
-import { simpanBerkas, hapusBerkas } from '@/lib/haqibah-storage';
+import { simpanBerkas, hapusBerkas, adalahBerkas } from '@/lib/haqibah-storage';
 import type { BerkasTersimpan } from '@/lib/haqibah-storage';
 import type { RoleAccess } from '@/types/db';
 
@@ -173,10 +173,13 @@ export async function unggahBerkasAksi(formData: FormData): Promise<HasilAksi> {
   const folderId = bacaId(formData.get('folderId') ?? formData.get('folder_id'));
   if (folderId === undefined) return { ok: false, error: 'Folder tujuan tidak dikenali.' };
 
-  // Input file kosong tetap terkirim sebagai File tanpa nama & 0 byte — saring.
+  // Input file kosong tetap terkirim sebagai berkas tanpa nama & 0 byte — saring.
+  // `adalahBerkas` memeriksa bentuk, bukan `instanceof File`: global File tak ada
+  // di runtime Node produksi, dan pemeriksaan instanceof di sini akan membuang
+  // SEMUA berkas tanpa pesan galat.
   const berkas = formData
     .getAll('berkas')
-    .filter((v): v is File => v instanceof File && (v.size > 0 || v.name !== ''));
+    .filter((v) => adalahBerkas(v) && (v.size > 0 || v.name !== '')) as File[];
   if (berkas.length === 0) return { ok: false, error: 'Belum ada berkas yang dipilih.' };
 
   let sukses = 0;

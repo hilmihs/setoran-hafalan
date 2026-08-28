@@ -8,7 +8,7 @@ import {
   daftarFile,
   daftarFolder,
 } from '@/lib/haqibah';
-import { simpanBerkas, hapusBerkas } from '@/lib/haqibah-storage';
+import { simpanBerkas, hapusBerkas, adalahBerkas } from '@/lib/haqibah-storage';
 
 /**
  * Endpoint pengisian awal Haqibatul Mu'allim — jalur otomasi tanpa SSH.
@@ -90,7 +90,7 @@ async function tangani(req: NextRequest) {
     return NextResponse.json({ error: 'bad_form_data' }, { status: 400 });
   }
 
-  const berkas = fd.getAll('berkas').filter((v): v is File => v instanceof File && v.size > 0);
+  const berkas = fd.getAll('berkas').filter((v) => adalahBerkas(v) && v.size > 0) as File[];
   if (berkas.length === 0) {
     return NextResponse.json({ error: 'berkas_required' }, { status: 400 });
   }

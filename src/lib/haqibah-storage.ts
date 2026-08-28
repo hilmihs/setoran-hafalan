@@ -56,6 +56,22 @@ export interface BerkasTersimpan {
   namaAsli: string;
 }
 
+/**
+ * Apakah entri FormData ini sebuah berkas?
+ *
+ * JANGAN pakai `v instanceof File` — global `File` tidak ada di runtime Node
+ * yang dipakai produksi, sehingga ekspresi itu melempar
+ * `ReferenceError: File is not defined` (di route handler) atau diam-diam
+ * membuang semua berkas (di Server Action). Cukup periksa bentuknya: entri
+ * berkas selalu punya `arrayBuffer()`, `name`, dan `size`, sedangkan entri teks
+ * biasa berupa string.
+ */
+export function adalahBerkas(v: unknown): v is File {
+  if (typeof v !== 'object' || v === null) return false;
+  const c = v as { arrayBuffer?: unknown; name?: unknown; size?: unknown };
+  return typeof c.arrayBuffer === 'function' && typeof c.name === 'string' && typeof c.size === 'number';
+}
+
 /** Buang jalur folder yang kadang ikut terbawa dari input berkas di browser. */
 function namaDasar(nama: string): string {
   return nama.split(/[\\/]/).pop() ?? nama;
