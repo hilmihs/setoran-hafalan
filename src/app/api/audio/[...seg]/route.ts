@@ -24,7 +24,32 @@ const MIME: Record<string, string> = {
   webp: 'image/webp',
   heic: 'image/heic',
   pdf: 'application/pdf',
+  // Berkas Haqibatul Mu'allim: tanpa entri ini xlsx/docx terunduh sebagai
+  // octet-stream dan sebagian OS bingung membukanya.
+  xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  xls: 'application/vnd.ms-excel',
+  docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  doc: 'application/msword',
+  pptx: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+  ppt: 'application/vnd.ms-powerpoint',
+  txt: 'text/plain; charset=utf-8',
+  csv: 'text/csv; charset=utf-8',
 };
+
+/**
+ * Nama unduhan dari parameter `n` (di luar tanda tangan — hanya memengaruhi nama
+ * berkas yang tersimpan di komputer pengguna, bukan berkas mana yang tersaji).
+ * Kutip, garis miring, dan karakter kendali dibuang supaya header tak bisa
+ * disisipi.
+ */
+function dispositionOf(nama: string | null): string | null {
+  if (!nama) return null;
+  // Karakter kendali, kutip, backslash, dan garis miring dibuang; spasi serta
+  // tanda hubung dipertahankan supaya nama unduhan tetap terbaca.
+  const aman = nama.replace(/[\u0000-\u001f"\\/]/g, '').trim().slice(0, 120);
+  if (!aman) return null;
+  return `inline; filename="${aman}"; filename*=UTF-8''${encodeURIComponent(aman)}`;
+}
 
 export async function GET(req: NextRequest, ctx: { params: { seg: string[] } }) {
   const seg = (ctx.params.seg ?? []).map((s) => decodeURIComponent(s));
@@ -48,12 +73,14 @@ export async function GET(req: NextRequest, ctx: { params: { seg: string[] } }) 
     const s = await stat(target);
     const buf = await readFile(target);
     const ext = full.split('.').pop()?.toLowerCase() ?? '';
+    const disposition = dispositionOf(url.searchParams.get('n'));
     return new NextResponse(buf, {
       status: 200,
       headers: {
         'Content-Type': MIME[ext] ?? 'application/octet-stream',
         'Content-Length': String(s.size),
         'Cache-Control': 'private, max-age=3600',
+        ...(disposition ? { 'Content-Disposition': disposition } : {}),
       },
     });
   } catch {

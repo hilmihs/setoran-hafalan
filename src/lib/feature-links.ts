@@ -116,6 +116,13 @@ export const FEATURE_LINKS: FeatureLink[] = [
     match: (a) => a.role === 'koordinator_ketua_kelas',
   },
   {
+    href: '/haqibah/koordinator',
+    title: 'Kelola Haqibah',
+    navLabel: 'Kelola Haqibah',
+    description: 'Kelola folder & berkas pembantu pengajar — unggah, ubah nama, hapus',
+    match: (a) => a.role === 'koordinator_ketua_kelas',
+  },
+  {
     href: '/hits/ketua',
     title: 'Ketua Kelas HITS',
     navLabel: 'Ketua Kelas HITS',
@@ -134,6 +141,13 @@ export const FEATURE_LINKS: FeatureLink[] = [
     title: 'Evaluasi Halaqah',
     navLabel: 'Evaluasi Halaqah',
     description: 'Nilai bacaan Qur’an peserta per sesi — hitung Lahn (tajwid) & skor',
+    match: (a) => a.role === 'pengajar',
+  },
+  {
+    href: '/haqibah/pengajar',
+    title: 'Haqibatul Mu’allim',
+    navLabel: 'Haqibah',
+    description: 'Berkas pembantu pengajar — panduan ujian, tatib/SOP, modul, kurikulum',
     match: (a) => a.role === 'pengajar',
   },
   {
