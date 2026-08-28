@@ -1,6 +1,7 @@
 import 'server-only';
 import { supabaseAdmin } from './supabase-admin';
-import type { RoleAccess } from '@/types/db';
+import { findRoleRowByWa } from './role-lookup';
+import type { Gender, RoleAccess } from '@/types/db';
 
 /**
  * Muat semua akses role (aktif) untuk satu nomor WA. Sumber kebenaran sama
@@ -11,23 +12,17 @@ import type { RoleAccess } from '@/types/db';
  */
 export async function loadAccessesForWa(wa: string): Promise<RoleAccess[]> {
   if (!wa) return [];
-  const [
-    { data: peserta },
-    { data: musyrif },
-    { data: koor },
-    { data: syaikh },
-    { data: pengajar },
-    { data: ketuaKelas },
-    { data: koorKK },
-  ] = await Promise.all([
-    supabaseAdmin.from('peserta').select('id, name, gender, kelas_id, active').eq('whatsapp_number', wa).maybeSingle(),
-    supabaseAdmin.from('musyrif').select('id, name, gender, active').eq('whatsapp_number', wa).maybeSingle(),
-    supabaseAdmin.from('koordinator').select('id, name, gender, active, kehadiran_only').eq('whatsapp_number', wa).maybeSingle(),
-    supabaseAdmin.from('syaikh').select('id, name, gender, active').eq('whatsapp_number', wa).maybeSingle(),
-    supabaseAdmin.from('pengajar').select('id, name, gender, kelompok_id, is_ketua, active').eq('whatsapp_number', wa).maybeSingle(),
+  // findRoleRowByWa (bukan .maybeSingle()) supaya baris kembar tak membuat
+  // perannya lenyap diam-diam — lihat src/lib/role-lookup.ts.
+  const [peserta, musyrif, koor, syaikh, pengajar, { data: ketuaKelas }, koorKK] = await Promise.all([
+    findRoleRowByWa<{ id: string; name: string; gender: Gender; kelas_id: string; active: boolean }>('peserta', 'id, name, gender, kelas_id, active', wa),
+    findRoleRowByWa<{ id: string; name: string; gender: Gender; active: boolean }>('musyrif', 'id, name, gender, active', wa),
+    findRoleRowByWa<{ id: string; name: string; gender: Gender; active: boolean; kehadiran_only: boolean }>('koordinator', 'id, name, gender, active, kehadiran_only', wa),
+    findRoleRowByWa<{ id: string; name: string; gender: Gender; active: boolean }>('syaikh', 'id, name, gender, active', wa),
+    findRoleRowByWa<{ id: string; name: string; gender: Gender; kelompok_id: string; is_ketua: boolean; active: boolean }>('pengajar', 'id, name, gender, kelompok_id, is_ketua, active', wa),
     // ketua_kelas: WA tak unik (peran ganda) → ambil 1 baris aktif untuk identitas sesi.
     supabaseAdmin.from('ketua_kelas').select('id, name, gender, kelas_hits_id, hits_halaqah_id, active').eq('whatsapp_number', wa).eq('active', true).order('created_at', { ascending: true }).limit(1).maybeSingle(),
-    supabaseAdmin.from('koordinator_ketua_kelas').select('id, name, gender, active').eq('whatsapp_number', wa).maybeSingle(),
+    findRoleRowByWa<{ id: string; name: string; gender: Gender; active: boolean }>('koordinator_ketua_kelas', 'id, name, gender, active', wa),
   ]);
 
   const out: RoleAccess[] = [];

@@ -3,9 +3,10 @@
 import bcrypt from 'bcryptjs';
 import { redirect } from 'next/navigation';
 import { supabaseAdmin } from './supabase-admin';
+import { findRoleRowByWa } from './role-lookup';
 import { getSession } from './session';
 import { normalizeWhatsApp } from './whatsapp';
-import type { RoleAccess } from '@/types/db';
+import type { Gender, RoleAccess } from '@/types/db';
 import { ROLE_LANDING } from './roles';
 import { logLogins, logLogout } from './session-log';
 import { logAudit } from './audit';
@@ -28,40 +29,34 @@ export async function login(
     return { error: 'Nomor WA dan password wajib diisi.' };
   }
 
-  const [
-    { data: peserta },
-    { data: musyrif },
-    { data: koor },
-    { data: syaikh },
-    { data: pengajar },
-    { data: ketuaKelas },
-    { data: koorKK },
-  ] = await Promise.all([
-    supabaseAdmin
-      .from('peserta')
-      .select('id, name, gender, kelas_id, password_hash, active')
-      .eq('whatsapp_number', wa)
-      .maybeSingle(),
-    supabaseAdmin
-      .from('musyrif')
-      .select('id, name, gender, password_hash, active')
-      .eq('whatsapp_number', wa)
-      .maybeSingle(),
-    supabaseAdmin
-      .from('koordinator')
-      .select('id, name, gender, password_hash, active, kehadiran_only')
-      .eq('whatsapp_number', wa)
-      .maybeSingle(),
-    supabaseAdmin
-      .from('syaikh')
-      .select('id, name, gender, password_hash, active')
-      .eq('whatsapp_number', wa)
-      .maybeSingle(),
-    supabaseAdmin
-      .from('pengajar')
-      .select('id, name, gender, password_hash, active, kelompok_id, is_ketua')
-      .eq('whatsapp_number', wa)
-      .maybeSingle(),
+  // findRoleRowByWa (bukan .maybeSingle()) supaya baris kembar tak diam-diam
+  // menghapus peran dari hasil login — lihat src/lib/role-lookup.ts.
+  const [peserta, musyrif, koor, syaikh, pengajar, { data: ketuaKelas }, koorKK] = await Promise.all([
+    findRoleRowByWa<{ id: string; name: string; gender: Gender; kelas_id: string; password_hash: string; active: boolean }>(
+      'peserta',
+      'id, name, gender, kelas_id, password_hash, active',
+      wa
+    ),
+    findRoleRowByWa<{ id: string; name: string; gender: Gender; password_hash: string; active: boolean }>(
+      'musyrif',
+      'id, name, gender, password_hash, active',
+      wa
+    ),
+    findRoleRowByWa<{ id: string; name: string; gender: Gender; password_hash: string; active: boolean; kehadiran_only: boolean }>(
+      'koordinator',
+      'id, name, gender, password_hash, active, kehadiran_only',
+      wa
+    ),
+    findRoleRowByWa<{ id: string; name: string; gender: Gender; password_hash: string; active: boolean }>(
+      'syaikh',
+      'id, name, gender, password_hash, active',
+      wa
+    ),
+    findRoleRowByWa<{ id: string; name: string; gender: Gender; password_hash: string; active: boolean; kelompok_id: string; is_ketua: boolean }>(
+      'pengajar',
+      'id, name, gender, password_hash, active, kelompok_id, is_ketua',
+      wa
+    ),
     // ketua_kelas: whatsapp_number TIDAK unik (1 orang bisa ketua di >1 halaqah).
     // Ambil 1 baris aktif saja untuk gate login; password disinkron per-WA di Step 3.
     supabaseAdmin
@@ -72,11 +67,11 @@ export async function login(
       .order('created_at', { ascending: true })
       .limit(1)
       .maybeSingle(),
-    supabaseAdmin
-      .from('koordinator_ketua_kelas')
-      .select('id, name, gender, password_hash, active')
-      .eq('whatsapp_number', wa)
-      .maybeSingle(),
+    findRoleRowByWa<{ id: string; name: string; gender: Gender; password_hash: string; active: boolean }>(
+      'koordinator_ketua_kelas',
+      'id, name, gender, password_hash, active',
+      wa
+    ),
   ]);
 
   type Candidate = {
