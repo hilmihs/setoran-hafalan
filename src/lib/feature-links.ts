@@ -141,7 +141,7 @@ export const FEATURE_LINKS: FeatureLink[] = [
     title: 'Rekap Evaluasi Halaqah',
     navLabel: 'Rekap Evaluasi',
     description: 'Dashboard evaluasi bacaan Qur’an — rekap skor & Lahn lintas halaqah',
-    match: (a) => a.role === 'koordinator',
+    match: (a) => a.role === 'koordinator' || a.role === 'koordinator_ketua_kelas',
   },
   {
     href: '/shakwa/koordinator',

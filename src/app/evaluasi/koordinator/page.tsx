@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { requireKoordinator } from '@/lib/session';
+import { requireOneOfRoles } from '@/lib/session';
 import { supabaseAdmin } from '@/lib/supabase-admin';
 import { ALL_LAHN, AMBANG, columnsToCounts } from '@/lib/evaluasi';
 import { PrintButton } from '@/components/PrintButton';
@@ -27,8 +27,11 @@ function monthLabel(): string {
 }
 
 export default async function KoordinatorEvaluasiPage() {
-  const session = await requireKoordinator();
+  // Rekap dibuka juga untuk koordinator ketua kelas — mereka memantau halaqah
+  // yang sama; pengaturan tetap milik koordinator.
+  const session = await requireOneOfRoles(['koordinator', 'koordinator_ketua_kelas']);
   const gender = session.gender;
+  const bolehPengaturan = session.role === 'koordinator';
 
   // Halaqah binaan (per gender).
   const { data: halaqahRaw } = await supabaseAdmin
@@ -203,13 +206,15 @@ export default async function KoordinatorEvaluasiPage() {
             </div>
           </div>
           <div className="no-print" style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
-            <Link
-              href="/evaluasi/koordinator/pengaturan"
-              className="btn btn-ghost btn-sm"
-              style={{ height: 40, padding: '0 14px', textDecoration: 'none' }}
-            >
-              ⚙ Pengaturan
-            </Link>
+            {bolehPengaturan && (
+              <Link
+                href="/evaluasi/koordinator/pengaturan"
+                className="btn btn-ghost btn-sm"
+                style={{ height: 40, padding: '0 14px', textDecoration: 'none' }}
+              >
+                ⚙ Pengaturan
+              </Link>
+            )}
             <PrintButton label="Unduh rekap PDF" />
           </div>
         </div>
