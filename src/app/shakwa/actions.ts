@@ -12,10 +12,13 @@ import {
   nomorTiket,
   HALAQAH_OPTIONS,
   tujuanWa,
+  tujuanDigilir,
+  kategoriSetujuan,
   IZIN_JENIS,
   IZIN_JENIS_LABEL,
   MAX_LAMPIRAN,
   type ShakwaIzinJenis,
+  type ShakwaTujuan,
 } from '@/lib/shakwa';
 import { uploadLampiran, validasiLampiran } from '@/lib/shakwa-storage';
 import { backfillTabayyunDariIzin, type IzinCocok } from '@/lib/shakwa-izin';
@@ -118,6 +121,27 @@ async function simpanDenganTiket(
     }
   }
   return { error: 'Gagal membuat nomor tiket. Coba lagi sebentar lagi.' };
+}
+
+/**
+ * Nomor giliran untuk tujuan yang dipegang beberapa koordinator: jumlah laporan
+ * sejenis (kategori yang berbagi tujuan itu, gender sama) yang sudah tersimpan.
+ * Baris yang baru saja disimpan ikut terhitung, jadi laporan pertama → indeks 1.
+ * Tujuan berpemegang tunggal tak perlu query sama sekali.
+ */
+async function urutanGiliran(tujuan: ShakwaTujuan, gender: Gender): Promise<number> {
+  if (!tujuanDigilir(tujuan, gender)) return 0;
+  const { count, error } = await supabaseAdmin
+    .from('shakwa')
+    .select('id', { count: 'exact', head: true })
+    .eq('gender', gender)
+    .in('kategori', kategoriSetujuan(tujuan));
+  // Gagal hitung bukan alasan menggagalkan kiriman — jatuh ke pemegang pertama.
+  if (error) {
+    console.error('shakwa: gagal hitung giliran tujuan', error);
+    return 0;
+  }
+  return count ?? 0;
 }
 
 export async function kirimShakwa(
@@ -278,7 +302,8 @@ export async function kirimShakwa(
     });
   }
 
-  const tujuan = def.waTujuan ? tujuanWa(def.waTujuan, gender as Gender) : null;
+  const giliran = def.waTujuan ? await urutanGiliran(def.waTujuan, gender as Gender) : 0;
+  const tujuan = def.waTujuan ? tujuanWa(def.waTujuan, gender as Gender, giliran) : null;
   const waUrl = tujuan
     ? buildWaMeUrl(
         tujuan.nomor,

@@ -31,7 +31,7 @@ export const STATUS_PILIHAN: ShakwaStatus[] = ['submitted', 'in_review', 'resolv
 export type ShakwaPelaporType = 'peserta' | 'pengajar';
 
 /** Kunci tujuan WA; nomornya di TUJUAN_WA (bisa ditimpa ENV). */
-export type ShakwaTujuan = 'koordinator_pengajar' | 'koordinator_peserta' | 'tali_kasih';
+export type ShakwaTujuan = 'koordinator_pengajar' | 'koordinator_peserta' | 'koordinator_kk';
 
 export type ShakwaFieldPilihan = {
   name: string;
@@ -66,7 +66,7 @@ export const KATEGORI: ShakwaKategoriDef[] = [
     labelIsi: 'Silakan tuliskan evaluasinya',
     butuhLogin: false,
     pakaiLampiran: false,
-    waTujuan: null,
+    waTujuan: 'koordinator_kk',
     fieldTambahan: [],
   },
   {
@@ -100,7 +100,7 @@ export const KATEGORI: ShakwaKategoriDef[] = [
     labelIsi: 'Ceritakan momennya',
     butuhLogin: false,
     pakaiLampiran: true,
-    waTujuan: null,
+    waTujuan: 'koordinator_kk',
     fieldTambahan: [],
   },
   {
@@ -112,7 +112,7 @@ export const KATEGORI: ShakwaKategoriDef[] = [
     labelIsi: 'Saran / koreksi modul & kurikulum',
     butuhLogin: false,
     pakaiLampiran: true,
-    waTujuan: null,
+    waTujuan: 'koordinator_pengajar',
     fieldTambahan: [],
   },
   {
@@ -153,7 +153,7 @@ export const KATEGORI: ShakwaKategoriDef[] = [
     labelIsi: 'Kondisi tali kasih',
     butuhLogin: true,
     pakaiLampiran: true,
-    waTujuan: 'tali_kasih',
+    waTujuan: 'koordinator_kk',
     fieldTambahan: [
       {
         name: 'sudah_presensi',
@@ -232,46 +232,88 @@ export const IZIN_JENIS_LABEL: Record<ShakwaIzinJenis, string> = Object.fromEntr
 export type TujuanWaEntry = { nama: string; nomor: string };
 
 /**
+ * Satu slot tujuan. Bila diisi lebih dari satu orang, laporan dibagi bergiliran
+ * (round-robin) di antara mereka — lihat `tujuanWa`.
+ */
+export type TujuanWaSlot = TujuanWaEntry[];
+
+/**
  * Nomor tujuan WA per kategori × gender. Semua tujuan dipisah ikhwan/akhwat
  * supaya laporan diarahkan ke koordinator sesuai gender pelapor.
  * ENV disediakan untuk ganti cepat tanpa deploy saat pemegang nomor berganti.
  */
-export const TUJUAN_WA: Record<ShakwaTujuan, Record<Gender, TujuanWaEntry>> = {
+export const TUJUAN_WA: Record<ShakwaTujuan, Record<Gender, TujuanWaSlot>> = {
+  // Kategori: Pengajar, Modul & Kurikulum, Izin.
   koordinator_pengajar: {
-    ikhwan: {
-      nama: process.env.SHAKWA_NAMA_KOORDINATOR_PENGAJAR_IKHWAN || 'Faisal Fajar',
-      nomor: process.env.SHAKWA_WA_KOORDINATOR_PENGAJAR_IKHWAN || '085271760094',
-    },
-    akhwat: {
-      nama: process.env.SHAKWA_NAMA_KOORDINATOR_PENGAJAR_AKHWAT || 'Umi Hidayati',
-      nomor: process.env.SHAKWA_WA_KOORDINATOR_PENGAJAR_AKHWAT || '081280683665',
-    },
+    ikhwan: [
+      {
+        nama: process.env.SHAKWA_NAMA_KOORDINATOR_PENGAJAR_IKHWAN || 'Ustadz Muhammad Sofyan',
+        nomor: process.env.SHAKWA_WA_KOORDINATOR_PENGAJAR_IKHWAN || '082199266821',
+      },
+    ],
+    akhwat: [
+      {
+        nama: process.env.SHAKWA_NAMA_KOORDINATOR_PENGAJAR_AKHWAT || 'Ustadzah Umi Hidayati',
+        nomor: process.env.SHAKWA_WA_KOORDINATOR_PENGAJAR_AKHWAT || '081280683665',
+      },
+    ],
   },
+  // Kategori: Peserta, Ketidaksesuaian Halaqah dengan Aplikasi.
+  // Sisi ikhwan dipegang berdua dan digilir per laporan masuk.
   koordinator_peserta: {
-    ikhwan: {
-      nama: process.env.SHAKWA_NAMA_KOORDINATOR_PESERTA_IKHWAN || 'Adam Malik',
-      nomor: process.env.SHAKWA_WA_KOORDINATOR_PESERTA_IKHWAN || '081280630437',
-    },
-    akhwat: {
-      nama: process.env.SHAKWA_NAMA_KOORDINATOR_PESERTA_AKHWAT || 'Talida Jihan Nabila',
-      nomor: process.env.SHAKWA_WA_KOORDINATOR_PESERTA_AKHWAT || '081994771197',
-    },
+    ikhwan: [
+      {
+        nama: process.env.SHAKWA_NAMA_KOORDINATOR_PESERTA_IKHWAN || 'Ustadz Adam Malik',
+        nomor: process.env.SHAKWA_WA_KOORDINATOR_PESERTA_IKHWAN || '081280630437',
+      },
+      {
+        nama: process.env.SHAKWA_NAMA_KOORDINATOR_PESERTA_IKHWAN_2 || 'Ustadz Muhammad Bintang Khairel',
+        nomor: process.env.SHAKWA_WA_KOORDINATOR_PESERTA_IKHWAN_2 || '081275958605',
+      },
+    ],
+    akhwat: [
+      {
+        nama: process.env.SHAKWA_NAMA_KOORDINATOR_PESERTA_AKHWAT || 'Ustadzah Talida Jihan Nabila',
+        nomor: process.env.SHAKWA_WA_KOORDINATOR_PESERTA_AKHWAT || '081994771197',
+      },
+    ],
   },
-  tali_kasih: {
-    ikhwan: {
-      nama: process.env.SHAKWA_NAMA_TALI_KASIH_IKHWAN || 'Ustadz Ahmad Syukri',
-      nomor: process.env.SHAKWA_WA_TALI_KASIH_IKHWAN || '087748055645',
-    },
-    akhwat: {
-      nama: process.env.SHAKWA_NAMA_TALI_KASIH_AKHWAT || 'Layla',
-      nomor: process.env.SHAKWA_WA_TALI_KASIH_AKHWAT || '089673092288',
-    },
+  // Koordinator ketua kelas. Kategori: Evaluasi, Cerita Menarik, Tali Kasih.
+  koordinator_kk: {
+    ikhwan: [
+      {
+        nama: process.env.SHAKWA_NAMA_KOORDINATOR_KK_IKHWAN || 'Ustadz Ahmad Syukri',
+        nomor: process.env.SHAKWA_WA_KOORDINATOR_KK_IKHWAN || '087748055645',
+      },
+    ],
+    akhwat: [
+      {
+        nama: process.env.SHAKWA_NAMA_KOORDINATOR_KK_AKHWAT || 'Ustadzah Nur Layla',
+        nomor: process.env.SHAKWA_WA_KOORDINATOR_KK_AKHWAT || '089673092288',
+      },
+    ],
   },
 };
 
-/** Nomor & nama koordinator tujuan sesuai gender pelapor. */
-export function tujuanWa(tujuan: ShakwaTujuan, gender: Gender): TujuanWaEntry {
-  return TUJUAN_WA[tujuan][gender];
+/**
+ * Nomor & nama koordinator tujuan sesuai gender pelapor. Bila slotnya dipegang
+ * beberapa orang, `urutan` (jumlah laporan sejenis yang sudah masuk) memutar
+ * giliran supaya bebannya terbagi rata.
+ */
+export function tujuanWa(tujuan: ShakwaTujuan, gender: Gender, urutan = 0): TujuanWaEntry {
+  const slot = TUJUAN_WA[tujuan][gender];
+  const idx = ((urutan % slot.length) + slot.length) % slot.length;
+  return slot[idx];
+}
+
+/** Apakah slot tujuan ini digilir beberapa orang — penanda perlu hitung urutan. */
+export function tujuanDigilir(tujuan: ShakwaTujuan, gender: Gender): boolean {
+  return TUJUAN_WA[tujuan][gender].length > 1;
+}
+
+/** Kategori lain yang berbagi tujuan yang sama — dasar penghitung giliran. */
+export function kategoriSetujuan(tujuan: ShakwaTujuan): ShakwaKategori[] {
+  return KATEGORI.filter((k) => k.waTujuan === tujuan).map((k) => k.value);
 }
 
 /** Teks panduan kategori di kepala formulir — sama dengan formulir asal. */
