@@ -240,7 +240,9 @@ html, body {
 }
 
 /* ========== Page padding ========== */
-.page { padding: 0 20px 28px; }
+/* Bottom padding besar: sisakan ruang untuk FAB Beranda (kiri-bawah) dan
+   Laporkan Error (kanan-bawah) supaya tidak menutupi baris terakhir. */
+.page { padding: 0 20px 84px; }
 
 .section-row {
   display: flex; align-items: baseline; justify-content: space-between;
@@ -773,7 +775,7 @@ dialog[open] {
   .stat-grid-3 { grid-template-columns: repeat(3, 1fr); gap: 8px; }
   .stat { padding: 12px; }
   .stat .v { font-size: 22px; }
-  .page { padding: 0 14px 24px; }
+  .page { padding: 0 14px 84px; }
   .topbar { padding: 12px 14px 8px; }
   .section-row { margin: 14px 2px 8px; }
   .k-table { font-size: 12px; }
@@ -990,6 +992,9 @@ dialog[open] {
 
   /* Kontrol layar tak ada gunanya di kertas. */
   .no-print, .topbar, .btn, nav, .chip-select { display: none !important; }
+
+  /* Ruang FAB tak perlu di kertas. */
+  .page { padding-bottom: 0 !important; }
 
   .cetak { max-width: none !important; margin: 0 !important; padding: 0 !important; }
 

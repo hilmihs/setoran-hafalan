@@ -4,6 +4,7 @@ import './globals.css';
 import { getActiveSession } from '@/lib/session';
 import { ReportErrorButton } from '@/components/ReportErrorButton';
 import { ImpersonationBanner } from '@/components/ImpersonationBanner';
+import { HomeFab } from '@/components/HomeFab';
 import { supabaseAdmin } from '@/lib/supabase-admin';
 import type { RoleAccess } from '@/types/db';
 
@@ -102,6 +103,7 @@ export default async function RootLayout({
         style={{ fontFamily: 'var(--font-sans), system-ui, sans-serif', margin: 0 }}
       >
         {children}
+        <HomeFab />
         <ImpersonationBanner />
         <ReportErrorButton user={user} />
       </body>
