@@ -11,6 +11,7 @@ import { PindahHalaqahPanel } from './PindahHalaqahPanel';
 import { UbahLevelPanel } from './UbahLevelPanel';
 import { TabayyunAlasanPanel, type TabayyunForPengajar } from './TabayyunAlasanForm';
 import { getHitsBatches } from '@/lib/hits-rekap';
+import { computeHutangForHalaqahList } from '@/lib/hits-hutang';
 
 export const dynamic = 'force-dynamic';
 
@@ -62,10 +63,11 @@ export default async function HitsPengajarPage() {
     // Tabayyun menunggu alasan/klarifikasi pengajar.
     const { data: tabRows } = await supabaseAdmin
       .from('hits_tabayyun')
-      .select('id, halaqah_id, kondisi, status, alasan_pengajar, hits_keterangan_harian:keterangan_id(tanggal, pertemuan_no)')
+      .select('id, halaqah_id, kondisi, status, alasan_pengajar, bayar_menit_klaim, bayar_catatan, izin_selisih_menit, hits_keterangan_harian:keterangan_id(tanggal, pertemuan_no)')
       .in('halaqah_id', halaqahIds)
       .in('status', ['pending', 'awaiting_reason'])
       .order('created_at', { ascending: false });
+    const hutangByHal = await computeHutangForHalaqahList(halaqahIds);
     tabayyunItems = (tabRows ?? []).map((t) => {
       const ket = t.hits_keterangan_harian as unknown as { tanggal: string; pertemuan_no: number } | null;
       return {
@@ -76,6 +78,10 @@ export default async function HitsPengajarPage() {
         pertemuan_no: ket?.pertemuan_no ?? 0,
         status: t.status,
         alasan_pengajar: t.alasan_pengajar,
+        saldo_hutang: hutangByHal.get(t.halaqah_id)?.saldo ?? 0,
+        bayar_menit_klaim: (t.bayar_menit_klaim as number | null) ?? null,
+        bayar_catatan: (t.bayar_catatan as string | null) ?? null,
+        izin_selisih_menit: (t.izin_selisih_menit as number | null) ?? 0,
       };
     });
 

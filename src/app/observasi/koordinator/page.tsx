@@ -78,6 +78,7 @@ export default async function KoordinatorKetuaKelasPage({
     .from('hits_tabayyun')
     .select(
       `id, kondisi, status, alasan_pengajar, deadline_at, reminder_sent_at, pengajar_id,
+       keterangan_id, bayar_menit_klaim, bayar_catatan, bayar_menit_disetujui, izin_selisih_menit,
        pengajar:pengajar_id(name),
        halaqah:halaqah_id(name, gender),
        keterangan:keterangan_id(tanggal)`
@@ -93,10 +94,34 @@ export default async function KoordinatorKetuaKelasPage({
     deadline_at: string;
     reminder_sent_at: string | null;
     pengajar_id: string | null;
+    keterangan_id: string | null;
+    bayar_menit_klaim: number | null;
+    bayar_catatan: string | null;
+    bayar_menit_disetujui: number | null;
+    izin_selisih_menit: number | null;
     pengajar: { name: string } | null;
     halaqah: { name: string; gender: string } | null;
     keterangan: { tanggal: string } | null;
   };
+
+  // Kredit yang sudah tercatat dari laporan ketua kelas untuk pertemuan yang
+  // sama — ditampilkan agar koordinator tidak menyetujui angka yang dobel.
+  const ketIdsTab = ((tabRaw ?? []) as unknown as TabRow[])
+    .map((t) => t.keterangan_id)
+    .filter((v): v is string => !!v);
+  const bayarKetuaByKet = new Map<string, number>();
+  if (ketIdsTab.length > 0) {
+    const { data: bayarRows } = await supabaseAdmin
+      .from('hits_hutang_bayar')
+      .select('keterangan_id, menit, sumber')
+      .in('keterangan_id', ketIdsTab);
+    for (const b of bayarRows ?? []) {
+      if ((b.sumber as string) !== 'ketua') continue;
+      const k = b.keterangan_id as string;
+      bayarKetuaByKet.set(k, (bayarKetuaByKet.get(k) ?? 0) + (b.menit as number));
+    }
+  }
+
   const tabayyunItems = ((tabRaw ?? []) as unknown as TabRow[])
     .filter((t) => t.halaqah?.gender === viewGender)
     .map((t) => ({
@@ -110,6 +135,11 @@ export default async function KoordinatorKetuaKelasPage({
       status: t.status,
       deadline_at: t.deadline_at,
       reminder_sent_at: t.reminder_sent_at,
+      bayar_menit_klaim: t.bayar_menit_klaim,
+      bayar_catatan: t.bayar_catatan,
+      bayar_menit_disetujui: t.bayar_menit_disetujui,
+      izin_selisih_menit: t.izin_selisih_menit ?? 0,
+      bayar_menit_ketua: t.keterangan_id ? (bayarKetuaByKet.get(t.keterangan_id) ?? 0) : 0,
     }))
     .filter((t) => !q || t.pengajar_name.toLowerCase().includes(q) || t.kelas_name.toLowerCase().includes(q));
 

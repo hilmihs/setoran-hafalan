@@ -14,7 +14,8 @@ import { logAudit } from '@/lib/audit';
 import { logWaReminder } from '@/lib/wa-log';
 import { getHitsHarian, OBSERVASI_EFEKTIF } from '@/lib/hits-harian';
 import { computeHutangForHalaqah } from '@/lib/hits-hutang';
-import { tabayyunGhostingState, deadlineFromReminder } from '@/lib/hits-tabayyun';
+import { tabayyunGhostingState, deadlineFromReminder, capBayarDisetujui } from '@/lib/hits-tabayyun';
+import { generateTabayyunToken } from '@/lib/hits-tabayyun-token';
 import { HITS_PELANGGARAN_LABEL, HITS_JKG_OPSI_LABEL } from '@/types/db';
 import type { HitsPelanggaranJenis } from '@/types/db';
 
@@ -119,10 +120,10 @@ export async function decideTabayyun(
 
   if (!tabayyunId) return { error: 'ID tabayyun tidak ditemukan.' };
 
-  // Konteks utk auto-teguran (kondisi, pengajar, tanggal).
+  // Konteks utk auto-teguran (kondisi, pengajar, tanggal) + kredit hutang.
   const { data: tab } = await supabaseAdmin
     .from('hits_tabayyun')
-    .select('id, kondisi, pengajar_id, halaqah:halaqah_id(pengajar_id), keterangan:keterangan_id(tanggal)')
+    .select('id, kondisi, pengajar_id, halaqah_id, keterangan_id, bayar_menit_klaim, halaqah:halaqah_id(pengajar_id), keterangan:keterangan_id(tanggal)')
     .eq('id', tabayyunId)
     .maybeSingle();
 
@@ -138,6 +139,47 @@ export async function decideTabayyun(
     .eq('id', tabayyunId);
 
   if (error) return { error: `Gagal simpan: ${error.message}` };
+
+  // Kredit hutang hasil persetujuan. Replace-all agar keputusan bisa diubah
+  // tanpa menumpuk kredit; hanya menyapu baris sumber='tabayyun' milik sendiri.
+  const disetujuiRaw = Number(formData.get('bayar_menit_disetujui') ?? 0);
+  if (tab?.keterangan_id) {
+    await supabaseAdmin
+      .from('hits_hutang_bayar')
+      .delete()
+      .eq('keterangan_id', tab.keterangan_id as string)
+      .eq('sumber', 'tabayyun');
+
+    const { saldo } = await computeHutangForHalaqah(tab.halaqah_id as string);
+    const menit = capBayarDisetujui(disetujuiRaw, saldo);
+    if (menit > 0) {
+      const ketTab = tab.keterangan as unknown as { tanggal: string } | null;
+      const halTab = tab.halaqah as unknown as { pengajar_id: string | null } | null;
+      const { error: bayarErr } = await supabaseAdmin.from('hits_hutang_bayar').insert({
+        halaqah_id: tab.halaqah_id as string,
+        pengajar_id: (tab.pengajar_id as string | null) ?? halTab?.pengajar_id ?? null,
+        keterangan_id: tab.keterangan_id as string,
+        menit,
+        tanggal: ketTab?.tanggal ?? new Date().toISOString().slice(0, 10),
+        dilaporkan_oleh: `koordinator_kk:${session.koordinator_kk_id}`,
+        sumber: 'tabayyun',
+      });
+      if (bayarErr) return { error: `Gagal menyimpan pembayaran: ${bayarErr.message}` };
+    }
+
+    await supabaseAdmin
+      .from('hits_tabayyun')
+      .update({ bayar_menit_disetujui: menit })
+      .eq('id', tabayyunId);
+
+    await logAudit({
+      actor: session,
+      action: 'hits.tabayyun.bayar',
+      targetTable: 'hits_hutang_bayar',
+      targetId: tabayyunId,
+      detail: { klaim: tab.bayar_menit_klaim ?? null, disetujui: menit, saldo_sebelum: saldo },
+    });
+  }
 
   // Bukan udzur syar'i → terbitkan teguran (feed komitmen_jadwal matrix + risk).
   if (!isUdzur && tab) {
@@ -205,7 +247,7 @@ export async function reminderTabayyunPengajar(
 
   const { data: tab } = await supabaseAdmin
     .from('hits_tabayyun')
-    .select('id, keterangan_id, pengajar_id, halaqah_id, status, reminder_sent_at, deadline_at, halaqah:halaqah_id(name), keterangan:keterangan_id(tanggal)')
+    .select('id, keterangan_id, pengajar_id, halaqah_id, status, reminder_sent_at, deadline_at, akses_token, halaqah:halaqah_id(name), keterangan:keterangan_id(tanggal)')
     .eq('id', tabayyunId)
     .maybeSingle();
   if (!tab) return { error: 'Tabayyun tidak ditemukan.' };
@@ -222,10 +264,21 @@ export async function reminderTabayyunPengajar(
     return { error: 'Tabayyun ini sudah direspons/diputuskan — reminder tidak berlaku.' };
   }
   // Reminder pertama → mulai jam 72h. Reminder ulang dalam window → jam TAK di-reset.
+  // Token digenerate sekali lalu dipakai selamanya (sampai status decided).
+  let token = (tab.akses_token as string | null) ?? null;
+  const patch: Record<string, string> = {};
   if (!tab.reminder_sent_at) {
+    patch.reminder_sent_at = nowIso;
+    patch.deadline_at = deadlineFromReminder(nowIso);
+  }
+  if (!token) {
+    token = generateTabayyunToken();
+    patch.akses_token = token;
+  }
+  if (Object.keys(patch).length > 0) {
     const { error: clockErr } = await supabaseAdmin
       .from('hits_tabayyun')
-      .update({ reminder_sent_at: nowIso, deadline_at: deadlineFromReminder(nowIso) })
+      .update(patch)
       .eq('id', tab.id);
     if (clockErr) return { error: `Gagal mulai jam tabayyun: ${clockErr.message}` };
   }
@@ -257,7 +310,7 @@ export async function reminderTabayyunPengajar(
     pengajarGender: pengajar.gender,
     tanggal: ket?.tanggal ?? '',
     kelasName: hal?.name ?? '(kelas)',
-    formUrl: absUrl('/hits/pengajar'),
+    formUrl: absUrl(`/tabayyun/${token}`),
     pelanggaran,
     hutangSaldo: hutang.saldo,
   });

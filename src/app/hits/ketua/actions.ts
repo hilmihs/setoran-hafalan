@@ -10,7 +10,7 @@ import { statusOnCheckin, KAJIAN_GHOSTING_DAYS } from '@/lib/hits-kajian';
 import { logAudit } from '@/lib/audit';
 import { absUrl } from '@/lib/url';
 import { buildWaMeUrl, tplHapusPertemuanToKoorKK } from '@/lib/whatsapp';
-import { cariIzinCocok, alasanDariIzin, tandaiIzinTerpakai } from '@/lib/shakwa-izin';
+import { cariIzinCocok, alasanDariIzin, tandaiIzinTerpakai, kebutuhanTabayyunIzin } from '@/lib/shakwa-izin';
 import { HITS_LEVEL_SHORT } from '@/lib/hits-pertemuan';
 import type { HitsKondisi, HitsStatusLatihan, HitsLevel, HitsPelanggaranJenis } from '@/types/db';
 
@@ -287,7 +287,13 @@ export async function submitKeteranganHarian(
 
   // Pembayaran hutang menit (F2): replace-all per keterangan (idempoten saat edit).
   // Cap ke saldo terkini agar tak overpay (saldo dihitung setelah credit lama ket ini dihapus).
-  await supabaseAdmin.from('hits_hutang_bayar').delete().eq('keterangan_id', saved.id);
+  // Hanya sapu kredit yang dilaporkan ketua. Kredit sumber='tabayyun' (disetujui
+  // koordinator) TIDAK boleh ikut terhapus saat ketua mengedit pertemuan ini.
+  await supabaseAdmin
+    .from('hits_hutang_bayar')
+    .delete()
+    .eq('keterangan_id', saved.id)
+    .eq('sumber', 'ketua');
   if (bayarMenit > 0) {
     const { saldo } = await computeHutangForHalaqah(halaqahId);
     const menit = Math.min(bayarMenit, saldo);
@@ -304,6 +310,7 @@ export async function submitKeteranganHarian(
         menit,
         tanggal: match.tanggal,
         dilaporkan_oleh: session.ketua_kelas_id,
+        sumber: 'ketua',
       });
       if (bayarErr) return { error: `Gagal menyimpan pembayaran: ${bayarErr.message}` };
     }
@@ -328,15 +335,36 @@ export async function submitKeteranganHarian(
       .eq('keterangan_id', saved.id)
       .maybeSingle();
     if (!existing) {
-      // Pengajar sudah lapor izin lewat Shakwa untuk tanggal ini? Pakai alasannya
-      // langsung supaya ia tak ditagih klarifikasi dua kali; status 'awaiting_reason'
-      // di basis kode ini berarti alasan sudah masuk, tinggal diputus koordinator.
+      // Pengajar sudah lapor izin lewat Shakwa untuk tanggal ini? Alasannya dipakai
+      // sebagai konteks — tapi izin TIDAK menutup tabayyun sendirian: bila menitnya
+      // tak menutupi observasi, atau masih ada saldo hutang, status tetap 'pending'
+      // supaya pengajar tetap ditanya lewat tautan tabayyun.
       const izin = await cariIzinCocok({
         pengajarId: halaqah?.pengajar_id,
         halaqahId,
         tanggal: match.tanggal,
         jenisList,
       });
+
+      let statusBaru: 'pending' | 'awaiting_reason' = 'pending';
+      let selisihIzin: number | null = null;
+      if (izin) {
+        // Menit observasi untuk jenis yang dicocokkan izin. 0 → null (tak ada
+        // menit yang bisa dibandingkan, mis. izin TIDAK_HADIR atau jenis JKG).
+        const menitObservasi =
+          pelRows
+            .filter((p) => p.jenis === izin.jenis)
+            .reduce((s, p) => s + (p.menit ?? 0), 0) || null;
+        const { saldo: saldoKini } = await computeHutangForHalaqah(halaqahId);
+        const kebutuhan = kebutuhanTabayyunIzin({
+          menitIzin: izin.menit,
+          menitObservasi,
+          saldoHutang: saldoKini,
+        });
+        statusBaru = kebutuhan.status;
+        selisihIzin = kebutuhan.selisihMenit;
+      }
+
       const { data: tabBaru } = await supabaseAdmin
         .from('hits_tabayyun')
         .insert({
@@ -344,9 +372,10 @@ export async function submitKeteranganHarian(
           halaqah_id: halaqahId,
           pengajar_id: halaqah?.pengajar_id ?? null,
           kondisi: head,
-          status: izin ? 'awaiting_reason' : 'pending',
+          status: statusBaru,
           alasan_pengajar: izin ? alasanDariIzin(izin) : null,
           alasan_submitted_at: izin ? izin.dikirimAt : null,
+          izin_selisih_menit: selisihIzin,
         })
         .select('id')
         .single();

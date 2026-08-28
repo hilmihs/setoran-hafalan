@@ -1,8 +1,8 @@
 'use client';
 
-import { useState, useTransition } from 'react';
 import { submitAlasanTabayyun } from './actions';
 import { hitsHeadlineLabel } from '@/types/db';
+import { TabayyunKlarifikasiForm } from '@/components/TabayyunKlarifikasiForm';
 
 export type TabayyunForPengajar = {
   id: string;
@@ -12,20 +12,17 @@ export type TabayyunForPengajar = {
   pertemuan_no: number;
   status: string;
   alasan_pengajar: string | null;
+  saldo_hutang: number;
+  bayar_menit_klaim: number | null;
+  bayar_catatan: string | null;
+  izin_selisih_menit: number;
 };
 
 function OneTabayyun({ t }: { t: TabayyunForPengajar }) {
-  const [pending, startTransition] = useTransition();
-  const [error, setError] = useState<string | null>(null);
-  const [done, setDone] = useState(t.status === 'awaiting_reason' || t.status === 'decided');
+  const sudahKirim = t.status === 'awaiting_reason' || t.status === 'decided';
 
-  function handleSubmit(fd: FormData) {
-    setError(null);
-    startTransition(async () => {
-      const res = await submitAlasanTabayyun(undefined, fd);
-      if (res?.error) { setError(res.error); return; }
-      if (res?.ok) setDone(true);
-    });
+  async function handleSubmit(fd: FormData) {
+    return submitAlasanTabayyun(undefined, fd);
   }
 
   return (
@@ -39,27 +36,27 @@ function OneTabayyun({ t }: { t: TabayyunForPengajar }) {
       <div className="t-small" style={{ color: 'var(--muted-2)', marginBottom: 8 }}>
         Pertemuan {t.pertemuan_no} · {t.tanggal} · {hitsHeadlineLabel(t.kondisi)}
       </div>
-      {done ? (
+      {t.status === 'decided' ? (
         <div className="t-small" style={{ color: 'var(--hijau-ink)' }}>
-          ✓ Alasan terkirim{t.status === 'decided' ? ' · sudah diputuskan koordinator' : ' · menunggu keputusan koordinator'}.
+          ✓ Sudah diputuskan koordinator.
         </div>
       ) : (
-        <form action={handleSubmit}>
-          <input type="hidden" name="tabayyun_id" value={t.id} />
-          <textarea
-            name="alasan_pengajar"
-            required
-            rows={2}
-            placeholder="Tulis alasan/klarifikasi…"
-            defaultValue={t.alasan_pengajar ?? ''}
-            className="input"
-            style={{ width: '100%', marginBottom: 8 }}
+        <>
+          {sudahKirim && (
+            <div className="t-small" style={{ color: 'var(--hijau-ink)', marginBottom: 8 }}>
+              ✓ Klarifikasi sudah terkirim · masih bisa direvisi selama belum diputuskan.
+            </div>
+          )}
+          <TabayyunKlarifikasiForm
+            tabayyunId={t.id}
+            saldoHutang={t.saldo_hutang}
+            alasanAwal={t.alasan_pengajar}
+            menitAwal={t.bayar_menit_klaim}
+            catatanAwal={t.bayar_catatan}
+            selisihIzinMenit={t.izin_selisih_menit}
+            onSubmit={handleSubmit}
           />
-          {error && <div className="t-small" style={{ color: 'var(--merah-ink)', marginBottom: 6 }}>{error}</div>}
-          <button type="submit" className="btn" disabled={pending}>
-            {pending ? 'Mengirim…' : 'Kirim Alasan'}
-          </button>
-        </form>
+        </>
       )}
     </div>
   );

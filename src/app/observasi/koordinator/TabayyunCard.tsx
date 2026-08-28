@@ -17,6 +17,13 @@ interface Props {
     status: string;
     deadline_at: string;
     reminder_sent_at: string | null;
+    bayar_menit_klaim: number | null;
+    bayar_catatan: string | null;
+    bayar_menit_disetujui: number | null;
+    /** Menit observasi − menit yang dilaporkan lewat izin pra-kelas. */
+    izin_selisih_menit: number;
+    /** Kredit untuk pertemuan ini yang sudah dilaporkan ketua kelas. */
+    bayar_menit_ketua: number;
   };
 }
 
@@ -137,6 +144,55 @@ export function TabayyunCard({ tabayyun: t }: Props) {
 
       <form action={handleDecide}>
         <input type="hidden" name="tabayyun_id" value={t.id} />
+        {t.izin_selisih_menit > 0 && (
+          <div
+            className="t-small"
+            style={{
+              marginBottom: 8,
+              padding: '8px 10px',
+              background: 'var(--kuning-tint)',
+              border: '1px solid var(--kuning-line)',
+              borderRadius: 6,
+              color: 'var(--kuning-ink)',
+              fontWeight: 600,
+            }}
+          >
+            Izin pra-kelas tidak menutupi seluruh catatan observasi — selisih {t.izin_selisih_menit} menit.
+          </div>
+        )}
+
+        {t.bayar_menit_klaim != null && (
+          <div
+            className="t-small"
+            style={{ marginBottom: 8, padding: '8px 10px', background: 'var(--surface-2)', borderRadius: 6 }}
+          >
+            <div>
+              <strong>Klaim pengajar:</strong> menunaikan {t.bayar_menit_klaim} menit di pertemuan ini.
+            </div>
+            {t.bayar_catatan && <div style={{ color: 'var(--muted-2)' }}>Catatan: {t.bayar_catatan}</div>}
+            {t.bayar_menit_ketua > 0 && (
+              <div style={{ color: 'var(--kuning-ink)', fontWeight: 600, marginTop: 4 }}>
+                ⚠ Ketua kelas sudah melaporkan {t.bayar_menit_ketua} menit untuk pertemuan ini — jangan dihitung dua kali.
+              </div>
+            )}
+          </div>
+        )}
+
+        {t.bayar_menit_klaim != null && (
+          <label className="t-small" style={{ display: 'block', marginBottom: 8 }}>
+            <span style={{ fontWeight: 600 }}>Menit disetujui</span>
+            <input
+              name="bayar_menit_disetujui"
+              type="number"
+              min={0}
+              step={1}
+              defaultValue={t.bayar_menit_disetujui ?? t.bayar_menit_klaim ?? 0}
+              className="input"
+              style={{ height: 36, fontSize: 13, marginTop: 4 }}
+            />
+          </label>
+        )}
+
         <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
           <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}>
             <input type="radio" name="is_udzur_syari" value="true" required />

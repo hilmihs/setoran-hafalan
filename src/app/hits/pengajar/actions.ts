@@ -8,6 +8,8 @@ import { getSessionWa } from '@/lib/program-kelas';
 import { buildWaMeUrl, normalizeWhatsApp, tplKetuaKelasTerpilih, tplPindahHalaqahToTarget, tplKetuaDualRoleApproval, tplKlaimHalaqahApproval } from '@/lib/whatsapp';
 import { absUrl } from '@/lib/url';
 import { logAudit } from '@/lib/audit';
+import { computeHutangForHalaqah } from '@/lib/hits-hutang';
+import { validateKlaimMenit } from '@/lib/hits-tabayyun';
 import type { PengajarSession } from '@/types/db';
 
 const BCRYPT_COST = 12;
@@ -36,11 +38,18 @@ export async function submitAlasanTabayyun(_prev: Res | undefined, fd: FormData)
   if (!owned) return { error: 'Tabayyun ini bukan untuk halaqah Anda.' };
   if (tab.status === 'decided') return { error: 'Tabayyun ini sudah diputuskan.' };
 
+  const { saldo } = await computeHutangForHalaqah(tab.halaqah_id as string);
+  const klaim = validateKlaimMenit(String(fd.get('bayar_menit_klaim') ?? ''), saldo);
+  if ('error' in klaim) return { error: klaim.error };
+  const bayarCatatan = String(fd.get('bayar_catatan') ?? '').trim();
+
   const { error } = await supabaseAdmin
     .from('hits_tabayyun')
     .update({
       alasan_pengajar: alasan,
       alasan_submitted_at: new Date().toISOString(),
+      bayar_menit_klaim: saldo > 0 ? klaim.menit : null,
+      bayar_catatan: saldo > 0 && bayarCatatan ? bayarCatatan : null,
       status: 'awaiting_reason',
     })
     .eq('id', tabayyunId);

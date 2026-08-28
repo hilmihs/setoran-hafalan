@@ -245,7 +245,7 @@ export const ENTITIES: Record<string, EntityDef> = {
   },
   'hits/hutang-bayar': {
     route: 'hits/hutang-bayar', table: 'hits_hutang_bayar', scope: 'hits',
-    columns: ['id', 'halaqah_id', 'pengajar_id', 'keterangan_id', 'menit', 'tanggal', 'created_at'],
+    columns: ['id', 'halaqah_id', 'pengajar_id', 'keterangan_id', 'menit', 'sumber', 'tanggal', 'created_at'],
     filters: [
       { param: 'halaqah_id', column: 'halaqah_id', kind: 'eq' },
       { param: 'pengajar_id', column: 'pengajar_id', kind: 'eq' },
