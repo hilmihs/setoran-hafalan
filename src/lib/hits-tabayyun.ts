@@ -38,3 +38,34 @@ export function tabayyunHoursLeft(t: TabayyunStateInput, nowIso: string): number
 export function deadlineFromReminder(reminderIso: string): string {
   return new Date(new Date(reminderIso).getTime() + TABAYYUN_DEADLINE_HOURS * MS_PER_HOUR).toISOString();
 }
+
+/**
+ * Validasi input klaim menit dari pengajar. Murni.
+ * `saldo` = sisa hutang halaqah saat ini. Bila saldo 0, form tidak menampilkan
+ * field ini, jadi input apa pun diabaikan dan hasilnya 0.
+ */
+export function validateKlaimMenit(
+  raw: string,
+  saldo: number
+): { menit: number } | { error: string } {
+  if (saldo <= 0) return { menit: 0 };
+  const s = raw.trim();
+  if (!s) return { error: 'Jumlah menit wajib diisi.' };
+  const n = Number(s);
+  if (!Number.isFinite(n)) return { error: 'Jumlah menit harus berupa angka.' };
+  if (!Number.isInteger(n)) return { error: 'Jumlah menit harus bilangan bulat.' };
+  if (n < 0) return { error: 'Menit tidak boleh negatif.' };
+  if (n > saldo) {
+    return { error: `Menit yang ditunaikan tidak boleh melebihi sisa hutang (${saldo} menit).` };
+  }
+  return { menit: n };
+}
+
+/**
+ * Menit yang benar-benar ditulis ke ledger saat koordinator memutus. Murni.
+ * Di-cap ke saldo agar tidak overpay (pola sama seperti laporan ketua kelas).
+ */
+export function capBayarDisetujui(disetujui: number, saldo: number): number {
+  if (!Number.isFinite(disetujui) || disetujui <= 0) return 0;
+  return Math.min(Math.floor(disetujui), Math.max(0, saldo));
+}

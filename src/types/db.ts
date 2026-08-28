@@ -316,6 +316,8 @@ export interface HitsHutangBayar {
   tanggal: string;
   dilaporkan_oleh: string | null;
   catatan: string | null;
+  /** 'ketua' = laporan ketua kelas (replace-all per keterangan). 'tabayyun' = disetujui koordinator. */
+  sumber: 'ketua' | 'tabayyun';
   created_at: string;
 }
 
@@ -426,6 +428,15 @@ export interface HitsTabayyun {
   status: HitsStatusTabayyun;
   deadline_at: string;
   reminder_sent_at: string | null;
+  /** Token akses publik /tabayyun/<token>. Null = reminder belum pernah dikirim. */
+  akses_token: string | null;
+  /** Klaim pengajar (menit). 0 = belum menunaikan, null = belum menjawab. */
+  bayar_menit_klaim: number | null;
+  bayar_catatan: string | null;
+  /** Disetujui koordinator; sumber baris hits_hutang_bayar sumber='tabayyun'. */
+  bayar_menit_disetujui: number | null;
+  /** Menit observasi − menit yang dilaporkan lewat izin pra-kelas. > 0 = izin tak menutupi. */
+  izin_selisih_menit: number | null;
   created_at: string;
 }
 
@@ -787,6 +798,37 @@ export interface EvalSyncStage {
   rejected: boolean;
   rejected_by: string | null;
   created_at: string;
+}
+
+// ========== Haqibatul Mu'allim (migration 0059) ==========
+
+export interface HaqibahFolder {
+  id: string;
+  /** null = folder akar. Maksimum 3 tingkat. */
+  parent_id: string | null;
+  nama: string;
+  urutan: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface HaqibahFile {
+  id: string;
+  /** null = berkas di akar (bukan di dalam folder). */
+  folder_id: string | null;
+  /** Nama tampil, TANPA ekstensi. */
+  nama: string;
+  /** Relatif terhadap bucket `haqibah`: '<uuid>.<ext>'. */
+  storage_path: string;
+  ext: string;
+  mime: string;
+  /** bigint di DB, dibaca sebagai number oleh parser pg (byte). */
+  ukuran: number;
+  urutan: number;
+  /** Nama/WA aktor pengunggah, untuk jejak. */
+  diunggah_oleh: string | null;
+  created_at: string;
+  updated_at: string;
 }
 
 // ========== Session types ==========

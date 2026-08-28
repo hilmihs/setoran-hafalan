@@ -4,6 +4,8 @@ import {
   tabayyunHoursLeft,
   deadlineFromReminder,
   TABAYYUN_DEADLINE_HOURS,
+  validateKlaimMenit,
+  capBayarDisetujui,
 } from '@/lib/hits-tabayyun';
 
 let failed = 0;
@@ -40,6 +42,25 @@ eq(tabayyunHoursLeft(T({ reminder_sent_at: '2026-07-03T00:00:00.000Z', deadline_
 // --- deadlineFromReminder ---
 eq(deadlineFromReminder('2026-07-06T12:00:00.000Z'), '2026-07-09T12:00:00.000Z', 'reminder + 72h');
 eq(TABAYYUN_DEADLINE_HOURS, 72, 'konstanta 72 jam');
+
+// --- validateKlaimMenit ---
+eq(validateKlaimMenit('30', 90), { menit: 30 }, 'klaim 30 dari saldo 90 -> valid');
+eq(validateKlaimMenit('0', 90), { menit: 0 }, 'klaim 0 valid (= belum menunaikan)');
+eq(validateKlaimMenit('90', 90), { menit: 90 }, 'klaim == saldo -> valid');
+eq(validateKlaimMenit('91', 90), { error: 'Menit yang ditunaikan tidak boleh melebihi sisa hutang (90 menit).' },
+   'klaim > saldo -> ditolak');
+eq(validateKlaimMenit('-1', 90), { error: 'Menit tidak boleh negatif.' }, 'klaim negatif -> ditolak');
+eq(validateKlaimMenit('', 90), { error: 'Jumlah menit wajib diisi.' }, 'kosong padahal ada saldo -> ditolak');
+eq(validateKlaimMenit('abc', 90), { error: 'Jumlah menit harus berupa angka.' }, 'bukan angka -> ditolak');
+eq(validateKlaimMenit('12.5', 90), { error: 'Jumlah menit harus bilangan bulat.' }, 'pecahan -> ditolak');
+eq(validateKlaimMenit('30', 0), { menit: 0 }, 'saldo 0 -> input diabaikan, hasil 0');
+
+// --- capBayarDisetujui ---
+eq(capBayarDisetujui(30, 90), 30, 'disetujui < saldo -> apa adanya');
+eq(capBayarDisetujui(120, 90), 90, 'disetujui > saldo -> di-cap ke saldo');
+eq(capBayarDisetujui(0, 90), 0, 'disetujui 0 -> 0');
+eq(capBayarDisetujui(-5, 90), 0, 'disetujui negatif -> 0');
+eq(capBayarDisetujui(30, 0), 0, 'saldo 0 -> 0');
 
 if (failed > 0) { console.error(`\n${failed} test GAGAL`); process.exit(1); }
 console.log('\nSemua test tabayyun lulus.');

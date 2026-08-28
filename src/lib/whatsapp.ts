@@ -318,6 +318,7 @@ export function tplTabayyunToPengajar(args: {
   pengajarGender: Gender;
   tanggal: string;
   kelasName: string;
+  /** URL klarifikasi — sekarang tautan token /tabayyun/<token>. */
   formUrl: string;
   /** Daftar pelanggaran pertemuan (sudah diformat), mis. "KMT — telat 10 menit". */
   pelanggaran: string[];
@@ -327,10 +328,13 @@ export function tplTabayyunToPengajar(args: {
   const daftar = args.pelanggaran.length
     ? args.pelanggaran.map((p) => `• ${p}`)
     : ['• (rincian tidak tersedia)'];
-  const hutangLines =
-    args.hutangSaldo && args.hutangSaldo > 0
-      ? ['', `Selain itu, tercatat *sisa hutang menit ${args.hutangSaldo} menit* yang perlu diganti.`]
-      : [];
+  const adaHutang = !!args.hutangSaldo && args.hutangSaldo > 0;
+  const hutangLines = adaHutang
+    ? ['', `Selain itu, tercatat *sisa hutang menit ${args.hutangSaldo} menit* yang perlu diganti.`]
+    : [];
+  const permintaan = adaHutang
+    ? `Mohon sampaikan alasan/klarifikasi, sekaligus *berapa menit hutang yang sudah ditunaikan* pada pertemuan tersebut, melalui tautan berikut:`
+    : `Mohon sampaikan alasan/klarifikasi melalui tautan berikut:`;
   return [
     `Assalamu'alaikum ${sapaan} ${args.pengajarName},`,
     ``,
@@ -338,7 +342,7 @@ export function tplTabayyunToPengajar(args: {
     ...daftar,
     ...hutangLines,
     ``,
-    `Mohon sampaikan alasan/klarifikasi melalui tautan berikut:`,
+    permintaan,
     args.formUrl,
     ``,
     `Jazakumullahu khairan.`,

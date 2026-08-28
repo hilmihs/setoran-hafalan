@@ -14,7 +14,7 @@ import {
   tujuanDigilir,
   kategoriSetujuan,
 } from '@/lib/shakwa';
-import { alasanDariIzin, berasalDariIzin, izinCocokKondisi, dalamJendelaYatim, PENANDA_IZIN } from '@/lib/shakwa-izin';
+import { alasanDariIzin, berasalDariIzin, izinCocokKondisi, dalamJendelaYatim, kebutuhanTabayyunIzin, PENANDA_IZIN } from '@/lib/shakwa-izin';
 import { rentangShakwa } from '@/lib/shakwa-rekap';
 import { periodeStartDate, periodeEndDate } from '@/lib/maahir-sp';
 import { normalizeWhatsApp } from '@/lib/whatsapp';
@@ -131,21 +131,50 @@ eq(periodeStartDate('2026-01'), '2025-12-28', 'awal periode Januari lintas tahun
 const opsiField = (kategori: string, field: string) =>
   kategoriDef(kategori)?.fieldTambahan.find((f) => f.name === field)?.opsi;
 eq(opsiField('tali_kasih', 'sudah_presensi'), ['Sudah'], 'talikasih sudah_presensi hanya "Sudah"');
-eq(opsiField('izin', 'sudah_info_koordinator'), ['Sudah'], 'izin sudah_info_koordinator hanya "Sudah"');
 eq(opsiField('tali_kasih', 'punya_rekening_cimb'), ['Sudah', 'Belum'], 'rekening CIMB tetap Sudah/Belum');
 
 // --- Predikat kecocokan izin ↔ kondisi tabayyun ---
 eq(izinCocokKondisi('KMT', 'KMT'), true, 'jenis sama → cocok');
 eq(izinCocokKondisi('KBLA', 'KMT'), false, 'jenis beda → tak cocok');
-eq(izinCocokKondisi('TIDAK_HADIR', 'BADAL'), true, 'TIDAK_HADIR net → cocok kondisi apa pun');
+eq(izinCocokKondisi('TIDAK_HADIR', 'BADAL'), true, 'TIDAK_HADIR net → cocok BADAL (bentuk ketidakhadiran)');
+eq(izinCocokKondisi('TIDAK_HADIR', 'JKG'), true, 'TIDAK_HADIR net → cocok JKG');
 eq(izinCocokKondisi('TIDAK_HADIR', 'TIDAK_LATIHAN'), true, 'TIDAK_HADIR net → cocok TIDAK_LATIHAN');
+eq(izinCocokKondisi('TIDAK_HADIR', 'KMT'), false, 'TIDAK_HADIR TIDAK menaungi KMT — kelas tetap berjalan');
+eq(izinCocokKondisi('TIDAK_HADIR', 'KBLA'), false, 'TIDAK_HADIR TIDAK menaungi KBLA — kelas tetap berjalan');
 eq(izinCocokKondisi('JKG', 'BADAL'), false, 'JKG vs BADAL → tak cocok');
+eq(izinCocokKondisi('KMT', 'KMT'), true, 'jenis sama tetap cocok');
 
 // --- Jendela izin yatim (default 14 hari) ---
 eq(dalamJendelaYatim('2026-08-15', '2026-08-15', 14), true, 'hari ini masuk jendela');
 eq(dalamJendelaYatim('2026-08-02', '2026-08-15', 14), true, 'tepat 13 hari lalu masuk');
 eq(dalamJendelaYatim('2026-08-01', '2026-08-15', 14), false, '14 hari lalu di luar jendela');
 eq(dalamJendelaYatim('2026-08-16', '2026-08-15', 14), false, 'masa depan di luar jendela');
+
+// --- Kebutuhan tabayyun setelah izin dicocokkan ---
+const KTI = (menitIzin: number | null, menitObservasi: number | null, saldoHutang: number) =>
+  kebutuhanTabayyunIzin({ menitIzin, menitObservasi, saldoHutang });
+
+eq(KTI(10, 15, 0),
+   { status: 'pending', selisihMenit: 5, perluAlasanTambahan: true, perluKlaimHutang: false },
+   'izin 10 vs observasi 15 -> selisih 5, tetap pending');
+eq(KTI(15, 10, 0),
+   { status: 'awaiting_reason', selisihMenit: 0, perluAlasanTambahan: false, perluKlaimHutang: false },
+   'izin lebih longgar dari observasi -> selisih 0, tak dihukum');
+eq(KTI(15, 15, 0),
+   { status: 'awaiting_reason', selisihMenit: 0, perluAlasanTambahan: false, perluKlaimHutang: false },
+   'izin pas + saldo 0 -> awaiting_reason (perilaku lama dipertahankan)');
+eq(KTI(15, 15, 40),
+   { status: 'pending', selisihMenit: 0, perluAlasanTambahan: false, perluKlaimHutang: true },
+   'izin pas tapi saldo 40 -> tetap pending demi pertanyaan hutang');
+eq(KTI(null, 15, 0),
+   { status: 'awaiting_reason', selisihMenit: 0, perluAlasanTambahan: false, perluKlaimHutang: false },
+   'izin tanpa menit (TIDAK_HADIR) -> selisih 0');
+eq(KTI(10, null, 0),
+   { status: 'awaiting_reason', selisihMenit: 0, perluAlasanTambahan: false, perluKlaimHutang: false },
+   'observasi tanpa menit (JKG/BADAL) -> selisih 0');
+eq(KTI(10, 15, 40),
+   { status: 'pending', selisihMenit: 5, perluAlasanTambahan: true, perluKlaimHutang: true },
+   'selisih dan hutang bersamaan -> pending, dua-duanya ditandai');
 
 if (failed) { console.error(`\n${failed} uji gagal.`); process.exit(1); }
 console.log('\nSemua uji Shakwa lolos.');

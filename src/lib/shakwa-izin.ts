@@ -8,6 +8,7 @@
 
 import { supabaseAdmin } from './supabase-admin';
 import { IZIN_JENIS_LABEL, type ShakwaIzinJenis } from './shakwa';
+import { computeHutangForHalaqah } from './hits-hutang';
 
 export type IzinCocok = {
   id: string;
@@ -58,12 +59,61 @@ export function berasalDariIzin(alasan: string | null | undefined): boolean {
 }
 
 /**
+ * Kondisi yang berarti kelas TETAP BERJALAN (hanya mulai terlambat / berakhir
+ * lebih awal). Izin "tidak hadir" tidak menjelaskan keduanya — justru
+ * bertabrakan dengan laporan ketua kelas, jadi harus ditabayyun.
+ */
+const KONDISI_KELAS_BERJALAN = ['KMT', 'KBLA'];
+
+/**
  * Apakah satu izin cocok dipakai untuk tabayyun berkondisi tertentu.
- * Jenis sama → cocok. TIDAK_HADIR jadi jaring pengaman: menaungi semua bentuk
- * ketidakhadiran hari itu (mirror logika fallback di cariIzinCocok).
+ * Jenis sama → cocok. TIDAK_HADIR jadi jaring pengaman untuk bentuk-bentuk
+ * ketidakhadiran (JKG, BADAL, TIDAK_LATIHAN), TAPI tidak menaungi KMT/KBLA.
  */
 export function izinCocokKondisi(izinJenis: ShakwaIzinJenis, tabKondisi: string): boolean {
-  return izinJenis === 'TIDAK_HADIR' || tabKondisi === izinJenis;
+  if (izinJenis === 'TIDAK_HADIR') return !KONDISI_KELAS_BERJALAN.includes(tabKondisi);
+  return tabKondisi === izinJenis;
+}
+
+export type KebutuhanTabayyun = {
+  /** Status tabayyun yang harus dipakai saat izin sudah dicocokkan. */
+  status: 'pending' | 'awaiting_reason';
+  /** Menit observasi − menit izin. > 0 = izin tidak menutupi seluruhnya. */
+  selisihMenit: number;
+  perluAlasanTambahan: boolean;
+  perluKlaimHutang: boolean;
+};
+
+/**
+ * Izin dipakai sebagai konteks, tapi tidak lagi menutup tabayyun sendirian.
+ * Murni — dipakai jalur maju (hits/ketua) dan jalur balik (backfill) supaya
+ * tidak ada dua sumber kebenaran.
+ *
+ * - `menitIzin` null (izin TIDAK_HADIR) atau `menitObservasi` null (JKG/BADAL,
+ *   tak berbasis menit) → tak ada yang bisa dibandingkan, selisih 0.
+ * - Izin lebih longgar dari observasi (lapor 15, tercatat 10) → selisih 0.
+ *   Pengajar tidak dihukum karena melapor berlebih.
+ * - Saldo hutang > 0 → tetap `pending` walau izinnya pas, karena izin
+ *   menjelaskan KENAPA terlambat, bukan APAKAH hutangnya sudah ditunaikan.
+ */
+export function kebutuhanTabayyunIzin(args: {
+  menitIzin: number | null;
+  menitObservasi: number | null;
+  saldoHutang: number;
+}): KebutuhanTabayyun {
+  const { menitIzin, menitObservasi, saldoHutang } = args;
+  const selisihMenit =
+    menitIzin == null || menitObservasi == null
+      ? 0
+      : Math.max(0, menitObservasi - menitIzin);
+  const perluAlasanTambahan = selisihMenit > 0;
+  const perluKlaimHutang = saldoHutang > 0;
+  return {
+    status: perluAlasanTambahan || perluKlaimHutang ? 'pending' : 'awaiting_reason',
+    selisihMenit,
+    perluAlasanTambahan,
+    perluKlaimHutang,
+  };
 }
 
 /**
@@ -108,10 +158,15 @@ export async function cariIzinCocok(args: {
   );
   if (!relevan.length) return null;
 
-  // Jenis yang sama lebih dulu; TIDAK_HADIR jadi jaring pengaman.
+  // Jenis yang sama lebih dulu; TIDAK_HADIR jadi jaring pengaman — tapi lewat
+  // izinCocokKondisi supaya pengetatan KMT/KBLA berlaku di sini juga.
   const cocok =
     relevan.find((r) => args.jenisList.includes(r.jenis)) ??
-    relevan.find((r) => r.jenis === 'TIDAK_HADIR');
+    relevan.find(
+      (r) =>
+        r.jenis === 'TIDAK_HADIR' &&
+        args.jenisList.some((j) => izinCocokKondisi('TIDAK_HADIR', j))
+    );
   if (!cocok) return null;
 
   const s = cocok.shakwa as unknown as { nomor_tiket: string; created_at: string } | null;
@@ -140,9 +195,9 @@ export async function tandaiIzinTerpakai(izinId: string, tabayyunId: string): Pr
 
 /**
  * Reverse-link: pengajar mengirim izin SETELAH ketua kelas terlanjur mengisi
- * observasi (tabayyun sudah 'pending' tanpa alasan). Cari tabayyun cocok lalu
- * isi alasannya dari izin, supaya pengajar tak ditagih klarifikasi & tak kena
- * ghosting. Menaungi urutan input kebalikan dari forward-match di hits/ketua.
+ * observasi (tabayyun sudah 'pending' tanpa alasan). Alasan izin diisikan
+ * sebagai konteks; statusnya ditentukan kebutuhanTabayyunIzin — hanya menjadi
+ * 'awaiting_reason' bila izin menutupi menit observasi DAN tak ada saldo hutang.
  *
  * Hanya menyentuh tabayyun 'pending' tanpa alasan_pengajar — tak menimpa yang
  * sudah 'awaiting_reason'/'decided' atau sudah punya alasan. Return id tabayyun
@@ -151,7 +206,7 @@ export async function tandaiIzinTerpakai(izinId: string, tabayyunId: string): Pr
 export async function backfillTabayyunDariIzin(izin: IzinCocok): Promise<string | null> {
   let q = supabaseAdmin
     .from('hits_tabayyun')
-    .select('id, kondisi, keterangan:keterangan_id(tanggal)')
+    .select('id, kondisi, halaqah_id, keterangan_id, keterangan:keterangan_id(tanggal)')
     .eq('pengajar_id', izin.pengajarId)
     .eq('status', 'pending')
     .is('alasan_pengajar', null);
@@ -161,6 +216,8 @@ export async function backfillTabayyunDariIzin(izin: IzinCocok): Promise<string 
   const rows = (data ?? []) as unknown as Array<{
     id: string;
     kondisi: string;
+    halaqah_id: string;
+    keterangan_id: string;
     keterangan: { tanggal: string } | null;
   }>;
 
@@ -169,12 +226,30 @@ export async function backfillTabayyunDariIzin(izin: IzinCocok): Promise<string 
   );
   if (!cocok) return null;
 
+  // Aturan yang sama seperti jalur maju di hits/ketua: izin jadi konteks, bukan
+  // penutup otomatis.
+  const { data: pels } = await supabaseAdmin
+    .from('hits_pelanggaran')
+    .select('jenis, menit')
+    .eq('keterangan_id', cocok.keterangan_id);
+  const menitObservasi =
+    (pels ?? [])
+      .filter((p) => (p.jenis as string) === izin.jenis)
+      .reduce((s, p) => s + ((p.menit as number | null) ?? 0), 0) || null;
+  const { saldo } = await computeHutangForHalaqah(cocok.halaqah_id);
+  const kebutuhan = kebutuhanTabayyunIzin({
+    menitIzin: izin.menit,
+    menitObservasi,
+    saldoHutang: saldo,
+  });
+
   const { error } = await supabaseAdmin
     .from('hits_tabayyun')
     .update({
-      status: 'awaiting_reason',
+      status: kebutuhan.status,
       alasan_pengajar: alasanDariIzin(izin),
       alasan_submitted_at: izin.dikirimAt,
+      izin_selisih_menit: kebutuhan.selisihMenit,
     })
     .eq('id', cocok.id);
   if (error) {
