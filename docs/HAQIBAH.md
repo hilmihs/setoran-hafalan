@@ -79,20 +79,32 @@ Migrasi `0059_haqibah.sql` harus sudah masuk lebih dulu (lihat CLAUDE.md bagian
 Migrations). Lalu:
 
 ```bash
-# 1. kirim folder sumbernya (dari laptop)
-scp -r "Haqibatul Mu'allim" root@maahir.muhajirproject.org:/tmp/haqibah-src
+# 1. kirim isinya sebagai satu arsip (nama folder ber-spasi & apostrof bikin scp -r rewel)
+tar czf haqibah-isi-awal.tar.gz "Haqibatul Mu'allim"
+scp haqibah-isi-awal.tar.gz <user>@maahir.muhajirproject.org:/tmp/
 
-# 2. di server, jalankan dari checkout aplikasi supaya env & node_modules sepadan
-ssh root@maahir.muhajirproject.org
+# 2. di server: bongkar arsipnya
+ssh <user>@maahir.muhajirproject.org
+mkdir -p /tmp/haqibah-src && tar xzf /tmp/haqibah-isi-awal.tar.gz -C /tmp/haqibah-src
+
+# 3. ambil env produksi. Env runtime dipasang systemd lewat EnvironmentFile
+#    /var/www/html/maahir/maahir.env (BUKAN env_vars.sh — berkas itu tak pernah dibaca).
 cd /var/www/html/maahir
-set -a; . ./env_vars.sh; set +a          # DATABASE_URL + STORAGE_DIR
-nvm exec 24.15.0 npx tsx scripts/seed-haqibah.ts /tmp/haqibah-src --dry-run
-nvm exec 24.15.0 npx tsx scripts/seed-haqibah.ts /tmp/haqibah-src
+grep -E 'DATABASE_URL|STORAGE_DIR' maahir.env      # lihat nama & nilainya dulu
+export DATABASE_URL='...' STORAGE_DIR='...'        # salin dari baris di atas (tanpa tanda kutip ganda)
 
-# 3. pastikan berkasnya bisa dibaca proses aplikasi, lalu buang sumbernya
+# 4. kering dulu, baru betulan
+npx tsx scripts/seed-haqibah.ts "/tmp/haqibah-src/Haqibatul Mu'allim" --dry-run
+npx tsx scripts/seed-haqibah.ts "/tmp/haqibah-src/Haqibatul Mu'allim"
+
+# 5. pastikan berkasnya bisa dibaca proses aplikasi, lalu buang sumbernya
 ls -la "$STORAGE_DIR/haqibah" | head
-rm -rf /tmp/haqibah-src
+rm -rf /tmp/haqibah-src /tmp/haqibah-isi-awal.tar.gz
 ```
+
+Kalau berkas dijalankan sebagai user berbeda dari proses aplikasi, samakan
+kepemilikannya (`chown -R <user-app> "$STORAGE_DIR/haqibah"`) — kalau tidak,
+halaman akan menampilkan berkasnya tapi `/api/audio` gagal membacanya.
 
 Script menulis **langsung ke Postgres** (`DATABASE_URL`) dan ke filesystem
 (`STORAGE_DIR`) — bukan lewat HTTP, jadi tidak ada hubungannya dengan `npm run db`.
