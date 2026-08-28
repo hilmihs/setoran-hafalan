@@ -2,9 +2,9 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Pengajar yang ditabayyun bisa membuka link token tanpa login dan menyatakan berapa menit hutang yang sudah ditunaikan di pertemuan tersebut; koordinator menyetujui angka itu saat memutus, dan barulah saldo hutang berkurang.
+**Goal:** Pengajar yang ditabayyun bisa membuka link token tanpa login dan menyatakan berapa menit hutang yang sudah ditunaikan di pertemuan tersebut; koordinator menyetujui angka itu saat memutus, dan barulah saldo hutang berkurang. Sekaligus menutup cacat lama: izin pra-kelas menutup tabayyun tanpa pernah membandingkan menit, sehingga izin "10 menit" meloloskan observasi "15 menit".
 
-**Architecture:** Klaim disimpan sebagai kolom baru di `hits_tabayyun` (bukan tabel baru, bukan baris `pending` di ledger). Ledger `hits_hutang_bayar` tetap berisi kredit terkonfirmasi saja, ditambah kolom `sumber` (`ketua` | `tabayyun`) supaya replace-all milik ketua kelas tidak menghapus kredit hasil tabayyun. Akses pengajar lewat token acak 32 byte di kolom `akses_token`, rute publik `/tabayyun/[token]` (middleware repo memakai daftar *protected*, jadi rute baru otomatis publik).
+**Architecture:** Klaim disimpan sebagai kolom baru di `hits_tabayyun` (bukan tabel baru, bukan baris `pending` di ledger). Ledger `hits_hutang_bayar` tetap berisi kredit terkonfirmasi saja, ditambah kolom `sumber` (`ketua` | `tabayyun`) supaya replace-all milik ketua kelas tidak menghapus kredit hasil tabayyun. Akses pengajar lewat token acak 32 byte di kolom `akses_token`, rute publik `/tabayyun/[token]` (middleware repo memakai daftar *protected*, jadi rute baru otomatis publik). Izin pra-kelas turun pangkat menjadi konteks: satu fungsi murni `kebutuhanTabayyunIzin` menentukan status, dipakai jalur maju maupun jalur balik.
 
 **Tech Stack:** Next.js App Router (Server Actions), PostgreSQL via `supabaseAdmin` shim (`src/lib/pg-shim.ts`), TypeScript. Tidak ada test runner — verifikasi lewat skrip `tsx` (`npm run test-tabayyun`), `npm run typecheck`, `npm run lint`.
 
@@ -16,42 +16,50 @@
 
 | File | Tanggung jawab | Pemilik |
 |---|---|---|
-| `supabase/migrations/0059_tabayyun_klaim_hutang.sql` | Kolom klaim + `sumber` | Agent 1 |
+| `supabase/migrations/0059_tabayyun_klaim_hutang.sql` | Kolom klaim, `izin_selisih_menit`, `sumber` | Agent 1 |
 | `src/types/db.ts` | Tipe `HitsTabayyun`, `HitsHutangBayar` | Agent 1 |
-| `src/app/hits/ketua/actions.ts` | Pagar replace-all `sumber='ketua'` | Agent 1 |
 | `src/lib/hits-tabayyun.ts` | Fungsi murni validasi/cap klaim | Agent 2 |
 | `src/lib/hits-tabayyun-token.ts` | Generator token (pakai `node:crypto`, bukan modul murni) | Agent 2 |
 | `src/lib/whatsapp.ts` | Template WA membawa URL token | Agent 2 |
-| `scripts/test-tabayyun.ts` | Uji fungsi murni baru | Agent 2 |
+| `scripts/test-tabayyun.ts` | Uji fungsi murni klaim | Agent 2 |
 | `src/components/TabayyunKlarifikasiForm.tsx` | Form klarifikasi dipakai bersama dua jalur | Agent 3 |
-| `src/app/tabayyun/[token]/page.tsx` | Halaman publik | Agent 3 |
-| `src/app/tabayyun/[token]/actions.ts` | Server action submit publik | Agent 3 |
+| `src/app/tabayyun/[token]/page.tsx`, `actions.ts` | Halaman + action publik | Agent 3 |
+| `src/app/hits/pengajar/page.tsx`, `TabayyunAlasanForm.tsx`, `actions.ts` | Jalur login pakai form bersama | Agent 3 |
+| `src/lib/api-public/registry.ts` | Ekspos `sumber`, jangan ekspos `bayar_catatan` | Agent 3 |
 | `src/app/observasi/koordinator/actions.ts` | Generate token saat reminder; tulis kredit saat memutus | Agent 4 |
-| `src/app/observasi/koordinator/TabayyunCard.tsx` | Tampilkan klaim + input `disetujui` | Agent 4 |
+| `src/app/observasi/koordinator/TabayyunCard.tsx` | Tampilkan klaim, selisih izin, input `disetujui` | Agent 4 |
 | `src/app/observasi/koordinator/page.tsx` | Ambil kolom klaim + kredit ketua | Agent 4 |
-| `src/app/hits/pengajar/page.tsx`, `TabayyunAlasanForm.tsx`, `actions.ts` | Jalur login pakai form bersama | Agent 5 |
-| `src/lib/api-public/registry.ts` | Ekspos `sumber`, jangan ekspos `bayar_catatan` | Agent 5 |
+| `src/lib/shakwa-izin.ts` | Aturan murni izin → status + jalur balik | Agent 5 |
+| `scripts/test-shakwa.ts` | Uji aturan izin | Agent 5 |
+| `src/app/hits/ketua/actions.ts` | Pagar `sumber='ketua'` + jalur maju izin | Agent 5 |
 
 **Tidak ada dua agent yang menyentuh file yang sama.**
 
 ## Urutan & paralelisme
 
 ```
-Gelombang 1 (paralel):  Agent 1 (DB)        Agent 2 (lib murni + WA + uji)
-Gelombang 2 (paralel):  Agent 3 (halaman publik)   Agent 4 (koordinator)   ← butuh 1 & 2 selesai
-Gelombang 3:            Agent 5 (jalur login + registry + verifikasi akhir)
+Gelombang 1 (paralel):  Agent 1 (DB)               Agent 2 (lib klaim + WA + token)
+Gelombang 2 (paralel):  Agent 3 (form + publik + login)   Agent 4 (koordinator)
+Gelombang 3:            Agent 5 (aturan izin + pagar ledger + verifikasi akhir)
 ```
 
-Agent 3 dan 4 keduanya memakai `validateKlaimMenit` / `capBayarDisetujui` dari Agent 2 dan kolom dari Agent 1. Jangan mulai gelombang 2 sebelum keduanya commit.
+Agent 3 dan 4 memakai `validateKlaimMenit` / `capBayarDisetujui` dari Agent 2 dan
+kolom dari Agent 1 — jangan mulai gelombang 2 sebelum keduanya commit. Agent 5
+memakai `izin_selisih_menit` (Agent 1), kolom `sumber` (Agent 1), dan menutup
+verifikasi seluruh fitur, jadi ia jalan terakhir. Fungsi murni milik Agent 5
+tinggal di `shakwa-izin.ts` (bukan `hits-tabayyun.ts`) supaya tidak ada dua agent
+yang mengedit berkas yang sama.
 
 ---
 
-## Agent 1 — Fondasi DB & pagar ledger
+## Agent 1 — Fondasi DB & tipe
 
 **Files:**
 - Create: `supabase/migrations/0059_tabayyun_klaim_hutang.sql`
 - Modify: `src/types/db.ts:310-320` (`HitsHutangBayar`), `src/types/db.ts:414-430` (`HitsTabayyun`)
-- Modify: `src/app/hits/ketua/actions.ts:290`
+
+Agent ini **tidak** menyentuh `src/app/hits/ketua/actions.ts` — pemakaian kolom
+`sumber` di sana milik Agent 5.
 
 - [ ] **Step 1: Pastikan nomor migrasi masih bebas**
 
@@ -71,8 +79,11 @@ alter table hits_tabayyun
   add column if not exists akses_token text unique,
   add column if not exists bayar_menit_klaim integer check (bayar_menit_klaim >= 0),
   add column if not exists bayar_catatan text,
-  add column if not exists bayar_menit_disetujui integer check (bayar_menit_disetujui >= 0);
+  add column if not exists bayar_menit_disetujui integer check (bayar_menit_disetujui >= 0),
+  add column if not exists izin_selisih_menit integer check (izin_selisih_menit >= 0);
 
+comment on column hits_tabayyun.izin_selisih_menit is
+  'Menit observasi ketua kelas dikurangi menit yang dilaporkan pengajar lewat izin pra-kelas. > 0 berarti izin tidak menutupi seluruhnya; 0/NULL berarti tidak ada selisih atau tidak ada izin.';
 comment on column hits_tabayyun.akses_token is
   'Token acak 32 byte base64url untuk /tabayyun/<token> (tanpa login). Digenerate saat reminder pertama; berlaku selama status <> decided.';
 comment on column hits_tabayyun.bayar_menit_klaim is
@@ -100,10 +111,10 @@ Expected: selesai tanpa error. (Butuh `DATABASE_URL` lokal di `.env.local`. **Ja
 
 Run:
 ```bash
-psql "$DATABASE_URL" -c "\d hits_tabayyun" | grep -E "akses_token|bayar_"
+psql "$DATABASE_URL" -c "\d hits_tabayyun" | grep -E "akses_token|bayar_|izin_selisih"
 psql "$DATABASE_URL" -c "\d hits_hutang_bayar" | grep sumber
 ```
-Expected: empat baris `akses_token|bayar_menit_klaim|bayar_catatan|bayar_menit_disetujui`, lalu satu baris `sumber`.
+Expected: lima baris (`akses_token`, `bayar_menit_klaim`, `bayar_catatan`, `bayar_menit_disetujui`, `izin_selisih_menit`), lalu satu baris `sumber`.
 
 - [ ] **Step 5: Perbarui `HitsHutangBayar` di `src/types/db.ts`**
 
@@ -152,59 +163,26 @@ export interface HitsTabayyun {
   bayar_catatan: string | null;
   /** Disetujui koordinator; sumber baris hits_hutang_bayar sumber='tabayyun'. */
   bayar_menit_disetujui: number | null;
+  /** Menit observasi − menit yang dilaporkan lewat izin pra-kelas. > 0 = izin tak menutupi. */
+  izin_selisih_menit: number | null;
   created_at: string;
 }
 ```
 
-- [ ] **Step 7: Pagari replace-all milik ketua kelas**
-
-Di `src/app/hits/ketua/actions.ts:290`, ganti baris:
-
-```ts
-  await supabaseAdmin.from('hits_hutang_bayar').delete().eq('keterangan_id', saved.id);
-```
-
-menjadi:
-
-```ts
-  // Hanya sapu kredit yang dilaporkan ketua. Kredit sumber='tabayyun' (disetujui
-  // koordinator) TIDAK boleh ikut terhapus saat ketua mengedit pertemuan ini.
-  await supabaseAdmin
-    .from('hits_hutang_bayar')
-    .delete()
-    .eq('keterangan_id', saved.id)
-    .eq('sumber', 'ketua');
-```
-
-- [ ] **Step 8: Tandai insert ketua secara eksplisit**
-
-Di blok insert tepat di bawahnya (`src/app/hits/ketua/actions.ts`, sekitar baris 300), tambahkan field `sumber` pada objek insert sehingga menjadi:
-
-```ts
-      const { error: bayarErr } = await supabaseAdmin.from('hits_hutang_bayar').insert({
-        halaqah_id: halaqahId,
-        pengajar_id: (hq?.pengajar_id as string | null) ?? null,
-        keterangan_id: saved.id,
-        menit,
-        tanggal: match.tanggal,
-        dilaporkan_oleh: session.ketua_kelas_id,
-        sumber: 'ketua',
-      });
-```
-
-- [ ] **Step 9: Typecheck**
+- [ ] **Step 7: Typecheck**
 
 Run: `npm run typecheck`
-Expected: keluar tanpa error.
+Expected: keluar tanpa error. (Kolom `sumber` belum dipakai di kode mana pun —
+itu tugas Agent 5; tipe boleh mendahului pemakaian.)
 
-- [ ] **Step 10: Commit**
+- [ ] **Step 8: Commit**
 
 ```bash
-git add supabase/migrations/0059_tabayyun_klaim_hutang.sql src/types/db.ts src/app/hits/ketua/actions.ts
-git commit -m "feat(tabayyun): kolom klaim hutang + kolom sumber di ledger
+git add supabase/migrations/0059_tabayyun_klaim_hutang.sql src/types/db.ts
+git commit -m "feat(tabayyun): kolom klaim hutang, selisih izin, sumber ledger
 
-Pagari replace-all milik ketua kelas dengan sumber='ketua' supaya kredit
-hasil persetujuan tabayyun tidak terhapus saat ketua mengedit pertemuan."
+Kolom sumber menyiapkan pemisahan kredit ketua vs kredit hasil tabayyun;
+pemakaiannya menyusul di Agent 5."
 ```
 
 ---
@@ -377,7 +355,7 @@ validateKlaimMenit & capBayarDisetujui murni + diuji lewat npm run test-tabayyun
 
 ---
 
-## Agent 3 — Halaman publik `/tabayyun/[token]`
+## Agent 3 — Form bersama, halaman publik, jalur login
 
 **Prasyarat:** Agent 1 dan Agent 2 sudah commit.
 
@@ -385,6 +363,10 @@ validateKlaimMenit & capBayarDisetujui murni + diuji lewat npm run test-tabayyun
 - Create: `src/components/TabayyunKlarifikasiForm.tsx`
 - Create: `src/app/tabayyun/[token]/page.tsx`
 - Create: `src/app/tabayyun/[token]/actions.ts`
+- Modify: `src/app/hits/pengajar/actions.ts:18-59`
+- Modify: `src/app/hits/pengajar/TabayyunAlasanForm.tsx`
+- Modify: `src/app/hits/pengajar/page.tsx:60-80`
+- Modify: `src/lib/api-public/registry.ts:247`
 
 Rute ini publik tanpa mengubah apa pun: `src/middleware.ts` memakai daftar **protected** dan `/tabayyun` tidak ada di sana (sama seperti `/shakwa`). Jangan menambahkannya ke daftar itu.
 
@@ -406,6 +388,8 @@ export interface TabayyunKlarifikasiFormProps {
   alasanAwal: string | null;
   menitAwal: number | null;
   catatanAwal: string | null;
+  /** Menit observasi − menit yang dilaporkan lewat izin. > 0 → minta penjelasan selisih. */
+  selisihIzinMenit: number;
   /** Server action pemanggil; jalur token & jalur login memberi action berbeda. */
   onSubmit: (fd: FormData) => Promise<KlarifikasiResult>;
 }
@@ -416,6 +400,7 @@ export function TabayyunKlarifikasiForm({
   alasanAwal,
   menitAwal,
   catatanAwal,
+  selisihIzinMenit,
   onSubmit,
 }: TabayyunKlarifikasiFormProps) {
   const [pending, startTransition] = useTransition();
@@ -443,6 +428,24 @@ export function TabayyunKlarifikasiForm({
   return (
     <form action={handleSubmit}>
       <input type="hidden" name="tabayyun_id" value={tabayyunId} />
+
+      {selisihIzinMenit > 0 && (
+        <div
+          className="t-small"
+          style={{
+            marginBottom: 12,
+            padding: '8px 10px',
+            background: 'var(--kuning-tint)',
+            border: '1px solid var(--kuning-line)',
+            borderRadius: 6,
+            color: 'var(--kuning-ink)',
+          }}
+        >
+          Izin yang Anda kirim <strong>belum menutupi seluruh catatan observasi</strong> —
+          masih ada selisih <strong>{selisihIzinMenit} menit</strong>. Mohon jelaskan
+          selisih tersebut pada kotak di bawah.
+        </div>
+      )}
 
       <label className="t-small" style={{ display: 'block', fontWeight: 600, marginBottom: 4 }}>
         Alasan / klarifikasi
@@ -599,7 +602,7 @@ export default async function TabayyunTokenPage({
     .from('hits_tabayyun')
     .select(
       `id, kondisi, status, alasan_pengajar, halaqah_id, keterangan_id,
-       bayar_menit_klaim, bayar_catatan,
+       bayar_menit_klaim, bayar_catatan, izin_selisih_menit,
        pengajar:pengajar_id(name),
        halaqah:halaqah_id(name),
        keterangan:keterangan_id(tanggal, pertemuan_no)`
@@ -672,6 +675,7 @@ export default async function TabayyunTokenPage({
             alasanAwal={(tab.alasan_pengajar as string | null) ?? null}
             menitAwal={(tab.bayar_menit_klaim as number | null) ?? null}
             catatanAwal={(tab.bayar_catatan as string | null) ?? null}
+            selisihIzinMenit={(tab.izin_selisih_menit as number | null) ?? 0}
             onSubmit={handleSubmit}
           />
         </div>
@@ -681,12 +685,162 @@ export default async function TabayyunTokenPage({
 }
 ```
 
-- [ ] **Step 4: Typecheck & lint**
+- [ ] **Step 4: Terima klaim menit di server action jalur login**
+
+Di `src/app/hits/pengajar/actions.ts`, tambahkan impor:
+
+```ts
+import { computeHutangForHalaqah } from '@/lib/hits-hutang';
+import { validateKlaimMenit } from '@/lib/hits-tabayyun';
+```
+
+Lalu di `submitAlasanTabayyun`, ganti blok update (baris 39-47) menjadi:
+
+```ts
+  const { saldo } = await computeHutangForHalaqah(tab.halaqah_id as string);
+  const klaim = validateKlaimMenit(String(fd.get('bayar_menit_klaim') ?? ''), saldo);
+  if ('error' in klaim) return { error: klaim.error };
+  const bayarCatatan = String(fd.get('bayar_catatan') ?? '').trim();
+
+  const { error } = await supabaseAdmin
+    .from('hits_tabayyun')
+    .update({
+      alasan_pengajar: alasan,
+      alasan_submitted_at: new Date().toISOString(),
+      bayar_menit_klaim: saldo > 0 ? klaim.menit : null,
+      bayar_catatan: saldo > 0 && bayarCatatan ? bayarCatatan : null,
+      status: 'awaiting_reason',
+    })
+    .eq('id', tabayyunId);
+  if (error) return { error: `Gagal menyimpan: ${error.message}` };
+```
+
+- [ ] **Step 5: Pakai form bersama di panel pengajar**
+
+Ganti isi `src/app/hits/pengajar/TabayyunAlasanForm.tsx` menjadi:
+
+```tsx
+'use client';
+
+import { submitAlasanTabayyun } from './actions';
+import { hitsHeadlineLabel } from '@/types/db';
+import { TabayyunKlarifikasiForm } from '@/components/TabayyunKlarifikasiForm';
+
+export type TabayyunForPengajar = {
+  id: string;
+  halaqah_name: string;
+  kondisi: string;
+  tanggal: string;
+  pertemuan_no: number;
+  status: string;
+  alasan_pengajar: string | null;
+  saldo_hutang: number;
+  bayar_menit_klaim: number | null;
+  bayar_catatan: string | null;
+  izin_selisih_menit: number;
+};
+
+function OneTabayyun({ t }: { t: TabayyunForPengajar }) {
+  const sudahKirim = t.status === 'awaiting_reason' || t.status === 'decided';
+
+  async function handleSubmit(fd: FormData) {
+    return submitAlasanTabayyun(undefined, fd);
+  }
+
+  return (
+    <div className="card-flat" style={{ padding: '12px 14px', marginBottom: 8 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+        <div style={{ fontWeight: 600, fontSize: 14 }}>{t.halaqah_name}</div>
+        <span className="badge" style={{ background: 'var(--kuning-tint)', borderColor: 'var(--kuning-line)', color: 'var(--kuning-ink)' }}>
+          {t.kondisi}
+        </span>
+      </div>
+      <div className="t-small" style={{ color: 'var(--muted-2)', marginBottom: 8 }}>
+        Pertemuan {t.pertemuan_no} · {t.tanggal} · {hitsHeadlineLabel(t.kondisi)}
+      </div>
+      {t.status === 'decided' ? (
+        <div className="t-small" style={{ color: 'var(--hijau-ink)' }}>
+          ✓ Sudah diputuskan koordinator.
+        </div>
+      ) : (
+        <>
+          {sudahKirim && (
+            <div className="t-small" style={{ color: 'var(--hijau-ink)', marginBottom: 8 }}>
+              ✓ Klarifikasi sudah terkirim · masih bisa direvisi selama belum diputuskan.
+            </div>
+          )}
+          <TabayyunKlarifikasiForm
+            tabayyunId={t.id}
+            saldoHutang={t.saldo_hutang}
+            alasanAwal={t.alasan_pengajar}
+            menitAwal={t.bayar_menit_klaim}
+            catatanAwal={t.bayar_catatan}
+            selisihIzinMenit={t.izin_selisih_menit}
+            onSubmit={handleSubmit}
+          />
+        </>
+      )}
+    </div>
+  );
+}
+
+export function TabayyunAlasanPanel({ items }: { items: TabayyunForPengajar[] }) {
+  if (items.length === 0) return null;
+  return (
+    <div style={{ marginBottom: 24 }}>
+      <h2 className="t-h2" style={{ marginBottom: 4 }}>Tabayyun — Klarifikasi Kondisi Kelas ({items.length})</h2>
+      <p className="t-small" style={{ color: 'var(--muted-2)', marginBottom: 12 }}>
+        Kondisi kelas tercatat tidak ideal. Mohon sampaikan alasan/klarifikasi.
+      </p>
+      {items.map((t) => <OneTabayyun key={t.id} t={t} />)}
+    </div>
+  );
+}
+```
+
+- [ ] **Step 6: Suplai saldo, klaim & selisih dari halaman pengajar**
+
+Di `src/app/hits/pengajar/page.tsx`, tambahkan impor:
+
+```ts
+import { computeHutangForHalaqahList } from '@/lib/hits-hutang';
+```
+
+Ganti `select` tabayyun (baris 64-68) menjadi:
+
+```ts
+      .from('hits_tabayyun')
+      .select('id, halaqah_id, kondisi, status, alasan_pengajar, bayar_menit_klaim, bayar_catatan, izin_selisih_menit, hits_keterangan_harian:keterangan_id(tanggal, pertemuan_no)')
+      .in('halaqah_id', halaqahIds)
+      .in('status', ['pending', 'awaiting_reason'])
+      .order('created_at', { ascending: false });
+```
+
+Tepat sebelum `tabayyunItems = (tabRows ?? []).map(...)` (baris 69), sisipkan:
+
+```ts
+    const hutangByHal = await computeHutangForHalaqahList(halaqahIds);
+```
+
+Lalu di dalam objek hasil `.map`, tambahkan empat field di samping yang sudah ada:
+
+```ts
+        saldo_hutang: hutangByHal.get(t.halaqah_id)?.saldo ?? 0,
+        bayar_menit_klaim: (t.bayar_menit_klaim as number | null) ?? null,
+        bayar_catatan: (t.bayar_catatan as string | null) ?? null,
+        izin_selisih_menit: (t.izin_selisih_menit as number | null) ?? 0,
+```
+
+- [ ] **Step 7: Amankan API publik**
+
+Buka `src/lib/api-public/registry.ts:247` (entitas `hits/hutang-bayar`). Tambahkan `'sumber'` ke daftar kolom yang diekspos. **Jangan** menambahkan entitas atau kolom untuk `bayar_catatan` / `bayar_menit_klaim` / `izin_selisih_menit` — itu teks bebas & data klarifikasi personal.
+
+- [ ] **Step 8: Typecheck & lint**
 
 Run: `npm run typecheck && npm run lint`
-Expected: lolos tanpa error.
+Expected: lolos tanpa error. Audit `FORBIDDEN_COLUMNS` berjalan saat modul dimuat dan akan melempar error kalau kolom terlarang ikut terekspos.
 
-- [ ] **Step 5: Uji manual halaman**
+- [ ] **Step 9: Uji manual halaman**
 
 Siapkan token uji pada satu tabayyun yang masih `pending` di DB lokal:
 
@@ -700,14 +854,25 @@ Expected: halaman tampil tanpa diminta login; bila halaqah punya saldo hutang > 
 Buka juga `http://localhost:3000/tabayyun/tokensalah`.
 Expected: halaman 404.
 
-- [ ] **Step 6: Commit**
+- [ ] **Step 10: Uji manual dua jalur berujung sama**
+
+Masih di `npm run dev`:
+1. Buka `/tabayyun/tokenujilokal123` (tanpa login), isi alasan + menit, submit.
+2. Login sebagai pengajar pemilik halaqah itu, buka `/hits/pengajar`.
+
+Expected: panel tabayyun menampilkan alasan & menit yang barusan dikirim (nilai
+awal form terisi), bukan form kosong.
+
+- [ ] **Step 11: Commit**
 
 ```bash
-git add src/components/TabayyunKlarifikasiForm.tsx src/app/tabayyun
-git commit -m "feat(tabayyun): halaman klarifikasi publik via token
+git add src/components/TabayyunKlarifikasiForm.tsx src/app/tabayyun src/app/hits/pengajar src/lib/api-public/registry.ts
+git commit -m "feat(tabayyun): form klarifikasi bersama untuk jalur token & login
 
 Rute /tabayyun/<token> tanpa login (middleware repo memakai daftar protected).
-Klaim menit wajib bila saldo hutang > 0; token mati saat status decided."
+Klaim menit wajib bila saldo hutang > 0; token mati saat status decided.
+/hits/pengajar memakai komponen & validasi yang sama. Kolom sumber diekspos di
+API publik; bayar_catatan dan izin_selisih_menit sengaja tidak."
 ```
 
 ---
@@ -846,7 +1011,7 @@ Di `src/app/observasi/koordinator/page.tsx`, ganti `select` tabayyun (baris 78-8
     .from('hits_tabayyun')
     .select(
       `id, kondisi, status, alasan_pengajar, deadline_at, reminder_sent_at, pengajar_id,
-       keterangan_id, bayar_menit_klaim, bayar_catatan, bayar_menit_disetujui,
+       keterangan_id, bayar_menit_klaim, bayar_catatan, bayar_menit_disetujui, izin_selisih_menit,
        pengajar:pengajar_id(name),
        halaqah:halaqah_id(name, gender),
        keterangan:keterangan_id(tanggal)`
@@ -870,6 +1035,7 @@ Perluas `type TabRow` (baris 88-99) dengan field baru:
     bayar_menit_klaim: number | null;
     bayar_catatan: string | null;
     bayar_menit_disetujui: number | null;
+    izin_selisih_menit: number | null;
     pengajar: { name: string } | null;
     halaqah: { name: string; gender: string } | null;
     keterangan: { tanggal: string } | null;
@@ -906,6 +1072,7 @@ Lalu di objek `.map((t) => ({ ... }))` (mulai baris 102), tambahkan empat field 
       bayar_menit_klaim: t.bayar_menit_klaim,
       bayar_catatan: t.bayar_catatan,
       bayar_menit_disetujui: t.bayar_menit_disetujui,
+      izin_selisih_menit: t.izin_selisih_menit ?? 0,
       bayar_menit_ketua: t.keterangan_id ? (bayarKetuaByKet.get(t.keterangan_id) ?? 0) : 0,
 ```
 
@@ -929,6 +1096,8 @@ interface Props {
     bayar_menit_klaim: number | null;
     bayar_catatan: string | null;
     bayar_menit_disetujui: number | null;
+    /** Menit observasi − menit yang dilaporkan lewat izin pra-kelas. */
+    izin_selisih_menit: number;
     /** Kredit untuk pertemuan ini yang sudah dilaporkan ketua kelas. */
     bayar_menit_ketua: number;
   };
@@ -938,6 +1107,23 @@ interface Props {
 Lalu di dalam `<form action={handleDecide}>`, tepat **sesudah** `<input type="hidden" name="tabayyun_id" ... />` dan **sebelum** blok radio udzur, sisipkan:
 
 ```tsx
+        {t.izin_selisih_menit > 0 && (
+          <div
+            className="t-small"
+            style={{
+              marginBottom: 8,
+              padding: '8px 10px',
+              background: 'var(--kuning-tint)',
+              border: '1px solid var(--kuning-line)',
+              borderRadius: 6,
+              color: 'var(--kuning-ink)',
+              fontWeight: 600,
+            }}
+          >
+            Izin pra-kelas tidak menutupi seluruh catatan observasi — selisih {t.izin_selisih_menit} menit.
+          </div>
+        )}
+
         {t.bayar_menit_klaim != null && (
           <div
             className="t-small"
@@ -1003,192 +1189,356 @@ dilaporkan ketua untuk pertemuan yang sama sebagai pencegah dobel-hitung."
 
 ---
 
-## Agent 5 — Jalur login, API publik, verifikasi akhir
+## Agent 5 — Aturan izin, pagar ledger, verifikasi akhir
 
 **Prasyarat:** Agent 1-4 sudah commit.
 
+Agent ini memperbaiki cacat yang ditemukan saat menelaah alur: izin pra-kelas
+menutup tabayyun tanpa pernah membandingkan menit. Izin "terlambat 10 menit"
+menutup observasi 15 menit, dan pertanyaan hutang tak pernah muncul untuk kasus
+berizin.
+
 **Files:**
-- Modify: `src/app/hits/pengajar/TabayyunAlasanForm.tsx`
-- Modify: `src/app/hits/pengajar/page.tsx:60-80`
-- Modify: `src/app/hits/pengajar/actions.ts:18-59`
-- Modify: `src/lib/api-public/registry.ts:247`
+- Modify: `src/lib/shakwa-izin.ts` (tambah fungsi murni; ubah `backfillTabayyunDariIzin` baris 151-186)
+- Modify: `scripts/test-shakwa.ts`
+- Modify: `src/app/hits/ketua/actions.ts:290`, `:300`, `:330-353`
 
-- [ ] **Step 1: Terima klaim menit di server action jalur login**
+- [ ] **Step 1: Tulis uji yang gagal untuk `kebutuhanTabayyunIzin`**
 
-Di `src/app/hits/pengajar/actions.ts`, tambahkan impor:
+Tambahkan di `scripts/test-shakwa.ts`, tepat **sebelum** baris
+`if (failed) { console.error(...); process.exit(1); }` di akhir file:
 
 ```ts
-import { computeHutangForHalaqah } from '@/lib/hits-hutang';
-import { validateKlaimMenit } from '@/lib/hits-tabayyun';
+// --- Kebutuhan tabayyun setelah izin dicocokkan ---
+const KTI = (menitIzin: number | null, menitObservasi: number | null, saldoHutang: number) =>
+  kebutuhanTabayyunIzin({ menitIzin, menitObservasi, saldoHutang });
+
+eq(KTI(10, 15, 0),
+   { status: 'pending', selisihMenit: 5, perluAlasanTambahan: true, perluKlaimHutang: false },
+   'izin 10 vs observasi 15 -> selisih 5, tetap pending');
+eq(KTI(15, 10, 0),
+   { status: 'awaiting_reason', selisihMenit: 0, perluAlasanTambahan: false, perluKlaimHutang: false },
+   'izin lebih longgar dari observasi -> selisih 0, tak dihukum');
+eq(KTI(15, 15, 0),
+   { status: 'awaiting_reason', selisihMenit: 0, perluAlasanTambahan: false, perluKlaimHutang: false },
+   'izin pas + saldo 0 -> awaiting_reason (perilaku lama dipertahankan)');
+eq(KTI(15, 15, 40),
+   { status: 'pending', selisihMenit: 0, perluAlasanTambahan: false, perluKlaimHutang: true },
+   'izin pas tapi saldo 40 -> tetap pending demi pertanyaan hutang');
+eq(KTI(null, 15, 0),
+   { status: 'awaiting_reason', selisihMenit: 0, perluAlasanTambahan: false, perluKlaimHutang: false },
+   'izin tanpa menit (TIDAK_HADIR) -> selisih 0');
+eq(KTI(10, null, 0),
+   { status: 'awaiting_reason', selisihMenit: 0, perluAlasanTambahan: false, perluKlaimHutang: false },
+   'observasi tanpa menit (JKG/BADAL) -> selisih 0');
+eq(KTI(10, 15, 40),
+   { status: 'pending', selisihMenit: 5, perluAlasanTambahan: true, perluKlaimHutang: true },
+   'selisih dan hutang bersamaan -> pending, dua-duanya ditandai');
 ```
 
-Lalu di `submitAlasanTabayyun`, ganti blok update (baris 39-47) menjadi:
+Lalu perluas impor `shakwa-izin` di baris 16 menjadi:
 
 ```ts
-  const { saldo } = await computeHutangForHalaqah(tab.halaqah_id as string);
-  const klaim = validateKlaimMenit(String(fd.get('bayar_menit_klaim') ?? ''), saldo);
-  if ('error' in klaim) return { error: klaim.error };
-  const bayarCatatan = String(fd.get('bayar_catatan') ?? '').trim();
+import { alasanDariIzin, berasalDariIzin, izinCocokKondisi, dalamJendelaYatim, kebutuhanTabayyunIzin, PENANDA_IZIN } from '@/lib/shakwa-izin';
+```
+
+- [ ] **Step 2: Jalankan uji, pastikan GAGAL**
+
+Run: `npm run test-shakwa`
+Expected: gagal saat kompilasi/impor dengan pesan seperti `has no exported member 'kebutuhanTabayyunIzin'`.
+
+- [ ] **Step 3: Implementasi aturan murni**
+
+Tambahkan di `src/lib/shakwa-izin.ts`, tepat **sesudah** fungsi `izinCocokKondisi`
+(baris 67) supaya semua fungsi murni berkumpul:
+
+```ts
+export type KebutuhanTabayyun = {
+  /** Status tabayyun yang harus dipakai saat izin sudah dicocokkan. */
+  status: 'pending' | 'awaiting_reason';
+  /** Menit observasi − menit izin. > 0 = izin tidak menutupi seluruhnya. */
+  selisihMenit: number;
+  perluAlasanTambahan: boolean;
+  perluKlaimHutang: boolean;
+};
+
+/**
+ * Izin dipakai sebagai konteks, tapi tidak lagi menutup tabayyun sendirian.
+ * Murni — dipakai jalur maju (hits/ketua) dan jalur balik (backfill) supaya
+ * tidak ada dua sumber kebenaran.
+ *
+ * - `menitIzin` null (izin TIDAK_HADIR) atau `menitObservasi` null (JKG/BADAL,
+ *   tak berbasis menit) → tak ada yang bisa dibandingkan, selisih 0.
+ * - Izin lebih longgar dari observasi (lapor 15, tercatat 10) → selisih 0.
+ *   Pengajar tidak dihukum karena melapor berlebih.
+ * - Saldo hutang > 0 → tetap `pending` walau izinnya pas, karena izin
+ *   menjelaskan KENAPA terlambat, bukan APAKAH hutangnya sudah ditunaikan.
+ */
+export function kebutuhanTabayyunIzin(args: {
+  menitIzin: number | null;
+  menitObservasi: number | null;
+  saldoHutang: number;
+}): KebutuhanTabayyun {
+  const { menitIzin, menitObservasi, saldoHutang } = args;
+  const selisihMenit =
+    menitIzin == null || menitObservasi == null
+      ? 0
+      : Math.max(0, menitObservasi - menitIzin);
+  const perluAlasanTambahan = selisihMenit > 0;
+  const perluKlaimHutang = saldoHutang > 0;
+  return {
+    status: perluAlasanTambahan || perluKlaimHutang ? 'pending' : 'awaiting_reason',
+    selisihMenit,
+    perluAlasanTambahan,
+    perluKlaimHutang,
+  };
+}
+```
+
+- [ ] **Step 4: Jalankan uji, pastikan LULUS**
+
+Run: `npm run test-shakwa`
+Expected: semua baris `ok`, diakhiri `Semua uji Shakwa lolos.`, exit code 0.
+
+- [ ] **Step 5: Pagari replace-all milik ketua kelas**
+
+Di `src/app/hits/ketua/actions.ts:290`, ganti baris:
+
+```ts
+  await supabaseAdmin.from('hits_hutang_bayar').delete().eq('keterangan_id', saved.id);
+```
+
+menjadi:
+
+```ts
+  // Hanya sapu kredit yang dilaporkan ketua. Kredit sumber='tabayyun' (disetujui
+  // koordinator) TIDAK boleh ikut terhapus saat ketua mengedit pertemuan ini.
+  await supabaseAdmin
+    .from('hits_hutang_bayar')
+    .delete()
+    .eq('keterangan_id', saved.id)
+    .eq('sumber', 'ketua');
+```
+
+- [ ] **Step 6: Tandai insert ketua secara eksplisit**
+
+Di blok insert tepat di bawahnya (sekitar baris 300), tambahkan field `sumber`
+sehingga objek insert menjadi:
+
+```ts
+      const { error: bayarErr } = await supabaseAdmin.from('hits_hutang_bayar').insert({
+        halaqah_id: halaqahId,
+        pengajar_id: (hq?.pengajar_id as string | null) ?? null,
+        keterangan_id: saved.id,
+        menit,
+        tanggal: match.tanggal,
+        dilaporkan_oleh: session.ketua_kelas_id,
+        sumber: 'ketua',
+      });
+```
+
+- [ ] **Step 7: Jalur maju — izin tak lagi menutup tabayyun sendirian**
+
+Tambahkan `kebutuhanTabayyunIzin` ke impor `shakwa-izin` di baris 13:
+
+```ts
+import { cariIzinCocok, alasanDariIzin, tandaiIzinTerpakai, kebutuhanTabayyunIzin } from '@/lib/shakwa-izin';
+```
+
+Lalu di blok `if (!existing) { ... }` (baris 330-353), ganti seluruh isinya menjadi:
+
+```ts
+      // Pengajar sudah lapor izin lewat Shakwa untuk tanggal ini? Alasannya dipakai
+      // sebagai konteks — tapi izin TIDAK menutup tabayyun sendirian: bila menitnya
+      // tak menutupi observasi, atau masih ada saldo hutang, status tetap 'pending'
+      // supaya pengajar tetap ditanya lewat tautan tabayyun.
+      const izin = await cariIzinCocok({
+        pengajarId: halaqah?.pengajar_id,
+        halaqahId,
+        tanggal: match.tanggal,
+        jenisList,
+      });
+
+      let statusBaru: 'pending' | 'awaiting_reason' = 'pending';
+      let selisihIzin: number | null = null;
+      if (izin) {
+        // Menit observasi untuk jenis yang dicocokkan izin. 0 → null (tak ada
+        // menit yang bisa dibandingkan, mis. izin TIDAK_HADIR atau jenis JKG).
+        const menitObservasi =
+          pelRows
+            .filter((p) => p.jenis === izin.jenis)
+            .reduce((s, p) => s + (p.menit ?? 0), 0) || null;
+        const { saldo: saldoKini } = await computeHutangForHalaqah(halaqahId);
+        const kebutuhan = kebutuhanTabayyunIzin({
+          menitIzin: izin.menit,
+          menitObservasi,
+          saldoHutang: saldoKini,
+        });
+        statusBaru = kebutuhan.status;
+        selisihIzin = kebutuhan.selisihMenit;
+      }
+
+      const { data: tabBaru } = await supabaseAdmin
+        .from('hits_tabayyun')
+        .insert({
+          keterangan_id: saved.id,
+          halaqah_id: halaqahId,
+          pengajar_id: halaqah?.pengajar_id ?? null,
+          kondisi: head,
+          status: statusBaru,
+          alasan_pengajar: izin ? alasanDariIzin(izin) : null,
+          alasan_submitted_at: izin ? izin.dikirimAt : null,
+          izin_selisih_menit: selisihIzin,
+        })
+        .select('id')
+        .single();
+      if (izin && tabBaru?.id) await tandaiIzinTerpakai(izin.id, tabBaru.id as string);
+```
+
+Catatan: `computeHutangForHalaqah` sudah diimpor di berkas ini (dipakai baris
+292) — jangan tambah impor ganda. Saldo dihitung **sesudah** `hits_pelanggaran`
+dan `hits_hutang_bayar` pertemuan ini tersimpan, jadi sudah mencerminkan debit
+pertemuan yang baru saja diisi.
+
+- [ ] **Step 8: Jalur balik — aturan yang sama saat izin datang belakangan**
+
+Di `src/lib/shakwa-izin.ts`, tambahkan impor di bagian atas berkas:
+
+```ts
+import { computeHutangForHalaqah } from './hits-hutang';
+```
+
+Lalu ganti isi `backfillTabayyunDariIzin` (baris 151-186) menjadi:
+
+```ts
+export async function backfillTabayyunDariIzin(izin: IzinCocok): Promise<string | null> {
+  let q = supabaseAdmin
+    .from('hits_tabayyun')
+    .select('id, kondisi, halaqah_id, keterangan_id, keterangan:keterangan_id(tanggal)')
+    .eq('pengajar_id', izin.pengajarId)
+    .eq('status', 'pending')
+    .is('alasan_pengajar', null);
+  if (izin.halaqahId) q = q.eq('halaqah_id', izin.halaqahId);
+
+  const { data } = await q;
+  const rows = (data ?? []) as unknown as Array<{
+    id: string;
+    kondisi: string;
+    halaqah_id: string;
+    keterangan_id: string;
+    keterangan: { tanggal: string } | null;
+  }>;
+
+  const cocok = rows.find(
+    (r) => r.keterangan?.tanggal === izin.tanggal && izinCocokKondisi(izin.jenis, r.kondisi)
+  );
+  if (!cocok) return null;
+
+  // Aturan yang sama seperti jalur maju di hits/ketua: izin jadi konteks, bukan
+  // penutup otomatis.
+  const { data: pels } = await supabaseAdmin
+    .from('hits_pelanggaran')
+    .select('jenis, menit')
+    .eq('keterangan_id', cocok.keterangan_id);
+  const menitObservasi =
+    (pels ?? [])
+      .filter((p) => (p.jenis as string) === izin.jenis)
+      .reduce((s, p) => s + ((p.menit as number | null) ?? 0), 0) || null;
+  const { saldo } = await computeHutangForHalaqah(cocok.halaqah_id);
+  const kebutuhan = kebutuhanTabayyunIzin({
+    menitIzin: izin.menit,
+    menitObservasi,
+    saldoHutang: saldo,
+  });
 
   const { error } = await supabaseAdmin
     .from('hits_tabayyun')
     .update({
-      alasan_pengajar: alasan,
-      alasan_submitted_at: new Date().toISOString(),
-      bayar_menit_klaim: saldo > 0 ? klaim.menit : null,
-      bayar_catatan: saldo > 0 && bayarCatatan ? bayarCatatan : null,
-      status: 'awaiting_reason',
+      status: kebutuhan.status,
+      alasan_pengajar: alasanDariIzin(izin),
+      alasan_submitted_at: izin.dikirimAt,
+      izin_selisih_menit: kebutuhan.selisihMenit,
     })
-    .eq('id', tabayyunId);
-  if (error) return { error: `Gagal menyimpan: ${error.message}` };
-```
-
-- [ ] **Step 2: Pakai form bersama di panel pengajar**
-
-Ganti isi `src/app/hits/pengajar/TabayyunAlasanForm.tsx` menjadi:
-
-```tsx
-'use client';
-
-import { submitAlasanTabayyun } from './actions';
-import { hitsHeadlineLabel } from '@/types/db';
-import { TabayyunKlarifikasiForm } from '@/components/TabayyunKlarifikasiForm';
-
-export type TabayyunForPengajar = {
-  id: string;
-  halaqah_name: string;
-  kondisi: string;
-  tanggal: string;
-  pertemuan_no: number;
-  status: string;
-  alasan_pengajar: string | null;
-  saldo_hutang: number;
-  bayar_menit_klaim: number | null;
-  bayar_catatan: string | null;
-};
-
-function OneTabayyun({ t }: { t: TabayyunForPengajar }) {
-  const sudahKirim = t.status === 'awaiting_reason' || t.status === 'decided';
-
-  async function handleSubmit(fd: FormData) {
-    return submitAlasanTabayyun(undefined, fd);
+    .eq('id', cocok.id);
+  if (error) {
+    console.error('backfillTabayyunDariIzin: gagal update tabayyun', error);
+    return null;
   }
-
-  return (
-    <div className="card-flat" style={{ padding: '12px 14px', marginBottom: 8 }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-        <div style={{ fontWeight: 600, fontSize: 14 }}>{t.halaqah_name}</div>
-        <span className="badge" style={{ background: 'var(--kuning-tint)', borderColor: 'var(--kuning-line)', color: 'var(--kuning-ink)' }}>
-          {t.kondisi}
-        </span>
-      </div>
-      <div className="t-small" style={{ color: 'var(--muted-2)', marginBottom: 8 }}>
-        Pertemuan {t.pertemuan_no} · {t.tanggal} · {hitsHeadlineLabel(t.kondisi)}
-      </div>
-      {t.status === 'decided' ? (
-        <div className="t-small" style={{ color: 'var(--hijau-ink)' }}>
-          ✓ Sudah diputuskan koordinator.
-        </div>
-      ) : (
-        <>
-          {sudahKirim && (
-            <div className="t-small" style={{ color: 'var(--hijau-ink)', marginBottom: 8 }}>
-              ✓ Klarifikasi sudah terkirim · masih bisa direvisi selama belum diputuskan.
-            </div>
-          )}
-          <TabayyunKlarifikasiForm
-            tabayyunId={t.id}
-            saldoHutang={t.saldo_hutang}
-            alasanAwal={t.alasan_pengajar}
-            menitAwal={t.bayar_menit_klaim}
-            catatanAwal={t.bayar_catatan}
-            onSubmit={handleSubmit}
-          />
-        </>
-      )}
-    </div>
-  );
-}
-
-export function TabayyunAlasanPanel({ items }: { items: TabayyunForPengajar[] }) {
-  if (items.length === 0) return null;
-  return (
-    <div style={{ marginBottom: 24 }}>
-      <h2 className="t-h2" style={{ marginBottom: 4 }}>Tabayyun — Klarifikasi Kondisi Kelas ({items.length})</h2>
-      <p className="t-small" style={{ color: 'var(--muted-2)', marginBottom: 12 }}>
-        Kondisi kelas tercatat tidak ideal. Mohon sampaikan alasan/klarifikasi.
-      </p>
-      {items.map((t) => <OneTabayyun key={t.id} t={t} />)}
-    </div>
-  );
+  await tandaiIzinTerpakai(izin.id, cocok.id);
+  return cocok.id;
 }
 ```
 
-- [ ] **Step 3: Suplai saldo & klaim dari halaman pengajar**
-
-Di `src/app/hits/pengajar/page.tsx`, tambahkan impor:
-
-```ts
-import { computeHutangForHalaqahList } from '@/lib/hits-hutang';
-```
-
-Ganti `select` tabayyun (baris 64-68) menjadi:
+Perbarui juga komentar dokumentasi di atas fungsi (baris 141-150) supaya tidak
+lagi menjanjikan bahwa pengajar "tak ditagih klarifikasi":
 
 ```ts
-      .from('hits_tabayyun')
-      .select('id, halaqah_id, kondisi, status, alasan_pengajar, bayar_menit_klaim, bayar_catatan, hits_keterangan_harian:keterangan_id(tanggal, pertemuan_no)')
-      .in('halaqah_id', halaqahIds)
-      .in('status', ['pending', 'awaiting_reason'])
-      .order('created_at', { ascending: false });
+/**
+ * Reverse-link: pengajar mengirim izin SETELAH ketua kelas terlanjur mengisi
+ * observasi (tabayyun sudah 'pending' tanpa alasan). Alasan izin diisikan
+ * sebagai konteks; statusnya ditentukan kebutuhanTabayyunIzin — hanya menjadi
+ * 'awaiting_reason' bila izin menutupi menit observasi DAN tak ada saldo hutang.
+ *
+ * Hanya menyentuh tabayyun 'pending' tanpa alasan_pengajar — tak menimpa yang
+ * sudah 'awaiting_reason'/'decided' atau sudah punya alasan. Return id tabayyun
+ * yang ter-backfill, atau null bila tak ada yang cocok.
+ */
 ```
 
-Tepat sebelum `tabayyunItems = (tabRows ?? []).map(...)` (baris 69), sisipkan:
+- [ ] **Step 9: Typecheck & lint**
 
-```ts
-    const hutangByHal = await computeHutangForHalaqahList(halaqahIds);
-```
+Run: `npm run typecheck && npm run lint`
+Expected: lolos tanpa error.
 
-Lalu di dalam objek hasil `.map`, tambahkan tiga field di samping yang sudah ada:
+- [ ] **Step 10: Uji manual skenario yang dilaporkan**
 
-```ts
-        saldo_hutang: hutangByHal.get(t.halaqah_id)?.saldo ?? 0,
-        bayar_menit_klaim: (t.bayar_menit_klaim as number | null) ?? null,
-        bayar_catatan: (t.bayar_catatan as string | null) ?? null,
-```
+Run: `npm run dev`.
 
-- [ ] **Step 4: Amankan API publik**
+1. Sebagai pengajar, kirim izin lewat `/shakwa` kategori izin: jenis KMT,
+   **10 menit**, untuk tanggal pertemuan tertentu.
+2. Sebagai ketua kelas, isi observasi pertemuan itu: KMT **15 menit**.
+3. Periksa DB:
+   ```bash
+   psql "$DATABASE_URL" -c "select status, izin_selisih_menit, left(alasan_pengajar, 40) from hits_tabayyun order by created_at desc limit 1;"
+   ```
+   Expected: `status = pending`, `izin_selisih_menit = 5`, `alasan_pengajar`
+   berisi teks izin. **Bukan** `awaiting_reason`.
+4. Sebagai koordinator, buka `/observasi/koordinator` → kartu menampilkan badge
+   "selisih 5 menit" dan tombol "Reminder Tabayyun" tetap tersedia.
+5. Buka tautan token dari WA → halaman menampilkan peringatan selisih 5 menit
+   dan field klaim hutang.
+6. Ulangi langkah 1-3 dengan izin **15 menit** dan observasi **15 menit** pada
+   halaqah yang saldo hutangnya 0.
+   Expected: `status = awaiting_reason`, `izin_selisih_menit = 0` — perilaku lama
+   dipertahankan untuk kasus yang benar-benar bersih.
 
-Buka `src/lib/api-public/registry.ts:247` (entitas `hits/hutang-bayar`). Tambahkan `'sumber'` ke daftar kolom yang diekspos. **Jangan** menambahkan entitas atau kolom untuk `bayar_catatan` / `bayar_menit_klaim` — itu teks bebas & data klarifikasi personal.
-
-Run: `npm run typecheck`
-Expected: lolos. Audit `FORBIDDEN_COLUMNS` berjalan saat modul dimuat dan akan melempar error kalau kolom terlarang ikut terekspos.
-
-- [ ] **Step 5: Jalankan seluruh verifikasi**
+- [ ] **Step 11: Verifikasi menyeluruh**
 
 ```bash
 npm run test-tabayyun
+npm run test-shakwa
 npm run typecheck
 npm run lint
 npm run build
 ```
-Expected: keempatnya lolos. `npm run test-tabayyun` menampilkan semua `ok` tanpa `FAIL`.
+Expected: kelimanya lolos, tanpa `FAIL` pada kedua skrip uji.
 
-- [ ] **Step 6: Uji manual dua jalur berujung sama**
-
-Run: `npm run dev`.
-1. Buka `/tabayyun/<token>` (tanpa login) untuk satu tabayyun, isi alasan + menit, submit.
-2. Login sebagai pengajar pemilik halaqah itu, buka `/hits/pengajar`.
-Expected: panel tabayyun menampilkan alasan & menit yang barusan dikirim (nilai awal form terisi), bukan form kosong.
-
-- [ ] **Step 7: Commit**
+- [ ] **Step 12: Commit**
 
 ```bash
-git add src/app/hits/pengajar src/lib/api-public/registry.ts
-git commit -m "feat(tabayyun): jalur login pakai form klarifikasi bersama
+git add src/lib/shakwa-izin.ts scripts/test-shakwa.ts src/app/hits/ketua/actions.ts
+git commit -m "fix(tabayyun): izin pra-kelas tak lagi menutup tabayyun sendirian
 
-/hits/pengajar dan /tabayyun/<token> kini memakai komponen & validasi yang
-sama, jadi klaim menit tersimpan lewat jalur mana pun. Kolom sumber diekspos
-di API publik; bayar_catatan sengaja tidak."
+Sebelumnya cariIzinCocok hanya mencocokkan pengajar+tanggal+jenis, jadi izin
+'terlambat 10 menit' menutup observasi 15 menit dan pengajar tak pernah ditanya
+soal selisihnya maupun soal hutang menitnya.
+
+kebutuhanTabayyunIzin kini menentukan status: awaiting_reason hanya bila izin
+menutupi menit observasi DAN saldo hutang 0. Selisihnya disimpan di
+izin_selisih_menit untuk ditampilkan ke pengajar dan koordinator. Aturan yang
+sama dipakai jalur maju (hits/ketua) dan jalur balik (backfill).
+
+Sekalian memasang pagar sumber='ketua' pada replace-all ledger."
 ```
 
 ---

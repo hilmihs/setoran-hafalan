@@ -25,6 +25,24 @@ koordinator memutuskan tabayyun tanpa melihat klaim pengajar.
 - `src/middleware.ts` memakai daftar **protected**; rute yang tidak terdaftar
   bersifat publik (contoh: `/shakwa`).
 
+### Cacat yang ditemukan saat menelaah alur
+
+Izin pra-kelas (Shakwa) menutup tabayyun secara otomatis **tanpa pernah
+membandingkan menit**:
+
+- Jalur maju — `src/app/hits/ketua/actions.ts:334-353`: `cariIzinCocok` mencocokkan
+  pengajar + tanggal + jenis saja, lalu tabayyun dibuat langsung dengan
+  `status='awaiting_reason'` dan `alasan_pengajar` dari izin.
+- Jalur balik — `backfillTabayyunDariIzin` (`src/lib/shakwa-izin.ts:151-186`):
+  `izinCocokKondisi` juga hanya membandingkan jenis.
+
+Akibatnya, pengajar yang melapor izin "terlambat 10 menit" sementara observasi
+ketua kelas mencatat 15 menit dianggap sudah selesai berklarifikasi. Selisih 5
+menit tak pernah ditanyakan, dan pertanyaan hutang tak pernah muncul sama sekali
+untuk kasus berizin — padahal debit hutang tetap terbentuk (`max(0, 15-5)` = 10
+menit, `src/lib/hits-hutang.ts:25`) karena debit dihitung murni dari
+`hits_pelanggaran`, tidak peduli ada izin atau tidak.
+
 ## Keputusan
 
 1. **Klaim, bukan kredit langsung.** Angka yang diisi pengajar disimpan sebagai
@@ -42,6 +60,14 @@ koordinator memutuskan tabayyun tanpa melihat klaim pengajar.
    `pending` di ledger akan memaksa setiap pembaca (`hits-hutang.ts`, registry API
    publik `hits/hutang-bayar`, rekap, XLSX disiplin) mengingat filter — satu yang
    lupa berarti saldo salah.
+6. **Izin tetap dipakai sebagai konteks, tapi tidak lagi menutup tabayyun
+   sendirian.** Teks izin tetap mengisi `alasan_pengajar`, namun status hanya
+   menjadi `awaiting_reason` bila izin benar-benar menutupi menit observasi
+   **dan** tidak ada saldo hutang. Selain itu status tetap `pending` sehingga
+   reminder + tautan token tetap berjalan.
+7. **Pertanyaan hutang berlaku untuk semua tabayyun bersaldo > 0**, termasuk yang
+   izinnya menutupi menit dengan pas. Izin menjelaskan *kenapa* terlambat, bukan
+   *apakah* hutangnya sudah ditunaikan — dua hal berbeda.
 
 ## Skema
 
@@ -54,7 +80,8 @@ alter table hits_tabayyun
   add column akses_token text unique,
   add column bayar_menit_klaim integer check (bayar_menit_klaim >= 0),
   add column bayar_catatan text,
-  add column bayar_menit_disetujui integer check (bayar_menit_disetujui >= 0);
+  add column bayar_menit_disetujui integer check (bayar_menit_disetujui >= 0),
+  add column izin_selisih_menit integer check (izin_selisih_menit >= 0);
 
 alter table hits_hutang_bayar
   add column sumber text not null default 'ketua'
@@ -73,6 +100,36 @@ sama. Karena itu:
 - Replace-all milik ketua diberi filter `.eq('sumber', 'ketua')`.
 - Baris hasil tabayyun ditulis dengan `sumber = 'tabayyun'`.
 - `computeHutang*` tidak berubah — tetap menjumlah semua baris.
+
+## Aturan izin → status tabayyun
+
+Fungsi murni baru di `src/lib/shakwa-izin.ts`, dipakai kedua jalur (maju di
+`hits/ketua/actions.ts` dan balik di `backfillTabayyunDariIzin`) supaya tidak ada
+dua sumber kebenaran:
+
+```
+selisihMenit = (menitIzin == null || menitObservasi == null)
+                 ? 0
+                 : max(0, menitObservasi - menitIzin)
+
+perluAlasanTambahan = selisihMenit > 0
+perluKlaimHutang    = saldoHutang > 0
+
+status = (perluAlasanTambahan || perluKlaimHutang) ? 'pending' : 'awaiting_reason'
+```
+
+- `menitIzin` null (mis. izin `TIDAK_HADIR`, atau jenis tanpa menit seperti JKG)
+  → tidak ada yang bisa dibandingkan, `selisihMenit` = 0.
+- Izin melebihi observasi (lapor 15, tercatat 10) → `selisihMenit` = 0. Pengajar
+  tidak dihukum karena melapor lebih longgar.
+- `selisihMenit` disimpan di kolom `izin_selisih_menit` supaya kartu koordinator
+  dan halaman token bisa menampilkannya tanpa menghitung ulang.
+- `alasan_pengajar` tetap diisi teks izin apa pun hasilnya; yang berubah hanya
+  status. Jadi koordinator tidak kehilangan konteks, dan penanda `PENANDA_IZIN`
+  tetap bekerja.
+- Saat status tetap `pending`, jam ghosting 72 jam **tetap baru mulai setelah
+  koordinator mengirim reminder** — perilaku ini tidak berubah, jadi pengajar
+  yang sudah beritikad melapor izin tidak tiba-tiba dianggap ghosting.
 
 ## Token
 
@@ -97,6 +154,9 @@ Isi halaman:
 
 - Nama pengajar, kelas, tanggal, rincian pelanggaran (pakai ulang
   `describePelanggaran`), saldo hutang terkini halaqah.
+- Bila `izin_selisih_menit > 0`: blok peringatan yang menyebutkan menit yang
+  dilaporkan lewat izin vs menit hasil observasi, dan meminta penjelasan
+  selisihnya. Kotak alasan sudah terisi teks izin — pengajar menambahkan.
 - `status = 'decided'` → tampilan read-only "sudah diputuskan".
 - Form:
   - `alasan` — textarea, wajib.
@@ -122,6 +182,7 @@ sudah ditunaikan pada pertemuan tersebut.
 `TabayyunCard` + `decideTabayyun` (`src/app/observasi/koordinator/`):
 
 - Tampilkan blok klaim: "Pengajar mengaku menunaikan **X menit**" + catatan.
+- Bila `izin_selisih_menit > 0`, tampilkan badge selisih izin vs observasi.
 - Tampilkan **kredit yang sudah dilaporkan ketua untuk pertemuan ini** (baris
   `hits_hutang_bayar` dengan `keterangan_id` sama) agar koordinator tidak
   menyetujui angka yang sudah tercatat — pencegah dobel-hitung.
@@ -143,6 +204,10 @@ sudah ditunaikan pada pertemuan tersebut.
 | Saldo 0 | Field menit tidak ditampilkan; nilai yang dikirim diabaikan |
 | `disetujui > saldo` saat memutus | Di-cap ke saldo (tidak menggagalkan keputusan) |
 | Keputusan diulang | Kredit `sumber='tabayyun'` di-replace, bukan ditambah |
+| Izin menit < observasi | `izin_selisih_menit` terisi, status tetap `pending` |
+| Izin menit ≥ observasi, saldo 0 | `awaiting_reason` (perilaku lama dipertahankan) |
+| Izin menit ≥ observasi, saldo > 0 | Status tetap `pending` demi pertanyaan hutang |
+| Izin tanpa menit (`TIDAK_HADIR`, JKG) | Selisih 0; status ditentukan saldo saja |
 
 ## Uji
 
@@ -152,8 +217,19 @@ kasus untuk fungsi murni yang baru:
 - klaim > saldo ditolak;
 - `min(disetujui, saldo)` melakukan cap dengan benar;
 - klaim 0 tersimpan sebagai 0 (bukan null);
-- submit setelah `decided` ditolak;
-- keputusan diulang tidak menggandakan kredit.
+
+Aturan izin diuji lewat `scripts/test-shakwa.ts` (sudah mengimpor fungsi murni
+`shakwa-izin`):
+
+- izin 10 vs observasi 15 → selisih 5, status `pending`;
+- izin 15 vs observasi 10 → selisih 0 (tak dihukum karena lapor longgar);
+- izin menit null → selisih 0;
+- izin pas + saldo > 0 → tetap `pending`;
+- izin pas + saldo 0 → `awaiting_reason`.
+
+Yang tak bisa diuji fungsi murni — submit setelah `decided` ditolak, dan
+keputusan diulang tidak menggandakan kredit — diverifikasi manual (langkah uji
+manual di rencana implementasi).
 
 Lalu `npm run typecheck` dan `npm run lint`.
 
