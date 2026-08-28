@@ -6,7 +6,9 @@ export const FORBIDDEN_COLUMNS: string[] = [
   'whatsapp_number', 'ketua_wa', 'wakil_wa', 'pengajar_wa', 'pelapor_wa',
   'magic_token',
   'new_password_plaintext',
-  'token',
+  // 'akses_token' = token /tabayyun/<token>: pemegangnya bisa mengirim
+  // klarifikasi atas nama pengajar. Setara kredensial, jangan pernah diekspos.
+  'token', 'akses_token',
   'audio_url',
   'masukan', 'ket_bacaan', 'ket_hafalan', 'catatan_umum',
 ];

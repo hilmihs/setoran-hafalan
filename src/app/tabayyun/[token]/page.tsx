@@ -2,6 +2,7 @@ import { notFound } from 'next/navigation';
 import { supabaseAdmin } from '@/lib/supabase-admin';
 import { computeHutangForHalaqah } from '@/lib/hits-hutang';
 import { hitsHeadlineLabel } from '@/types/db';
+import { describePelanggaran } from '@/lib/hits-tabayyun';
 import { TabayyunKlarifikasiForm } from '@/components/TabayyunKlarifikasiForm';
 import { submitKlarifikasiPublik } from './actions';
 
@@ -31,8 +32,20 @@ export default async function TabayyunTokenPage({ params }: { params: { token: s
 
   const { data: pelRows } = await supabaseAdmin
     .from('hits_pelanggaran')
-    .select('jenis, menit')
+    .select('jenis, menit, jkg_opsi, cicil_n, badal_nama, badal_mulai')
     .eq('keterangan_id', tab.keterangan_id as string);
+  // Kode mentah ("JKG") tak berarti bagi pengajar — pakai formatter yang sama
+  // dengan pesan WA & kartu koordinator.
+  const pelanggaran = (pelRows ?? []).map((p) =>
+    describePelanggaran({
+      jenis: p.jenis as string,
+      menit: (p.menit as number | null) ?? null,
+      jkg_opsi: (p.jkg_opsi as string | null) ?? null,
+      cicil_n: (p.cicil_n as number | null) ?? null,
+      badal_nama: (p.badal_nama as string | null) ?? null,
+      badal_mulai: (p.badal_mulai as string | null) ?? null,
+    })
+  );
 
   const { saldo } = await computeHutangForHalaqah(tab.halaqah_id as string);
   const decided = tab.status === 'decided';
@@ -55,15 +68,10 @@ export default async function TabayyunTokenPage({ params }: { params: { token: s
           Tercatat: {tab.kondisi as string} — {hitsHeadlineLabel(tab.kondisi as string)}
         </div>
         <ul className="t-small" style={{ margin: 0, paddingLeft: 18, color: 'var(--muted-2)' }}>
-          {(pelRows ?? []).length === 0 ? (
+          {pelanggaran.length === 0 ? (
             <li>(rincian tidak tersedia)</li>
           ) : (
-            (pelRows ?? []).map((p, i) => (
-              <li key={i}>
-                {p.jenis as string}
-                {p.menit ? ` — ${p.menit} menit` : ''}
-              </li>
-            ))
+            pelanggaran.map((baris, i) => <li key={i}>{baris}</li>)
           )}
         </ul>
       </div>

@@ -1,8 +1,40 @@
 // Fungsi MURNI lifecycle tabayyun F3. Tanpa I/O — dipakai server action (guard)
 // & UI (label tombol/badge). Diuji: npm run test-tabayyun.
 
+import { HITS_PELANGGARAN_LABEL, HITS_JKG_OPSI_LABEL } from '@/types/db';
+import type { HitsPelanggaranJenis } from '@/types/db';
+
 export const TABAYYUN_DEADLINE_HOURS = 72;
 const MS_PER_HOUR = 3_600_000;
+
+export type PelanggaranRingkas = {
+  jenis: string;
+  menit: number | null;
+  jkg_opsi?: string | null;
+  cicil_n?: number | null;
+  badal_nama?: string | null;
+  badal_mulai?: string | null;
+};
+
+/**
+ * Satu pelanggaran → baris ringkas berbahasa manusia. Murni. Dipakai template WA
+ * tabayyun, kartu koordinator, DAN halaman token publik — satu sumber kebenaran
+ * supaya pengajar tidak pernah cuma disodori kode mentah ("JKG") tanpa arti.
+ */
+export function describePelanggaran(p: PelanggaranRingkas): string {
+  const label = HITS_PELANGGARAN_LABEL[p.jenis as HitsPelanggaranJenis] ?? p.jenis;
+  let detail = '';
+  if (p.jenis === 'KMT' && p.menit != null) detail = ` — telat ${p.menit} menit`;
+  else if (p.jenis === 'KBLA' && p.menit != null) detail = ` — lebih awal ${p.menit} menit`;
+  else if (p.jenis === 'JKG' && p.jkg_opsi) {
+    detail = ` — ${HITS_JKG_OPSI_LABEL[p.jkg_opsi as 'ganti_hari' | 'cicil'] ?? p.jkg_opsi}`;
+    if (p.jkg_opsi === 'cicil' && p.cicil_n) detail += ` (${p.cicil_n}×)`;
+  } else if (p.jenis === 'BADAL') {
+    detail = p.badal_nama ? ` — oleh ${p.badal_nama}` : '';
+    if (p.badal_mulai) detail += p.badal_mulai === 'lebih_awal' ? ' (mulai lebih awal)' : ' (mulai sesuai jadwal)';
+  }
+  return `${p.jenis} (${label})${detail}`;
+}
 
 export type TabayyunGhostingState =
   | 'not_reminded'    // pending, koordinator belum kirim reminder → jam belum jalan

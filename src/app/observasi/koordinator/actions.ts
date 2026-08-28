@@ -14,36 +14,16 @@ import { logAudit } from '@/lib/audit';
 import { logWaReminder } from '@/lib/wa-log';
 import { getHitsHarian, OBSERVASI_EFEKTIF } from '@/lib/hits-harian';
 import { computeHutangForHalaqah } from '@/lib/hits-hutang';
-import { tabayyunGhostingState, deadlineFromReminder, capBayarDisetujui } from '@/lib/hits-tabayyun';
+import {
+  tabayyunGhostingState,
+  deadlineFromReminder,
+  capBayarDisetujui,
+  describePelanggaran,
+} from '@/lib/hits-tabayyun';
 import { generateTabayyunToken } from '@/lib/hits-tabayyun-token';
-import { HITS_PELANGGARAN_LABEL, HITS_JKG_OPSI_LABEL } from '@/types/db';
-import type { HitsPelanggaranJenis } from '@/types/db';
 
 function jakartaToday(): string {
   return new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Jakarta' });
-}
-
-/** Format satu pelanggaran jadi baris ringkas utk WA tabayyun. */
-function describePelanggaran(p: {
-  jenis: string;
-  menit: number | null;
-  jkg_opsi: string | null;
-  cicil_n: number | null;
-  badal_nama: string | null;
-  badal_mulai: string | null;
-}): string {
-  const label = HITS_PELANGGARAN_LABEL[p.jenis as HitsPelanggaranJenis] ?? p.jenis;
-  let detail = '';
-  if (p.jenis === 'KMT' && p.menit != null) detail = ` — telat ${p.menit} menit`;
-  else if (p.jenis === 'KBLA' && p.menit != null) detail = ` — lebih awal ${p.menit} menit`;
-  else if (p.jenis === 'JKG' && p.jkg_opsi) {
-    detail = ` — ${HITS_JKG_OPSI_LABEL[p.jkg_opsi as 'ganti_hari' | 'cicil'] ?? p.jkg_opsi}`;
-    if (p.jkg_opsi === 'cicil' && p.cicil_n) detail += ` (${p.cicil_n}×)`;
-  } else if (p.jenis === 'BADAL') {
-    detail = p.badal_nama ? ` — oleh ${p.badal_nama}` : '';
-    if (p.badal_mulai) detail += p.badal_mulai === 'lebih_awal' ? ' (mulai lebih awal)' : ' (mulai sesuai jadwal)';
-  }
-  return `${p.jenis} (${label})${detail}`;
 }
 
 /** URL isi keterangan untuk ketua: magic-link (auto-login) bila ada token. */
