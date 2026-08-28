@@ -16,7 +16,7 @@
 
 | File | Tanggung jawab | Pemilik |
 |---|---|---|
-| `supabase/migrations/0059_tabayyun_klaim_hutang.sql` | Kolom klaim, `izin_selisih_menit`, `sumber` | Agent 1 |
+| `supabase/migrations/0060_tabayyun_klaim_hutang.sql` | Kolom klaim, `izin_selisih_menit`, `sumber` | Agent 1 |
 | `src/types/db.ts` | Tipe `HitsTabayyun`, `HitsHutangBayar` | Agent 1 |
 | `src/lib/hits-tabayyun.ts` | Fungsi murni validasi/cap klaim | Agent 2 |
 | `src/lib/hits-tabayyun-token.ts` | Generator token (pakai `node:crypto`, bukan modul murni) | Agent 2 |
@@ -55,7 +55,7 @@ yang mengedit berkas yang sama.
 ## Agent 1 — Fondasi DB & tipe
 
 **Files:**
-- Create: `supabase/migrations/0059_tabayyun_klaim_hutang.sql`
+- Create: `supabase/migrations/0060_tabayyun_klaim_hutang.sql`
 - Modify: `src/types/db.ts:310-320` (`HitsHutangBayar`), `src/types/db.ts:414-430` (`HitsTabayyun`)
 
 Agent ini **tidak** menyentuh `src/app/hits/ketua/actions.ts` — pemakaian kolom
@@ -68,7 +68,7 @@ Expected: baris terakhir `0058_eval_batch_rapot_ujian_terpisah.sql`. Kalau sudah
 
 - [ ] **Step 2: Tulis migrasi**
 
-Create `supabase/migrations/0059_tabayyun_klaim_hutang.sql`:
+Create `supabase/migrations/0060_tabayyun_klaim_hutang.sql`:
 
 ```sql
 -- Klaim penunaian hutang menit oleh pengajar saat tabayyun (spec 2026-08-28).
@@ -104,7 +104,7 @@ comment on column hits_hutang_bayar.sumber is
 
 - [ ] **Step 3: Terapkan migrasi ke DB lokal**
 
-Run: `npm run apply-migration -- supabase/migrations/0059_tabayyun_klaim_hutang.sql`
+Run: `npm run apply-migration -- supabase/migrations/0060_tabayyun_klaim_hutang.sql`
 Expected: selesai tanpa error. (Butuh `DATABASE_URL` lokal di `.env.local`. **Jangan** pakai `npm run db` — itu menembak PRODUKSI.)
 
 - [ ] **Step 4: Verifikasi kolom benar-benar ada**
@@ -178,7 +178,7 @@ itu tugas Agent 5; tipe boleh mendahului pemakaian.)
 - [ ] **Step 8: Commit**
 
 ```bash
-git add supabase/migrations/0059_tabayyun_klaim_hutang.sql src/types/db.ts
+git add supabase/migrations/0060_tabayyun_klaim_hutang.sql src/types/db.ts
 git commit -m "feat(tabayyun): kolom klaim hutang, selisih izin, sumber ledger
 
 Kolom sumber menyiapkan pemisahan kredit ketua vs kredit hasil tabayyun;

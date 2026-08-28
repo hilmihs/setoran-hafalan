@@ -77,8 +77,8 @@ menit, `src/lib/hits-hutang.ts:25`) karena debit dihitung murni dari
 
 ## Skema
 
-Migrasi `supabase/migrations/0059_tabayyun_klaim_hutang.sql`
-(nomor berikutnya setelah `0058`; verifikasi ulang dengan
+Migrasi `supabase/migrations/0060_tabayyun_klaim_hutang.sql`
+(nomor berikutnya setelah `0059_haqibah.sql`; verifikasi ulang dengan
 `ls supabase/migrations | tail -1` sebelum menulis).
 
 ```sql
