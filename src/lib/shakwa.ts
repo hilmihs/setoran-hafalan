@@ -137,13 +137,9 @@ export const KATEGORI: ShakwaKategoriDef[] = [
     butuhLogin: true,
     pakaiLampiran: false,
     waTujuan: 'koordinator_pengajar',
-    fieldTambahan: [
-      {
-        name: 'sudah_info_koordinator',
-        label: 'Apakah sudah menginfokan ke Koordinator / Ketua kelompok pengajar?',
-        opsi: ['Sudah'],
-      },
-    ],
+    // Tanpa pertanyaan "sudah menginfokan koordinator?" — laporan izin ini
+    // sendiri sudah jadi pemberitahuannya, jadi pertanyaannya mubazir.
+    fieldTambahan: [],
   },
   {
     value: 'tali_kasih',
