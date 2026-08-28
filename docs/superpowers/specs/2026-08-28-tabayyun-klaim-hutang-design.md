@@ -68,6 +68,12 @@ menit, `src/lib/hits-hutang.ts:25`) karena debit dihitung murni dari
 7. **Pertanyaan hutang berlaku untuk semua tabayyun bersaldo > 0**, termasuk yang
    izinnya menutupi menit dengan pas. Izin menjelaskan *kenapa* terlambat, bukan
    *apakah* hutangnya sudah ditunaikan — dua hal berbeda.
+8. **Jaring pengaman `TIDAK_HADIR` diperketat.** Izin `TIDAK_HADIR` berhenti
+   menaungi `KMT` dan `KBLA`. Kedua jenis itu berarti kelas **tetap berjalan**
+   (mulai terlambat / berakhir lebih awal), jadi izin "tidak hadir" tidak
+   menjelaskannya — justru bertabrakan dengan laporan ketua kelas. `JKG`,
+   `BADAL`, dan `TIDAK_LATIHAN` tetap dinaungi karena merupakan konsekuensi wajar
+   ketidakhadiran.
 
 ## Skema
 
@@ -120,6 +126,10 @@ status = (perluAlasanTambahan || perluKlaimHutang) ? 'pending' : 'awaiting_reaso
 
 - `menitIzin` null (mis. izin `TIDAK_HADIR`, atau jenis tanpa menit seperti JKG)
   → tidak ada yang bisa dibandingkan, `selisihMenit` = 0.
+- Aturan ini hanya berjalan bila izinnya memang **cocok**. Pengetatan
+  `izinCocokKondisi` (keputusan 8) menyaring lebih dulu: izin `TIDAK_HADIR` vs
+  observasi `KMT`/`KBLA` tidak lagi dianggap cocok, jadi tabayyun berjalan penuh
+  tanpa alasan prasetel dan izinnya tercatat sebagai izin yatim.
 - Izin melebihi observasi (lapor 15, tercatat 10) → `selisihMenit` = 0. Pengajar
   tidak dihukum karena melapor lebih longgar.
 - `selisihMenit` disimpan di kolom `izin_selisih_menit` supaya kartu koordinator
@@ -208,6 +218,8 @@ sudah ditunaikan pada pertemuan tersebut.
 | Izin menit ≥ observasi, saldo 0 | `awaiting_reason` (perilaku lama dipertahankan) |
 | Izin menit ≥ observasi, saldo > 0 | Status tetap `pending` demi pertanyaan hutang |
 | Izin tanpa menit (`TIDAK_HADIR`, JKG) | Selisih 0; status ditentukan saldo saja |
+| Izin `TIDAK_HADIR`, observasi `KMT`/`KBLA` | Tak cocok — tabayyun penuh, izin jadi yatim |
+| Izin `TIDAK_HADIR`, observasi `JKG`/`BADAL`/`TIDAK_LATIHAN` | Tetap dinaungi seperti sebelumnya |
 
 ## Uji
 
@@ -225,7 +237,10 @@ Aturan izin diuji lewat `scripts/test-shakwa.ts` (sudah mengimpor fungsi murni
 - izin 15 vs observasi 10 → selisih 0 (tak dihukum karena lapor longgar);
 - izin menit null → selisih 0;
 - izin pas + saldo > 0 → tetap `pending`;
-- izin pas + saldo 0 → `awaiting_reason`.
+- izin pas + saldo 0 → `awaiting_reason`;
+- `izinCocokKondisi('TIDAK_HADIR', 'KMT')` dan `('TIDAK_HADIR', 'KBLA')` → false;
+- `izinCocokKondisi('TIDAK_HADIR', ...)` untuk `JKG`/`BADAL`/`TIDAK_LATIHAN` →
+  tetap true (uji lama dipertahankan, hanya labelnya disesuaikan).
 
 Yang tak bisa diuji fungsi murni — submit setelah `decided` ditolak, dan
 keputusan diulang tidak menggandakan kredit — diverifikasi manual (langkah uji

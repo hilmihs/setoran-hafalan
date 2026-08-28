@@ -1199,7 +1199,7 @@ menutup observasi 15 menit, dan pertanyaan hutang tak pernah muncul untuk kasus
 berizin.
 
 **Files:**
-- Modify: `src/lib/shakwa-izin.ts` (tambah fungsi murni; ubah `backfillTabayyunDariIzin` baris 151-186)
+- Modify: `src/lib/shakwa-izin.ts` (perketat `izinCocokKondisi` baris 60-67 & fallback `cariIzinCocok` baris 112-115; tambah `kebutuhanTabayyunIzin`; ubah `backfillTabayyunDariIzin` baris 151-186)
 - Modify: `scripts/test-shakwa.ts`
 - Modify: `src/app/hits/ketua/actions.ts:290`, `:300`, `:330-353`
 
@@ -1242,15 +1242,79 @@ Lalu perluas impor `shakwa-izin` di baris 16 menjadi:
 import { alasanDariIzin, berasalDariIzin, izinCocokKondisi, dalamJendelaYatim, kebutuhanTabayyunIzin, PENANDA_IZIN } from '@/lib/shakwa-izin';
 ```
 
+Terakhir, perketat blok uji `izinCocokKondisi` yang sudah ada (di dekat akhir
+berkas, tepat sebelum blok "Jendela izin yatim"). Ganti tiga baris ini:
+
+```ts
+eq(izinCocokKondisi('TIDAK_HADIR', 'BADAL'), true, 'TIDAK_HADIR net → cocok kondisi apa pun');
+eq(izinCocokKondisi('TIDAK_HADIR', 'TIDAK_LATIHAN'), true, 'TIDAK_HADIR net → cocok TIDAK_LATIHAN');
+eq(izinCocokKondisi('JKG', 'BADAL'), false, 'JKG vs BADAL → tak cocok');
+```
+
+menjadi:
+
+```ts
+eq(izinCocokKondisi('TIDAK_HADIR', 'BADAL'), true, 'TIDAK_HADIR net → cocok BADAL (bentuk ketidakhadiran)');
+eq(izinCocokKondisi('TIDAK_HADIR', 'JKG'), true, 'TIDAK_HADIR net → cocok JKG');
+eq(izinCocokKondisi('TIDAK_HADIR', 'TIDAK_LATIHAN'), true, 'TIDAK_HADIR net → cocok TIDAK_LATIHAN');
+eq(izinCocokKondisi('TIDAK_HADIR', 'KMT'), false, 'TIDAK_HADIR TIDAK menaungi KMT — kelas tetap berjalan');
+eq(izinCocokKondisi('TIDAK_HADIR', 'KBLA'), false, 'TIDAK_HADIR TIDAK menaungi KBLA — kelas tetap berjalan');
+eq(izinCocokKondisi('JKG', 'BADAL'), false, 'JKG vs BADAL → tak cocok');
+eq(izinCocokKondisi('KMT', 'KMT'), true, 'jenis sama tetap cocok');
+```
+
 - [ ] **Step 2: Jalankan uji, pastikan GAGAL**
 
 Run: `npm run test-shakwa`
 Expected: gagal saat kompilasi/impor dengan pesan seperti `has no exported member 'kebutuhanTabayyunIzin'`.
 
-- [ ] **Step 3: Implementasi aturan murni**
+- [ ] **Step 3a: Perketat jaring pengaman `TIDAK_HADIR`**
 
-Tambahkan di `src/lib/shakwa-izin.ts`, tepat **sesudah** fungsi `izinCocokKondisi`
-(baris 67) supaya semua fungsi murni berkumpul:
+Di `src/lib/shakwa-izin.ts`, ganti fungsi `izinCocokKondisi` (baris 65-67) —
+beserta komentar dokumentasinya (baris 60-64) — menjadi:
+
+```ts
+/**
+ * Kondisi yang berarti kelas TETAP BERJALAN (hanya mulai terlambat / berakhir
+ * lebih awal). Izin "tidak hadir" tidak menjelaskan keduanya — justru
+ * bertabrakan dengan laporan ketua kelas, jadi harus ditabayyun.
+ */
+const KONDISI_KELAS_BERJALAN = ['KMT', 'KBLA'];
+
+/**
+ * Apakah satu izin cocok dipakai untuk tabayyun berkondisi tertentu.
+ * Jenis sama → cocok. TIDAK_HADIR jadi jaring pengaman untuk bentuk-bentuk
+ * ketidakhadiran (JKG, BADAL, TIDAK_LATIHAN), TAPI tidak menaungi KMT/KBLA.
+ */
+export function izinCocokKondisi(izinJenis: ShakwaIzinJenis, tabKondisi: string): boolean {
+  if (izinJenis === 'TIDAK_HADIR') return !KONDISI_KELAS_BERJALAN.includes(tabKondisi);
+  return tabKondisi === izinJenis;
+}
+```
+
+- [ ] **Step 3b: Selaraskan fallback di `cariIzinCocok`**
+
+Fallback di `cariIzinCocok` (baris 112-115) memilih izin `TIDAK_HADIR` tanpa
+melewati `izinCocokKondisi`, jadi pengetatan di atas akan dilangkahi kalau tidak
+ikut diubah. Ganti blok itu menjadi:
+
+```ts
+  // Jenis yang sama lebih dulu; TIDAK_HADIR jadi jaring pengaman — tapi lewat
+  // izinCocokKondisi supaya pengetatan KMT/KBLA berlaku di sini juga.
+  const cocok =
+    relevan.find((r) => args.jenisList.includes(r.jenis)) ??
+    relevan.find(
+      (r) =>
+        r.jenis === 'TIDAK_HADIR' &&
+        args.jenisList.some((j) => izinCocokKondisi('TIDAK_HADIR', j))
+    );
+  if (!cocok) return null;
+```
+
+- [ ] **Step 3c: Implementasi aturan murni status**
+
+Tambahkan di `src/lib/shakwa-izin.ts`, tepat **sesudah** `izinCocokKondisi`
+supaya semua fungsi murni berkumpul:
 
 ```ts
 export type KebutuhanTabayyun = {
@@ -1511,6 +1575,11 @@ Run: `npm run dev`.
    halaqah yang saldo hutangnya 0.
    Expected: `status = awaiting_reason`, `izin_selisih_menit = 0` — perilaku lama
    dipertahankan untuk kasus yang benar-benar bersih.
+7. Kirim izin jenis **TIDAK_HADIR**, lalu ketua kelas mengisi observasi **KMT 15
+   menit** (kelas tetap berjalan, hanya terlambat).
+   Expected: `status = pending` dan `alasan_pengajar` **NULL** — izinnya tidak
+   dianggap cocok sama sekali, dan izin itu muncul di daftar izin yatim
+   koordinator. Sebelum perbaikan, kasus ini auto-close.
 
 - [ ] **Step 11: Verifikasi menyeluruh**
 
@@ -1537,6 +1606,9 @@ kebutuhanTabayyunIzin kini menentukan status: awaiting_reason hanya bila izin
 menutupi menit observasi DAN saldo hutang 0. Selisihnya disimpan di
 izin_selisih_menit untuk ditampilkan ke pengajar dan koordinator. Aturan yang
 sama dipakai jalur maju (hits/ketua) dan jalur balik (backfill).
+
+Jaring pengaman TIDAK_HADIR juga diperketat: berhenti menaungi KMT/KBLA, dua
+kondisi yang justru berarti kelas tetap berjalan.
 
 Sekalian memasang pagar sumber='ketua' pada replace-all ledger."
 ```
