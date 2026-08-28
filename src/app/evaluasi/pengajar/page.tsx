@@ -46,7 +46,7 @@ export default async function EvaluasiPengajarPage({
   const { data: halaqahRows } = evalPengajarId
     ? await supabaseAdmin
         .from('eval_halaqah')
-        .select('id, nama, gender, mustawa, level, ambang_ujian')
+        .select('id, nama, gender, mustawa, level, ambang_ujian, batch_id')
         .eq('pengajar_id', evalPengajarId)
         .order('nama')
     : { data: null };
@@ -104,6 +104,20 @@ export default async function EvaluasiPengajarPage({
     )
     .in('sesi_id', sesiIds.length ? sesiIds : noId);
 
+  // Batch: menentukan skema rapot ujian (0058). Batch HITS Januari menilai ujian
+  // QN & PB terpisah, nilai akhir murni skor ujian tanpa bobot evaluasi berkala.
+  let rapotUjianTerpisah = false;
+  let batchNama: string | null = null;
+  if (halaqah.batch_id) {
+    const { data: batchRow } = await supabaseAdmin
+      .from('eval_batch')
+      .select('nama, rapot_ujian_terpisah')
+      .eq('id', halaqah.batch_id as string)
+      .maybeSingle();
+    rapotUjianTerpisah = !!batchRow?.rapot_ujian_terpisah;
+    batchNama = (batchRow?.nama as string | undefined) ?? null;
+  }
+
   // Config per gender.
   const { data: configRow } = await supabaseAdmin
     .from('eval_config')
@@ -157,6 +171,8 @@ export default async function EvaluasiPengajarPage({
       level: (halaqah.level as string | null) ?? null,
       ambang_ujian: (halaqah.ambang_ujian as number) ?? 70,
       pesertaCount: peserta.length,
+      batch: batchNama,
+      rapotUjianTerpisah,
     },
     config,
     peserta,

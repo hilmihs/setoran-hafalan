@@ -11,6 +11,8 @@ import {
   KHAFIY,
   AMBANG,
   JENIS,
+  UJIAN_QN_SESI,
+  UJIAN_PB_SESI,
   type Jenis,
   type LahnCounts,
 } from '@/lib/evaluasi';
@@ -20,7 +22,16 @@ import { Nilai } from './screens/Nilai';
 import { Ringkasan } from './screens/Ringkasan';
 import RapotBerkala from './screens/RapotBerkala';
 import { RapotUjian } from './screens/RapotUjian';
-import { buildBerkalaPayload, buildUjianPayload, type SesiNilaiInput } from '@/lib/rapot';
+import RapotBerkalaA4 from './rapot/RapotBerkalaA4';
+import RapotUjianA4 from './rapot/RapotUjianA4';
+import RapotPrintStyle from './rapot/RapotPrintStyle';
+import {
+  buildBerkalaPayload,
+  buildUjianPayload,
+  buildUjianTunggalPayload,
+  type JenisRapot,
+  type SesiNilaiInput,
+} from '@/lib/rapot';
 
 // ── Types shared with the RSC page ──
 export interface EvPeserta {
@@ -67,6 +78,10 @@ export interface EvaluasiInitial {
     level: string | null;
     ambang_ujian: number;
     pesertaCount: number;
+    /** Nama batch (dari eval_batch) — dicetak di kop rapot. */
+    batch: string | null;
+    /** Batch HITS Januari (0058): rapot Ujian QN & PB terpisah, nilai akhir murni skor ujian. */
+    rapotUjianTerpisah: boolean;
   };
   config: EvConfig;
   peserta: EvPeserta[];
@@ -101,6 +116,27 @@ export interface Tile {
 const JENIS_SHORT: Record<Jenis, string> = { qn: 'QN', pb: 'PB', ujian: 'Ujian' };
 // Ujian akhir bukan sesi berurutan — dua ujian terpisah: QN & PB.
 const UJIAN_SESI_LABELS = ['Ujian QN', 'Ujian PB'];
+
+/**
+ * Dokumen rapot yang bisa dicetak pengajar.
+ * - `berkala` — rekap 4 sesi QN + 4 sesi PB. SATU dokumen per peserta, bukan per
+ *   sesi; sesi mana pun yang jadi pintu masuk, isinya sama.
+ * - `ujian`   — rapot ujian akhir. `nomor` = nomor sesi ujian (1 = QN, 2 = PB);
+ *   hanya membedakan dokumen pada batch `rapot_ujian_terpisah`.
+ */
+export type DokCetak = { kind: 'berkala' } | { kind: 'ujian'; nomor: number };
+
+/** Dokumen yang relevan dgn sebuah sesi — jadi tombol cetak di layar sesi tahu mau cetak apa. */
+function dokDariSesi(j: Jenis, nomor: number): DokCetak {
+  return j === 'ujian' ? { kind: 'ujian', nomor } : { kind: 'berkala' };
+}
+
+// Label sesi utk riwayat & menu PDF. Ujian dinamai per jenisnya ("Ujian PB"),
+// bukan "Ujian Sesi 2" — pada batch terpisah nomor sesi menentukan dokumennya.
+function sesiLabelPendek(j: Jenis, nomor: number): string {
+  if (j === 'ujian') return UJIAN_SESI_LABELS[nomor - 1] ?? `Ujian ${nomor}`;
+  return `${JENIS_SHORT[j]} Sesi ${nomor}`;
+}
 
 function genderLabel(g: Gender): string {
   return g === 'ikhwan' ? 'Ikhwan' : 'Akhwat';
@@ -143,9 +179,9 @@ export function EvaluasiPengajarApp({ initial }: { initial: EvaluasiInitial }) {
     return out;
   });
   const [kirimStatus, setKirimStatus] = useState<SaveStatus>('idle');
-  // Cetak PDF rinci dari kartu riwayat: menu pilih peserta → render rapot → print.
-  const [pdfMenu, setPdfMenu] = useState<{ jenis: Jenis; nomor: number } | null>(null);
-  const [printReq, setPrintReq] = useState<{ jenis: Jenis; ids: string[] } | null>(null);
+  // Cetak rapot: pilih dokumen → menu pilih peserta → render lembar A4 → print.
+  const [cetakMenu, setCetakMenu] = useState<DokCetak | null>(null);
+  const [printReq, setPrintReq] = useState<{ dok: DokCetak; ids: string[] } | null>(null);
   // Sesi ujian yang di-soft-delete pengajar (per nomor_sesi).
   const [ujianDihapus, setUjianDihapus] = useState<Set<number>>(
     () => new Set(initial.sesiList.filter((s) => s.jenis === 'ujian' && s.dihapus).map((s) => s.nomor_sesi))
@@ -313,14 +349,42 @@ export function EvaluasiPengajarApp({ initial }: { initial: EvaluasiInitial }) {
     };
   }, [flushSaves]);
 
-  // Setelah overlay rapot rinci ter-render (dipicu menu PDF riwayat), buka dialog cetak.
+  // Setelah overlay rapot rinci ter-render (dipicu tombol PDF), buka dialog cetak.
+  // Tunggu font & gambar (logo) selesai dulu — kalau tidak, kop bisa tercetak kosong.
   useEffect(() => {
     if (!printReq) return;
-    const id = requestAnimationFrame(() => {
-      window.print();
-      setPrintReq(null);
-    });
-    return () => cancelAnimationFrame(id);
+    let batal = false;
+    const jalan = async () => {
+      try {
+        await document.fonts?.ready;
+      } catch {
+        /* abaikan */
+      }
+      const belum = Array.from(document.images).filter((im) => !im.complete);
+      if (belum.length) {
+        await Promise.race([
+          Promise.all(
+            belum.map(
+              (im) =>
+                new Promise<void>((res) => {
+                  im.addEventListener('load', () => res(), { once: true });
+                  im.addEventListener('error', () => res(), { once: true });
+                })
+            )
+          ),
+          new Promise<void>((res) => setTimeout(res, 2500)),
+        ]);
+      }
+      if (batal) return;
+      requestAnimationFrame(() => {
+        window.print();
+        setPrintReq(null);
+      });
+    };
+    void jalan();
+    return () => {
+      batal = true;
+    };
   }, [printReq]);
 
   const updateWork = useCallback(
@@ -565,7 +629,7 @@ export function EvaluasiPengajarApp({ initial }: { initial: EvaluasiInitial }) {
         key: s.id,
         jenis: s.jenis,
         nomor: s.nomor_sesi,
-        label: `${JENIS_SHORT[s.jenis]} Sesi ${s.nomor_sesi} — ${fmtBulan(s.tgl_jadwal)}`,
+        label: `${sesiLabelPendek(s.jenis, s.nomor_sesi)} — ${fmtBulan(s.tgl_jadwal)}`,
         hadirCount: rows.length,
         total: peserta.length,
         avg,
@@ -691,30 +755,66 @@ export function EvaluasiPengajarApp({ initial }: { initial: EvaluasiInitial }) {
     level: halaqah.level,
     mustawa: halaqah.mustawa,
     gender: halaqah.gender,
-    batch: null as string | null,
+    batch: halaqah.batch,
   };
   const rSesi = assembleSesi(rId);
+  // Batch terpisah: sesi ujian yang sedang dibuka menentukan dokumennya
+  // (sesi 1 = Ujian QN, sesi 2 = Ujian PB).
+  const terpisah = halaqah.rapotUjianTerpisah;
+  const fokusUjianAktif: 'qn' | 'pb' = activeSession === UJIAN_QN_SESI ? 'qn' : 'pb';
   const rapotBerkala = buildBerkalaPayload(rIdentitas, initial.pengajarName, '', rSesi, config.nama_qn, config.nama_pb);
-  const rapotUjian = buildUjianPayload(rIdentitas, initial.pengajarName, '', rSesi, halaqah.ambang_ujian);
+  const rapotUjian = terpisah
+    ? buildUjianTunggalPayload(rIdentitas, initial.pengajarName, '', rSesi, fokusUjianAktif, halaqah.ambang_ujian)
+    : buildUjianPayload(rIdentitas, initial.pengajarName, '', rSesi, halaqah.ambang_ujian);
 
-  // Rapot rinci sembarang peserta (untuk cetak PDF dari menu riwayat).
-  const buildRapotFor = (pid: string, jns: Jenis) => {
+  // Rapot rinci sembarang peserta, untuk dicetak sebagai lembar A4.
+  const buildRapotFor = (pid: string, dok: DokCetak) => {
     const nama = peserta.find((p) => p.id === pid)?.nama ?? '';
-    const idn = { peserta: nama, halaqah: halaqah.nama, level: halaqah.level, mustawa: halaqah.mustawa, gender: halaqah.gender, batch: null as string | null };
+    const idn = { peserta: nama, halaqah: halaqah.nama, level: halaqah.level, mustawa: halaqah.mustawa, gender: halaqah.gender, batch: halaqah.batch };
     const sesi = assembleSesi(pid);
-    return jns === 'ujian'
-      ? { kind: 'ujian' as const, payload: buildUjianPayload(idn, initial.pengajarName, '', sesi, halaqah.ambang_ujian) }
-      : { kind: 'berkala' as const, payload: buildBerkalaPayload(idn, initial.pengajarName, '', sesi, config.nama_qn, config.nama_pb) };
+    if (dok.kind === 'berkala') {
+      return { kind: 'berkala' as const, payload: buildBerkalaPayload(idn, initial.pengajarName, '', sesi, config.nama_qn, config.nama_pb) };
+    }
+    const payload = terpisah
+      ? buildUjianTunggalPayload(idn, initial.pengajarName, '', sesi, dok.nomor === UJIAN_QN_SESI ? 'qn' : 'pb', halaqah.ambang_ujian)
+      : buildUjianPayload(idn, initial.pengajarName, '', sesi, halaqah.ambang_ujian);
+    return { kind: 'ujian' as const, payload };
   };
-  // Daftar peserta yang dinilai (done+hadir) pada sesi menu PDF aktif.
-  const pdfPeserta = pdfMenu
-    ? peserta.filter((p) => {
-        const w = getWork(p.id, pdfMenu.jenis, pdfMenu.nomor);
-        return w.done && w.hadir !== false;
-      })
-    : [];
 
-  const terbitkanRapot = async (jenis_rapot: 'berkala' | 'ujian') => {
+  const dokLabel = (dok: DokCetak): string => {
+    if (dok.kind === 'berkala') return 'Rapot Berkala';
+    if (!terpisah) return 'Rapot Ujian Akhir';
+    return dok.nomor === UJIAN_QN_SESI ? 'Rapot Ujian QN' : 'Rapot Ujian PB';
+  };
+  const dokKey = (dok: DokCetak): string => (dok.kind === 'berkala' ? 'berkala' : `ujian-${dok.nomor}`);
+
+  // Peserta yang datanya cukup untuk dokumen ini. Berkala butuh minimal satu sesi
+  // QN/PB dinilai; ujian butuh sesi ujian bersangkutan dinilai.
+  const pesertaUntukDok = (dok: DokCetak): EvPeserta[] =>
+    peserta.filter((p) => {
+      if (dok.kind === 'ujian') {
+        const w = getWork(p.id, 'ujian', dok.nomor);
+        return w.done && w.hadir !== false;
+      }
+      return (['qn', 'pb'] as Jenis[]).some((j) =>
+        [1, 2, 3, 4].some((n) => {
+          const w = getWork(p.id, j, n);
+          return w.done && w.hadir !== false;
+        })
+      );
+    });
+
+  // Dokumen yang ditawarkan di kartu "Cetak rapot" di layar awal.
+  const dokTersedia: DokCetak[] = [
+    { kind: 'berkala' },
+    ...(terpisah
+      ? sesiOptionsFor('ujian').map((n) => ({ kind: 'ujian' as const, nomor: n }))
+      : [{ kind: 'ujian' as const, nomor: UJIAN_PB_SESI }]),
+  ];
+
+  const cetakPeserta = cetakMenu ? pesertaUntukDok(cetakMenu) : [];
+
+  const terbitkanRapot = async (jenis_rapot: JenisRapot) => {
     if (cobaRef.current) return; // Mode Coba: tak menerbitkan rapot resmi.
     setTerbitStatus('saving');
     try {
@@ -743,20 +843,42 @@ export function EvaluasiPengajarApp({ initial }: { initial: EvaluasiInitial }) {
     boxShadow: '0 0 0 1px #e8e4dc',
   };
 
-  // Overlay cetak: render rapot rinci tiap peserta terpilih, lalu useEffect memicu print.
+  // Overlay cetak: render lembar A4 tiap peserta terpilih, lalu useEffect memicu print.
+  // Sengaja memakai komponen A4 (bukan layar rapot versi HP) supaya hasil cetak rapi
+  // satu peserta = satu halaman, bukan kartu 460px yang meluber ke mana-mana.
   if (printReq) {
-    const built = printReq.ids.map((pid) => ({ pid, ...buildRapotFor(pid, printReq.jenis) }));
+    const built = printReq.ids.map((pid) => ({ pid, ...buildRapotFor(pid, printReq.dok) }));
     return (
-      <div className="eval-print-wrap" style={{ minHeight: '100vh', background: '#fff' }}>
-        {built.map((b, i) => (
-          <div key={b.pid} style={{ breakAfter: i < built.length - 1 ? 'page' : 'auto', pageBreakAfter: i < built.length - 1 ? 'always' : 'auto' }}>
-            {b.kind === 'ujian' ? (
-              <RapotUjian payload={b.payload} onBack={() => setPrintReq(null)} onTerbitkan={() => {}} />
+      <div className="a4-print-wrap eval-print-wrap">
+        <RapotPrintStyle />
+        <div
+          className="noprint"
+          style={{ display: 'flex', gap: 8, justifyContent: 'center', padding: '0 0 14px' }}
+        >
+          <button
+            type="button"
+            onClick={() => setPrintReq(null)}
+            style={{ height: 38, padding: '0 14px', borderRadius: 8, border: '1px solid #d8d3c8', background: '#ffffff', font: 'inherit', fontSize: 13, fontWeight: 600, color: '#44423d', cursor: 'pointer' }}
+          >
+            ← Tutup
+          </button>
+          <button
+            type="button"
+            onClick={() => window.print()}
+            style={{ height: 38, padding: '0 16px', borderRadius: 8, border: 'none', background: 'oklch(0.58 0.09 165)', font: 'inherit', fontSize: 13, fontWeight: 700, color: '#ffffff', cursor: 'pointer' }}
+          >
+            ⬇ Cetak / Simpan PDF
+          </button>
+        </div>
+        <div className="a4-stack">
+          {built.map((b) =>
+            b.kind === 'ujian' ? (
+              <RapotUjianA4 key={b.pid} payload={b.payload} logoSrc="/logo-mpt.png" />
             ) : (
-              <RapotBerkala payload={b.payload} onBack={() => setPrintReq(null)} onTerbitkan={() => {}} />
-            )}
-          </div>
-        ))}
+              <RapotBerkalaA4 key={b.pid} payload={b.payload} logoSrc="/logo-mpt.png" />
+            )
+          )}
+        </div>
       </div>
     );
   }
@@ -871,6 +993,47 @@ export function EvaluasiPengajarApp({ initial }: { initial: EvaluasiInitial }) {
               </div>
             </div>
 
+            {/* Cetak rapot — jalur langsung dari layar awal. Sebelumnya cetak hanya
+                bisa lewat kartu riwayat (sesi terkirim saja) atau setelah menelusuri
+                sesi → daftar → ringkasan, padahal dokumennya tak bergantung sesi. */}
+            <div style={{ padding: '20px 16px 0' }}>
+              <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.04em', textTransform: 'uppercase', color: '#7a766f', marginBottom: 10 }}>Cetak rapot</div>
+              <div style={{ background: '#ffffff', border: '1px solid #e8e4dc', borderRadius: 12, overflow: 'hidden' }}>
+                {dokTersedia.map((d, i) => {
+                  const siap = pesertaUntukDok(d).length;
+                  return (
+                    <button
+                      key={dokKey(d)}
+                      onClick={() => setCetakMenu(d)}
+                      className="ev-press"
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 10,
+                        width: '100%',
+                        textAlign: 'left',
+                        padding: '12px 14px',
+                        border: 'none',
+                        borderBottom: i < dokTersedia.length - 1 ? '1px solid #e8e4dc' : 'none',
+                        background: 'transparent',
+                        font: 'inherit',
+                        cursor: 'pointer',
+                      }}
+                    >
+                      <span style={{ fontSize: 16, flexShrink: 0 }}>{d.kind === 'berkala' ? '📄' : '🎓'}</span>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontSize: 13, fontWeight: 600, color: '#1b1a17' }}>{dokLabel(d)}</div>
+                        <div style={{ fontSize: 11, color: '#a8a39a', marginTop: 1 }}>
+                          {siap > 0 ? `${siap} peserta siap dicetak` : 'Belum ada nilai'}
+                        </div>
+                      </div>
+                      <span style={{ fontSize: 15, color: '#d8d3c8' }}>›</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
             <div style={{ padding: '20px 16px 0' }}>
               <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.04em', textTransform: 'uppercase', color: '#7a766f', marginBottom: 10 }}>Riwayat sesi</div>
               {riwayat.length === 0 ? (
@@ -889,10 +1052,10 @@ export function EvaluasiPengajarApp({ initial }: { initial: EvaluasiInitial }) {
                         </div>
                       </div>
                       <button
-                        onClick={() => setPdfMenu({ jenis: r.jenis, nomor: r.nomor })}
+                        onClick={() => setCetakMenu(dokDariSesi(r.jenis, r.nomor))}
                         style={{ height: 28, padding: '0 10px', borderRadius: 7, border: '1px solid #d8d3c8', background: '#ffffff', font: 'inherit', fontSize: 11, fontWeight: 600, color: '#44423d', cursor: 'pointer' }}
                       >
-                        PDF
+                        🖨 Cetak
                       </button>
                     </div>
                   ))}
@@ -966,6 +1129,7 @@ export function EvaluasiPengajarApp({ initial }: { initial: EvaluasiInitial }) {
               setScreen('p-nilai');
             }}
             onReset={resetSesi}
+            onPdf={() => setCetakMenu(dokDariSesi(jenis, activeSession))}
           />
         )}
 
@@ -1039,6 +1203,7 @@ export function EvaluasiPengajarApp({ initial }: { initial: EvaluasiInitial }) {
                 : 'Semua data tersimpan, siap dikirim.'
             }
             back={() => nav('p-daftar')}
+            onCetak={() => setCetakMenu(dokDariSesi(jenis, activeSession))}
           />
         )}
 
@@ -1047,8 +1212,13 @@ export function EvaluasiPengajarApp({ initial }: { initial: EvaluasiInitial }) {
             <RapotUjian
               payload={rapotUjian}
               onBack={() => nav('p-ringkasan')}
-              onTerbitkan={() => terbitkanRapot('ujian')}
+              onTerbitkan={() =>
+                terbitkanRapot(
+                  terpisah ? (fokusUjianAktif === 'qn' ? 'ujian_qn' : 'ujian_pb') : 'ujian'
+                )
+              }
               terbitStatus={terbitStatus}
+              onCetak={() => setPrintReq({ dok: { kind: 'ujian', nomor: activeSession }, ids: [rId] })}
             />
           ) : (
             <RapotBerkala
@@ -1056,13 +1226,14 @@ export function EvaluasiPengajarApp({ initial }: { initial: EvaluasiInitial }) {
               onBack={() => nav('p-ringkasan')}
               onTerbitkan={() => terbitkanRapot('berkala')}
               terbitStatus={terbitStatus}
+              onCetak={() => setPrintReq({ dok: { kind: 'berkala' }, ids: [rId] })}
             />
           ))}
       </div>
 
-      {pdfMenu && (
+      {cetakMenu && (
         <div
-          onClick={() => setPdfMenu(null)}
+          onClick={() => setCetakMenu(null)}
           style={{ position: 'fixed', inset: 0, zIndex: 50, background: 'rgba(20,18,14,0.45)', display: 'flex', alignItems: 'flex-end', justifyContent: 'center' }}
         >
           <div
@@ -1070,20 +1241,50 @@ export function EvaluasiPengajarApp({ initial }: { initial: EvaluasiInitial }) {
             style={{ width: '100%', maxWidth: 460, background: '#ffffff', borderRadius: '18px 18px 0 0', padding: '16px 16px 22px', maxHeight: '80vh', overflowY: 'auto' }}
           >
             <div style={{ width: 36, height: 4, borderRadius: 2, background: '#e0dcd2', margin: '0 auto 14px' }} />
-            <div style={{ fontSize: 14, fontWeight: 800, marginBottom: 2 }}>Unduh rapor rinci</div>
+            <div style={{ fontSize: 14, fontWeight: 800, marginBottom: 2 }}>Cetak {dokLabel(cetakMenu)}</div>
             <div style={{ fontSize: 11.5, color: '#a8a39a', marginBottom: 14 }}>
-              {JENIS_SHORT[pdfMenu.jenis]} Sesi {pdfMenu.nomor} · pilih peserta atau semua
+              Pilih satu peserta, atau cetak semuanya sekaligus (1 peserta = 1 halaman).
             </div>
-            {pdfPeserta.length === 0 ? (
-              <div style={{ fontSize: 12.5, color: '#a8a39a', padding: '8px 0 4px' }}>Belum ada peserta yang dinilai pada sesi ini.</div>
+            {/* Ganti dokumen tanpa harus menutup menu — pengajar sering butuh QN lalu PB. */}
+            {dokTersedia.length > 1 && (
+              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 14 }}>
+                {dokTersedia.map((d) => {
+                  const aktif = dokKey(d) === dokKey(cetakMenu);
+                  return (
+                    <button
+                      key={dokKey(d)}
+                      onClick={() => setCetakMenu(d)}
+                      style={{
+                        height: 32,
+                        padding: '0 12px',
+                        borderRadius: 999,
+                        border: `1.5px solid ${aktif ? 'oklch(0.58 0.09 165)' : '#e8e4dc'}`,
+                        background: aktif ? 'oklch(0.96 0.035 165)' : '#ffffff',
+                        font: 'inherit',
+                        fontSize: 12,
+                        fontWeight: 700,
+                        color: aktif ? 'oklch(0.40 0.10 150)' : '#7a766f',
+                        cursor: 'pointer',
+                      }}
+                    >
+                      {dokLabel(d)}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+            {cetakPeserta.length === 0 ? (
+              <div style={{ fontSize: 12.5, color: '#a8a39a', padding: '8px 0 4px', lineHeight: 1.5 }}>
+                Belum ada peserta yang bisa dicetak untuk dokumen ini — nilainya belum ada.
+              </div>
             ) : (
               <>
-                {pdfPeserta.map((p) => (
+                {cetakPeserta.map((p) => (
                   <button
                     key={p.id}
                     onClick={() => {
-                      setPrintReq({ jenis: pdfMenu.jenis, ids: [p.id] });
-                      setPdfMenu(null);
+                      setPrintReq({ dok: cetakMenu, ids: [p.id] });
+                      setCetakMenu(null);
                     }}
                     style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%', textAlign: 'left', padding: '11px 4px', border: 'none', borderBottom: '1px solid #f0ede6', background: 'transparent', font: 'inherit', fontSize: 13, fontWeight: 600, color: '#1b1a17', cursor: 'pointer' }}
                   >
@@ -1093,13 +1294,13 @@ export function EvaluasiPengajarApp({ initial }: { initial: EvaluasiInitial }) {
                 ))}
                 <button
                   onClick={() => {
-                    setPrintReq({ jenis: pdfMenu.jenis, ids: pdfPeserta.map((p) => p.id) });
-                    setPdfMenu(null);
+                    setPrintReq({ dok: cetakMenu, ids: cetakPeserta.map((p) => p.id) });
+                    setCetakMenu(null);
                   }}
                   className="ev-dark"
                   style={{ width: '100%', height: 46, marginTop: 14, borderRadius: 10, border: 'none', background: 'oklch(0.58 0.09 165)', font: 'inherit', fontSize: 13.5, fontWeight: 700, color: '#ffffff', cursor: 'pointer' }}
                 >
-                  ⬇ Semua peserta ({pdfPeserta.length}) · rinci
+                  🖨 Semua peserta ({cetakPeserta.length})
                 </button>
               </>
             )}

@@ -86,7 +86,17 @@ export default async function CekRapotPage({
   }
 
   const payload = row.payload as RapotPayload;
-  const isUjian = payload.jenis_rapot === 'ujian';
+  // 'ujian' (gabungan) maupun 'ujian_qn'/'ujian_pb' (batch terpisah, 0058) sama-sama
+  // rapot ujian — yang membedakan hanya label dokumennya.
+  const isUjian = payload.jenis_rapot !== 'berkala';
+  const jenisLabel =
+    payload.jenis_rapot === 'ujian_qn'
+      ? 'Ujian QN'
+      : payload.jenis_rapot === 'ujian_pb'
+      ? 'Ujian PB'
+      : payload.jenis_rapot === 'ujian'
+      ? 'Ujian Akhir'
+      : 'Berkala';
   const lulus = isUjian ? payload.ujian?.lulus ?? null : null;
   const MERAH = 'oklch(0.55 0.16 25)';
   const MERAH_TUA = 'oklch(0.46 0.14 25)';
@@ -179,7 +189,7 @@ export default async function CekRapotPage({
                 padding: '4px 12px',
               }}
             >
-              {isUjian ? 'Ujian Akhir' : 'Berkala'}
+              {jenisLabel}
             </span>
           </div>
         </div>

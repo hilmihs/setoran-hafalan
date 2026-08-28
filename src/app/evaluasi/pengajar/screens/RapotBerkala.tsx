@@ -8,6 +8,8 @@ interface Props {
   onBack: () => void;
   onTerbitkan: () => void;
   terbitStatus?: 'idle' | 'saving' | 'done' | 'error';
+  /** Cetak lembar A4 peserta ini tanpa menerbitkan rapot resmi. */
+  onCetak?: () => void;
 }
 
 const HIJAU = 'oklch(0.58 0.09 165)';
@@ -17,16 +19,19 @@ const HIJAU_BORDER = 'oklch(0.85 0.06 150)';
 const JALIY_C = 'oklch(0.46 0.14 25)';
 const KHAFIY_C = 'oklch(0.48 0.10 75)';
 
+// Tombol ini MENERBITKAN rapot resmi (ber-QR) lalu membukanya di tab baru —
+// bukan sekadar unduh. Labelnya harus mengatakan itu; cetak biasa ada di tombol
+// terpisah di sebelahnya.
 function tombolLabel(status: Props['terbitStatus']): string {
   switch (status) {
     case 'saving':
-      return 'Menyimpan…';
+      return 'Menerbitkan…';
     case 'done':
-      return '✓ Tersimpan';
+      return '✓ Terbit';
     case 'error':
       return 'Gagal — ulangi';
     default:
-      return '⬇ Unduh PDF';
+      return 'Terbitkan';
   }
 }
 
@@ -99,7 +104,7 @@ function TrackCard({ track }: { track: RapotTrackSnap }) {
   );
 }
 
-export default function RapotBerkala({ payload, onBack, onTerbitkan, terbitStatus = 'idle' }: Props) {
+export default function RapotBerkala({ payload, onBack, onTerbitkan, terbitStatus = 'idle', onCetak }: Props) {
   const { identitas, penerbit } = payload;
   const b = payload.berkala;
   const saving = terbitStatus === 'saving';
@@ -147,12 +152,35 @@ export default function RapotBerkala({ payload, onBack, onTerbitkan, terbitStatu
           ←
         </button>
         <div style={{ fontSize: 15, fontWeight: 700 }}>Rapot Berkala</div>
+        {onCetak && (
+          <button
+            type="button"
+            onClick={onCetak}
+            title="Cetak lembar A4 tanpa menerbitkan"
+            style={{
+              marginLeft: 'auto',
+              height: 36,
+              padding: '0 12px',
+              borderRadius: 8,
+              border: '1px solid #d8d3c8',
+              background: '#ffffff',
+              font: 'inherit',
+              fontSize: 12.5,
+              fontWeight: 700,
+              color: '#44423d',
+              cursor: 'pointer',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            🖨 Cetak
+          </button>
+        )}
         <button
           type="button"
           onClick={onTerbitkan}
           disabled={saving}
           style={{
-            marginLeft: 'auto',
+            marginLeft: onCetak ? undefined : 'auto',
             height: 36,
             padding: '0 14px',
             borderRadius: 8,

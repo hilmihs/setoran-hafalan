@@ -30,6 +30,8 @@ interface DaftarProps {
   back: () => void;
   mulai: () => void;
   onReset?: () => void;
+  /** Buka menu cetak rapot rinci untuk sesi ini. */
+  onPdf?: () => void;
 }
 
 export function Daftar(props: DaftarProps) {
@@ -42,6 +44,15 @@ export function Daftar(props: DaftarProps) {
           <div style={{ fontSize: 15, fontWeight: 700 }}>{props.judul}</div>
           <div style={{ fontSize: 11, color: '#7a766f' }}>{props.sub}</div>
         </div>
+        {props.onPdf && !confirmReset && (
+          <button
+            onClick={props.onPdf}
+            title="Cetak / simpan rapot rinci peserta sesi ini"
+            style={{ height: 34, padding: '0 12px', borderRadius: 8, border: '1px solid #d8d3c8', background: '#ffffff', font: 'inherit', fontSize: 12, fontWeight: 600, color: '#44423d', cursor: 'pointer', whiteSpace: 'nowrap' }}
+          >
+            ⬇ PDF
+          </button>
+        )}
         {props.onReset && !confirmReset && (
           <button
             onClick={() => setConfirmReset(true)}

@@ -8,7 +8,8 @@ import RapotKop from './RapotKop';
 
 interface Props {
   payload: RapotPayload;
-  qr: string;
+  /** QR verifikasi. Kosong = rapot belum diterbitkan (pratinjau/cetak dari aplikasi). */
+  qr?: string;
   logoSrc: string;
 }
 
@@ -146,6 +147,7 @@ export default function RapotBerkalaA4({ payload, qr, logoSrc }: Props): ReactEl
 
   return (
     <div
+      className="a4-sheet"
       style={{
         width: 794,
         minHeight: 1123,
@@ -263,18 +265,25 @@ export default function RapotBerkalaA4({ payload, qr, logoSrc }: Props): ReactEl
           marginTop: 18,
         }}
       >
-        <div
-          style={{
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            gap: 6,
-            flexShrink: 0,
-          }}
-        >
-          <img src={qr} width={64} height={64} alt="QR verifikasi rapot" style={{ display: 'block' }} />
-          <div style={{ fontSize: 8.5, color: '#a8a39a' }}>Cek keaslian rapot</div>
-        </div>
+        {qr ? (
+          <div
+            style={{
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              gap: 6,
+              flexShrink: 0,
+            }}
+          >
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={qr} width={64} height={64} alt="QR verifikasi rapot" style={{ display: 'block' }} />
+            <div style={{ fontSize: 8.5, color: '#a8a39a' }}>Cek keaslian rapot</div>
+          </div>
+        ) : (
+          <div style={{ fontSize: 8.5, color: '#a8a39a', maxWidth: 190, lineHeight: 1.5 }}>
+            Cetakan pratinjau — rapot belum diterbitkan, jadi belum ada QR verifikasi.
+          </div>
+        )}
         <div style={{ display: 'flex', gap: 28, textAlign: 'center' }}>
           <div>
             <div style={{ fontSize: 11, color: MUTED, marginBottom: 2 }}>

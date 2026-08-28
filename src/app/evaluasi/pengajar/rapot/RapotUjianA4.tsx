@@ -1,14 +1,22 @@
 import type { RapotPayload, RapotUjianSnap } from '@/lib/rapot';
+import { fokusUjian } from '@/lib/rapot';
 import { tierOf } from '@/lib/evaluasi';
 import RapotKop from './RapotKop';
 
 // Presentasional murni (tanpa hooks) — cetak A4 Rapot Ujian Akhir, 2 halaman @794px.
 // Hal 1: status kelulusan, komponen nilai akhir, hasil ujian, QR, tanda tangan.
 // Hal 2: rincian kesalahan QN vs PB + catatan penguji.
+//
+// Dua varian, dipilih dari payload.jenis_rapot:
+// - 'ujian'                → gabungan; nilai akhir 30% berkala + 70% Ujian PB.
+// - 'ujian_qn' / 'ujian_pb' → batch `rapot_ujian_terpisah` (0058); satu ujian saja,
+//   nilai akhir = skor ujian itu. Tabel komponen nilai akhir dibuang dan ujian
+//   satunya TIDAK disinggung di mana pun.
 
 interface Props {
   payload: RapotPayload;
-  qr: string;
+  /** QR verifikasi. Kosong = rapot belum diterbitkan (pratinjau/cetak dari aplikasi). */
+  qr?: string;
   logoSrc: string;
 }
 
@@ -62,12 +70,17 @@ export default function RapotUjianA4({ payload, qr, logoSrc }: Props) {
   const { identitas } = payload;
   const uj = payload.ujian;
   const id = identitas;
-  const lampiran = `Lampiran rapot ujian akhir · ${id.peserta} · Halaqah ${id.halaqah} · halaman 2 dari 2`;
+  // Rapot per-ujian (batch Januari): fokus 'qn' | 'pb'. null = rapot gabungan.
+  const fokus = fokusUjian(payload.jenis_rapot);
+  const tunggal = fokus != null;
+  const ujianLabel = fokus === 'qn' ? 'Ujian QN' : 'Ujian PB';
+  const judul = tunggal ? `RAPOT ${ujianLabel.toUpperCase()} AKHIR LEVEL` : 'RAPOT UJIAN AKHIR LEVEL';
+  const lampiran = `Lampiran ${tunggal ? `rapot ${ujianLabel.toLowerCase()}` : 'rapot ujian akhir'} · ${id.peserta} · Halaqah ${id.halaqah} · halaman 2 dari 2`;
 
   if (!uj) {
     return (
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-        <div style={PAGE}>
+      <div className="a4-stack">
+        <div className="a4-sheet" style={PAGE}>
           <RapotKop identitas={identitas} logoSrc={logoSrc} />
           <div style={{ fontSize: 13, color: '#7a766f' }}>Data ujian tidak tersedia.</div>
         </div>
@@ -135,17 +148,21 @@ export default function RapotUjianA4({ payload, qr, logoSrc }: Props) {
   // Total kolom rincian
   const totalQn = uj.qn ? uj.rincian.reduce((a, r) => a + (r.qn ?? 0), 0) : null;
   const totalPb = uj.pb ? uj.rincian.reduce((a, r) => a + (r.pb ?? 0), 0) : null;
-  const rincGrid = '1fr 96px 96px 96px';
+  const rincGrid = tunggal ? '1fr 96px 120px' : '1fr 96px 96px 96px';
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+    <div className="a4-stack">
       {/* ============ HALAMAN 1 ============ */}
-      <div style={PAGE}>
+      <div className="a4-sheet" style={PAGE}>
         <RapotKop identitas={identitas} logoSrc={logoSrc} pageLabel="Halaman 1 dari 2" />
 
         <div style={{ textAlign: 'center', marginBottom: 16 }}>
-          <div style={{ fontSize: 19, fontWeight: 800, letterSpacing: '0.06em' }}>RAPOT UJIAN AKHIR LEVEL</div>
-          <div style={{ fontSize: 12, color: '#7a766f', marginTop: 4 }}>Sekaligus surat keterangan hasil ujian akhir</div>
+          <div style={{ fontSize: 19, fontWeight: 800, letterSpacing: '0.06em' }}>{judul}</div>
+          <div style={{ fontSize: 12, color: '#7a766f', marginTop: 4 }}>
+            {tunggal
+              ? `Sekaligus surat keterangan hasil ${ujianLabel.toLowerCase()}`
+              : 'Sekaligus surat keterangan hasil ujian akhir'}
+          </div>
         </div>
 
         {/* Status kelulusan + nilai akhir */}
@@ -173,7 +190,10 @@ export default function RapotUjianA4({ payload, qr, logoSrc }: Props) {
           ))}
         </div>
 
-        {/* A. Komponen nilai akhir */}
+        {/* A. Komponen nilai akhir — hanya rapot gabungan. Pada rapot per-ujian
+            nilai akhir = skor ujian itu sendiri, jadi tabel bobot tak ada gunanya. */}
+        {!tunggal && (
+          <>
         <div style={SECTION_LABEL}>A. Komponen nilai akhir</div>
         <div style={{ border: '1px solid #d8d3c8', borderRadius: 8, overflow: 'hidden', marginBottom: 18 }}>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 110px 100px 120px', alignItems: 'center', ...HEAD }}>
@@ -209,9 +229,11 @@ export default function RapotUjianA4({ payload, qr, logoSrc }: Props) {
             </div>
           </div>
         </div>
+          </>
+        )}
 
-        {/* B. Nilai ujian akhir */}
-        <div style={SECTION_LABEL}>B. Nilai ujian akhir</div>
+        {/* Nilai ujian — gabungan menampilkan QN & PB, per-ujian hanya fokusnya. */}
+        <div style={SECTION_LABEL}>{tunggal ? `A. Nilai ${ujianLabel.toLowerCase()}` : 'B. Nilai ujian akhir'}</div>
         <div style={{ border: '1px solid #d8d3c8', borderRadius: 8, overflow: 'hidden', marginBottom: 18 }}>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 78px 78px 66px 150px', alignItems: 'center', ...HEAD }}>
             <div style={{ padding: '9px 14px', borderRight: '1px solid #d8d3c8' }}>Jenis ujian</div>
@@ -220,25 +242,38 @@ export default function RapotUjianA4({ payload, qr, logoSrc }: Props) {
             <div style={{ padding: '9px 8px', borderRight: '1px solid #d8d3c8', textAlign: 'center' }}>Skor</div>
             <div style={{ padding: '9px 14px' }}>Hasil</div>
           </div>
-          {ujiRow(uj.qn, 'Ujian QN')}
-          {ujiRow(uj.pb, 'Ujian PB')}
+          {(!tunggal || fokus === 'qn') && ujiRow(uj.qn, 'Ujian QN')}
+          {(!tunggal || fokus === 'pb') && ujiRow(uj.pb, 'Ujian PB')}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 78px 78px 66px 150px', alignItems: 'center', fontSize: 12, background: '#efece5' }}>
-            <div style={{ padding: '10px 14px', borderRight: '1px solid #d8d3c8', gridColumn: '1 / span 3', fontWeight: 800 }}>Dipakai untuk nilai akhir · Ujian PB</div>
-            <div style={{ padding: '10px 8px', borderRight: '1px solid #d8d3c8', textAlign: 'center', fontWeight: 800, fontSize: 14, color: statusColor, fontVariantNumeric: 'tabular-nums' }}>{nilaiOf(pbSkor)}</div>
+            <div style={{ padding: '10px 14px', borderRight: '1px solid #d8d3c8', gridColumn: '1 / span 3', fontWeight: 800 }}>
+              {tunggal ? `Nilai akhir · ${ujianLabel}` : 'Dipakai untuk nilai akhir · Ujian PB'}
+            </div>
+            <div style={{ padding: '10px 8px', borderRight: '1px solid #d8d3c8', textAlign: 'center', fontWeight: 800, fontSize: 14, color: statusColor, fontVariantNumeric: 'tabular-nums' }}>
+              {nilaiOf(tunggal ? uj.nilaiAkhir : pbSkor)}
+            </div>
             <div style={{ padding: '10px 14px', fontWeight: 800, color: statusColor }}>{statusText}</div>
           </div>
         </div>
         <div style={{ fontSize: 10, color: '#a8a39a' }}>
-          Skor = 100 − (Lahn Jaliy × 6) − (Lahn Khafiy × 2). Nilai akhir = 30% Evaluasi Berkala + 70% Ujian PB (ambang lulus nilai akhir 70).
+          Skor = 100 − (Lahn Jaliy × 6) − (Lahn Khafiy × 2).{' '}
+          {tunggal
+            ? `Nilai akhir = skor ${ujianLabel} (ambang lulus 70).`
+            : 'Nilai akhir = 30% Evaluasi Berkala + 70% Ujian PB (ambang lulus nilai akhir 70).'}
         </div>
 
         {/* QR + tanda tangan */}
         <div style={{ marginTop: 'auto', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', gap: 20, paddingTop: 24 }}>
-          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, flexShrink: 0 }}>
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={qr} alt="QR verifikasi rapot" style={{ width: 62, height: 62, display: 'block' }} />
-            <div style={{ fontSize: 8.5, color: '#a8a39a' }}>Cek keaslian rapot</div>
-          </div>
+          {qr ? (
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={qr} alt="QR verifikasi rapot" style={{ width: 62, height: 62, display: 'block' }} />
+              <div style={{ fontSize: 8.5, color: '#a8a39a' }}>Cek keaslian rapot</div>
+            </div>
+          ) : (
+            <div style={{ fontSize: 8.5, color: '#a8a39a', maxWidth: 190, lineHeight: 1.5 }}>
+              Cetakan pratinjau — rapot belum diterbitkan, jadi belum ada QR verifikasi.
+            </div>
+          )}
           <div style={{ display: 'flex', gap: 28, textAlign: 'center' }}>
             <div>
               <div style={{ fontSize: 11, color: '#7a766f', marginBottom: 2 }}>{fmtTgl(payload.tanggal)}</div>
@@ -257,17 +292,23 @@ export default function RapotUjianA4({ payload, qr, logoSrc }: Props) {
       </div>
 
       {/* ============ HALAMAN 2 ============ */}
-      <div style={{ ...PAGE, pageBreakBefore: 'always', breakBefore: 'page' }}>
+      <div className="a4-sheet" style={{ ...PAGE, pageBreakBefore: 'always', breakBefore: 'page' }}>
         <RapotKop identitas={identitas} logoSrc={logoSrc} sub={lampiran} pageLabel="Halaman 2 dari 2" />
 
-        {/* C. Rincian kesalahan tiap ujian */}
-        <div style={SECTION_LABEL}>C. Rincian kesalahan tiap ujian</div>
+        {/* Rincian kesalahan — gabungan: dua kolom (QN & PB); per-ujian: satu kolom. */}
+        <div style={SECTION_LABEL}>
+          {tunggal ? `B. Rincian kesalahan ${ujianLabel.toLowerCase()}` : 'C. Rincian kesalahan tiap ujian'}
+        </div>
         <div style={{ border: '1px solid #d8d3c8', borderRadius: 8, overflow: 'hidden', marginBottom: 8 }}>
           <div style={{ display: 'grid', gridTemplateColumns: rincGrid, alignItems: 'center', ...HEAD }}>
             <div style={{ padding: '9px 14px', borderRight: '1px solid #d8d3c8' }}>Jenis kesalahan</div>
             <div style={{ padding: '9px 8px', borderRight: '1px solid #d8d3c8' }}>Kelompok</div>
-            <div style={{ padding: '9px 8px', borderRight: '1px solid #d8d3c8', textAlign: 'center' }}>Ujian QN</div>
-            <div style={{ padding: '9px 8px', textAlign: 'center' }}>Ujian PB</div>
+            {(!tunggal || fokus === 'qn') && (
+              <div style={{ padding: '9px 8px', borderRight: tunggal ? undefined : '1px solid #d8d3c8', textAlign: 'center' }}>Ujian QN</div>
+            )}
+            {(!tunggal || fokus === 'pb') && (
+              <div style={{ padding: '9px 8px', textAlign: 'center' }}>Ujian PB</div>
+            )}
           </div>
           {uj.rincian.length === 0 ? (
             <div style={{ padding: '12px 14px', fontSize: 12, color: '#a8a39a' }}>Tidak ada kesalahan tercatat.</div>
@@ -278,8 +319,12 @@ export default function RapotUjianA4({ payload, qr, logoSrc }: Props) {
                 <div key={r.key} style={{ display: 'grid', gridTemplateColumns: rincGrid, alignItems: 'center', fontSize: 12, borderBottom: '1px solid #f4f2ed' }}>
                   <div style={{ padding: '8px 14px', borderRight: '1px solid #f4f2ed', color: '#44423d' }}>{r.label}</div>
                   <div style={{ padding: '8px 8px', borderRight: '1px solid #f4f2ed', fontSize: 10, fontWeight: 700, color: isJaliy ? 'oklch(0.46 0.14 25)' : 'oklch(0.48 0.10 75)' }}>{isJaliy ? 'Jaliy' : 'Khafiy'}</div>
-                  <div style={{ padding: '8px 8px', borderRight: '1px solid #f4f2ed', textAlign: 'center', fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{rincianCell(r.qn, uj.qn == null)}</div>
-                  <div style={{ padding: '8px 8px', textAlign: 'center', fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{rincianCell(r.pb, uj.pb == null)}</div>
+                  {(!tunggal || fokus === 'qn') && (
+                    <div style={{ padding: '8px 8px', borderRight: tunggal ? undefined : '1px solid #f4f2ed', textAlign: 'center', fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{rincianCell(r.qn, uj.qn == null)}</div>
+                  )}
+                  {(!tunggal || fokus === 'pb') && (
+                    <div style={{ padding: '8px 8px', textAlign: 'center', fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{rincianCell(r.pb, uj.pb == null)}</div>
+                  )}
                 </div>
               );
             })
@@ -287,16 +332,20 @@ export default function RapotUjianA4({ payload, qr, logoSrc }: Props) {
           <div style={{ display: 'grid', gridTemplateColumns: rincGrid, alignItems: 'center', fontSize: 12, background: '#efece5' }}>
             <div style={{ padding: '10px 14px', borderRight: '1px solid #d8d3c8', fontWeight: 800 }}>Total</div>
             <div style={{ padding: '10px 8px', borderRight: '1px solid #d8d3c8' }}></div>
-            <div style={{ padding: '10px 8px', borderRight: '1px solid #d8d3c8', textAlign: 'center', fontWeight: 800, fontVariantNumeric: 'tabular-nums' }}>{totalQn == null ? '—' : totalQn}</div>
-            <div style={{ padding: '10px 8px', textAlign: 'center', fontWeight: 800, fontVariantNumeric: 'tabular-nums' }}>{totalPb == null ? '—' : totalPb}</div>
+            {(!tunggal || fokus === 'qn') && (
+              <div style={{ padding: '10px 8px', borderRight: tunggal ? undefined : '1px solid #d8d3c8', textAlign: 'center', fontWeight: 800, fontVariantNumeric: 'tabular-nums' }}>{totalQn == null ? '—' : totalQn}</div>
+            )}
+            {(!tunggal || fokus === 'pb') && (
+              <div style={{ padding: '10px 8px', textAlign: 'center', fontWeight: 800, fontVariantNumeric: 'tabular-nums' }}>{totalPb == null ? '—' : totalPb}</div>
+            )}
           </div>
         </div>
         <div style={{ fontSize: 10, color: '#a8a39a', marginBottom: 20 }}>
           Lahn Jaliy dihitung −6 poin per kesalahan, Lahn Khafiy −2 poin per kesalahan.
         </div>
 
-        {/* E. Catatan penguji */}
-        <div style={SECTION_LABEL}>D. Catatan penguji</div>
+        {/* Catatan penguji */}
+        <div style={SECTION_LABEL}>{tunggal ? 'C. Catatan penguji' : 'D. Catatan penguji'}</div>
         <div style={{ border: '1px solid #e8e4dc', borderRadius: 8, padding: '13px 16px', background: '#faf8f4', fontSize: 12.5, lineHeight: 1.65, color: '#44423d', textWrap: 'pretty' }}>
           {uj.catatanPenguji.trim() || 'Tidak ada catatan penguji.'}
         </div>

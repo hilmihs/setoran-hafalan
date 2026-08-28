@@ -1,8 +1,8 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { requireKoordinator } from '@/lib/session';
+import { requireOneOfRoles } from '@/lib/session';
 import { supabaseAdmin } from '@/lib/supabase-admin';
-import { ALL_LAHN, AMBANG, columnsToCounts, initials, tierOf, nilaiAkhirOf, UJIAN_QN_SESI, UJIAN_PB_SESI } from '@/lib/evaluasi';
+import { ALL_LAHN, AMBANG, AMBANG_LULUS_AKHIR, columnsToCounts, initials, tierOf, nilaiAkhirOf, UJIAN_QN_SESI, UJIAN_PB_SESI } from '@/lib/evaluasi';
 import { PrintButton } from '@/components/PrintButton';
 import RekapNilaiAkhir from './RekapNilaiAkhir';
 
@@ -23,16 +23,30 @@ export default async function KoordinatorHalaqahPage({
 }: {
   params: { halaqahId: string };
 }) {
-  const session = await requireKoordinator();
+  // Rekap dibuka juga untuk koordinator ketua kelas — mereka memantau halaqah
+  // yang sama; pengaturan tetap milik koordinator.
+  const session = await requireOneOfRoles(['koordinator', 'koordinator_ketua_kelas']);
   const gender = session.gender;
 
   const { data: halaqah } = await supabaseAdmin
     .from('eval_halaqah')
-    .select('id, nama, gender, mustawa, level, pengajar_id')
+    .select('id, nama, gender, mustawa, level, pengajar_id, batch_id')
     .eq('id', params.halaqahId)
     .maybeSingle();
 
   if (!halaqah || halaqah.gender !== gender) notFound();
+
+  // Skema penilaian batch (0058). Batch HITS Januari: nilai akhir murni skor ujian,
+  // tanpa bobot evaluasi berkala.
+  let terpisah = false;
+  if (halaqah.batch_id) {
+    const { data: batchRow } = await supabaseAdmin
+      .from('eval_batch')
+      .select('rapot_ujian_terpisah')
+      .eq('id', halaqah.batch_id as string)
+      .maybeSingle();
+    terpisah = !!batchRow?.rapot_ujian_terpisah;
+  }
 
   const noId = ['00000000-0000-0000-0000-000000000000'];
 
@@ -124,6 +138,18 @@ export default async function KoordinatorHalaqahPage({
       else if (m.jenis === 'ujian' && m.nomor_sesi === UJIAN_PB_SESI) ujianPb = skor;
     }
     const na = nilaiAkhirOf(berkala, ujianPb);
+    // Batch terpisah: nilai akhir = skor Ujian PB apa adanya. Rata-rata berkala tetap
+    // ditampilkan sebagai informasi, tapi tidak ikut hitungan.
+    if (terpisah) {
+      return {
+        nama: p.nama as string,
+        berkalaAvg: na.berkalaAvg,
+        ujianQn,
+        ujianPb,
+        nilaiAkhir: ujianPb,
+        lulus: ujianPb == null ? null : ujianPb >= AMBANG_LULUS_AKHIR,
+      };
+    }
     return { nama: p.nama as string, berkalaAvg: na.berkalaAvg, ujianQn, ujianPb, nilaiAkhir: na.nilai, lulus: na.lulus };
   });
 
@@ -198,7 +224,7 @@ export default async function KoordinatorHalaqahPage({
         </div>
 
         <div style={{ marginBottom: 18 }}>
-          <RekapNilaiAkhir halaqahNama={halaqah.nama as string} rows={rekapRows} />
+          <RekapNilaiAkhir halaqahNama={halaqah.nama as string} rows={rekapRows} terpisah={terpisah} />
         </div>
 
         <div

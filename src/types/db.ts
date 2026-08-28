@@ -678,6 +678,9 @@ export interface EvalBatch {
   id: string;
   nama: string;
   aktif: boolean;
+  /** Kolom kurasi (0058), tidak ikut ditimpa sinkron hilmihs.
+   *  true = nilai akhir murni skor ujian + rapot Ujian QN/PB terpisah. */
+  rapot_ujian_terpisah: boolean;
   synced_at: string;
 }
 

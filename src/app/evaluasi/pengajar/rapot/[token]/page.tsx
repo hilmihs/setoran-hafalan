@@ -8,6 +8,8 @@ import RapotBerkalaA4 from '../RapotBerkalaA4';
 import RapotUjianA4 from '../RapotUjianA4';
 import PrintButton from '../PrintButton';
 import CabutButton from '../CabutButton';
+import RapotPrintStyle from '../RapotPrintStyle';
+import AutoPrint from '../AutoPrint';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -96,13 +98,15 @@ export default async function RapotPengajarPage({
   const qr = await qrSvgDataUri(verifyUrl);
 
   return (
-    <div>
-      <style>
-        {'@page{size:A4;margin:0} @media print{.noprint{display:none}} body{background:#fff}'}
-      </style>
+    <div className="a4-print-wrap">
+      <RapotPrintStyle />
+      <AutoPrint token={token} />
       {(row.status as string | undefined) && row.status !== 'aktif' && (
         <div
+          className="a4-banner"
           style={{
+            maxWidth: 794,
+            margin: '0 auto 12px',
             background: 'oklch(0.96 0.04 25)',
             border: '1px solid oklch(0.85 0.08 25)',
             color: 'oklch(0.46 0.14 25)',

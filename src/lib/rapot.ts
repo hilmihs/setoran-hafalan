@@ -85,8 +85,28 @@ export interface RapotUjian {
   catatanPenguji: string;
 }
 
+/**
+ * Jenis dokumen rapot.
+ * - `berkala`   — rekap 4 sesi QN + 4 sesi PB.
+ * - `ujian`     — rapot ujian akhir gabungan; nilai akhir = 30% berkala + 70% Ujian PB.
+ * - `ujian_qn` / `ujian_pb` — batch dgn `eval_batch.rapot_ujian_terpisah` (0058):
+ *   satu dokumen per ujian, nilai akhir MURNI skor ujian itu, dan sengaja tidak
+ *   menyinggung ujian yang lain sama sekali.
+ */
+export type JenisRapot = 'berkala' | 'ujian' | 'ujian_qn' | 'ujian_pb';
+
+/** Rapot ujian yang berdiri sendiri (bukan gabungan QN+PB). */
+export function isUjianTunggal(j: JenisRapot): j is 'ujian_qn' | 'ujian_pb' {
+  return j === 'ujian_qn' || j === 'ujian_pb';
+}
+
+/** Ujian mana yang jadi fokus dokumen; null untuk rapot gabungan/berkala. */
+export function fokusUjian(j: JenisRapot): 'qn' | 'pb' | null {
+  return j === 'ujian_qn' ? 'qn' : j === 'ujian_pb' ? 'pb' : null;
+}
+
 export interface RapotPayload {
-  jenis_rapot: 'berkala' | 'ujian';
+  jenis_rapot: JenisRapot;
   identitas: RapotIdentitas;
   ambang: number;
   tanggal: string; // ISO terbit
@@ -213,6 +233,56 @@ export function buildUjianPayload(
       pb,
       rincian,
       catatanPenguji: (pb?.catatan || qn?.catatan || '').trim(),
+    },
+  };
+}
+
+/**
+ * Rapot untuk SATU ujian akhir saja (batch `rapot_ujian_terpisah`, 0058).
+ *
+ * Bedanya dgn `buildUjianPayload`:
+ * - nilai akhir = skor ujian itu sendiri, tanpa bobot evaluasi berkala
+ *   (`berkalaAvg` sengaja null supaya perender tahu komponen itu tak ada);
+ * - ujian yang tidak difokuskan tidak muncul di mana pun — snap-nya null dan
+ *   kolomnya di `rincian` diisi null, jadi rapot PB betul-betul tak menyebut QN.
+ *
+ * Ambang LULUS tetap `AMBANG_LULUS_AKHIR` (70), sama dengan batch lain.
+ * `ambangSesi` hanya menentukan flag `lulus` di dalam snap (dipakai layar Nilai).
+ */
+export function buildUjianTunggalPayload(
+  identitas: RapotIdentitas,
+  penerbit: string,
+  tanggal: string,
+  sesi: SesiNilaiInput[],
+  fokus: 'qn' | 'pb',
+  ambangSesi = AMBANG_UJIAN_DEFAULT,
+): RapotPayload {
+  const nomor = fokus === 'qn' ? UJIAN_QN_SESI : UJIAN_PB_SESI;
+  const label = fokus === 'qn' ? 'Ujian QN' : 'Ujian PB';
+  const snap = ujianSnap(sesi, nomor, label, ambangSesi);
+  const nilaiAkhir = snap?.skor ?? null;
+  const rincian = ALL_LAHN.map((d) => ({
+    key: d.key,
+    label: d.label,
+    group: d.group,
+    qn: fokus === 'qn' && snap ? snap.counts[d.key] || 0 : null,
+    pb: fokus === 'pb' && snap ? snap.counts[d.key] || 0 : null,
+  })).filter((r) => ((fokus === 'qn' ? r.qn : r.pb) ?? 0) > 0);
+  return {
+    jenis_rapot: fokus === 'qn' ? 'ujian_qn' : 'ujian_pb',
+    identitas,
+    ambang: AMBANG_LULUS_AKHIR,
+    tanggal,
+    penerbit,
+    ujian: {
+      nilaiAkhir,
+      berkalaAvg: null,
+      ujianPbSkor: fokus === 'pb' ? nilaiAkhir : null,
+      lulus: nilaiAkhir == null ? null : nilaiAkhir >= AMBANG_LULUS_AKHIR,
+      qn: fokus === 'qn' ? snap : null,
+      pb: fokus === 'pb' ? snap : null,
+      rincian,
+      catatanPenguji: (snap?.catatan ?? '').trim(),
     },
   };
 }

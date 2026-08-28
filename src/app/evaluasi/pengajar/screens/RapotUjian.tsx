@@ -1,12 +1,15 @@
 'use client';
 
 import type { RapotPayload, RapotUjianSnap } from '@/lib/rapot';
+import { fokusUjian } from '@/lib/rapot';
 
 interface RapotUjianProps {
   payload: RapotPayload;
   onBack: () => void;
   onTerbitkan: () => void;
   terbitStatus?: 'idle' | 'saving' | 'done' | 'error';
+  /** Cetak lembar A4 peserta ini tanpa menerbitkan rapot resmi. */
+  onCetak?: () => void;
 }
 
 function cell(v: number | null): string {
@@ -48,16 +51,22 @@ function SnapCard({ snap }: { snap: RapotUjianSnap }) {
   );
 }
 
-export function RapotUjian({ payload, onBack, onTerbitkan, terbitStatus = 'idle' }: RapotUjianProps) {
+export function RapotUjian({ payload, onBack, onTerbitkan, terbitStatus = 'idle', onCetak }: RapotUjianProps) {
   const u = payload.ujian;
   const id = payload.identitas;
+  // Rapot per-ujian (batch `rapot_ujian_terpisah`): dokumen ini hanya bicara satu
+  // ujian, dan sengaja tidak menyinggung ujian yang lain.
+  const fokus = fokusUjian(payload.jenis_rapot);
+  const tunggal = fokus != null;
+  const ujianLabel = fokus === 'qn' ? 'Ujian QN' : 'Ujian PB';
+  const judulLayar = tunggal ? `Rapot ${ujianLabel}` : 'Rapot Ujian Akhir';
 
   if (!u) {
     return (
       <>
         <div className="no-print" style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 16px', background: '#ffffff', borderBottom: '1px solid #e8e4dc' }}>
           <button onClick={onBack} style={{ width: 32, height: 32, borderRadius: 8, border: '1px solid #e8e4dc', background: '#ffffff', color: '#44423d', fontSize: 15, cursor: 'pointer' }}>←</button>
-          <div style={{ fontSize: 15, fontWeight: 700 }}>Rapot Ujian Akhir</div>
+          <div style={{ fontSize: 15, fontWeight: 700 }}>{judulLayar}</div>
         </div>
         <div style={{ padding: 16, fontSize: 12.5, color: '#7a766f' }}>Belum ada data ujian.</div>
       </>
@@ -65,7 +74,9 @@ export function RapotUjian({ payload, onBack, onTerbitkan, terbitStatus = 'idle'
   }
 
   const saving = terbitStatus === 'saving';
-  const hasPb = !!u.pb;
+  // Ujian yang jadi dasar nilai akhir: PB pada rapot gabungan, atau ujian fokus.
+  const snapUtama = tunggal ? (fokus === 'qn' ? u.qn : u.pb) : u.pb;
+  const hasPb = !!snapUtama;
   const ambang = payload.ambang;
 
   const metaParts: string[] = [`Halaqah ${id.halaqah}`];
@@ -73,8 +84,12 @@ export function RapotUjian({ payload, onBack, onTerbitkan, terbitStatus = 'idle'
   if (id.mustawa != null) metaParts.push(`Level ${id.mustawa}`);
   const meta = metaParts.join(' · ');
 
-  // Penyebab null bisa: PB belum ada, ATAU PB ada tapi berkala kosong. Bedakan.
-  const nullReason = hasPb ? 'Belum ada nilai berkala' : 'Belum ada ujian PB';
+  // Penyebab null bisa: ujian belum ada, ATAU (rapot gabungan) berkala kosong.
+  const nullReason = tunggal
+    ? `Belum ada ${ujianLabel.toLowerCase()}`
+    : hasPb
+    ? 'Belum ada nilai berkala'
+    : 'Belum ada ujian PB';
   const status = u.lulus === true ? 'LULUS' : u.lulus === false ? 'MENGULANG' : nullReason;
   const showNilai = u.lulus != null && u.nilaiAkhir != null;
   // Warna banner ikut status — jangan hijau untuk MENGULANG.
@@ -89,27 +104,52 @@ export function RapotUjian({ payload, onBack, onTerbitkan, terbitStatus = 'idle'
   const totalQn = u.rincian.reduce((a, r) => a + (r.qn ?? 0), 0);
   const totalPb = u.rincian.reduce((a, r) => a + (r.pb ?? 0), 0);
 
-  let btnLabel = '⬇ Unduh PDF';
-  if (saving) btnLabel = 'Menyimpan…';
+  // Tombol ini menerbitkan rapot resmi (ber-QR), bukan mengunduh. Cetak biasa
+  // punya tombolnya sendiri di sebelahnya.
+  let btnLabel = 'Terbitkan';
+  if (saving) btnLabel = 'Menerbitkan…';
   else if (terbitStatus === 'done') btnLabel = '✓ Terbit';
   else if (terbitStatus === 'error') btnLabel = 'Gagal · ulangi';
 
   // Selaras dgn guard server: butuh PB DAN nilai akhir (berkala ada) sebelum terbit.
   const btnDisabled = saving || !hasPb || u.nilaiAkhir == null;
 
-  const gridCols = '1fr 46px 40px 40px';
+  const gridCols = tunggal ? '1fr 46px 48px' : '1fr 46px 40px 40px';
 
   return (
     <>
       <div className="no-print" style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 16px', background: '#ffffff', borderBottom: '1px solid #e8e4dc' }}>
         <button onClick={onBack} style={{ width: 32, height: 32, borderRadius: 8, border: '1px solid #e8e4dc', background: '#ffffff', color: '#44423d', fontSize: 15, cursor: 'pointer' }}>←</button>
-        <div style={{ fontSize: 15, fontWeight: 700 }}>Rapot Ujian Akhir</div>
+        <div style={{ fontSize: 15, fontWeight: 700 }}>{judulLayar}</div>
+        {onCetak && (
+          <button
+            type="button"
+            onClick={onCetak}
+            title="Cetak lembar A4 tanpa menerbitkan"
+            style={{
+              marginLeft: 'auto',
+              height: 36,
+              padding: '0 12px',
+              borderRadius: 8,
+              border: '1px solid #d8d3c8',
+              background: '#ffffff',
+              font: 'inherit',
+              fontSize: 12.5,
+              fontWeight: 700,
+              color: '#44423d',
+              cursor: 'pointer',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            🖨 Cetak
+          </button>
+        )}
         <button
           onClick={onTerbitkan}
           disabled={btnDisabled}
           className="ev-dark"
           style={{
-            marginLeft: 'auto',
+            marginLeft: onCetak ? undefined : 'auto',
             height: 36,
             padding: '0 14px',
             borderRadius: 8,
@@ -161,44 +201,71 @@ export function RapotUjian({ payload, onBack, onTerbitkan, terbitStatus = 'idle'
               </div>
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.05em', textTransform: 'uppercase', color: '#7a766f', marginBottom: 8 }}>Nilai akhir</div>
-                <div style={{ marginBottom: 10 }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11.5, marginBottom: 4 }}>
-                    <span style={{ color: '#44423d', fontWeight: 600 }}>Berkala · bobot 30%</span>
-                    <span style={{ fontWeight: 800, fontVariantNumeric: 'tabular-nums' }}>{u.berkalaAvg ?? '–'}</span>
-                  </div>
-                  <div style={{ height: 7, borderRadius: 4, background: '#efece5', overflow: 'hidden' }}>
-                    <div style={{ height: '100%', width: `${berkalaAvg}%`, background: 'oklch(0.72 0.07 210)' }} />
-                  </div>
-                </div>
-                <div style={{ marginBottom: 10 }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11.5, marginBottom: 4 }}>
-                    <span style={{ color: '#44423d', fontWeight: 600 }}>Ujian PB · bobot 70%</span>
-                    <span style={{ fontWeight: 800, fontVariantNumeric: 'tabular-nums' }}>{u.ujianPbSkor ?? '–'}</span>
-                  </div>
-                  <div style={{ height: 7, borderRadius: 4, background: '#efece5', overflow: 'hidden' }}>
-                    <div style={{ height: '100%', width: `${ujianPbSkor}%`, background: HIJAU_BTN }} />
-                  </div>
-                </div>
-                <div style={{ fontSize: 10.5, color: '#a8a39a', lineHeight: 1.4 }}>
-                  ({u.berkalaAvg ?? '–'} × 0,3) + ({u.ujianPbSkor ?? '–'} × 0,7) = {rawFormula} → {u.nilaiAkhir}
-                </div>
+                {tunggal ? (
+                  <>
+                    <div style={{ marginBottom: 10 }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11.5, marginBottom: 4 }}>
+                        <span style={{ color: '#44423d', fontWeight: 600 }}>{ujianLabel}</span>
+                        <span style={{ fontWeight: 800, fontVariantNumeric: 'tabular-nums' }}>{snapUtama?.skor ?? '–'}</span>
+                      </div>
+                      <div style={{ height: 7, borderRadius: 4, background: '#efece5', overflow: 'hidden' }}>
+                        <div style={{ height: '100%', width: `${snapUtama?.skor ?? 0}%`, background: HIJAU_BTN }} />
+                      </div>
+                    </div>
+                    <div style={{ fontSize: 10.5, color: '#a8a39a', lineHeight: 1.4 }}>
+                      Nilai akhir = skor {ujianLabel}. Evaluasi berkala tidak ikut dihitung.
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div style={{ marginBottom: 10 }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11.5, marginBottom: 4 }}>
+                        <span style={{ color: '#44423d', fontWeight: 600 }}>Berkala · bobot 30%</span>
+                        <span style={{ fontWeight: 800, fontVariantNumeric: 'tabular-nums' }}>{u.berkalaAvg ?? '–'}</span>
+                      </div>
+                      <div style={{ height: 7, borderRadius: 4, background: '#efece5', overflow: 'hidden' }}>
+                        <div style={{ height: '100%', width: `${berkalaAvg}%`, background: 'oklch(0.72 0.07 210)' }} />
+                      </div>
+                    </div>
+                    <div style={{ marginBottom: 10 }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11.5, marginBottom: 4 }}>
+                        <span style={{ color: '#44423d', fontWeight: 600 }}>Ujian PB · bobot 70%</span>
+                        <span style={{ fontWeight: 800, fontVariantNumeric: 'tabular-nums' }}>{u.ujianPbSkor ?? '–'}</span>
+                      </div>
+                      <div style={{ height: 7, borderRadius: 4, background: '#efece5', overflow: 'hidden' }}>
+                        <div style={{ height: '100%', width: `${ujianPbSkor}%`, background: HIJAU_BTN }} />
+                      </div>
+                    </div>
+                    <div style={{ fontSize: 10.5, color: '#a8a39a', lineHeight: 1.4 }}>
+                      ({u.berkalaAvg ?? '–'} × 0,3) + ({u.ujianPbSkor ?? '–'} × 0,7) = {rawFormula} → {u.nilaiAkhir}
+                    </div>
+                  </>
+                )}
               </div>
             </div>
           )}
 
           <div style={{ padding: showNilai ? '0 18px' : '20px 18px 0' }}>
             {/* Ujian QN & PB */}
-            <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.05em', textTransform: 'uppercase', color: '#7a766f', marginBottom: 8 }}>Nilai ujian akhir</div>
+            <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.05em', textTransform: 'uppercase', color: '#7a766f', marginBottom: 8 }}>
+              {tunggal ? `Nilai ${ujianLabel.toLowerCase()}` : 'Nilai ujian akhir'}
+            </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 8 }}>
-              {u.qn ? <SnapCard snap={u.qn} /> : (
-                <div style={{ background: '#faf8f4', border: '1px solid #e8e4dc', borderRadius: 12, padding: '11px 12px', fontSize: 12, color: '#a8a39a' }}>Belum ada ujian QN</div>
-              )}
-              {u.pb ? <SnapCard snap={u.pb} /> : (
-                <div style={{ background: '#faf8f4', border: '1px solid #e8e4dc', borderRadius: 12, padding: '11px 12px', fontSize: 12, color: '#a8a39a' }}>Belum ada ujian PB</div>
-              )}
+              {(!tunggal || fokus === 'qn') &&
+                (u.qn ? <SnapCard snap={u.qn} /> : (
+                  <div style={{ background: '#faf8f4', border: '1px solid #e8e4dc', borderRadius: 12, padding: '11px 12px', fontSize: 12, color: '#a8a39a' }}>Belum ada ujian QN</div>
+                ))}
+              {(!tunggal || fokus === 'pb') &&
+                (u.pb ? <SnapCard snap={u.pb} /> : (
+                  <div style={{ background: '#faf8f4', border: '1px solid #e8e4dc', borderRadius: 12, padding: '11px 12px', fontSize: 12, color: '#a8a39a' }}>Belum ada ujian PB</div>
+                ))}
             </div>
             <div style={{ fontSize: 10.5, color: '#a8a39a', marginBottom: 18, lineHeight: 1.45 }}>
-              Nilai akhir memakai skor <b>Ujian PB</b>. Ujian QN sebagai catatan progres. Ambang lulus {ambang}.
+              {tunggal ? (
+                <>Nilai akhir = skor <b>{ujianLabel}</b>. Evaluasi berkala tidak dihitung. Ambang lulus {ambang}.</>
+              ) : (
+                <>Nilai akhir memakai skor <b>Ujian PB</b>. Ujian QN sebagai catatan progres. Ambang lulus {ambang}.</>
+              )}
             </div>
 
             {/* Rincian kesalahan */}
@@ -207,8 +274,8 @@ export function RapotUjian({ payload, onBack, onTerbitkan, terbitStatus = 'idle'
               <div style={{ display: 'grid', gridTemplateColumns: gridCols, alignItems: 'center', background: '#faf8f4', borderBottom: '1px solid #e8e4dc', fontSize: 9.5, fontWeight: 700, letterSpacing: '0.03em', textTransform: 'uppercase', color: '#7a766f' }}>
                 <div style={{ padding: '7px 12px' }}>Jenis kesalahan</div>
                 <div style={{ padding: '7px 0' }} />
-                <div style={{ padding: '7px 0', textAlign: 'center' }}>QN</div>
-                <div style={{ padding: '7px 8px 7px 0', textAlign: 'center' }}>PB</div>
+                {(!tunggal || fokus === 'qn') && <div style={{ padding: '7px 0', textAlign: 'center' }}>QN</div>}
+                {(!tunggal || fokus === 'pb') && <div style={{ padding: '7px 8px 7px 0', textAlign: 'center' }}>PB</div>}
               </div>
               {u.rincian.map((r) => (
                 <div key={r.key} style={{ display: 'grid', gridTemplateColumns: gridCols, alignItems: 'center', fontSize: 12, borderBottom: '1px solid #f4f2ed' }}>
@@ -216,8 +283,8 @@ export function RapotUjian({ payload, onBack, onTerbitkan, terbitStatus = 'idle'
                   <div style={{ padding: '7px 0', fontSize: 9.5, fontWeight: 700, color: r.group === 'jaliy' ? JALIY_COLOR : KHAFIY_COLOR }}>
                     {r.group === 'jaliy' ? 'Jaliy' : 'Khafiy'}
                   </div>
-                  <div style={{ padding: '7px 0', textAlign: 'center', fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{cell(r.qn)}</div>
-                  <div style={{ padding: '7px 8px 7px 0', textAlign: 'center', fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{cell(r.pb)}</div>
+                  {(!tunggal || fokus === 'qn') && <div style={{ padding: '7px 0', textAlign: 'center', fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{cell(r.qn)}</div>}
+                  {(!tunggal || fokus === 'pb') && <div style={{ padding: '7px 8px 7px 0', textAlign: 'center', fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{cell(r.pb)}</div>}
                 </div>
               ))}
               {u.rincian.length === 0 && (
@@ -226,8 +293,8 @@ export function RapotUjian({ payload, onBack, onTerbitkan, terbitStatus = 'idle'
               <div style={{ display: 'grid', gridTemplateColumns: gridCols, alignItems: 'center', fontSize: 12, background: '#faf8f4' }}>
                 <div style={{ padding: '8px 12px', fontWeight: 800 }}>Total kesalahan</div>
                 <div style={{ padding: '8px 0' }} />
-                <div style={{ padding: '8px 0', textAlign: 'center', fontWeight: 800, fontVariantNumeric: 'tabular-nums' }}>{cell(totalQn)}</div>
-                <div style={{ padding: '8px 8px 8px 0', textAlign: 'center', fontWeight: 800, fontVariantNumeric: 'tabular-nums' }}>{cell(totalPb)}</div>
+                {(!tunggal || fokus === 'qn') && <div style={{ padding: '8px 0', textAlign: 'center', fontWeight: 800, fontVariantNumeric: 'tabular-nums' }}>{cell(totalQn)}</div>}
+                {(!tunggal || fokus === 'pb') && <div style={{ padding: '8px 8px 8px 0', textAlign: 'center', fontWeight: 800, fontVariantNumeric: 'tabular-nums' }}>{cell(totalPb)}</div>}
               </div>
             </div>
 
@@ -239,7 +306,7 @@ export function RapotUjian({ payload, onBack, onTerbitkan, terbitStatus = 'idle'
 
             {!hasPb && (
               <div style={{ fontSize: 11.5, fontWeight: 700, color: JALIY_COLOR, background: 'oklch(0.96 0.03 25)', border: `1px solid ${JALIY_COLOR}`, borderRadius: 8, padding: '10px 12px', marginBottom: 18, textAlign: 'center' }}>
-                Belum ada ujian PB
+                Belum ada {tunggal ? ujianLabel.toLowerCase() : 'ujian PB'}
               </div>
             )}
 

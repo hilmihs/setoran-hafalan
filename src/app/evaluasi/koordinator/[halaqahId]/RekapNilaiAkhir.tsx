@@ -21,6 +21,8 @@ export interface RekapNilaiAkhirRow {
 export interface RekapNilaiAkhirProps {
   halaqahNama: string;
   rows: RekapNilaiAkhirRow[];
+  /** Batch `rapot_ujian_terpisah` (0058): nilai akhir murni skor ujian, tanpa bobot berkala. */
+  terpisah?: boolean;
 }
 
 const GRID = '1fr 88px 88px 88px 96px 156px';
@@ -53,7 +55,7 @@ function StatusPill({ lulus }: { lulus: boolean | null }) {
   );
 }
 
-export default function RekapNilaiAkhir({ halaqahNama, rows }: RekapNilaiAkhirProps) {
+export default function RekapNilaiAkhir({ halaqahNama, rows, terpisah = false }: RekapNilaiAkhirProps) {
   const total = rows.length;
   const jumlahLulus = rows.filter((r) => r.lulus === true).length;
   const jumlahMengulang = rows.filter((r) => r.lulus === false).length;
@@ -64,7 +66,9 @@ export default function RekapNilaiAkhir({ halaqahNama, rows }: RekapNilaiAkhirPr
       <div style={{ marginBottom: 18 }}>
         <div style={{ fontSize: 20, fontWeight: 700, color: '#1b1a17' }}>{halaqahNama}</div>
         <div style={{ fontSize: 12, color: '#7a766f', marginTop: 2 }}>
-          Rekap nilai akhir · nilai akhir = 30% berkala + 70% Ujian PB · ambang lulus {AMBANG_LULUS_AKHIR}
+          {terpisah
+            ? `Rekap nilai akhir · nilai akhir = skor Ujian PB (berkala tidak dihitung; Ujian QN dirapotkan terpisah) · ambang lulus ${AMBANG_LULUS_AKHIR}`
+            : `Rekap nilai akhir · nilai akhir = 30% berkala + 70% Ujian PB · ambang lulus ${AMBANG_LULUS_AKHIR}`}
         </div>
       </div>
 
