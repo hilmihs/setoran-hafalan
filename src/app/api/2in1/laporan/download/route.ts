@@ -10,10 +10,10 @@ export const maxDuration = 60;
 
 export async function GET(req: NextRequest) {
   const s = await getSession();
-  if (
-    !s.session ||
-    (s.session.role !== 'koordinator' && s.session.role !== 'syaikh')
-  ) {
+  // Cek SEMUA akses (bukan hanya role aktif) — sama seperti /api/laporan/download.
+  const accesses = s.accesses ?? (s.session ? [s.session] : []);
+  const akses = accesses.find((a) => a.role === 'koordinator' || a.role === 'syaikh');
+  if (!akses) {
     return NextResponse.json({ error: 'Akses ditolak.' }, { status: 403 });
   }
 
@@ -36,7 +36,7 @@ export async function GET(req: NextRequest) {
   if (genderParam === 'ikhwan' || genderParam === 'akhwat') {
     gender = genderParam;
   } else {
-    gender = s.session.gender;
+    gender = akses.gender;
   }
 
   const report = await generateMonthlyReport(year, month, gender);
