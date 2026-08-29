@@ -2,13 +2,15 @@
 // Diakses via QR pada rapot cetak: /evaluasi/rapot/cek/<token>.
 // Server component: baca row dari evaluasi_rapot lalu render ringkas dari payload.
 import { supabaseAdmin } from '@/lib/supabase-admin';
-import type { RapotPayload } from '@/lib/rapot';
+import type { RapotPayload, RapotPayloadLegacy, RapotPayloadTrack } from '@/lib/rapot';
 import { tierOf } from '@/lib/evaluasi';
 
 export const dynamic = 'force-dynamic';
 
 const HIJAU = 'oklch(0.58 0.09 165)';
 const HIJAU_TUA = 'oklch(0.40 0.10 150)';
+const MERAH = 'oklch(0.55 0.16 25)';
+const MERAH_TUA = 'oklch(0.46 0.14 25)';
 const BG = '#f4f2ed';
 const KARTU = '#fff';
 const BORDER = '#e8e4dc';
@@ -47,6 +49,147 @@ function Shell({ children }: { children: React.ReactNode }) {
   );
 }
 
+/** Kartu pesan sederhana (rapot tak ditemukan / bentuk payload tak dikenali). */
+function KartuNetral({ judul, pesan }: { judul: string; pesan: string }) {
+  return (
+    <Shell>
+      <div
+        style={{
+          width: '100%',
+          maxWidth: 460,
+          background: KARTU,
+          border: `1px solid ${BORDER}`,
+          borderRadius: 16,
+          padding: '32px 24px',
+          textAlign: 'center',
+          boxShadow: '0 1px 2px rgba(20,18,14,0.04), 0 6px 24px -8px rgba(20,18,14,0.10)',
+        }}
+      >
+        <img src="/logo-mpt.png" alt="Logo" width={44} height={44} style={{ display: 'block', margin: '0 auto 14px' }} />
+        <div style={{ fontSize: 17, fontWeight: 800 }}>{judul}</div>
+        <div style={{ fontSize: 13, color: MUTED, marginTop: 8 }}>{pesan}</div>
+      </div>
+    </Shell>
+  );
+}
+
+/**
+ * `row.payload` datang dari DB tanpa validasi apa pun, dan halaman ini PUBLIK —
+ * satu deref ke field yang tak ada = 500 di layar orang tua santri. Jadi bentuknya
+ * dikenali dulu secara runtime; apa pun yang tidak cocok jatuh ke kartu netral.
+ */
+type Bentuk =
+  | { kind: 'legacy'; payload: RapotPayloadLegacy }
+  | { kind: 'track'; payload: RapotPayloadTrack }
+  | { kind: 'asing' };
+
+function kenaliBentuk(raw: unknown): Bentuk {
+  if (!raw || typeof raw !== 'object') return { kind: 'asing' };
+  const p = raw as Record<string, unknown>;
+
+  // Field yang di-deref tanpa syarat oleh kartu utama (header + footer).
+  const identitas = p.identitas;
+  if (!identitas || typeof identitas !== 'object') return { kind: 'asing' };
+  if (typeof (identitas as Record<string, unknown>).peserta !== 'string') return { kind: 'asing' };
+  if (typeof p.tanggal !== 'string' || typeof p.penerbit !== 'string') return { kind: 'asing' };
+
+  const j = p.jenis_rapot;
+  if (j === 'qn' || j === 'pb') {
+    const tr = p.trackRapot;
+    if (!tr || typeof tr !== 'object') return { kind: 'asing' };
+    return { kind: 'track', payload: raw as RapotPayloadTrack };
+  }
+  if (j === 'berkala' || j === 'ujian' || j === 'ujian_qn' || j === 'ujian_pb') {
+    return { kind: 'legacy', payload: raw as RapotPayloadLegacy };
+  }
+  return { kind: 'asing' };
+}
+
+/** Nilai turunan untuk blok angka besar — supaya JSX bebas ternary bersarang. */
+type Pill = { teks: string; fg: string; bg: string; border: string };
+type Vm = {
+  jenisLabel: string;
+  angka: number | null;
+  angkaColor: string;
+  pill: Pill | null;
+  tampilAmbang: boolean;
+  predikat: { teks: string; color: string } | null;
+  peranTeks: string | null;
+};
+
+/** Pil status kelulusan — warna sama persis di era legacy maupun track. */
+function pillLulus(lulus: boolean | null, teksKosong: string): Pill {
+  return {
+    teks: lulus === true ? 'LULUS' : lulus === false ? 'MENGULANG' : teksKosong,
+    fg: lulus === true ? HIJAU_TUA : lulus === false ? MERAH_TUA : MUTED,
+    bg: lulus === true ? 'oklch(0.96 0.035 150)' : lulus === false ? 'oklch(0.96 0.04 25)' : '#f0eee9',
+    border: lulus === true ? 'oklch(0.85 0.06 150)' : lulus === false ? 'oklch(0.85 0.08 25)' : BORDER,
+  };
+}
+
+/** ERA LAMA — perilaku dikunci; rapot yang sudah dicetak harus terverifikasi identik. */
+function vmLegacy(payload: RapotPayloadLegacy): Vm {
+  // 'ujian' (gabungan) maupun 'ujian_qn'/'ujian_pb' (batch terpisah, 0058) sama-sama
+  // rapot ujian — yang membedakan hanya label dokumennya.
+  const isUjian = payload.jenis_rapot !== 'berkala';
+  const jenisLabel =
+    payload.jenis_rapot === 'ujian_qn'
+      ? 'Ujian QN'
+      : payload.jenis_rapot === 'ujian_pb'
+      ? 'Ujian PB'
+      : payload.jenis_rapot === 'ujian'
+      ? 'Ujian Akhir'
+      : 'Berkala';
+  const lulus = isUjian ? payload.ujian?.lulus ?? null : null;
+  const angka = isUjian
+    ? payload.ujian?.nilaiAkhir ?? null
+    : payload.berkala?.rataGabungan ?? null;
+
+  // Warna angka besar ikut status. Ujian: lulus hijau / mengulang merah / null netral.
+  // Berkala: ikut tier predikat (jangan paksa hijau utk "Cukup"/"Perlu pengulangan").
+  const angkaColor = isUjian
+    ? lulus === true ? HIJAU : lulus === false ? MERAH : MUTED
+    : angka != null ? tierOf(angka).color : MUTED;
+
+  return {
+    jenisLabel,
+    angka,
+    angkaColor,
+    pill: isUjian ? pillLulus(lulus, 'Belum ada nilai ujian') : null,
+    tampilAmbang: isUjian && lulus != null,
+    predikat: isUjian
+      ? null
+      : {
+          teks: payload.berkala?.predikat ?? '—',
+          color: angka != null ? tierOf(angka).color : MUTED,
+        },
+    peranTeks: null,
+  };
+}
+
+/** ERA BARU (0062) — satu rapot per track: QN prasyarat, PB penentu kelulusan. */
+function vmTrack(payload: RapotPayloadTrack): Vm {
+  // `trackRapot` cuma dipastikan "sebuah objek" oleh kenaliBentuk — baca defensif.
+  const tr = payload.trackRapot as Partial<RapotPayloadTrack['trackRapot']>;
+  const angka = typeof tr.nilaiAkhir === 'number' ? tr.nilaiAkhir : null;
+  const lulus = tr.lulus === true ? true : tr.lulus === false ? false : null;
+
+  return {
+    jenisLabel: payload.jenis_rapot === 'qn' ? 'Rapot QN' : 'Rapot PB',
+    angka,
+    angkaColor: lulus === true ? HIJAU : lulus === false ? MERAH : MUTED,
+    pill: pillLulus(lulus, 'Belum lengkap'),
+    tampilAmbang: true,
+    predikat: null,
+    peranTeks:
+      tr.peran === 'penentu'
+        ? 'Penentu kelulusan level'
+        : tr.peran === 'prasyarat'
+        ? 'Prasyarat — bukan penentu kelulusan'
+        : null,
+  };
+}
+
 export default async function CekRapotPage({
   params,
 }: {
@@ -62,55 +205,25 @@ export default async function CekRapotPage({
 
   if (!row) {
     return (
-      <Shell>
-        <div
-          style={{
-            width: '100%',
-            maxWidth: 460,
-            background: KARTU,
-            border: `1px solid ${BORDER}`,
-            borderRadius: 16,
-            padding: '32px 24px',
-            textAlign: 'center',
-            boxShadow: '0 1px 2px rgba(20,18,14,0.04), 0 6px 24px -8px rgba(20,18,14,0.10)',
-          }}
-        >
-          <img src="/logo-mpt.png" alt="Logo" width={44} height={44} style={{ display: 'block', margin: '0 auto 14px' }} />
-          <div style={{ fontSize: 17, fontWeight: 800 }}>Rapot tidak ditemukan</div>
-          <div style={{ fontSize: 13, color: MUTED, marginTop: 8 }}>
-            Kode verifikasi tidak dikenali. Pastikan QR dipindai dari rapot resmi.
-          </div>
-        </div>
-      </Shell>
+      <KartuNetral
+        judul="Rapot tidak ditemukan"
+        pesan="Kode verifikasi tidak dikenali. Pastikan QR dipindai dari rapot resmi."
+      />
     );
   }
 
-  const payload = row.payload as RapotPayload;
-  // 'ujian' (gabungan) maupun 'ujian_qn'/'ujian_pb' (batch terpisah, 0058) sama-sama
-  // rapot ujian — yang membedakan hanya label dokumennya.
-  const isUjian = payload.jenis_rapot !== 'berkala';
-  const jenisLabel =
-    payload.jenis_rapot === 'ujian_qn'
-      ? 'Ujian QN'
-      : payload.jenis_rapot === 'ujian_pb'
-      ? 'Ujian PB'
-      : payload.jenis_rapot === 'ujian'
-      ? 'Ujian Akhir'
-      : 'Berkala';
-  const lulus = isUjian ? payload.ujian?.lulus ?? null : null;
-  const MERAH = 'oklch(0.55 0.16 25)';
-  const MERAH_TUA = 'oklch(0.46 0.14 25)';
+  const bentuk = kenaliBentuk(row.payload);
+  if (bentuk.kind === 'asing') {
+    return (
+      <KartuNetral
+        judul="Format rapot tidak dikenali"
+        pesan="Kode ini terdaftar, tapi isinya tidak bisa ditampilkan di halaman ini. Hubungi penerbit rapot."
+      />
+    );
+  }
 
-  const angka = isUjian
-    ? payload.ujian?.nilaiAkhir ?? null
-    : payload.berkala?.rataGabungan ?? null;
-
-  // Warna angka besar ikut status. Ujian: lulus hijau / mengulang merah / null netral.
-  // Berkala: ikut tier predikat (jangan paksa hijau utk "Cukup"/"Perlu pengulangan").
-  const angkaColor = isUjian
-    ? lulus === true ? HIJAU : lulus === false ? MERAH : MUTED
-    : angka != null ? tierOf(angka).color : MUTED;
-  const berkalaPredikatColor = angka != null ? tierOf(angka).color : MUTED;
+  const payload: RapotPayload = bentuk.payload;
+  const vm = bentuk.kind === 'track' ? vmTrack(bentuk.payload) : vmLegacy(bentuk.payload);
 
   // Status lifecycle rapot (0054): dicabut / digantikan menandai dokumen tak berlaku.
   const status = (row.status as string | undefined) ?? 'aktif';
@@ -142,7 +255,8 @@ export default async function CekRapotPage({
 
   const identitas = payload.identitas;
   const barisMeta = [identitas.halaqah, identitas.level, identitas.batch]
-    .filter((v): v is string => !!v && v.trim().length > 0)
+    // typeof, bukan sekadar truthy: payload tak tervalidasi, jangan sampai .trim() throw.
+    .filter((v): v is string => typeof v === 'string' && v.trim().length > 0)
     .join(' · ');
 
   return (
@@ -189,7 +303,7 @@ export default async function CekRapotPage({
                 padding: '4px 12px',
               }}
             >
-              {jenisLabel}
+              {vm.jenisLabel}
             </span>
           </div>
         </div>
@@ -225,41 +339,45 @@ export default async function CekRapotPage({
               fontSize: 56,
               fontWeight: 800,
               lineHeight: 1,
-              color: angkaColor,
+              color: vm.angkaColor,
               fontVariantNumeric: 'tabular-nums',
             }}
           >
-            {angka ?? '—'}
+            {vm.angka ?? '—'}
           </div>
 
-          {isUjian ? (
-            <>
-              <div style={{ marginTop: 14 }}>
-                <span
-                  style={{
-                    display: 'inline-block',
-                    fontSize: 13,
-                    fontWeight: 800,
-                    letterSpacing: '0.04em',
-                    borderRadius: 999,
-                    padding: '6px 16px',
-                    color: lulus === true ? HIJAU_TUA : lulus === false ? MERAH_TUA : MUTED,
-                    background:
-                      lulus === true ? 'oklch(0.96 0.035 150)' : lulus === false ? 'oklch(0.96 0.04 25)' : '#f0eee9',
-                    border: `1px solid ${lulus === true ? 'oklch(0.85 0.06 150)' : lulus === false ? 'oklch(0.85 0.08 25)' : BORDER}`,
-                  }}
-                >
-                  {lulus === true ? 'LULUS' : lulus === false ? 'MENGULANG' : 'Belum ada nilai ujian'}
-                </span>
-              </div>
-              {lulus != null && (
-                <div style={{ fontSize: 11.5, color: MUTED, marginTop: 8 }}>ambang {row.ambang}</div>
-              )}
-            </>
-          ) : (
-            <div style={{ fontSize: 13, fontWeight: 700, color: berkalaPredikatColor, marginTop: 8 }}>
-              {payload.berkala?.predikat ?? '—'}
+          {vm.pill && (
+            <div style={{ marginTop: 14 }}>
+              <span
+                style={{
+                  display: 'inline-block',
+                  fontSize: 13,
+                  fontWeight: 800,
+                  letterSpacing: '0.04em',
+                  borderRadius: 999,
+                  padding: '6px 16px',
+                  color: vm.pill.fg,
+                  background: vm.pill.bg,
+                  border: `1px solid ${vm.pill.border}`,
+                }}
+              >
+                {vm.pill.teks}
+              </span>
             </div>
+          )}
+
+          {vm.tampilAmbang && (
+            <div style={{ fontSize: 11.5, color: MUTED, marginTop: 8 }}>ambang {row.ambang}</div>
+          )}
+
+          {vm.predikat && (
+            <div style={{ fontSize: 13, fontWeight: 700, color: vm.predikat.color, marginTop: 8 }}>
+              {vm.predikat.teks}
+            </div>
+          )}
+
+          {vm.peranTeks && (
+            <div style={{ fontSize: 11.5, color: MUTED, marginTop: 6 }}>{vm.peranTeks}</div>
           )}
         </div>
 

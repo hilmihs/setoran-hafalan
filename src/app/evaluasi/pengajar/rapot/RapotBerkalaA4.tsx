@@ -1,5 +1,5 @@
 import type { ReactElement } from 'react';
-import type { RapotPayload, RapotTrackSnap } from '@/lib/rapot';
+import type { RapotPayloadLegacy, RapotTrackSnap } from '@/lib/rapot';
 import { tierOf } from '@/lib/evaluasi';
 import RapotKop from './RapotKop';
 
@@ -7,7 +7,7 @@ import RapotKop from './RapotKop';
 // Sumber data: payload.berkala & payload.identitas. Tanpa 'use client', tanpa hooks.
 
 interface Props {
-  payload: RapotPayload;
+  payload: RapotPayloadLegacy;
   /** QR verifikasi. Kosong = rapot belum diterbitkan (pratinjau/cetak dari aplikasi). */
   qr?: string;
   logoSrc: string;

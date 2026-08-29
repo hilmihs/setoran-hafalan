@@ -1,6 +1,7 @@
 // Mirror dari schema SQL. Update kalau migration berubah.
 
 import type { Jenis } from '@/lib/evaluasi';
+import type { JenisRapot, RapotPayload } from '@/lib/rapot';
 
 export type Gender = 'ikhwan' | 'akhwat';
 
@@ -746,6 +747,9 @@ export interface EvaluasiSesi {
   ayat_selesai: number;
   ambang: number;
   status: 'draft' | 'terkirim';
+  /** Soft-delete sesi ujian (0052). Reversible; nilai lama tetap tersimpan
+   *  tapi sesi disembunyikan dari picker & progres. */
+  dihapus: boolean;
   dibuat_oleh: string | null;
   created_at: string;
   updated_at: string;
@@ -773,6 +777,45 @@ export interface EvaluasiNilai {
   confirmed: boolean;
   done: boolean;
   updated_at: string;
+}
+
+/**
+ * Rapot resmi beku (0053) + lifecycle supersede/cabut (0054) + FK RESTRICT (0055)
+ * + `ujian_skor` netral-track (0062). Snapshot ber-QR: barisnya TIDAK PERNAH
+ * dihitung ulang, jadi baris era lama dan era track hidup berdampingan di tabel
+ * yang sama dan kolom yang sama bisa punya semantik berbeda per `jenis_rapot`.
+ */
+export interface EvaluasiRapot {
+  id: string;
+  /** Token acak untuk URL verifikasi publik `/evaluasi/rapot/cek/[token]`. Unik. */
+  token: string;
+  halaqah_id: string;
+  peserta_id: string;
+  /** 4 nilai legacy ('berkala'|'ujian'|'ujian_qn'|'ujian_pb') + 2 track ('qn'|'pb'). */
+  jenis_rapot: JenisRapot;
+  nilai_akhir: number | null;
+  /** SEMANTIK BEDA PER ERA: baris berkala/ujian = rata gabungan QN+PB; baris
+   *  qn/pb = rata sesi track itu saja; baris ujian_qn/ujian_pb = null.
+   *  Query yang membacanya WAJIB memfilter `jenis_rapot`. */
+  berkala_avg: number | null;
+  /** LEGACY (0053). Baris `qn` selalu null — pakai `ujian_skor`. */
+  ujian_pb_skor: number | null;
+  /** 0062. Skor ujian yang dipakai `nilai_akhir` baris ini:
+   *  baris qn = Ujian QN; baris pb/ujian_pb/ujian = Ujian PB. */
+  ujian_skor: number | null;
+  lulus: boolean | null;
+  /** Ambang yang dibekukan saat terbit (default DB 70). */
+  ambang: number;
+  /** Snapshot penuh; union dua era — persempit dengan `isRapotTrack`. */
+  payload: RapotPayload;
+  /** eval_pengajar.id; null bila pengajarnya sudah dihapus (ON DELETE SET NULL). */
+  diterbitkan_oleh: string | null;
+  diterbitkan_at: string;
+  status: 'aktif' | 'digantikan' | 'dicabut';
+  /** Rapot pengganti (0054); terisi pada baris berstatus 'digantikan'. */
+  superseded_by: string | null;
+  dicabut_at: string | null;
+  dicabut_oleh: string | null;
 }
 
 export interface EvalSyncRun {

@@ -4,18 +4,27 @@ import { supabaseAdmin } from '@/lib/supabase-admin';
 import { getPool } from '@/lib/pg-core';
 import { getSession } from '@/lib/session';
 import { evalPengajarIdFor } from '@/lib/evaluasi-pengajar';
-import { columnsToCounts, UJIAN_QN_SESI, UJIAN_PB_SESI, type Jenis } from '@/lib/evaluasi';
 import {
-  buildBerkalaPayload,
-  buildUjianPayload,
-  buildUjianTunggalPayload,
-  fokusUjian,
-  type JenisRapot,
+  columnsToCounts,
+  UJIAN_SESI_BY_TRACK,
+  SESI_BERKALA_PER_TRACK,
+  type Jenis,
+  type Track,
+} from '@/lib/evaluasi';
+import {
+  buildTrackRapotPayload,
   type RapotIdentitas,
   type SesiNilaiInput,
 } from '@/lib/rapot';
 
-const JENIS_RAPOT: JenisRapot[] = ['berkala', 'ujian', 'ujian_qn', 'ujian_pb'];
+/**
+ * Sejak rotasi 0062 penerbitan HANYA melayani rapot per-track. Nama field di body
+ * tetap `jenis_rapot` (kembar dgn kolom DB), tapi nilainya kini sebuah Track.
+ */
+const TRACKS: Track[] = ['qn', 'pb'];
+/** Jenis era lama — dokumennya masih sah & terverifikasi, tapi tak bisa diterbitkan lagi. */
+const JENIS_LEGACY = ['berkala', 'ujian', 'ujian_qn', 'ujian_pb'];
+const TRACK_LABEL: Record<Track, string> = { qn: 'QN', pb: 'PB' };
 
 export const runtime = 'nodejs';
 
@@ -45,11 +54,17 @@ export async function POST(req: NextRequest) {
     if (typeof peserta_id !== 'string' || !peserta_id) {
       return NextResponse.json({ error: 'peserta_id wajib diisi' }, { status: 400 });
     }
-    if (typeof jenis_rapot !== 'string' || !JENIS_RAPOT.includes(jenis_rapot as JenisRapot)) {
+    if (typeof jenis_rapot === 'string' && JENIS_LEGACY.includes(jenis_rapot)) {
+      return NextResponse.json(
+        { error: 'Jenis rapot lama tidak bisa diterbitkan lagi — gunakan Rapot QN / Rapot PB' },
+        { status: 400 }
+      );
+    }
+    if (typeof jenis_rapot !== 'string' || !TRACKS.includes(jenis_rapot as Track)) {
       return NextResponse.json({ error: 'jenis_rapot tidak valid' }, { status: 400 });
     }
-    const jenisRapot = jenis_rapot as JenisRapot;
-    const fokus = fokusUjian(jenisRapot);
+    const track = jenis_rapot as Track;
+    const trackLabel = TRACK_LABEL[track];
 
     // --- Halaqah + verifikasi kepemilikan pengajar ---
     const { data: halaqah } = await supabaseAdmin
@@ -92,20 +107,10 @@ export async function POST(req: NextRequest) {
       terpisah = !!batch?.rapot_ujian_terpisah;
     }
 
-    // Jenis rapot harus cocok dgn skema batch — jangan biarkan client menerbitkan
-    // rapot gabungan untuk batch terpisah (atau sebaliknya) lewat request rakitan.
-    if (terpisah && jenisRapot === 'ujian') {
-      return NextResponse.json(
-        { error: 'Batch ini menilai Ujian QN & PB terpisah — pakai jenis_rapot ujian_qn / ujian_pb' },
-        { status: 400 }
-      );
-    }
-    if (!terpisah && fokus) {
-      return NextResponse.json(
-        { error: 'Batch ini memakai rapot ujian gabungan — pakai jenis_rapot ujian' },
-        { status: 400 }
-      );
-    }
+    // Batch `rapot_ujian_terpisah` (0058): nilai akhir murni skor ujian, komponen
+    // berkala tidak dipakai — dan sejak 0062 itu berlaku untuk KEDUA track, bukan
+    // PB saja. Jadi flag batch langsung jadi `ujianSaja`, tanpa cabang per jenis.
+    const ujianSaja = terpisah;
 
     // --- Config by gender (nama_qn, nama_pb) ---
     const { data: config } = await supabaseAdmin
@@ -154,46 +159,43 @@ export async function POST(req: NextRequest) {
     });
 
     // --- Guard kelengkapan sebelum terbit (server-side, jangan andalkan client) ---
-    const adaBerkala = sesi.some(
-      (x) => (x.jenis === 'qn' || x.jenis === 'pb') && x.done && x.hadir !== false
+    // Ujian track ini wajib ada: tanpa ujian, nilai akhir tak punya komponen 70%
+    // (atau, untuk batch ujianSaja, tak punya nilai sama sekali).
+    const adaUjian = sesi.some(
+      (x) =>
+        x.jenis === 'ujian' &&
+        x.nomor_sesi === UJIAN_SESI_BY_TRACK[track] &&
+        x.done &&
+        x.hadir !== false
     );
-    if (fokus) {
-      // Rapot per-ujian: satu-satunya syarat adalah ujian itu sendiri sudah dinilai.
-      // Berkala tidak dipakai, jadi tak boleh jadi penghalang terbit.
-      const nomor = fokus === 'qn' ? UJIAN_QN_SESI : UJIAN_PB_SESI;
-      const ada = sesi.some(
-        (x) => x.jenis === 'ujian' && x.nomor_sesi === nomor && x.done && x.hadir !== false
-      );
-      if (!ada) {
-        const label = fokus === 'qn' ? 'Ujian QN' : 'Ujian PB';
-        return NextResponse.json(
-          { error: `${label} belum dinilai — rapot belum bisa diterbitkan` },
-          { status: 400 }
-        );
-      }
-    } else if (jenisRapot === 'ujian') {
-      const adaPb = sesi.some(
-        (x) => x.jenis === 'ujian' && x.nomor_sesi === UJIAN_PB_SESI && x.done && x.hadir !== false
-      );
-      if (!adaPb) {
-        return NextResponse.json(
-          { error: 'Ujian PB belum dinilai — rapot ujian belum bisa diterbitkan' },
-          { status: 400 }
-        );
-      }
-      // Nilai akhir = 30% berkala + 70% PB — tanpa berkala, nilai akhir tak sah.
-      if (!adaBerkala) {
-        return NextResponse.json(
-          { error: 'Belum ada nilai berkala — nilai akhir belum bisa dihitung' },
-          { status: 400 }
-        );
-      }
-    } else if (!adaBerkala) {
+    if (!adaUjian) {
       return NextResponse.json(
-        { error: 'Belum ada sesi berkala yang dinilai — rapot belum bisa diterbitkan' },
+        {
+          error: `Ujian ${trackLabel} belum dinilai — Rapot ${trackLabel} belum bisa diterbitkan`,
+        },
         { status: 400 }
       );
     }
+
+    if (!ujianSaja) {
+      // Rapot track memuat SELURUH sesi berkala track itu, jadi keempatnya wajib
+      // sudah dinilai — bukan sekadar "ada satu" seperti era sebelum 0062.
+      const nomorBerkala = new Set(
+        sesi
+          .filter((x) => x.jenis === track && x.done && x.hadir !== false)
+          .map((x) => x.nomor_sesi)
+      );
+      if (nomorBerkala.size < SESI_BERKALA_PER_TRACK) {
+        return NextResponse.json(
+          {
+            error: `Sesi evaluasi ${trackLabel} baru ${nomorBerkala.size} dari ${SESI_BERKALA_PER_TRACK} — rapot belum bisa diterbitkan`,
+          },
+          { status: 400 }
+        );
+      }
+    }
+    // ujianSaja: komponen berkala tidak dipakai sama sekali, jadi kelengkapannya
+    // sengaja tidak jadi syarat terbit.
 
     // --- Identitas & meta terbit ---
     const identitas: RapotIdentitas = {
@@ -208,25 +210,25 @@ export async function POST(req: NextRequest) {
     const tanggal = new Date().toISOString();
 
     // --- Build payload ---
-    const payload = fokus
-      ? buildUjianTunggalPayload(identitas, penerbit, tanggal, sesi, fokus, halaqah.ambang_ujian as number)
-      : jenisRapot === 'berkala'
-      ? buildBerkalaPayload(identitas, penerbit, tanggal, sesi, namaQn, namaPb)
-      : buildUjianPayload(identitas, penerbit, tanggal, sesi, halaqah.ambang_ujian as number);
+    const payload = buildTrackRapotPayload({
+      track,
+      identitas,
+      penerbit,
+      tanggal,
+      sesi,
+      namaTrack: track === 'qn' ? namaQn : namaPb,
+      ambangUjianSesi: halaqah.ambang_ujian as number,
+      ujianSaja,
+    });
 
     // --- Kolom ringkas untuk query cepat ---
-    let nilai_akhir: number | null = null;
-    let berkala_avg: number | null = null;
-    let ujian_pb_skor: number | null = null;
-    let lulus: boolean | null = null;
-    if (jenisRapot === 'berkala') {
-      berkala_avg = payload.berkala?.rataGabungan ?? null;
-    } else {
-      nilai_akhir = payload.ujian?.nilaiAkhir ?? null;
-      berkala_avg = payload.ujian?.berkalaAvg ?? null;
-      ujian_pb_skor = payload.ujian?.ujianPbSkor ?? null;
-      lulus = payload.ujian?.lulus ?? null;
-    }
+    const t = payload.trackRapot;
+    const nilai_akhir = t.nilaiAkhir;
+    const berkala_avg = t.berkalaAvg;
+    const ujian_skor = t.ujianSkor;
+    // `ujian_pb_skor` = kolom LEGACY; baris qn wajib null (lihat komentar 0062).
+    const ujian_pb_skor = track === 'pb' ? t.ujianSkor : null;
+    const lulus = t.lulus;
 
     const token = crypto.randomBytes(16).toString('hex');
 
@@ -241,19 +243,19 @@ export async function POST(req: NextRequest) {
         `update evaluasi_rapot set status = 'digantikan'
            where peserta_id = $1 and halaqah_id = $2 and jenis_rapot = $3 and status = 'aktif'
          returning id`,
-        [peserta_id, halaqah_id, jenis_rapot]
+        [peserta_id, halaqah_id, track]
       );
       const oldId = (demoted.rows[0]?.id as string | undefined) ?? null;
 
       const ins = await client.query(
         `insert into evaluasi_rapot
            (token, halaqah_id, peserta_id, jenis_rapot, nilai_akhir, berkala_avg,
-            ujian_pb_skor, lulus, ambang, payload, diterbitkan_oleh)
-         values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10::jsonb,$11)
+            ujian_skor, ujian_pb_skor, lulus, ambang, payload, diterbitkan_oleh)
+         values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11::jsonb,$12)
          returning id`,
         [
-          token, halaqah_id, peserta_id, jenis_rapot, nilai_akhir, berkala_avg,
-          ujian_pb_skor, lulus, payload.ambang, JSON.stringify(payload), evalPengajarId,
+          token, halaqah_id, peserta_id, track, nilai_akhir, berkala_avg,
+          ujian_skor, ujian_pb_skor, lulus, payload.ambang, JSON.stringify(payload), evalPengajarId,
         ]
       );
       const newId = ins.rows[0].id as string;

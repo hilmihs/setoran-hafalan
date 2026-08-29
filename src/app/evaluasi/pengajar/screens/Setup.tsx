@@ -23,7 +23,6 @@ interface SetupProps {
 }
 
 export function Setup(props: SetupProps) {
-  const canDelete = !!props.onToggleSesi && props.sesiOptions.length > 1;
   return (
     <>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 16px', background: '#ffffff', borderBottom: '1px solid #e8e4dc' }}>
@@ -54,19 +53,11 @@ export function Setup(props: SetupProps) {
                   >
                     {props.sesiOptionLabels?.[n - 1] ?? `Sesi ${n}`}
                   </button>
-                  {canDelete && (
-                    <button
-                      aria-label="Hapus sesi ini"
-                      title="Hapus sesi ini"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        props.onToggleSesi?.(n, true);
-                      }}
-                      style={{ position: 'absolute', top: -7, right: -7, width: 20, height: 20, borderRadius: 10, border: '1px solid #e8e4dc', background: '#ffffff', color: 'oklch(0.55 0.14 25)', fontSize: 12, lineHeight: '18px', cursor: 'pointer', padding: 0, boxShadow: '0 1px 2px rgba(0,0,0,0.08)' }}
-                    >
-                      ×
-                    </button>
-                  )}
+                  {/* Tombol hapus sesi ujian dibuang (0062): Ujian QN & Ujian PB
+                      dua-duanya wajib — masing-masing menyumbang 70% nilai akhir
+                      rapot track-nya, dan server menolak penghapusan dgn 409.
+                      Tombol pulihkan di bawah tetap ada untuk sesi yang terlanjur
+                      dihapus sebelum aturan ini berlaku. */}
                 </div>
               );
             })}

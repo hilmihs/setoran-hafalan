@@ -68,13 +68,39 @@ export function initials(nama: string): string {
   return nama.split(' ').slice(0, 2).map((w) => w[0] || '').join('').toUpperCase();
 }
 
-// --- Nilai akhir: 30% rata-rata evaluasi berkala (qn+pb) + 70% Ujian PB ---
-// Ujian QN (nomor_sesi 1) TIDAK dihitung ke nilai akhir; hanya catatan progres.
+// --- Nilai akhir: 30% rata-rata evaluasi berkala + 70% ujian akhir ---
+// Sumbu rapot dirotasi (0062): tiap track dinilai sendiri — Rapot QN = 30% rata
+// 4 sesi QN + 70% Ujian QN, Rapot PB = 30% rata 4 sesi PB + 70% Ujian PB.
+// Bobotnya tidak berubah; yang berubah kolam rata-ratanya (dulu QN+PB digabung
+// dan hanya Ujian PB yang dihitung). Lihat `nilaiAkhirTrackOf` di bawah.
 export const BOBOT_BERKALA = 0.3;
 export const BOBOT_UJIAN_AKHIR = 0.7;
 export const AMBANG_LULUS_AKHIR = 70; // ambang lulus nilai akhir (fix)
 export const UJIAN_QN_SESI = 1;
 export const UJIAN_PB_SESI = 2;
+
+/** Track penilaian. Satu rapot = satu track. */
+export type Track = 'qn' | 'pb';
+export const TRACKS: readonly Track[] = ['qn', 'pb'] as const;
+
+/** Sesi evaluasi berkala per track — dipakai guard kelengkapan sebelum terbit. */
+export const SESI_BERKALA_PER_TRACK = 4;
+
+/** Ujian per track FIX: QN=sesi 1, PB=sesi 2 (eval_config.ujian_attempts dibekukan di 2). */
+export const UJIAN_SESI_BY_TRACK: Record<Track, number> = {
+  qn: UJIAN_QN_SESI,
+  pb: UJIAN_PB_SESI,
+};
+
+/** Track pemilik sebuah sesi ujian; null bila nomornya di luar 1/2. */
+export function trackOfUjianSesi(nomor: number): Track | null {
+  return nomor === UJIAN_QN_SESI ? 'qn' : nomor === UJIAN_PB_SESI ? 'pb' : null;
+}
+
+/** Peran dokumen: PB menentukan kelulusan level, QN prasyarat yang wajib tuntas. */
+export function peranTrack(track: Track): 'penentu' | 'prasyarat' {
+  return track === 'pb' ? 'penentu' : 'prasyarat';
+}
 
 export interface NilaiAkhir {
   nilai: number | null;      // null bila Ujian PB belum ada
@@ -85,6 +111,12 @@ export interface NilaiAkhir {
 }
 
 // berkalaScores = skor semua sesi qn+pb yang sudah dinilai (digabung, unweighted).
+/**
+ * @deprecated Hanya untuk rapot era lama (`jenis_rapot` berkala/ujian). Rapot baru
+ * per-track memakai `nilaiAkhirTrackOf`. Dipertahankan supaya aritmetika dokumen
+ * yang sudah terbit bisa dikunci di `scripts/test-evaluasi.ts` dan tidak diam-diam
+ * bergeser kalau seseorang "merapikan" fungsi ini.
+ */
 export function nilaiAkhirOf(berkalaScores: number[], ujianPbSkor: number | null): NilaiAkhir {
   const berkalaAvg = berkalaScores.length
     ? Math.round(berkalaScores.reduce((a, b) => a + b, 0) / berkalaScores.length)
@@ -102,6 +134,62 @@ export function nilaiAkhirOf(berkalaScores: number[], ujianPbSkor: number | null
     ujianPbSkor,
     lengkap: berkalaAvg != null && ujianPbSkor != null,
     lulus: nilai == null ? null : nilai >= AMBANG_LULUS_AKHIR,
+  };
+}
+
+export interface NilaiAkhirTrack {
+  track: Track;
+  nilai: number | null;      // null bila komponen belum lengkap
+  berkalaAvg: number | null; // rata sesi berkala track ini; null di mode ujianSaja
+  ujianSkor: number | null;  // skor ujian track ini
+  lengkap: boolean;
+  lulus: boolean | null;     // null bila nilai null
+  ujianSaja: boolean;        // true = nilai akhir murni skor ujian (batch rapot_ujian_terpisah)
+}
+
+/**
+ * Nilai akhir SATU track (0062).
+ *
+ * Normal    : 30% rata sesi berkala track itu + 70% ujian track itu.
+ * ujianSaja : 100% skor ujian track itu — batch `eval_batch.rapot_ujian_terpisah`
+ *             (Januari 2026) yang memang tidak menjalankan sesi berkala. Berlaku
+ *             untuk KEDUA track, bukan PB saja.
+ *
+ * Semantik null sengaja sama dengan `nilaiAkhirOf`: nilai hanya sah bila komponen
+ * yang dibutuhkan ADA. Berkala kosong tidak boleh diperlakukan 0 — itu diam-diam
+ * memotong nilai maksimum ke 70 dan menghasilkan angka yang menyesatkan.
+ */
+export function nilaiAkhirTrackOf(
+  track: Track,
+  berkalaScoresTrack: number[],
+  ujianSkor: number | null,
+  opts?: { ujianSaja?: boolean },
+): NilaiAkhirTrack {
+  const ujianSaja = opts?.ujianSaja === true;
+
+  const berkalaAvg = berkalaScoresTrack.length
+    ? Math.round(berkalaScoresTrack.reduce((a, b) => a + b, 0) / berkalaScoresTrack.length)
+    : null;
+
+  // Mode ujianSaja: berkala memang tidak ada, jadi ketiadaannya bukan alasan
+  // menahan nilai. Mode normal: kedua komponen wajib ada.
+  const lengkap = ujianSaja ? ujianSkor != null : berkalaAvg != null && ujianSkor != null;
+
+  let nilai: number | null = null;
+  if (lengkap && ujianSkor != null) {
+    nilai = ujianSaja
+      ? ujianSkor
+      : Math.round(BOBOT_BERKALA * (berkalaAvg as number) + BOBOT_UJIAN_AKHIR * ujianSkor);
+  }
+
+  return {
+    track,
+    nilai,
+    berkalaAvg: ujianSaja ? null : berkalaAvg,
+    ujianSkor,
+    lengkap,
+    lulus: nilai == null ? null : nilai >= AMBANG_LULUS_AKHIR,
+    ujianSaja,
   };
 }
 

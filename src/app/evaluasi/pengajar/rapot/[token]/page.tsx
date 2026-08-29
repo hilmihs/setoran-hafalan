@@ -4,8 +4,10 @@ import { getSession } from '@/lib/session';
 import { evalPengajarIdFor } from '@/lib/evaluasi-pengajar';
 import { qrSvgDataUri } from '@/lib/qr';
 import type { RapotPayload } from '@/lib/rapot';
+import { isRapotTrack } from '@/lib/rapot';
 import RapotBerkalaA4 from '../RapotBerkalaA4';
 import RapotUjianA4 from '../RapotUjianA4';
+import RapotTrackA4 from '../RapotTrackA4';
 import PrintButton from '../PrintButton';
 import CabutButton from '../CabutButton';
 import RapotPrintStyle from '../RapotPrintStyle';
@@ -41,6 +43,40 @@ function Kartu({ judul, teks }: { judul: string; teks: string }) {
       </div>
     </div>
   );
+}
+
+/**
+ * Pilih komponen cetak sesuai bentuk payload.
+ *
+ * `row.payload` di-cast ke `RapotPayload` tanpa validasi apa pun, jadi baris yang
+ * rusak / setengah migrasi bisa sampai ke sini tanpa `jenis_rapot`. Tanpa penjaga
+ * pertama, `isRapotTrack` langsung mendereferensikan `undefined` dan halaman 500.
+ */
+function RapotDokumen({ payload, qr }: { payload: RapotPayload; qr: string }) {
+  const takDikenali = (
+    <Kartu
+      judul="Format rapot tidak dikenali"
+      teks="Format rapot tidak dikenali — hubungi koordinator."
+    />
+  );
+
+  const jenis = (payload as { jenis_rapot?: unknown } | null | undefined)?.jenis_rapot;
+  if (typeof jenis !== 'string') return takDikenali;
+
+  if (isRapotTrack(payload)) {
+    return <RapotTrackA4 payload={payload} qr={qr} logoSrc="/logo-mpt.png" />;
+  }
+  if (payload.jenis_rapot === 'berkala') {
+    return <RapotBerkalaA4 payload={payload} qr={qr} logoSrc="/logo-mpt.png" />;
+  }
+  if (
+    payload.jenis_rapot === 'ujian' ||
+    payload.jenis_rapot === 'ujian_qn' ||
+    payload.jenis_rapot === 'ujian_pb'
+  ) {
+    return <RapotUjianA4 payload={payload} qr={qr} logoSrc="/logo-mpt.png" />;
+  }
+  return takDikenali;
 }
 
 export default async function RapotPengajarPage({
@@ -121,11 +157,7 @@ export default async function RapotPengajarPage({
             : 'RAPOT DIGANTIKAN — ADA VERSI TERBARU'}
         </div>
       )}
-      {payload.jenis_rapot === 'berkala' ? (
-        <RapotBerkalaA4 payload={payload} qr={qr} logoSrc="/logo-mpt.png" />
-      ) : (
-        <RapotUjianA4 payload={payload} qr={qr} logoSrc="/logo-mpt.png" />
-      )}
+      <RapotDokumen payload={payload} qr={qr} />
       <PrintButton />
       <CabutButton token={token} status={(row.status as string | undefined) ?? 'aktif'} />
     </div>

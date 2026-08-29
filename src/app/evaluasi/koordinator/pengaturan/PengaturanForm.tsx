@@ -12,6 +12,12 @@ export interface PengaturanInitial {
 
 type SaveState = 'idle' | 'saving' | 'saved' | 'error';
 
+// Sumbu rapot = track: tiap track punya ujian akhirnya sendiri (nomor_sesi 1 =
+// Ujian QN, 2 = Ujian PB) dan masing-masing menyumbang 70% nilai akhir rapot
+// track-nya. Jumlah sesi ujian karena itu tidak bisa lagi diatur koordinator.
+const UJIAN_ATTEMPTS = 2;
+const UJIAN_LABELS = ['Ujian QN', 'Ujian PB'];
+
 const cardStyle: React.CSSProperties = {
   padding: 16,
 };
@@ -49,7 +55,6 @@ const dateInputStyle: React.CSSProperties = {
 export function PengaturanForm({ initial }: { initial: PengaturanInitial }) {
   const [namaQn, setNamaQn] = useState(initial.nama_qn);
   const [namaPb, setNamaPb] = useState(initial.nama_pb);
-  const [ujianAttempts, setUjianAttempts] = useState<number>(initial.ujian_attempts);
   const [jadwal, setJadwal] = useState(initial.jadwal);
   const [saveState, setSaveState] = useState<SaveState>('idle');
 
@@ -88,19 +93,19 @@ export function PengaturanForm({ initial }: { initial: PengaturanInitial }) {
     timerRef.current = setTimeout(() => {
       // Normalisasi tiap array jadwal jadi array padat berisi string ('' atau
       // 'YYYY-MM-DD') — cegah lubang/undefined yang di-serialize jadi null dan
-      // ditolak validDateArray di route config (400). Ujian attempts menentukan
-      // jumlah jadwal ujian yang dikirim.
+      // ditolak validDateArray di route config (400). Jadwal ujian selalu 2
+      // (Ujian QN & Ujian PB).
       const dense = (arr: string[], n: number): string[] =>
         Array.from({ length: n }, (_, i) => arr[i] ?? '');
       const qn = dense(jadwal.qn, 4);
       const pb = dense(jadwal.pb, 4);
-      const ujian = dense(jadwal.ujian, ujianAttempts);
-      save({ nama_qn: namaQn, nama_pb: namaPb, ujian_attempts: ujianAttempts, jadwal: { qn, pb, ujian } });
+      const ujian = dense(jadwal.ujian, UJIAN_ATTEMPTS);
+      save({ nama_qn: namaQn, nama_pb: namaPb, ujian_attempts: UJIAN_ATTEMPTS, jadwal: { qn, pb, ujian } });
     }, 700);
     return () => {
       if (timerRef.current) clearTimeout(timerRef.current);
     };
-  }, [namaQn, namaPb, ujianAttempts, jadwal, save]);
+  }, [namaQn, namaPb, jadwal, save]);
 
   const setSchedule = (track: 'qn' | 'pb' | 'ujian', idx: number, value: string) => {
     setJadwal((prev) => {
@@ -149,7 +154,7 @@ export function PengaturanForm({ initial }: { initial: PengaturanInitial }) {
 
         <div style={{ fontSize: 20, fontWeight: 700, marginBottom: 4 }}>Pengaturan Program</div>
         <div className="t-small" style={{ marginBottom: 18 }}>
-          Nama evaluasi, jumlah percobaan Ujian Akhir, dan jadwal pelaksanaan.
+          Nama evaluasi berkala dan jadwal pelaksanaan. Ujian Akhir tetap 2 sesi.
         </div>
 
         <div
@@ -192,37 +197,28 @@ export function PengaturanForm({ initial }: { initial: PengaturanInitial }) {
             </div>
           </div>
 
-          {/* Ujian attempts */}
+          {/* Ujian attempts — dibekukan, tak bisa diubah */}
           <div className="card-flat" style={cardStyle}>
-            <div style={sectionTitle}>Ujian Akhir — jumlah percobaan</div>
-            <div style={{ display: 'flex', gap: 8 }}>
-              {[1, 2].map((n) => {
-                const on = n === ujianAttempts;
-                return (
-                  <button
-                    key={n}
-                    type="button"
-                    onClick={() => setUjianAttempts(n)}
-                    style={{
-                      height: 44,
-                      padding: '0 18px',
-                      borderRadius: 8,
-                      border: `1.5px solid ${on ? 'var(--ink)' : 'var(--line-2)'}`,
-                      background: on ? 'var(--ink)' : 'var(--surface)',
-                      color: on ? '#ffffff' : 'var(--ink-2)',
-                      font: 'inherit',
-                      fontSize: 14,
-                      fontWeight: 700,
-                      cursor: 'pointer',
-                    }}
-                  >
-                    {n}x
-                  </button>
-                );
-              })}
+            <div style={sectionTitle}>Ujian Akhir — jumlah sesi</div>
+            <div
+              style={{
+                height: 44,
+                display: 'flex',
+                alignItems: 'center',
+                padding: '0 14px',
+                borderRadius: 8,
+                border: '1.5px solid var(--line-2)',
+                background: 'var(--surface-2, var(--surface))',
+                color: 'var(--ink-2)',
+                fontSize: 14,
+                fontWeight: 700,
+              }}
+            >
+              2 · Ujian QN &amp; Ujian PB
             </div>
             <div style={{ fontSize: 11, color: 'var(--muted-2)', marginTop: 10 }}>
-              2x berarti peserta yang mengulang bisa mencoba lagi pada percobaan kedua.
+              Tiap track punya ujian akhirnya sendiri dan masing-masing menyumbang 70% nilai akhir
+              rapot track tersebut, jadi keduanya wajib ada.
             </div>
           </div>
 
@@ -266,10 +262,10 @@ export function PengaturanForm({ initial }: { initial: PengaturanInitial }) {
           <div className="card-flat" style={{ ...cardStyle, gridColumn: '1 / -1' }}>
             <div style={sectionTitle}>Jadwal Ujian Akhir</div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px 16px' }}>
-              {Array.from({ length: ujianAttempts }, (_, i) => i).map((i) => (
+              {Array.from({ length: UJIAN_ATTEMPTS }, (_, i) => i).map((i) => (
                 <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                   <span style={{ fontSize: 12, color: 'var(--ink-2)', width: 90, flexShrink: 0 }}>
-                    Percobaan {i + 1}
+                    {UJIAN_LABELS[i] ?? `Ujian ${i + 1}`}
                   </span>
                   <input
                     type="date"

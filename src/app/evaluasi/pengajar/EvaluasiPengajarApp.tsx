@@ -11,28 +11,22 @@ import {
   KHAFIY,
   AMBANG,
   JENIS,
-  UJIAN_QN_SESI,
-  UJIAN_PB_SESI,
+  TRACKS,
+  UJIAN_SESI_BY_TRACK,
+  trackOfUjianSesi,
   type Jenis,
   type LahnCounts,
+  type Track,
 } from '@/lib/evaluasi';
 import { Setup } from './screens/Setup';
 import { Daftar } from './screens/Daftar';
 import { Nilai } from './screens/Nilai';
 import { Ringkasan } from './screens/Ringkasan';
 import { KelolaPeserta } from './screens/KelolaPeserta';
-import RapotBerkala from './screens/RapotBerkala';
-import { RapotUjian } from './screens/RapotUjian';
-import RapotBerkalaA4 from './rapot/RapotBerkalaA4';
-import RapotUjianA4 from './rapot/RapotUjianA4';
+import RapotTrack from './screens/RapotTrack';
+import RapotTrackA4 from './rapot/RapotTrackA4';
 import RapotPrintStyle from './rapot/RapotPrintStyle';
-import {
-  buildBerkalaPayload,
-  buildUjianPayload,
-  buildUjianTunggalPayload,
-  type JenisRapot,
-  type SesiNilaiInput,
-} from '@/lib/rapot';
+import { buildTrackRapotPayload, type RapotPayloadTrack, type SesiNilaiInput } from '@/lib/rapot';
 
 // ── Types shared with the RSC page ──
 export interface EvPeserta {
@@ -119,17 +113,21 @@ const JENIS_SHORT: Record<Jenis, string> = { qn: 'QN', pb: 'PB', ujian: 'Ujian' 
 const UJIAN_SESI_LABELS = ['Ujian QN', 'Ujian PB'];
 
 /**
- * Dokumen rapot yang bisa dicetak pengajar.
- * - `berkala` — rekap 4 sesi QN + 4 sesi PB. SATU dokumen per peserta, bukan per
- *   sesi; sesi mana pun yang jadi pintu masuk, isinya sama.
- * - `ujian`   — rapot ujian akhir. `nomor` = nomor sesi ujian (1 = QN, 2 = PB);
- *   hanya membedakan dokumen pada batch `rapot_ujian_terpisah`.
+ * Dokumen rapot yang bisa dicetak pengajar (0062) = SATU TRACK. Hanya ada dua:
+ * Rapot QN dan Rapot PB, masing-masing memuat 4 sesi berkala track itu + ujiannya.
+ * Sumbu "berkala vs ujian" sudah tidak ada — itu era sebelum rotasi.
  */
-export type DokCetak = { kind: 'berkala' } | { kind: 'ujian'; nomor: number };
+export type DokCetak = Track;
 
-/** Dokumen yang relevan dgn sebuah sesi — jadi tombol cetak di layar sesi tahu mau cetak apa. */
+/**
+ * Track pemilik sebuah sesi — dipakai tiap kali cetak berangkat dari SESI (baris
+ * riwayat, tombol PDF di layar sesi/ringkasan). `nomor` hanya berarti untuk sesi
+ * ujian, dan diserap DI SINI lewat `trackOfUjianSesi`; yang disimpan ke state
+ * cetak sudah berupa track, jadi baris riwayat "Ujian QN" tak lagi bisa nyasar
+ * ke dokumen PB.
+ */
 function dokDariSesi(j: Jenis, nomor: number): DokCetak {
-  return j === 'ujian' ? { kind: 'ujian', nomor } : { kind: 'berkala' };
+  return j === 'ujian' ? trackOfUjianSesi(nomor) ?? 'pb' : j;
 }
 
 // Label sesi utk riwayat & menu PDF. Ujian dinamai per jenisnya ("Ujian PB"),
@@ -168,6 +166,9 @@ export function EvaluasiPengajarApp({ initial }: { initial: EvaluasiInitial }) {
   const [activeIdx, setActiveIdx] = useState(0);
   const [work, setWork] = useState<Record<string, EvWork>>(initial.work);
   const [raporId, setRaporId] = useState<string | null>(null);
+  // Rapot mana yang sedang dibuka di layar 'p-rapor'. Satu rapot = satu track
+  // (0062), jadi ini SATU-SATUNYA penentu dokumen — bukan `jenis`/`activeSession`.
+  const [rapotTrack, setRapotTrack] = useState<Track>('qn');
   const [terbitStatus, setTerbitStatus] = useState<'idle' | 'saving' | 'done' | 'error'>('idle');
   const [waOpen, setWaOpen] = useState(false);
   const [surat, setSurat] = useState('Al-Baqarah');
@@ -529,8 +530,16 @@ export function EvaluasiPengajarApp({ initial }: { initial: EvaluasiInitial }) {
     }
   };
 
-  // Hapus / pulihkan satu sesi ujian akhir (optimistic).
+  // Pulihkan satu sesi ujian akhir (optimistic). PENGHAPUSAN SUDAH TIDAK ADA:
+  // sejak rotasi rapot per-track (0062) Ujian QN & Ujian PB dua-duanya wajib —
+  // masing-masing menyumbang 70% nilai akhir rapot track-nya. Server menolak
+  // penghapusan dengan 409, jadi jangan kirim permintaan yang pasti gagal:
+  // tombolnya cuma akan berkedip lalu balik tanpa penjelasan.
   const toggleSesiUjian = async (n: number, dihapus: boolean) => {
+    // Penjaga: UI tidak lagi menawarkan penghapusan (tombolnya dibuang di Setup),
+    // dan server membalas 409. Kalau toh terpanggil, berhenti di sini daripada
+    // mengirim permintaan yang pasti gagal lalu me-revert diam-diam.
+    if (dihapus) return;
     setUjianDihapus((prev) => {
       const nx = new Set(prev);
       if (dihapus) nx.add(n);
@@ -692,6 +701,9 @@ export function EvaluasiPengajarApp({ initial }: { initial: EvaluasiInitial }) {
         tierLabel: t.label,
         lihat: () => {
           setRaporId(p.id);
+          // Sesi yang sedang dibuka cuma menentukan rapot mana yang PERTAMA
+          // ditampilkan; setelah itu pengajar bebas pindah QN ⇄ PB di layarnya.
+          setRapotTrack(dokDariSesi(jenis, activeSession));
           setTerbitStatus('idle');
           setScreen('p-rapor');
         },
@@ -759,63 +771,62 @@ export function EvaluasiPengajarApp({ initial }: { initial: EvaluasiInitial }) {
     batch: halaqah.batch,
   };
   const rSesi = assembleSesi(rId);
-  // Batch terpisah: sesi ujian yang sedang dibuka menentukan dokumennya
-  // (sesi 1 = Ujian QN, sesi 2 = Ujian PB).
+  // Batch `rapot_ujian_terpisah` tidak menjalankan sesi berkala sama sekali, jadi
+  // nilai akhir kedua track murni skor ujiannya (`ujianSaja`).
   const terpisah = halaqah.rapotUjianTerpisah;
-  const fokusUjianAktif: 'qn' | 'pb' = activeSession === UJIAN_QN_SESI ? 'qn' : 'pb';
-  const rapotBerkala = buildBerkalaPayload(rIdentitas, initial.pengajarName, '', rSesi, config.nama_qn, config.nama_pb);
-  const rapotUjian = terpisah
-    ? buildUjianTunggalPayload(rIdentitas, initial.pengajarName, '', rSesi, fokusUjianAktif, halaqah.ambang_ujian)
-    : buildUjianPayload(rIdentitas, initial.pengajarName, '', rSesi, halaqah.ambang_ujian);
+  const namaTrack = (t: Track): string => (t === 'qn' ? config.nama_qn : config.nama_pb);
+  const trackShort = (t: Track): string => (t === 'qn' ? 'QN' : 'PB');
 
-  // Rapot rinci sembarang peserta, untuk dicetak sebagai lembar A4.
-  const buildRapotFor = (pid: string, dok: DokCetak) => {
-    const nama = peserta.find((p) => p.id === pid)?.nama ?? '';
-    const idn = { peserta: nama, halaqah: halaqah.nama, level: halaqah.level, mustawa: halaqah.mustawa, gender: halaqah.gender, batch: halaqah.batch };
-    const sesi = assembleSesi(pid);
-    if (dok.kind === 'berkala') {
-      return { kind: 'berkala' as const, payload: buildBerkalaPayload(idn, initial.pengajarName, '', sesi, config.nama_qn, config.nama_pb) };
-    }
-    const payload = terpisah
-      ? buildUjianTunggalPayload(idn, initial.pengajarName, '', sesi, dok.nomor === UJIAN_QN_SESI ? 'qn' : 'pb', halaqah.ambang_ujian)
-      : buildUjianPayload(idn, initial.pengajarName, '', sesi, halaqah.ambang_ujian);
-    return { kind: 'ujian' as const, payload };
-  };
-
-  const dokLabel = (dok: DokCetak): string => {
-    if (dok.kind === 'berkala') return 'Rapot Berkala';
-    if (!terpisah) return 'Rapot Ujian Akhir';
-    return dok.nomor === UJIAN_QN_SESI ? 'Rapot Ujian QN' : 'Rapot Ujian PB';
-  };
-  const dokKey = (dok: DokCetak): string => (dok.kind === 'berkala' ? 'berkala' : `ujian-${dok.nomor}`);
-
-  // Peserta yang datanya cukup untuk dokumen ini. Berkala butuh minimal satu sesi
-  // QN/PB dinilai; ujian butuh sesi ujian bersangkutan dinilai.
-  const pesertaUntukDok = (dok: DokCetak): EvPeserta[] =>
-    peserta.filter((p) => {
-      if (dok.kind === 'ujian') {
-        const w = getWork(p.id, 'ujian', dok.nomor);
-        return w.done && w.hadir !== false;
-      }
-      return (['qn', 'pb'] as Jenis[]).some((j) =>
-        [1, 2, 3, 4].some((n) => {
-          const w = getWork(p.id, j, n);
-          return w.done && w.hadir !== false;
-        })
-      );
+  // Builder murni & murah — dua-duanya dibangun tiap render, yang dipilih saat
+  // render adalah `rapotTrack`. Tak ada cabang tersembunyi lewat jenis/sesi aktif.
+  const buildTrackPayload = (
+    idn: typeof rIdentitas,
+    sesi: SesiNilaiInput[],
+    t: Track,
+  ): RapotPayloadTrack =>
+    buildTrackRapotPayload({
+      track: t,
+      identitas: idn,
+      penerbit: initial.pengajarName,
+      tanggal: '',
+      sesi,
+      namaTrack: namaTrack(t),
+      ambangUjianSesi: halaqah.ambang_ujian,
+      ujianSaja: terpisah,
     });
 
-  // Dokumen yang ditawarkan di kartu "Cetak rapot" di layar awal.
-  const dokTersedia: DokCetak[] = [
-    { kind: 'berkala' },
-    ...(terpisah
-      ? sesiOptionsFor('ujian').map((n) => ({ kind: 'ujian' as const, nomor: n }))
-      : [{ kind: 'ujian' as const, nomor: UJIAN_PB_SESI }]),
-  ];
+  const rapotQn = buildTrackPayload(rIdentitas, rSesi, 'qn');
+  const rapotPb = buildTrackPayload(rIdentitas, rSesi, 'pb');
+  const rapotAktif = rapotTrack === 'qn' ? rapotQn : rapotPb;
+
+  // Rapot rinci sembarang peserta, untuk dicetak sebagai lembar A4.
+  const buildRapotFor = (pid: string, track: Track): RapotPayloadTrack => {
+    const nama = peserta.find((p) => p.id === pid)?.nama ?? '';
+    const idn = { peserta: nama, halaqah: halaqah.nama, level: halaqah.level, mustawa: halaqah.mustawa, gender: halaqah.gender, batch: halaqah.batch };
+    return buildTrackPayload(idn, assembleSesi(pid), track);
+  };
+
+  const dokLabel = (dok: DokCetak): string => `Rapot ${trackShort(dok)}`;
+  const dokKey = (dok: DokCetak): string => dok;
+
+  // Peserta yang datanya cukup untuk dokumen ini: minimal satu sesi track itu —
+  // sesi berkala mana pun, atau ujian track itu — sudah dinilai & hadir.
+  const pesertaUntukDok = (dok: DokCetak): EvPeserta[] =>
+    peserta.filter((p) => {
+      const dinilai = (j: Jenis, n: number) => {
+        const w = getWork(p.id, j, n);
+        return w.done && w.hadir !== false;
+      };
+      if (dinilai('ujian', UJIAN_SESI_BY_TRACK[dok])) return true;
+      return !terpisah && [1, 2, 3, 4].some((n) => dinilai(dok, n));
+    });
+
+  // Dokumen yang ditawarkan di kartu "Cetak rapot" di layar awal: satu per track.
+  const dokTersedia: DokCetak[] = [...TRACKS];
 
   const cetakPeserta = cetakMenu ? pesertaUntukDok(cetakMenu) : [];
 
-  const terbitkanRapot = async (jenis_rapot: JenisRapot) => {
+  const terbitkanRapot = async (jenis_rapot: Track) => {
     if (cobaRef.current) return; // Mode Coba: tak menerbitkan rapot resmi.
     setTerbitStatus('saving');
     try {
@@ -848,7 +859,7 @@ export function EvaluasiPengajarApp({ initial }: { initial: EvaluasiInitial }) {
   // Sengaja memakai komponen A4 (bukan layar rapot versi HP) supaya hasil cetak rapi
   // satu peserta = satu halaman, bukan kartu 460px yang meluber ke mana-mana.
   if (printReq) {
-    const built = printReq.ids.map((pid) => ({ pid, ...buildRapotFor(pid, printReq.dok) }));
+    const built = printReq.ids.map((pid) => ({ pid, payload: buildRapotFor(pid, printReq.dok) }));
     return (
       <div className="a4-print-wrap eval-print-wrap">
         <RapotPrintStyle />
@@ -872,13 +883,9 @@ export function EvaluasiPengajarApp({ initial }: { initial: EvaluasiInitial }) {
           </button>
         </div>
         <div className="a4-stack">
-          {built.map((b) =>
-            b.kind === 'ujian' ? (
-              <RapotUjianA4 key={b.pid} payload={b.payload} logoSrc="/logo-mpt.png" />
-            ) : (
-              <RapotBerkalaA4 key={b.pid} payload={b.payload} logoSrc="/logo-mpt.png" />
-            )
-          )}
+          {built.map((b) => (
+            <RapotTrackA4 key={b.pid} payload={b.payload} logoSrc="/logo-mpt.png" />
+          ))}
         </div>
       </div>
     );
@@ -1040,11 +1047,11 @@ export function EvaluasiPengajarApp({ initial }: { initial: EvaluasiInitial }) {
                         cursor: 'pointer',
                       }}
                     >
-                      <span style={{ fontSize: 16, flexShrink: 0 }}>{d.kind === 'berkala' ? '📄' : '🎓'}</span>
+                      <span style={{ fontSize: 16, flexShrink: 0 }}>{d === 'qn' ? '📖' : '📝'}</span>
                       <div style={{ flex: 1, minWidth: 0 }}>
                         <div style={{ fontSize: 13, fontWeight: 600, color: '#1b1a17' }}>{dokLabel(d)}</div>
                         <div style={{ fontSize: 11, color: '#a8a39a', marginTop: 1 }}>
-                          {siap > 0 ? `${siap} peserta siap dicetak` : 'Belum ada nilai'}
+                          {namaTrack(d)} · {siap > 0 ? `${siap} peserta siap dicetak` : 'belum ada nilai'}
                         </div>
                       </div>
                       <span style={{ fontSize: 15, color: '#d8d3c8' }}>›</span>
@@ -1237,28 +1244,19 @@ export function EvaluasiPengajarApp({ initial }: { initial: EvaluasiInitial }) {
           />
         )}
 
-        {screen === 'p-rapor' &&
-          (isUjian ? (
-            <RapotUjian
-              payload={rapotUjian}
-              onBack={() => nav('p-ringkasan')}
-              onTerbitkan={() =>
-                terbitkanRapot(
-                  terpisah ? (fokusUjianAktif === 'qn' ? 'ujian_qn' : 'ujian_pb') : 'ujian'
-                )
-              }
-              terbitStatus={terbitStatus}
-              onCetak={() => setPrintReq({ dok: { kind: 'ujian', nomor: activeSession }, ids: [rId] })}
-            />
-          ) : (
-            <RapotBerkala
-              payload={rapotBerkala}
-              onBack={() => nav('p-ringkasan')}
-              onTerbitkan={() => terbitkanRapot('berkala')}
-              terbitStatus={terbitStatus}
-              onCetak={() => setPrintReq({ dok: { kind: 'berkala' }, ids: [rId] })}
-            />
-          ))}
+        {screen === 'p-rapor' && (
+          <RapotTrack
+            payload={rapotAktif}
+            onBack={() => nav('p-ringkasan')}
+            onTerbitkan={() => terbitkanRapot(rapotTrack)}
+            terbitStatus={terbitStatus}
+            onCetak={() => setPrintReq({ dok: rapotTrack, ids: [rId] })}
+            onPilihTrack={(t) => {
+              setRapotTrack(t);
+              setTerbitStatus('idle');
+            }}
+          />
+        )}
       </div>
 
       {cetakMenu && (

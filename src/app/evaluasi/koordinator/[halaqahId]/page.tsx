@@ -2,7 +2,7 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { requireOneOfRoles } from '@/lib/session';
 import { supabaseAdmin } from '@/lib/supabase-admin';
-import { ALL_LAHN, AMBANG, AMBANG_LULUS_AKHIR, columnsToCounts, initials, tierOf, nilaiAkhirOf, UJIAN_QN_SESI, UJIAN_PB_SESI } from '@/lib/evaluasi';
+import { ALL_LAHN, AMBANG, columnsToCounts, initials, tierOf, nilaiAkhirTrackOf, UJIAN_QN_SESI, UJIAN_PB_SESI } from '@/lib/evaluasi';
 import { PrintButton } from '@/components/PrintButton';
 import RekapNilaiAkhir from './RekapNilaiAkhir';
 
@@ -126,31 +126,24 @@ export default async function KoordinatorHalaqahPage({
   const rekapRows = pesertaList.map((p) => {
     // Selaras dgn rapot resmi: hanya sesi done & hadir yang dihitung.
     const mine = allNilai.filter((n) => n.peserta_id === (p.id as string) && n.done && n.hadir !== false);
-    const berkala: number[] = [];
+    // Sumbu rapot dirotasi (0062): akumulasi dipecah per track, bukan digabung.
+    const berkalaQn: number[] = [];
+    const berkalaPb: number[] = [];
     let ujianQn: number | null = null;
     let ujianPb: number | null = null;
     for (const n of mine) {
       const m = sesiMeta.get(n.sesi_id);
       if (!m) continue;
       const skor = Number(n.skor) || 0;
-      if (m.jenis === 'qn' || m.jenis === 'pb') berkala.push(skor);
+      if (m.jenis === 'qn') berkalaQn.push(skor);
+      else if (m.jenis === 'pb') berkalaPb.push(skor);
       else if (m.jenis === 'ujian' && m.nomor_sesi === UJIAN_QN_SESI) ujianQn = skor;
       else if (m.jenis === 'ujian' && m.nomor_sesi === UJIAN_PB_SESI) ujianPb = skor;
     }
-    const na = nilaiAkhirOf(berkala, ujianPb);
-    // Batch terpisah: nilai akhir = skor Ujian PB apa adanya. Rata-rata berkala tetap
-    // ditampilkan sebagai informasi, tapi tidak ikut hitungan.
-    if (terpisah) {
-      return {
-        nama: p.nama as string,
-        berkalaAvg: na.berkalaAvg,
-        ujianQn,
-        ujianPb,
-        nilaiAkhir: ujianPb,
-        lulus: ujianPb == null ? null : ujianPb >= AMBANG_LULUS_AKHIR,
-      };
-    }
-    return { nama: p.nama as string, berkalaAvg: na.berkalaAvg, ujianQn, ujianPb, nilaiAkhir: na.nilai, lulus: na.lulus };
+    // `terpisah` (batch rapot_ujian_terpisah) berlaku untuk KEDUA track.
+    const qn = nilaiAkhirTrackOf('qn', berkalaQn, ujianQn, { ujianSaja: terpisah });
+    const pb = nilaiAkhirTrackOf('pb', berkalaPb, ujianPb, { ujianSaja: terpisah });
+    return { nama: p.nama as string, qn, pb };
   });
 
   // Distribusi jenis kesalahan (baris done).

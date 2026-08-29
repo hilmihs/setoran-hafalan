@@ -62,7 +62,7 @@ export default function SosialisasiPenilaianPage() {
 
         {/* Judul — to the point, tanpa deskripsi */}
         <h1 style={{ fontSize: 22, fontWeight: 800, letterSpacing: '0.01em', margin: '0 0 20px', textWrap: 'balance' }}>
-          Sosialisasi Sistem Penilaian: Evaluasi Berkala &amp; Ujian Akhir
+          Sosialisasi Sistem Penilaian: Rapot QN &amp; Rapot PB
         </h1>
 
         {/* 1. Skor per sesi */}
@@ -90,15 +90,16 @@ export default function SosialisasiPenilaianPage() {
           </div>
         </div>
 
-        {/* 2. Evaluasi Berkala */}
+        {/* 2. Rapot dipisah per track */}
         <div style={CARD}>
-          <div style={SECTION_LABEL}>2 · Evaluasi Berkala</div>
+          <div style={SECTION_LABEL}>2 · Rapot dipisah per track</div>
           <div style={{ fontSize: 13, color: '#44423d', lineHeight: 1.55 }}>
-            Terdiri dari dua track — <b>QN</b> dan <b>PB</b>, masing-masing 4 sesi. Rata-rata seluruh sesi QN &amp; PB
-            (digabung) menjadi <b>nilai Evaluasi Berkala</b>.
+            Ada dua track — <b>QN</b> dan <b>PB</b>, masing-masing 4 sesi evaluasi. Mulai pembaruan ini setiap track
+            punya rapot sendiri: <b>Rapot QN</b> dan <b>Rapot PB</b>, terbit sebagai dua dokumen terpisah.
           </div>
-          <div style={{ fontSize: 12.5, fontWeight: 700, color: 'oklch(0.40 0.10 150)', marginTop: 8 }}>
-            Menyumbang <b>30%</b> nilai akhir.
+          <div style={{ fontSize: 13, color: '#44423d', lineHeight: 1.55, marginTop: 8 }}>
+            <b>Rapot QN</b> memuat seluruh sesi evaluasi QN + Ujian QN. <b>Rapot PB</b> memuat seluruh sesi evaluasi PB
+            + Ujian PB. Sesi QN dan PB <b>tidak lagi digabung</b> menjadi satu rata-rata.
           </div>
         </div>
 
@@ -106,25 +107,53 @@ export default function SosialisasiPenilaianPage() {
         <div style={CARD}>
           <div style={SECTION_LABEL}>3 · Ujian Akhir</div>
           <div style={{ fontSize: 13, color: '#44423d', lineHeight: 1.55 }}>
-            Ada dua ujian: <b>Ujian QN</b> dan <b>Ujian PB</b>. Keduanya diuji &amp; dinilai, tetapi untuk nilai akhir
-            <b> hanya skor Ujian PB yang dihitung</b>. Ujian QN dipakai sebagai catatan progres, <b>tidak</b> masuk nilai akhir.
+            Ada dua ujian: <b>Ujian QN</b> dan <b>Ujian PB</b>. Keduanya diuji, dinilai, dan <b>keduanya kini dihitung</b>
+            {' '}— masing-masing masuk ke nilai akhir rapot track-nya sendiri.
           </div>
           <div style={{ fontSize: 12.5, fontWeight: 700, color: 'oklch(0.40 0.10 150)', marginTop: 8 }}>
-            Skor Ujian PB menyumbang <b>70%</b> nilai akhir.
+            Perubahan penting: Ujian QN sebelumnya hanya catatan progres dan tidak masuk nilai akhir. Sekarang Ujian QN
+            menyumbang <b>70%</b> nilai akhir Rapot QN.
           </div>
         </div>
 
-        {/* 4. Nilai akhir */}
+        {/* 4. Nilai akhir tiap rapot */}
         <div style={{ ...CARD, background: 'oklch(0.96 0.035 150)', border: '1px solid oklch(0.85 0.06 150)' }}>
-          <div style={SECTION_LABEL}>4 · Nilai akhir</div>
+          <div style={SECTION_LABEL}>4 · Nilai akhir tiap rapot</div>
+          <div style={{ fontSize: 15, fontWeight: 800, marginBottom: 4 }}>
+            Nilai Akhir QN = (rata-rata sesi QN × 30%) + (Ujian QN × 70%)
+          </div>
           <div style={{ fontSize: 15, fontWeight: 800, marginBottom: 6 }}>
-            Nilai akhir = (Evaluasi Berkala × 30%) + (Ujian PB × 70%)
+            Nilai Akhir PB = (rata-rata sesi PB × 30%) + (Ujian PB × 70%)
           </div>
           <div style={{ fontSize: 13, color: '#44423d', lineHeight: 1.55 }}>
-            Ambang lulus <b>70</b>. Nilai akhir ≥ 70 → <b>LULUS</b>; di bawah 70 → <b>MENGULANG</b>.
+            Ambang <b>70 per rapot</b>. Nilai akhir sebuah rapot ≥ 70 → <b>LULUS</b>; di bawah 70 → <b>MENGULANG</b>,
+            dinilai terpisah untuk QN dan PB.
           </div>
           <div style={{ fontSize: 12, color: '#44423d', marginTop: 10, background: '#fff', border: '1px solid #d8d3c8', borderRadius: 8, padding: '8px 12px' }}>
-            Contoh: Berkala 79, Ujian PB 78 → (79 × 0,3) + (78 × 0,7) = 78,3 → <b>78</b> · LULUS.
+            Contoh (Rapot PB): rata-rata sesi PB 79, Ujian PB 78 → (79 × 0,3) + (78 × 0,7) = 78,3 → <b>78</b> · LULUS.
+          </div>
+          <div style={{ fontSize: 12, color: '#44423d', marginTop: 8, background: '#fff', border: '1px solid #d8d3c8', borderRadius: 8, padding: '8px 12px' }}>
+            Sebagian angkatan tidak menjalankan sesi evaluasi berkala. Untuk angkatan tersebut, nilai akhir tiap rapot
+            diambil <b>100% dari skor ujian track yang bersangkutan</b> — Rapot QN dari Ujian QN, Rapot PB dari Ujian PB.
+          </div>
+        </div>
+
+        {/* 5. Kelulusan */}
+        <div style={CARD}>
+          <div style={SECTION_LABEL}>5 · Kelulusan</div>
+          <div style={{ fontSize: 13, color: '#44423d', lineHeight: 1.55 }}>
+            Kelulusan level ditentukan <b>Rapot PB</b>. Rapot QN <b>wajib diselesaikan</b> sebagai prasyarat, tetapi
+            nilai QN di bawah 70 <b>tidak menggugurkan kelulusan</b>.
+          </div>
+        </div>
+
+        {/* 6. Rapot lama */}
+        <div style={CARD}>
+          <div style={SECTION_LABEL}>6 · Rapot lama</div>
+          <div style={{ fontSize: 13, color: '#44423d', lineHeight: 1.55 }}>
+            Rapot yang terbit sebelum pembaruan ini <b>tetap berlaku dengan aturan lama</b> (Rapot Berkala + Rapot Ujian
+            Akhir). Bila keterangan pada rapot lama berbeda dengan lembar ini, yang berlaku untuk rapot tersebut adalah
+            keterangan yang tercetak padanya.
           </div>
         </div>
       </div>

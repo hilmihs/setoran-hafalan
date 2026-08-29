@@ -5,8 +5,15 @@ import { evalPengajarIdFor } from '@/lib/evaluasi-pengajar';
 
 export const runtime = 'nodejs';
 
-// Soft-delete / restore satu sesi ujian akhir untuk sebuah halaqah.
-// Hanya jenis 'ujian' yang boleh dihapus, dan minimal 1 sesi ujian harus tersisa.
+// Restore satu sesi ujian akhir untuk sebuah halaqah.
+//
+// Sejak sumbu rapot dirotasi ke track, tiap track punya ujian akhirnya sendiri:
+// nomor_sesi 1 = Ujian QN, nomor_sesi 2 = Ujian PB, masing-masing menyumbang 70%
+// nilai akhir rapot track-nya. Keduanya karena itu WAJIB ada — penghapusan sesi
+// ujian ditolak (dulu hanya disyaratkan "minimal 1 tersisa", yang membuat
+// pengajar bisa menghapus Ujian PB dan mengunci Rapot PB selamanya tanpa pesan
+// error apa pun). Pemulihan (dihapus=false) tetap dilayani supaya tombstone
+// lama bisa dibalikkan. Sesi berkala (qn/pb) tidak ditangani endpoint ini.
 export async function POST(req: NextRequest) {
   try {
     const s = await getSession();
@@ -19,10 +26,11 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json();
-    const { halaqah_id, nomor_sesi, dihapus } = body as {
+    const { halaqah_id, nomor_sesi, dihapus, jenis } = body as {
       halaqah_id: string;
       nomor_sesi: number;
       dihapus: boolean;
+      jenis?: string;
     };
 
     if (typeof halaqah_id !== 'string' || !halaqah_id) {
@@ -34,10 +42,25 @@ export async function POST(req: NextRequest) {
     if (typeof dihapus !== 'boolean') {
       return NextResponse.json({ error: 'dihapus harus boolean' }, { status: 400 });
     }
+    // Endpoint ini khusus sesi ujian; jangan sampai payload berjenis lain
+    // diam-diam mengenai baris ujian.
+    if (jenis !== undefined && jenis !== 'ujian') {
+      return NextResponse.json(
+        { error: 'Endpoint ini hanya untuk sesi ujian' },
+        { status: 400 }
+      );
+    }
+    // Kedua sesi ujian wajib ada — penghapusan ditolak, apa pun sisanya.
+    if (dihapus) {
+      return NextResponse.json(
+        { error: 'Ujian QN dan Ujian PB wajib ada — tidak bisa dihapus.' },
+        { status: 409 }
+      );
+    }
 
     const { data: halaqah } = await supabaseAdmin
       .from('eval_halaqah')
-      .select('id, gender, pengajar_id')
+      .select('id, pengajar_id')
       .eq('id', halaqah_id)
       .maybeSingle();
     if (!halaqah) {
@@ -48,7 +71,6 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Bukan halaqah Anda' }, { status: 403 });
     }
 
-    // Sesi yang sudah dikirim tidak boleh dihapus.
     const { data: existing } = await supabaseAdmin
       .from('evaluasi_sesi')
       .select('id, status')
@@ -56,66 +78,19 @@ export async function POST(req: NextRequest) {
       .eq('jenis', 'ujian')
       .eq('nomor_sesi', nomor_sesi)
       .maybeSingle();
-    if (existing?.status === 'terkirim') {
-      return NextResponse.json(
-        { error: 'Sesi sudah dikirim, tidak bisa dihapus' },
-        { status: 409 }
-      );
-    }
 
-    // Saat MENGHAPUS: pastikan minimal 1 sesi ujian tetap tersisa.
-    if (dihapus) {
-      const { data: cfg } = await supabaseAdmin
-        .from('eval_config')
-        .select('ujian_attempts')
-        .eq('gender', halaqah.gender)
-        .maybeSingle();
-      const attempts = (cfg?.ujian_attempts as number) ?? 2;
-
-      const { data: deletedRows } = await supabaseAdmin
-        .from('evaluasi_sesi')
-        .select('nomor_sesi')
-        .eq('halaqah_id', halaqah_id)
-        .eq('jenis', 'ujian')
-        .eq('dihapus', true);
-      const alreadyDeleted = new Set((deletedRows ?? []).map((r) => r.nomor_sesi as number));
-      alreadyDeleted.add(nomor_sesi);
-      const remaining = attempts - alreadyDeleted.size;
-      if (remaining < 1) {
-        return NextResponse.json(
-          { error: 'Minimal satu sesi ujian harus tetap ada' },
-          { status: 409 }
-        );
-      }
-    }
-
-    const now = new Date().toISOString();
+    // Sisanya pasti pemulihan (dihapus=false) — penghapusan sudah ditolak di
+    // atas, jadi tak ada lagi jalur tombstone/penjagaan "minimal 1 tersisa".
     if (existing) {
       // Row sudah ada → cukup toggle flag; JANGAN upsert (upsert tanpa surat/ayat
       // akan mereset silabus ke default DB → sesi hantu Al-Baqarah 142-157).
       const { error } = await supabaseAdmin
         .from('evaluasi_sesi')
-        .update({ dihapus, updated_at: now })
+        .update({ dihapus: false, updated_at: new Date().toISOString() })
         .eq('id', existing.id);
       if (error) {
         console.error('[sesi/hapus] update gagal:', error.message);
         return NextResponse.json({ error: 'Gagal memperbarui sesi' }, { status: 500 });
-      }
-    } else if (dihapus) {
-      // Belum ada row & ingin menghapus → buat penanda terhapus (tombstone).
-      // dihapus=true shg tak pernah ditampilkan; silabus asli diisi klien via
-      // sesi/upsert saat sesi benar-benar dijadwalkan.
-      const { error } = await supabaseAdmin.from('evaluasi_sesi').insert({
-        halaqah_id,
-        jenis: 'ujian',
-        nomor_sesi,
-        dihapus: true,
-        dibuat_oleh: evalPengajarId,
-        updated_at: now,
-      });
-      if (error) {
-        console.error('[sesi/hapus] insert tombstone gagal:', error.message);
-        return NextResponse.json({ error: 'Gagal menghapus sesi' }, { status: 500 });
       }
     }
     // else: memulihkan sesi yang belum pernah ada → no-op.

@@ -10,13 +10,14 @@ import {
   scoreOf,
   tierOf,
   sumCounts,
-  nilaiAkhirOf,
+  nilaiAkhirTrackOf,
+  peranTrack,
   AMBANG_LULUS_AKHIR,
   AMBANG_UJIAN_DEFAULT,
-  UJIAN_QN_SESI,
-  UJIAN_PB_SESI,
+  UJIAN_SESI_BY_TRACK,
   type Jenis,
   type LahnCounts,
+  type Track,
 } from './evaluasi';
 
 // Satu sesi peserta yang sudah dinormalisasi (dari DB atau dari state client).
@@ -86,27 +87,60 @@ export interface RapotUjian {
 }
 
 /**
- * Jenis dokumen rapot.
- * - `berkala`   — rekap 4 sesi QN + 4 sesi PB.
+ * Jenis dokumen rapot ERA LAMA — dokumen yang sudah terbit sebelum rotasi 0062.
+ * Nilainya tidak dicabut dan barisnya tidak pernah dihitung ulang: rapot ber-QR
+ * yang sudah beredar harus tetap terverifikasi persis seperti saat dicetak.
+ *
+ * - `berkala`   — rekap 4 sesi QN + 4 sesi PB digabung.
  * - `ujian`     — rapot ujian akhir gabungan; nilai akhir = 30% berkala + 70% Ujian PB.
  * - `ujian_qn` / `ujian_pb` — batch dgn `eval_batch.rapot_ujian_terpisah` (0058):
  *   satu dokumen per ujian, nilai akhir MURNI skor ujian itu, dan sengaja tidak
  *   menyinggung ujian yang lain sama sekali.
  */
-export type JenisRapot = 'berkala' | 'ujian' | 'ujian_qn' | 'ujian_pb';
+export type JenisRapotLegacy = 'berkala' | 'ujian' | 'ujian_qn' | 'ujian_pb';
 
-/** Rapot ujian yang berdiri sendiri (bukan gabungan QN+PB). */
+/**
+ * Jenis dokumen rapot ERA BARU (0062) = track-nya sendiri: satu rapot memuat
+ * seluruh evaluasi berkala track itu PLUS ujian akhir track itu.
+ */
+export type JenisRapot = JenisRapotLegacy | Track;
+
+/** Rapot ujian legacy yang berdiri sendiri (bukan gabungan QN+PB). */
 export function isUjianTunggal(j: JenisRapot): j is 'ujian_qn' | 'ujian_pb' {
   return j === 'ujian_qn' || j === 'ujian_pb';
 }
 
-/** Ujian mana yang jadi fokus dokumen; null untuk rapot gabungan/berkala. */
+/**
+ * Ujian mana yang jadi fokus dokumen LEGACY; null untuk rapot gabungan/berkala.
+ * Sengaja null juga untuk 'qn'/'pb' — rapot era baru punya `trackRapot.track`,
+ * jangan pakai fungsi ini untuk menentukan track-nya.
+ */
 export function fokusUjian(j: JenisRapot): 'qn' | 'pb' | null {
   return j === 'ujian_qn' ? 'qn' : j === 'ujian_pb' ? 'pb' : null;
 }
 
-export interface RapotPayload {
-  jenis_rapot: JenisRapot;
+/** Isi rapot satu track: seluruh sesi berkala track itu + ujian akhirnya. */
+export interface RapotTrackAkhir {
+  track: Track;
+  label: string; // config.nama_qn / nama_pb
+  berkala: RapotTrackSnap; // 4 slot sesi — bentuk lama dipakai ulang
+  berkalaAvg: number | null;
+  ujian: RapotUjianSnap | null;
+  ujianSkor: number | null;
+  nilaiAkhir: number | null;
+  lulus: boolean | null;
+  ujianSaja: boolean; // true = nilai akhir murni skor ujian (batch rapot_ujian_terpisah)
+  predikat: string;
+  akumulasi: RapotLahnRow[]; // kesalahan sesi berkala track ini
+  rincianUjian: RapotLahnRow[]; // kesalahan pada ujian track ini
+  catatanPenguji: string;
+  peran: 'penentu' | 'prasyarat'; // pb menentukan kelulusan, qn prasyarat
+}
+
+/** ERA LAMA — bentuk payload yang sudah tersimpan. JANGAN diubah selamanya. */
+export interface RapotPayloadLegacy {
+  v?: undefined;
+  jenis_rapot: JenisRapotLegacy;
   identitas: RapotIdentitas;
   ambang: number;
   tanggal: string; // ISO terbit
@@ -115,16 +149,44 @@ export interface RapotPayload {
   ujian?: RapotUjian;
 }
 
+/** ERA BARU (0062) — satu rapot per track. */
+export interface RapotPayloadTrack {
+  v: 1;
+  jenis_rapot: Track;
+  identitas: RapotIdentitas;
+  ambang: number; // AMBANG_LULUS_AKHIR (70)
+  tanggal: string;
+  penerbit: string;
+  trackRapot: RapotTrackAkhir;
+}
+
+/**
+ * Payload rapot — union dua era. Diskriminannya `jenis_rapot` (selalu ada, dan
+ * kembar dengan kolom DB); `v` hanya penanda forensik (baris lama tidak punya).
+ *
+ * Konsumen WAJIB mempersempit lewat `isRapotTrack` sebelum menyentuh isinya.
+ */
+export type RapotPayload = RapotPayloadLegacy | RapotPayloadTrack;
+
+export function isRapotTrack(p: RapotPayload): p is RapotPayloadTrack {
+  return p.jenis_rapot === 'qn' || p.jenis_rapot === 'pb';
+}
+
+export function isRapotLegacy(p: RapotPayload): p is RapotPayloadLegacy {
+  return !isRapotTrack(p);
+}
+
 const TRACK_LABEL: Record<'qn' | 'pb', string> = { qn: 'Evaluasi QN', pb: 'Evaluasi PB' };
 
 function trackShort(j: Jenis): string {
   return j === 'qn' ? 'QN' : j === 'pb' ? 'PB' : 'Ujian';
 }
 
-// Skor semua sesi berkala (qn+pb) yang done — dasar rata-rata 30%.
-function berkalaScores(sesi: SesiNilaiInput[]): number[] {
+// Skor sesi berkala SATU track yang done — dasar rata-rata 30% rapot track itu.
+// (Sebelum 0062 fungsi ini menggabung qn+pb; penggabungan itulah yang dihapus.)
+function berkalaScoresOf(sesi: SesiNilaiInput[], track: Track): number[] {
   return sesi
-    .filter((s) => (s.jenis === 'qn' || s.jenis === 'pb') && s.done && s.hadir !== false)
+    .filter((s) => s.jenis === track && s.done && s.hadir !== false)
     .map((s) => scoreOf(s.counts).skor);
 }
 
@@ -143,43 +205,19 @@ function buildTrack(sesi: SesiNilaiInput[], jenis: 'qn' | 'pb', namaTrack?: stri
   return { jenis, label: namaTrack ?? TRACK_LABEL[jenis], rata, history, catatan };
 }
 
-function akumulasiLahn(sesi: SesiNilaiInput[]): RapotLahnRow[] {
-  const done = sesi
-    .filter((s) => (s.jenis === 'qn' || s.jenis === 'pb') && s.done && s.hadir !== false)
-    .map((s) => s.counts);
-  const total = sumCounts(done);
-  return ALL_LAHN.map((d) => ({ key: d.key, label: d.label, group: d.group, count: total[d.key] || 0 }))
+/** Baris lahn nonzero, urut menurun — dipakai akumulasi berkala & rincian ujian. */
+function lahnRowsOf(counts: LahnCounts): RapotLahnRow[] {
+  return ALL_LAHN.map((d) => ({ key: d.key, label: d.label, group: d.group, count: counts[d.key] || 0 }))
     .filter((r) => r.count > 0)
     .sort((a, b) => b.count - a.count);
 }
 
-export function buildBerkalaPayload(
-  identitas: RapotIdentitas,
-  penerbit: string,
-  tanggal: string,
-  sesi: SesiNilaiInput[],
-  namaQn?: string,
-  namaPb?: string,
-  ambang = AMBANG_LULUS_AKHIR,
-): RapotPayload {
-  const scores = berkalaScores(sesi);
-  const rataGabungan = scores.length ? Math.round(scores.reduce((a, b) => a + b, 0) / scores.length) : null;
-  const tertinggi = scores.length ? Math.max(...scores) : null;
-  const predikat = rataGabungan == null ? '—' : tierOf(rataGabungan).label;
-  return {
-    jenis_rapot: 'berkala',
-    identitas,
-    ambang,
-    tanggal,
-    penerbit,
-    berkala: {
-      rataGabungan,
-      tertinggi,
-      predikat,
-      tracks: [buildTrack(sesi, 'qn', namaQn), buildTrack(sesi, 'pb', namaPb)],
-      akumulasi: akumulasiLahn(sesi),
-    },
-  };
+/** Akumulasi kesalahan seluruh sesi berkala SATU track. */
+function akumulasiLahn(sesi: SesiNilaiInput[], track: Track): RapotLahnRow[] {
+  const done = sesi
+    .filter((s) => s.jenis === track && s.done && s.hadir !== false)
+    .map((s) => s.counts);
+  return lahnRowsOf(sumCounts(done));
 }
 
 function ujianSnap(sesi: SesiNilaiInput[], nomor: number, label: string, ambang: number): RapotUjianSnap | null {
@@ -199,90 +237,75 @@ function ujianSnap(sesi: SesiNilaiInput[], nomor: number, label: string, ambang:
   };
 }
 
-export function buildUjianPayload(
-  identitas: RapotIdentitas,
-  penerbit: string,
-  tanggal: string,
-  sesi: SesiNilaiInput[],
-  // Ambang lulus PER-SESI ujian (QN/PB) = halaqah.ambang_ujian; harus sama dgn
-  // layar Nilai pengajar. Ambang NILAI AKHIR tetap fix AMBANG_LULUS_AKHIR (70).
-  ambangSesi = AMBANG_UJIAN_DEFAULT,
-): RapotPayload {
-  const qn = ujianSnap(sesi, UJIAN_QN_SESI, 'Ujian QN', ambangSesi);
-  const pb = ujianSnap(sesi, UJIAN_PB_SESI, 'Ujian PB', ambangSesi);
-  const na = nilaiAkhirOf(berkalaScores(sesi), pb?.skor ?? null);
-  const rincian = ALL_LAHN.map((d) => ({
-    key: d.key,
-    label: d.label,
-    group: d.group,
-    qn: qn ? qn.counts[d.key] || 0 : null,
-    pb: pb ? pb.counts[d.key] || 0 : null,
-  })).filter((r) => (r.qn ?? 0) > 0 || (r.pb ?? 0) > 0);
-  return {
-    jenis_rapot: 'ujian',
-    identitas,
-    ambang: AMBANG_LULUS_AKHIR, // ambang nilai akhir (fix 70), ditampilkan di halaman verifikasi
-    tanggal,
-    penerbit,
-    ujian: {
-      nilaiAkhir: na.nilai,
-      berkalaAvg: na.berkalaAvg,
-      ujianPbSkor: na.ujianPbSkor,
-      lulus: na.lulus,
-      qn,
-      pb,
-      rincian,
-      catatanPenguji: (pb?.catatan || qn?.catatan || '').trim(),
-    },
-  };
-}
-
 /**
- * Rapot untuk SATU ujian akhir saja (batch `rapot_ujian_terpisah`, 0058).
+ * Bangun rapot SATU track (0062): seluruh sesi evaluasi berkala track itu plus
+ * ujian akhir track itu, dalam satu dokumen.
  *
- * Bedanya dgn `buildUjianPayload`:
- * - nilai akhir = skor ujian itu sendiri, tanpa bobot evaluasi berkala
- *   (`berkalaAvg` sengaja null supaya perender tahu komponen itu tak ada);
- * - ujian yang tidak difokuskan tidak muncul di mana pun — snap-nya null dan
- *   kolomnya di `rincian` diisi null, jadi rapot PB betul-betul tak menyebut QN.
+ * Nilai akhir = 30% rata sesi berkala track + 70% ujian track (`nilaiAkhirTrackOf`).
+ * Untuk batch `eval_batch.rapot_ujian_terpisah` (Januari 2026) pakai `ujianSaja`:
+ * nilai akhir jadi murni skor ujian track itu dan komponen berkala tidak ada —
+ * berlaku untuk KEDUA track, bukan PB saja.
  *
- * Ambang LULUS tetap `AMBANG_LULUS_AKHIR` (70), sama dengan batch lain.
- * `ambangSesi` hanya menentukan flag `lulus` di dalam snap (dipakai layar Nilai).
+ * `ambangUjianSesi` (= halaqah.ambang_ujian) hanya menentukan badge lulus di dalam
+ * snap ujian, supaya cocok dengan layar Nilai pengajar. Ambang NILAI AKHIR tetap
+ * fix `AMBANG_LULUS_AKHIR` (70) untuk kedua track.
  */
-export function buildUjianTunggalPayload(
-  identitas: RapotIdentitas,
-  penerbit: string,
-  tanggal: string,
-  sesi: SesiNilaiInput[],
-  fokus: 'qn' | 'pb',
-  ambangSesi = AMBANG_UJIAN_DEFAULT,
-): RapotPayload {
-  const nomor = fokus === 'qn' ? UJIAN_QN_SESI : UJIAN_PB_SESI;
-  const label = fokus === 'qn' ? 'Ujian QN' : 'Ujian PB';
-  const snap = ujianSnap(sesi, nomor, label, ambangSesi);
-  const nilaiAkhir = snap?.skor ?? null;
-  const rincian = ALL_LAHN.map((d) => ({
-    key: d.key,
-    label: d.label,
-    group: d.group,
-    qn: fokus === 'qn' && snap ? snap.counts[d.key] || 0 : null,
-    pb: fokus === 'pb' && snap ? snap.counts[d.key] || 0 : null,
-  })).filter((r) => ((fokus === 'qn' ? r.qn : r.pb) ?? 0) > 0);
+export function buildTrackRapotPayload(args: {
+  track: Track;
+  identitas: RapotIdentitas;
+  penerbit: string;
+  tanggal: string;
+  sesi: SesiNilaiInput[];
+  namaTrack?: string;
+  ambangUjianSesi?: number;
+  ujianSaja?: boolean;
+}): RapotPayloadTrack {
+  const {
+    track,
+    identitas,
+    penerbit,
+    tanggal,
+    sesi,
+    namaTrack,
+    ambangUjianSesi = AMBANG_UJIAN_DEFAULT,
+    ujianSaja = false,
+  } = args;
+
+  const label = namaTrack ?? TRACK_LABEL[track];
+  const berkala = buildTrack(sesi, track, label);
+  const ujian = ujianSnap(
+    sesi,
+    UJIAN_SESI_BY_TRACK[track],
+    `Ujian ${track.toUpperCase()}`,
+    ambangUjianSesi,
+  );
+
+  const na = nilaiAkhirTrackOf(track, berkalaScoresOf(sesi, track), ujian?.skor ?? null, {
+    ujianSaja,
+  });
+
   return {
-    jenis_rapot: fokus === 'qn' ? 'ujian_qn' : 'ujian_pb',
+    v: 1,
+    jenis_rapot: track,
     identitas,
     ambang: AMBANG_LULUS_AKHIR,
     tanggal,
     penerbit,
-    ujian: {
-      nilaiAkhir,
-      berkalaAvg: null,
-      ujianPbSkor: fokus === 'pb' ? nilaiAkhir : null,
-      lulus: nilaiAkhir == null ? null : nilaiAkhir >= AMBANG_LULUS_AKHIR,
-      qn: fokus === 'qn' ? snap : null,
-      pb: fokus === 'pb' ? snap : null,
-      rincian,
-      catatanPenguji: (snap?.catatan ?? '').trim(),
+    trackRapot: {
+      track,
+      label,
+      berkala,
+      berkalaAvg: na.berkalaAvg,
+      ujian,
+      ujianSkor: na.ujianSkor,
+      nilaiAkhir: na.nilai,
+      lulus: na.lulus,
+      ujianSaja: na.ujianSaja,
+      predikat: na.nilai == null ? '\u2014' : tierOf(na.nilai).label,
+      akumulasi: ujianSaja ? [] : akumulasiLahn(sesi, track),
+      rincianUjian: ujian ? lahnRowsOf(ujian.counts) : [],
+      catatanPenguji: (ujian?.catatan ?? '').trim(),
+      peran: peranTrack(track),
     },
   };
 }

@@ -1,4 +1,4 @@
-import type { RapotPayload, RapotUjianSnap } from '@/lib/rapot';
+import type { RapotPayloadLegacy, RapotUjianSnap } from '@/lib/rapot';
 import { fokusUjian } from '@/lib/rapot';
 import { tierOf } from '@/lib/evaluasi';
 import RapotKop from './RapotKop';
@@ -14,7 +14,7 @@ import RapotKop from './RapotKop';
 //   satunya TIDAK disinggung di mana pun.
 
 interface Props {
-  payload: RapotPayload;
+  payload: RapotPayloadLegacy;
   /** QR verifikasi. Kosong = rapot belum diterbitkan (pratinjau/cetak dari aplikasi). */
   qr?: string;
   logoSrc: string;

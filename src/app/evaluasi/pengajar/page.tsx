@@ -19,8 +19,14 @@ interface SesiRow {
   dihapus: boolean;
 }
 
-function maxSessionsFor(jenis: Jenis, ujianAttempts: number): number {
-  return jenis === 'ujian' ? ujianAttempts : 4;
+// Sumbu rapot = track. Tiap track punya ujian akhirnya sendiri dan keduanya
+// wajib ada: nomor_sesi 1 = Ujian QN, nomor_sesi 2 = Ujian PB (masing-masing
+// menyumbang 70% nilai akhir rapot track-nya). Jadi jumlah sesi ujian dibekukan
+// di 2 — TIDAK lagi mengikuti eval_config.ujian_attempts.
+const UJIAN_SESSIONS = 2;
+
+function maxSessionsFor(jenis: Jenis): number {
+  return jenis === 'ujian' ? UJIAN_SESSIONS : 4;
 }
 
 function currentSessionFor(jenis: Jenis, sesiList: SesiRow[], maxSessions: number): number {
@@ -121,7 +127,7 @@ export default async function EvaluasiPengajarPage({
   // Config per gender.
   const { data: configRow } = await supabaseAdmin
     .from('eval_config')
-    .select('nama_qn, nama_pb, ujian_attempts, jadwal')
+    .select('nama_qn, nama_pb, jadwal')
     .eq('gender', halaqah.gender)
     .maybeSingle();
 
@@ -130,7 +136,9 @@ export default async function EvaluasiPengajarPage({
   const config = {
     nama_qn: (configRow?.nama_qn as string) ?? 'Evaluasi QN',
     nama_pb: (configRow?.nama_pb as string) ?? 'Evaluasi PB',
-    ujian_attempts: (configRow?.ujian_attempts as number) ?? 2,
+    // Dibekukan di 2 (Ujian QN + Ujian PB); kolom DB tak lagi jadi acuan supaya
+    // baris lama yang bernilai 1 tidak menyembunyikan Ujian PB di UI pengajar.
+    ujian_attempts: UJIAN_SESSIONS,
     jadwal: {
       qn: asDates(jadwalRaw.qn),
       pb: asDates(jadwalRaw.pb),
@@ -157,7 +165,7 @@ export default async function EvaluasiPengajarPage({
 
   const currentSession = {} as Record<Jenis, number>;
   for (const j of JENIS) {
-    currentSession[j] = currentSessionFor(j, sesiRows, maxSessionsFor(j, config.ujian_attempts));
+    currentSession[j] = currentSessionFor(j, sesiRows, maxSessionsFor(j));
   }
 
   const initial: EvaluasiInitial = {
