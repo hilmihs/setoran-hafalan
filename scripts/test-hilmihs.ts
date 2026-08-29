@@ -33,7 +33,9 @@ eq(
 );
 eq(
   mapHalaqah('hits-regular', { halaqahId: 54, name: 'HITS 006', pengajar: 'Abdul Hakim', guruPhone: '81331732974', level: 'HITS Lanjutan', gender: 1, type: 'online' }),
-  { id: 'hits-regular:54', nama: 'HITS 006', gender: 'ikhwan', level: 'HITS Lanjutan', pengajar_id: 'wa:6281331732974', batch_id: 'hits-regular', mustawa: null, ambang_ujian: 70 },
+  // ambang_ujian sengaja tak ikut dipetakan (map.ts): kolom terkurasi lokal, supaya
+  // sync tak mereset ambang yang sudah disetel koordinator.
+  { id: 'hits-regular:54', nama: 'HITS 006', gender: 'ikhwan', level: 'HITS Lanjutan', pengajar_id: 'wa:6281331732974', batch_id: 'hits-regular', mustawa: null },
   'mapHalaqah'
 );
 eq(
@@ -73,6 +75,31 @@ eq([upd.before?.nama, upd.after?.nama], ['Lama', 'Baru'], 'diff before/after');
 eq(diffEntity('pengajar', [{ id: 'wa:628111', nama: 'Baru', gender: 'ikhwan', whatsapp: '628111' }],
      [{ id: 'wa:628111', nama: 'Baru', gender: 'ikhwan', whatsapp: '628111', aktif: true }],
      ['nama', 'gender', 'whatsapp']).length, 0, 'diff no-op');
+
+// ── peserta manual dikecualikan dari deactivate ──
+// Peserta yang ditambahkan pengajar lewat /evaluasi/pengajar memang tak akan
+// pernah ada di fetch hilmihs. Kalau ikut di-deactivate, sekali koordinator
+// approve, peserta itu lenyap dari layar pengajar tanpa sebab yang kelihatan.
+const curPes = [
+  { id: 'hits-regular-jan:769', nama: 'Haqqi', halaqah_id: 'hits-regular-jan:785', aktif: true },
+  { id: 'manual:budi-ab12cd', nama: 'Budi', halaqah_id: 'hits-regular-jan:785', aktif: true },
+  { id: 'hits-regular-jan:3274', nama: 'Ghazali', halaqah_id: 'hits-regular-jan:785', aktif: true },
+];
+const dPes = diffEntity(
+  'peserta',
+  [{ id: 'hits-regular-jan:769', nama: 'Haqqi', halaqah_id: 'hits-regular-jan:785' }],
+  curPes,
+  ['nama', 'halaqah_id']
+);
+eq(dPes.filter((x) => x.op === 'deactivate').map((x) => x.entity_id),
+   ['hits-regular-jan:3274'],
+   'hanya peserta remote yang hilang di-deactivate');
+eq(dPes.some((x) => x.entity_id.startsWith('manual:')), false, 'peserta manual tak muncul di diff');
+// Pengecualian ini khusus entitas peserta — id ber-prefix serupa di entitas lain
+// tetap diperlakukan normal.
+eq(diffEntity('halaqah', [], [{ id: 'manual:x', aktif: true }], ['nama']).map((x) => x.op),
+   ['deactivate'],
+   'pengecualian manual tak bocor ke entitas lain');
 
 if (failed) { console.error(`\n${failed} FAILED`); process.exit(1); }
 console.log('\nAll hilmihs tests passed.');

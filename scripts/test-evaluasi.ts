@@ -5,6 +5,7 @@ import {
   scoreOf, tierOf, AMBANG, columnFor,
   buildTrackGeometry,
 } from '@/lib/evaluasi';
+import { isPesertaManual, buatIdPesertaManual, bersihkanNamaPeserta } from '@/lib/evaluasi-peserta';
 
 let failed = 0;
 function eq(actual: unknown, expected: unknown, label: string) {
@@ -43,6 +44,21 @@ eq(g.avg, 80, 'geometry avg 80 (round 79.667)');
 eq(g.trend, 7, 'geometry trend 7');
 eq(g.sessions[3].filled, false, 'geometry sesi ke-4 unfilled');
 eq(g.points, '16,29.7 92,26.3 168,21.5', 'geometry points 3 titik');
+
+// ── peserta yang ditambahkan pengajar sendiri ──
+eq(isPesertaManual('manual:budi-ab12cd'), true, 'kenali id peserta manual');
+eq(isPesertaManual('hits-regular-jan:769'), false, 'id remote bukan manual');
+eq(buatIdPesertaManual('Ahmad  Zaki').startsWith('manual:ahmad-zaki-'), true, 'id manual pakai slug nama');
+// Nama non-latin tetap harus menghasilkan id yang sah, bukan `manual:-abc123`.
+eq(buatIdPesertaManual('عبد الله').startsWith('manual:peserta-'), true, 'nama non-latin tetap dapat id sah');
+eq(buatIdPesertaManual('Budi') === buatIdPesertaManual('Budi'), false, 'nama sama tetap dapat id berbeda');
+
+eq(bersihkanNamaPeserta('  Ahmad   Zaki  '), { nama: 'Ahmad Zaki' }, 'nama dirapikan');
+eq('error' in bersihkanNamaPeserta('A'), true, 'tolak nama terlalu pendek');
+eq('error' in bersihkanNamaPeserta('   '), true, 'tolak nama kosong');
+eq('error' in bersihkanNamaPeserta(42), true, 'tolak nama bukan string');
+eq('error' in bersihkanNamaPeserta('x'.repeat(81)), true, 'tolak nama terlalu panjang');
+eq('error' in bersihkanNamaPeserta('x'.repeat(80)), false, 'terima nama tepat 80 huruf');
 
 if (failed) { console.error(`\n${failed} FAILED`); process.exit(1); }
 console.log('\nAll evaluasi tests passed.');

@@ -2,6 +2,7 @@
 // hasilkan daftar diff (create/update/deactivate). Deactivate = ada di mirror
 // (aktif) tapi hilang dari fetch. Update = field pembanding berubah.
 import type { MirrorEntity } from './types';
+import { isPesertaManual } from '../evaluasi-peserta';
 
 export interface DiffRow {
   entity: MirrorEntity;
@@ -40,9 +41,14 @@ export function diffEntity(
     }
   }
   for (const c of current) {
-    if (!fetchedIds.has(c.id) && c.aktif !== false) {
-      out.push({ entity, op: 'deactivate', entity_id: c.id, before: c, after: null, flags: [] });
-    }
+    if (fetchedIds.has(c.id) || c.aktif === false) continue;
+    // Peserta yang ditambahkan pengajar lewat aplikasi memang tak akan pernah
+    // muncul di fetch hilmihs. Tanpa pengecualian ini setiap pull menstage
+    // penonaktifan mereka, dan daftar approve koordinator jadi ranjau: sekali
+    // ter-approve, peserta itu hilang dari layar pengajar tanpa sebab yang
+    // kelihatan. Lihat src/lib/evaluasi-peserta.ts.
+    if (entity === 'peserta' && isPesertaManual(c.id)) continue;
+    out.push({ entity, op: 'deactivate', entity_id: c.id, before: c, after: null, flags: [] });
   }
   return out;
 }
