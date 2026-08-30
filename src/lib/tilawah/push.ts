@@ -3,7 +3,17 @@ import { randomBytes } from 'node:crypto';
 import { supabaseAdmin } from '@/lib/supabase-admin';
 import type { Gender, KsPeriode } from '@/types/db';
 import { catatKs } from '@/lib/ketersediaan-log';
-import { cariGuru, cariMurid, kirim, tilawahTerkonfigurasi, TilawahError } from './client';
+import {
+  adalahRedirect,
+  ambilHalaqahDetail,
+  ambilIdBaru,
+  cariGuru,
+  cariHalaqah,
+  cariMurid,
+  kirim,
+  tilawahTerkonfigurasi,
+  TilawahError,
+} from './client';
 import type { BuatHalaqahBody, BuatMuridBody, EnrolMuridBody, TilawahEnvelope } from './types';
 
 /**
@@ -128,14 +138,17 @@ export async function prosesOutbox(
           ? await susunPayloadHalaqah(periode, b.usulan_id)
           : await susunPayloadEnrol(periode, b.peserta_id!);
 
-      if (!periode.kirim_nyata) {
-        // Mode percobaan: simpan payload yang sudah terselesaikan, jangan kirim.
-        await supabaseAdmin
-          .from('ks_outbox')
-          .update({ payload, updated_at: new Date().toISOString() })
-          .eq('id', b.id);
-        continue;
-      }
+      // Simpan payload lebih dulu. Bila pengiriman gagal, inilah satu-satunya
+      // bahan diagnosis — dan bila CMS ternyata sudah menerimanya, isi payload
+      // yang tercatat memudahkan mencocokkan baris yang terlanjur terbuat.
+      await supabaseAdmin
+        .from('ks_outbox')
+        .update({ payload, updated_at: new Date().toISOString() })
+        .eq('id', b.id);
+
+      // Mode percobaan berhenti di sini: payload sudah tersimpan di atas, dan
+      // tidak ada panggilan keluar sama sekali.
+      if (!periode.kirim_nyata) continue;
 
       const respons =
         b.aksi === 'buat_halaqah'
@@ -145,7 +158,6 @@ export async function prosesOutbox(
       await supabaseAdmin
         .from('ks_outbox')
         .update({
-          payload,
           respons,
           status: 'terkirim',
           percobaan: b.percobaan + 1,
@@ -304,12 +316,30 @@ async function cariGuruId(batchId: number, nama: string, wa: string): Promise<nu
 // ── Pengiriman ─────────────────────────────────────────────────────────────
 
 async function kirimHalaqah(usulanId: string, body: BuatHalaqahBody): Promise<unknown> {
-  const res = await kirim<TilawahEnvelope<{ halaqah?: { id: number }; id?: number }>>(
-    '/api/halaqah',
-    body
-  );
-  const id = res.data?.halaqah?.id ?? res.data?.id;
-  if (!id) throw new Error('CMS tilawah tidak mengembalikan id halaqah.');
+  const res = await kirim<TilawahEnvelope<Record<string, unknown>>>('/api/halaqah', body);
+
+  // Redirect berarti mutasi bergaya Inertia yang biasanya BERHASIL. Jangan
+  // menganggapnya gagal: mengulang akan membuat halaqah ganda, dan endpoint
+  // hapus CMS membalas 500. Pastikan lewat pembacaan ulang berdasarkan nama.
+  let id = adalahRedirect(res) ? null : ambilIdBaru(res);
+  if (!id) {
+    const cocok = (await cariHalaqah(body.batch_id, body.name)).filter(
+      (h) => h.name.trim() === body.name.trim()
+    );
+    if (cocok.length === 1) id = cocok[0].id;
+    else if (cocok.length > 1) {
+      throw new Error(
+        `Ada ${cocok.length} halaqah bernama "${body.name}" di batch ini — kemungkinan kiriman ganda. `
+          + 'Bereskan manual di CMS sebelum melanjutkan.'
+      );
+    }
+  }
+  if (!id) {
+    throw new Error(
+      'CMS tilawah tidak mengembalikan id halaqah dan halaqahnya tidak ditemukan saat dibaca ulang. '
+        + 'Periksa daftar halaqah di CMS sebelum mengulang.'
+    );
+  }
 
   await supabaseAdmin
     .from('ks_usulan')
@@ -369,9 +399,29 @@ async function kirimEnrol(
       batch_id: batchId,
       meta: { bio: '', wag: 'Belum' },
     };
-    const res = await kirim<TilawahEnvelope<{ user?: { id: number }; id?: number }>>('/api/users', body);
-    const id = res.data?.user?.id ?? res.data?.id;
-    if (!id) throw new Error('CMS tilawah tidak mengembalikan id murid.');
+    const res = await kirim<TilawahEnvelope<Record<string, unknown>>>('/api/users', body);
+
+    // POST /api/users terbukti membalas 302 ke akar sambil tetap membuat akun.
+    // Karena itu id dipastikan lewat pencarian ulang berdasarkan nomor telepon,
+    // bukan diambil dari badan respons yang memang tidak ada.
+    let id = adalahRedirect(res) ? null : ambilIdBaru(res);
+    if (!id) {
+      const cocok = (await cariMurid(batchId, digit)).filter((u) =>
+        (u.phone ?? '').replace(/\D/g, '').endsWith(digit)
+      );
+      if (cocok.length === 1) id = cocok[0].id;
+      else if (cocok.length > 1) {
+        throw new Error(
+          `Ada ${cocok.length} murid dengan nomor berakhiran ${digit} di batch ini — kemungkinan akun ganda. `
+            + 'Bereskan manual di CMS sebelum melanjutkan.'
+        );
+      }
+    }
+    if (!id) {
+      throw new Error(
+        'Akun murid tidak ditemukan setelah dibuat. Periksa daftar murid di CMS sebelum mengulang.'
+      );
+    }
     userId = id;
   }
 
@@ -379,11 +429,35 @@ async function kirimEnrol(
   // pembuatan user tidak berpengaruh terhadap pivot halaqah.
   const enrol: EnrolMuridBody = {
     _method: 'PUT',
+    name: payload.nama,
+    email: payload.email,
+    phone: payload.phone,
+    user_code: '',
+    gender: payload.gender,
+    role: 'murid',
+    bio: '',
+    wag: 'Belum',
+    batch_id: batchId,
     halaqah_id: halaqahId,
     old_halaqah_id: null,
     move_reason: payload.move_reason,
+    meta: { bio: '', wag: 'Belum' },
   };
   const res = await kirim<TilawahEnvelope<unknown>>(`/api/users/${userId}`, enrol);
+
+  // Bila CMS membalas redirect, badan respons tidak menyatakan apa pun tentang
+  // keberhasilan. Menandai "terenroll" atas dasar tebakan berbahaya: koordinator
+  // akan mengira murid sudah masuk padahal belum. Jadi dibaca ulang.
+  if (adalahRedirect(res)) {
+    const detail = await ambilHalaqahDetail(halaqahId);
+    const masuk = detail?.users.some((u) => u.id === userId) ?? false;
+    if (!masuk) {
+      throw new Error(
+        `Murid #${userId} tidak terlihat di halaqah #${halaqahId} setelah enrolment. `
+          + 'Periksa di CMS sebelum mengulang.'
+      );
+    }
+  }
 
   await supabaseAdmin
     .from('ks_usulan_peserta')

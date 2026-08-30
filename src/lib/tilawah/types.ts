@@ -133,11 +133,24 @@ export interface BuatMuridBody {
 
 /**
  * Badan enrolment: POST /api/users/{id} dengan `_method: "PUT"`.
- * `move_reason` WAJIB — 422 bila kosong.
+ *
+ * BUKAN pembaruan sebagian. Mengirim hanya `halaqah_id` + `move_reason`
+ * menghasilkan 422 "The name field is required." — sama seperti `pertemuans`,
+ * seluruh field wajib disertakan ulang. `move_reason` juga wajib (422 bila kosong).
  */
 export interface EnrolMuridBody {
   _method: 'PUT';
+  name: string;
+  email: string;
+  phone: string;
+  user_code: string;
+  gender: 1 | 2;
+  role: 'murid';
+  bio: string;
+  wag: string;
+  batch_id: number;
   halaqah_id: number;
   old_halaqah_id: number | null;
   move_reason: string;
+  meta: { bio: string; wag: string };
 }

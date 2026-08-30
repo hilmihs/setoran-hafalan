@@ -3,6 +3,7 @@ import type {
   TilawahBatch,
   TilawahDay,
   TilawahEnvelope,
+  TilawahHalaqah,
   TilawahLevel,
   TilawahProgram,
   TilawahSession,
@@ -160,6 +161,18 @@ async function panggil<T>(path: string, init: RequestInit = {}): Promise<T> {
     teks = await res.text();
   }
 
+  // CMS ini campuran: sebagian endpoint bergaya API dan membalas JSON, sebagian
+  // lagi bergaya Inertia dan membalas REDIRECT setelah mutasi berhasil.
+  // POST /api/users terbukti membalas 302 ke akar sambil tetap membuat akunnya.
+  //
+  // Memperlakukan redirect sebagai kegagalan itu berbahaya, bukan sekadar salah:
+  // percobaan ulang akan membuat akun ganda, dan endpoint hapus CMS balas 500.
+  // Jadi redirect dikembalikan sebagai penanda, dan pemanggil yang memastikan
+  // hasilnya lewat pembacaan ulang.
+  if (res.status >= 300 && res.status < 400) {
+    return { __redirect: res.headers.get('location') ?? '' } as T;
+  }
+
   let json: unknown;
   try {
     json = JSON.parse(teks);
@@ -231,6 +244,78 @@ export async function cariMurid(batchId: number, keyword: string): Promise<Tilaw
     `/api/users?filters[role]=murid&filters[batch_id]=${batchId}&page=1&per_page=50&sort_by=name&sort=asc&keyword=${encodeURIComponent(keyword)}`
   );
   return daftar<TilawahUser>(j, 'users');
+}
+
+/** Penanda bahwa CMS membalas redirect, bukan JSON. Lihat catatan di `panggil`. */
+export interface ResponsRedirect {
+  __redirect: string;
+}
+
+export function adalahRedirect(x: unknown): x is ResponsRedirect {
+  return Boolean(x && typeof x === 'object' && '__redirect' in (x as Record<string, unknown>));
+}
+
+/**
+ * Ambil id sumber daya dari respons tulis.
+ *
+ * Bentuknya tidak seragam dan ejaannya tidak dapat ditebak: daftar halaqah
+ * memakai kunci `halaqohs`, detail satu halaqah memakai `halaqoh`, sedangkan
+ * dokumentasi hasil reverse-engineering menyebut `halaqah`. Menebak satu nama
+ * membuat pembuatan yang BERHASIL terbaca sebagai gagal — dan karena tidak ada
+ * cara membatalkan, percobaan ulang menumpuk baris ganda di CMS.
+ *
+ * Karena itu id dicari, bukan diasumsikan: id di akar `data`, atau id pertama
+ * pada objek anak mana pun.
+ */
+export function ambilIdBaru(respons: unknown): number | null {
+  const data = (respons as { data?: unknown } | null)?.data;
+  if (!data || typeof data !== 'object') return null;
+
+  const akar = (data as { id?: unknown }).id;
+  if (typeof akar === 'number') return akar;
+
+  for (const nilai of Object.values(data as Record<string, unknown>)) {
+    if (nilai && typeof nilai === 'object' && !Array.isArray(nilai)) {
+      const id = (nilai as { id?: unknown }).id;
+      if (typeof id === 'number') return id;
+    }
+  }
+  return null;
+}
+
+/**
+ * Cari halaqah pada satu batch. Kunci daftarnya `halaqohs` — ejaan yang berbeda
+ * dari `halaqoh` pada detail dan `halaqah` pada dokumentasi, jadi ketiganya dicoba.
+ */
+export async function cariHalaqah(batchId: number, keyword: string): Promise<TilawahHalaqah[]> {
+  const j = await panggil<TilawahEnvelope<Record<string, unknown>>>(
+    `/api/halaqah?page=1&per_page=100&sort_by=id&sort=desc&simple=true&filters[batch_id]=${batchId}&keyword=${encodeURIComponent(keyword)}`
+  );
+  for (const kunci of ['halaqohs', 'halaqah', 'halaqahs']) {
+    const d = daftar<TilawahHalaqah>(j, kunci);
+    if (d.length > 0) return d;
+  }
+  return [];
+}
+
+/** Detail satu halaqah, termasuk `users[]` — dipakai memverifikasi enrolment. */
+export async function ambilHalaqahDetail(id: number): Promise<{
+  id: number;
+  users: { id: number; pivot?: { type?: string } }[];
+} | null> {
+  const j = await panggil<TilawahEnvelope<Record<string, unknown>>>(`/api/halaqah/${id}`);
+  const data = j.data ?? (j as unknown as Record<string, unknown>);
+  for (const kunci of ['halaqoh', 'halaqah']) {
+    const h = (data as Record<string, unknown>)[kunci];
+    if (h && typeof h === 'object') {
+      const users = ((h as { users?: unknown }).users ?? []) as {
+        id: number;
+        pivot?: { type?: string };
+      }[];
+      return { id: (h as { id: number }).id, users };
+    }
+  }
+  return null;
 }
 
 /** POST JSON umum. Dipakai push.ts; dipisah supaya semua tulis lewat satu pintu. */
