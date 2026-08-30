@@ -1,0 +1,676 @@
+'use server';
+
+import { revalidatePath } from 'next/cache';
+import { supabaseAdmin } from '@/lib/supabase-admin';
+import { requireOneOfRoles } from '@/lib/session';
+import { requireAdmin } from '@/lib/admin-guard';
+import { getSessionWa } from '@/lib/program-kelas';
+import { absUrl } from '@/lib/url';
+import { buildWaMeUrl, tplKonfirmasiHalaqahPenuh } from '@/lib/whatsapp';
+import { catatKs } from '@/lib/ketersediaan-log';
+import { getPeriode, getPeriodeAktif, listSlot, siapkanSlot, SLOT_BAWAAN } from '@/lib/ketersediaan-periode';
+import { susunLabel, uraikanSlot } from '@/lib/ketersediaan-slot';
+import { tarikSumber, tebakPemetaan } from '@/lib/ketersediaan-pendaftar';
+import { jalankanAlokasi } from '@/lib/ketersediaan-jalankan';
+import {
+  geserYangKedaluwarsa,
+  tanggalMulaiBawaan,
+  tenggatDari,
+  terbitkanToken,
+} from '@/lib/ketersediaan-konfirmasi';
+import type { KsPemetaanKolom, KsPendaftarSumber, KsPrioritasPreset } from '@/types/db';
+
+export type Hasil = { ok: true; pesan: string; data?: unknown } | { ok: false; error: string };
+
+async function aktor(): Promise<{ wa: string | null; nama: string }> {
+  const sesi = await requireOneOfRoles(['koordinator']);
+  return { wa: await getSessionWa(), nama: sesi.name };
+}
+
+function segarkan(): void {
+  revalidatePath('/ketersediaan/koordinator');
+  revalidatePath('/ketersediaan/pengajar');
+}
+
+// ── Periode & slot ─────────────────────────────────────────────────────────
+
+export async function buatPeriode(input: {
+  nama: string;
+  mulai: string;
+  selesai: string;
+  minimalSlot: number;
+  kapasitas: number;
+  isiSlotBawaan: boolean;
+}): Promise<Hasil> {
+  const a = await aktor();
+  if (!input.nama.trim()) return { ok: false, error: 'Nama periode wajib diisi.' };
+  if (!input.mulai || !input.selesai) return { ok: false, error: 'Tanggal mulai dan selesai wajib diisi.' };
+  if (input.selesai < input.mulai) return { ok: false, error: 'Tanggal selesai lebih awal dari tanggal mulai.' };
+
+  const { data: periode, error } = await supabaseAdmin
+    .from('ks_periode')
+    .insert({
+      nama: input.nama.trim(),
+      mulai: input.mulai,
+      selesai: input.selesai,
+      minimal_slot: Math.max(0, Math.min(50, input.minimalSlot)),
+      kapasitas_halaqah: Math.max(1, Math.min(100, input.kapasitas)),
+      // Bergulir: form tidak pernah ditutup kecuali koordinator menutupnya sendiri.
+      form_tutup: null,
+    })
+    .select('*')
+    .single();
+  if (error || !periode) return { ok: false, error: 'Gagal membuat periode.' };
+
+  let jumlahSlot = 0;
+  if (input.isiSlotBawaan) {
+    const { baris, gagal } = siapkanSlot(periode.id as string, SLOT_BAWAAN);
+    for (const b of baris) {
+      await supabaseAdmin.from('ks_slot').insert(b);
+      jumlahSlot++;
+    }
+    if (gagal.length > 0) {
+      await catatKs({
+        periode_id: periode.id as string,
+        entitas: 'ks_slot',
+        aksi: 'slot_bawaan_gagal_diurai',
+        sesudah: { gagal },
+        aktor_wa: a.wa,
+        aktor_nama: a.nama,
+      });
+    }
+  }
+
+  await catatKs({
+    periode_id: periode.id as string,
+    entitas: 'ks_periode',
+    entitas_id: periode.id as string,
+    aksi: 'buat_periode',
+    sesudah: { nama: input.nama, slot: jumlahSlot },
+    aktor_wa: a.wa,
+    aktor_nama: a.nama,
+  });
+
+  segarkan();
+  return {
+    ok: true,
+    pesan: `Periode dibuat${jumlahSlot ? ` dengan ${jumlahSlot} slot bawaan` : ''}. Slot offline masih berlokasi "Belum ditentukan" — mohon diisi sebelum dipakai.`,
+  };
+}
+
+export async function ubahAturanPeriode(input: {
+  periodeId: string;
+  minimalSlot: number;
+  kapasitas: number;
+  ambangBentuk: number;
+  ambangBawah: number;
+  usiaAntreanMaksHari: number;
+  jedaMulaiHari: number;
+  tenggatKonfirmasiJam: number;
+  penyegaranHari: number;
+}): Promise<Hasil> {
+  const a = await aktor();
+  const lama = await getPeriode(input.periodeId);
+  if (!lama) return { ok: false, error: 'Periode tidak ditemukan.' };
+  if (input.ambangBawah > input.ambangBentuk) {
+    return { ok: false, error: 'Ambang bawah tidak boleh melebihi ambang bentuk.' };
+  }
+
+  const patch = {
+    minimal_slot: input.minimalSlot,
+    kapasitas_halaqah: input.kapasitas,
+    ambang_bentuk: input.ambangBentuk,
+    ambang_bawah: input.ambangBawah,
+    usia_antrean_maks_hari: input.usiaAntreanMaksHari,
+    jeda_mulai_hari: input.jedaMulaiHari,
+    tenggat_konfirmasi_jam: input.tenggatKonfirmasiJam,
+    penyegaran_hari: input.penyegaranHari,
+    updated_at: new Date().toISOString(),
+  };
+  await supabaseAdmin.from('ks_periode').update(patch).eq('id', input.periodeId);
+
+  await catatKs({
+    periode_id: input.periodeId,
+    entitas: 'ks_periode',
+    entitas_id: input.periodeId,
+    aksi: 'ubah_aturan',
+    sebelum: {
+      minimal_slot: lama.minimal_slot,
+      kapasitas_halaqah: lama.kapasitas_halaqah,
+      ambang_bentuk: lama.ambang_bentuk,
+      ambang_bawah: lama.ambang_bawah,
+    },
+    sesudah: patch,
+    aktor_wa: a.wa,
+    aktor_nama: a.nama,
+  });
+  segarkan();
+  return { ok: true, pesan: 'Aturan periode diperbarui.' };
+}
+
+export async function tambahSlot(input: {
+  periodeId: string;
+  kelompok: 'ikhwan' | 'akhwat';
+  mode: 'online' | 'offline';
+  teks: string;
+  lokasi: string;
+}): Promise<Hasil> {
+  const a = await aktor();
+  const urai = uraikanSlot(input.teks);
+  if (!urai) {
+    return {
+      ok: false,
+      error: 'Teks slot tidak terbaca. Contoh yang benar: "Senin & Rabu 06:00 - 07:30 WIB".',
+    };
+  }
+  if (input.mode === 'offline' && !input.lokasi.trim()) {
+    return { ok: false, error: 'Slot offline wajib berlokasi.' };
+  }
+
+  const label = susunLabel(urai.hari_idx, urai.waktu_mulai, urai.waktu_selesai);
+  const adaSlot = await listSlot(input.periodeId);
+  if (
+    adaSlot.some(
+      (s) => s.kelompok === input.kelompok && s.mode === input.mode && s.label === label
+    )
+  ) {
+    return { ok: false, error: 'Slot dengan kombinasi kelompok, mode, dan waktu itu sudah ada.' };
+  }
+
+  await supabaseAdmin.from('ks_slot').insert({
+    periode_id: input.periodeId,
+    kelompok: input.kelompok,
+    mode: input.mode,
+    label,
+    hari: urai.hari,
+    hari_idx: urai.hari_idx,
+    waktu_mulai: urai.waktu_mulai,
+    waktu_selesai: urai.waktu_selesai,
+    lokasi: input.mode === 'offline' ? input.lokasi.trim() : null,
+    urutan: adaSlot.length,
+  });
+
+  await catatKs({
+    periode_id: input.periodeId,
+    entitas: 'ks_slot',
+    aksi: 'tambah_slot',
+    sesudah: { label, kelompok: input.kelompok, mode: input.mode },
+    aktor_wa: a.wa,
+    aktor_nama: a.nama,
+  });
+  segarkan();
+  return { ok: true, pesan: `Slot "${label}" ditambahkan.` };
+}
+
+/**
+ * Nonaktifkan slot, jangan hapus — aturan eksplisit dokumen konsep. Baris yang
+ * sudah memakai slot itu tetap punya rujukan yang sah, dan riwayatnya utuh.
+ */
+export async function alihSlotAktif(input: { slotId: string; aktif: boolean }): Promise<Hasil> {
+  const a = await aktor();
+  const { data: slot } = await supabaseAdmin
+    .from('ks_slot')
+    .select('id, label, periode_id, aktif')
+    .eq('id', input.slotId)
+    .maybeSingle();
+  if (!slot) return { ok: false, error: 'Slot tidak ditemukan.' };
+
+  await supabaseAdmin
+    .from('ks_slot')
+    .update({ aktif: input.aktif, updated_at: new Date().toISOString() })
+    .eq('id', input.slotId);
+
+  await catatKs({
+    periode_id: slot.periode_id as string,
+    entitas: 'ks_slot',
+    entitas_id: input.slotId,
+    aksi: input.aktif ? 'aktifkan_slot' : 'nonaktifkan_slot',
+    sebelum: { aktif: slot.aktif },
+    sesudah: { aktif: input.aktif },
+    aktor_wa: a.wa,
+    aktor_nama: a.nama,
+  });
+  segarkan();
+  return { ok: true, pesan: `Slot "${slot.label}" ${input.aktif ? 'diaktifkan' : 'dinonaktifkan'}.` };
+}
+
+// ── Verifikasi & sanggahan ─────────────────────────────────────────────────
+
+export async function putuskanSanggahan(input: {
+  ketersediaanId: string;
+  terima: boolean;
+  catatan: string;
+}): Promise<Hasil> {
+  const a = await aktor();
+  const { data: baris } = await supabaseAdmin
+    .from('ks_ketersediaan')
+    .select('id, slot_id, bentrok_alasan, pengisian:pengisian_id(periode_id)')
+    .eq('id', input.ketersediaanId)
+    .maybeSingle();
+  if (!baris) return { ok: false, error: 'Baris tidak ditemukan.' };
+
+  await supabaseAdmin
+    .from('ks_ketersediaan')
+    .update({
+      sanggahan_status: input.terima ? 'diterima' : 'ditolak',
+      sanggahan_catatan: input.catatan.trim() || null,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', input.ketersediaanId);
+
+  const pengisian = baris.pengisian as { periode_id: string } | null;
+  await catatKs({
+    periode_id: pengisian?.periode_id ?? null,
+    entitas: 'ks_ketersediaan',
+    entitas_id: input.ketersediaanId,
+    aksi: input.terima ? 'terima_sanggahan' : 'tolak_sanggahan',
+    alasan: input.catatan.trim() || (baris.bentrok_alasan as string | null),
+    aktor_wa: a.wa,
+    aktor_nama: a.nama,
+  });
+  segarkan();
+  return {
+    ok: true,
+    pesan: input.terima
+      ? 'Sanggahan diterima — slot terbuka untuk pengajar itu. Pengajar perlu mengirim ulang pilihannya.'
+      : 'Sanggahan ditolak — slot tetap terkunci.',
+  };
+}
+
+export async function ubahStatusVerifikasi(input: {
+  ketersediaanId: string;
+  status: 'terverifikasi' | 'perlu_konfirmasi' | 'ditolak';
+  catatan: string;
+}): Promise<Hasil> {
+  const a = await aktor();
+  const { data: baris } = await supabaseAdmin
+    .from('ks_ketersediaan')
+    .select('id, status, pengisian:pengisian_id(periode_id)')
+    .eq('id', input.ketersediaanId)
+    .maybeSingle();
+  if (!baris) return { ok: false, error: 'Baris tidak ditemukan.' };
+  if (input.status === 'ditolak' && !input.catatan.trim()) {
+    return { ok: false, error: 'Penolakan wajib disertai alasan — dokumen konsep menuntut jejaknya.' };
+  }
+
+  await supabaseAdmin
+    .from('ks_ketersediaan')
+    .update({
+      status: input.status,
+      catatan: input.catatan.trim() || null,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', input.ketersediaanId);
+
+  const pengisian = baris.pengisian as { periode_id: string } | null;
+  await catatKs({
+    periode_id: pengisian?.periode_id ?? null,
+    entitas: 'ks_ketersediaan',
+    entitas_id: input.ketersediaanId,
+    aksi: 'ubah_status_verifikasi',
+    sebelum: { status: baris.status },
+    sesudah: { status: input.status },
+    alasan: input.catatan.trim() || null,
+    aktor_wa: a.wa,
+    aktor_nama: a.nama,
+  });
+  segarkan();
+  return { ok: true, pesan: 'Status verifikasi diperbarui.' };
+}
+
+// ── Sumber pendaftar ───────────────────────────────────────────────────────
+
+export async function simpanSumberPendaftar(input: {
+  periodeId: string;
+  sumberId?: string;
+  nama: string;
+  csvUrl: string;
+  pemetaan: KsPemetaanKolom;
+}): Promise<Hasil> {
+  const a = await aktor();
+  if (!/^https?:\/\//.test(input.csvUrl)) {
+    return { ok: false, error: 'URL CSV tidak sah. Gunakan tautan publish-to-web format CSV.' };
+  }
+
+  if (input.sumberId) {
+    await supabaseAdmin
+      .from('ks_pendaftar_sumber')
+      .update({
+        nama: input.nama.trim(),
+        csv_url: input.csvUrl.trim(),
+        pemetaan_kolom: input.pemetaan,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', input.sumberId);
+  } else {
+    await supabaseAdmin.from('ks_pendaftar_sumber').insert({
+      periode_id: input.periodeId,
+      nama: input.nama.trim() || 'Responses pendaftaran',
+      csv_url: input.csvUrl.trim(),
+      pemetaan_kolom: input.pemetaan,
+    });
+  }
+
+  await catatKs({
+    periode_id: input.periodeId,
+    entitas: 'ks_pendaftar_sumber',
+    aksi: input.sumberId ? 'ubah_sumber' : 'tambah_sumber',
+    sesudah: { nama: input.nama, kolom: Object.keys(input.pemetaan) },
+    aktor_wa: a.wa,
+    aktor_nama: a.nama,
+  });
+  segarkan();
+  return { ok: true, pesan: 'Sumber pendaftar tersimpan.' };
+}
+
+/**
+ * Baca kepala CSV lalu usulkan pemetaan kolom. Dipanggil sebelum menyimpan,
+ * supaya koordinator melihat kolom apa saja yang benar-benar ada di sheet.
+ */
+export async function intipKolomCsv(input: { csvUrl: string }): Promise<Hasil> {
+  await requireOneOfRoles(['koordinator']);
+  try {
+    const res = await fetch(input.csvUrl, { cache: 'no-store', redirect: 'follow' });
+    if (!res.ok) return { ok: false, error: `Gagal membuka CSV (HTTP ${res.status}).` };
+    const teks = await res.text();
+    if (teks.includes('<html')) {
+      return { ok: false, error: 'Sheet mengembalikan HTML — aktifkan "Publish to web".' };
+    }
+    const kepala = (teks.split('\n')[0] ?? '')
+      .split(',')
+      .map((h) => h.replace(/^"|"$/g, '').trim())
+      .filter(Boolean);
+    return { ok: true, pesan: `${kepala.length} kolom terbaca.`, data: { kepala, usulan: tebakPemetaan(kepala) } };
+  } catch (e) {
+    return { ok: false, error: `Gagal membuka CSV: ${(e as Error).message}` };
+  }
+}
+
+export async function tarikPendaftarSekarang(input: { periodeId: string }): Promise<Hasil> {
+  const a = await aktor();
+  const periode = await getPeriode(input.periodeId);
+  if (!periode) return { ok: false, error: 'Periode tidak ditemukan.' };
+
+  const { data: sumberRows } = await supabaseAdmin
+    .from('ks_pendaftar_sumber')
+    .select('*')
+    .eq('periode_id', input.periodeId)
+    .eq('aktif', true);
+  const sumber = (sumberRows ?? []) as KsPendaftarSumber[];
+  if (sumber.length === 0) return { ok: false, error: 'Belum ada sumber pendaftar yang aktif.' };
+
+  const slots = await listSlot(input.periodeId);
+  const sekarang = new Date();
+  const ringkas: string[] = [];
+
+  for (const s of sumber) {
+    try {
+      const h = await tarikSumber(s, periode, slots, sekarang);
+      ringkas.push(
+        `${s.nama}: ${h.dibaca} baris → ${h.baru} baru, ${h.diperbarui} diperbarui, ${h.ditahan} ditahan` +
+          (h.peringatan.length ? ` — ${h.peringatan.join('; ')}` : '')
+      );
+    } catch (e) {
+      const pesan = (e as Error).message;
+      ringkas.push(`${s.nama}: GAGAL — ${pesan}`);
+      await supabaseAdmin
+        .from('ks_pendaftar_sumber')
+        .update({
+          terakhir_tarik: sekarang.toISOString(),
+          terakhir_status: 'gagal',
+          terakhir_pesan: pesan,
+        })
+        .eq('id', s.id);
+    }
+  }
+
+  await catatKs({
+    periode_id: input.periodeId,
+    entitas: 'ks_pendaftar',
+    aksi: 'tarik_pendaftar',
+    sesudah: { ringkas },
+    aktor_wa: a.wa,
+    aktor_nama: a.nama,
+  });
+  segarkan();
+  return { ok: true, pesan: ringkas.join(' | ') };
+}
+
+// ── Alokasi & konfirmasi ───────────────────────────────────────────────────
+
+export async function jalankanAlokasiSekarang(input: {
+  periodeId: string;
+  presetIkhwanId?: string | null;
+  presetAkhwatId?: string | null;
+}): Promise<Hasil> {
+  const a = await aktor();
+  const periode = await getPeriode(input.periodeId);
+  if (!periode) return { ok: false, error: 'Periode tidak ditemukan.' };
+
+  const ambil = async (id?: string | null): Promise<KsPrioritasPreset | null> => {
+    if (!id) return null;
+    const { data } = await supabaseAdmin.from('ks_prioritas_preset').select('*').eq('id', id).maybeSingle();
+    return (data as KsPrioritasPreset | null) ?? null;
+  };
+
+  const hasil = await jalankanAlokasi(periode, {
+    presetIkhwan: await ambil(input.presetIkhwanId),
+    presetAkhwat: await ambil(input.presetAkhwatId),
+    aktor: a,
+  });
+
+  segarkan();
+  return {
+    ok: true,
+    pesan:
+      `${hasil.usulanBaru} usulan halaqah dibentuk (${hasil.pesertaTerpakai} murid, ${hasil.putaran} putaran). ` +
+      (hasil.tanpaPengajar > 0
+        ? `${hasil.tanpaPengajar} kelompok siap tetapi belum ada pengajarnya.`
+        : 'Semua kelompok mendapat pengajar.'),
+  };
+}
+
+/**
+ * Deklarasikan halaqah penuh: terbitkan token, siapkan tautan wa.me.
+ * Pengiriman tetap lewat manusia — maahir tidak punya gateway WhatsApp, dan
+ * membangun satu bukan bagian dari pekerjaan ini.
+ */
+export async function setujuiUsulan(input: { usulanId: string; tanggalMulai?: string }): Promise<Hasil> {
+  const a = await aktor();
+  const { data: usulan } = await supabaseAdmin
+    .from('ks_usulan')
+    .select(
+      'id, periode_id, status, level, pengajar_id, slot:slot_id(label), pengajar:pengajar_id(name, gender, whatsapp_number)'
+    )
+    .eq('id', input.usulanId)
+    .maybeSingle();
+  if (!usulan) return { ok: false, error: 'Usulan tidak ditemukan.' };
+  if (usulan.status !== 'usulan' && usulan.status !== 'disetujui') {
+    return { ok: false, error: `Usulan berstatus "${usulan.status}" tidak dapat disetujui lagi.` };
+  }
+  const pengajar = usulan.pengajar as { name: string; gender: 'ikhwan' | 'akhwat'; whatsapp_number: string } | null;
+  const slot = usulan.slot as { label: string } | null;
+  if (!pengajar || !slot) return { ok: false, error: 'Data pengajar atau slot tidak lengkap.' };
+
+  const periode = await getPeriode(usulan.periode_id as string);
+  if (!periode) return { ok: false, error: 'Periode tidak ditemukan.' };
+
+  const sekarang = new Date();
+  const token = terbitkanToken();
+  const mulai = input.tanggalMulai || tanggalMulaiBawaan(periode, sekarang);
+  const tenggat = tenggatDari(periode, sekarang);
+
+  const { data: pesertaRows } = await supabaseAdmin
+    .from('ks_usulan_peserta')
+    .select('id')
+    .eq('usulan_id', input.usulanId);
+  const jumlahPeserta = (pesertaRows ?? []).length;
+
+  await supabaseAdmin
+    .from('ks_usulan')
+    .update({
+      status: 'menunggu',
+      akses_token: token,
+      token_kedaluwarsa: tenggat,
+      tanggal_mulai: mulai,
+      updated_at: sekarang.toISOString(),
+    })
+    .eq('id', input.usulanId);
+
+  const url = absUrl(`/ketersediaan/konfirmasi/${token}`);
+  const teks = tplKonfirmasiHalaqahPenuh({
+    pengajarName: pengajar.name,
+    pengajarGender: pengajar.gender,
+    slotLabel: slot.label,
+    level: usulan.level as string,
+    jumlahPeserta,
+    tanggalMulai: mulai,
+    batasKonfirmasi: new Date(tenggat).toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' }),
+    konfirmasiUrl: url,
+  });
+
+  await catatKs({
+    periode_id: usulan.periode_id as string,
+    entitas: 'ks_usulan',
+    entitas_id: input.usulanId,
+    aksi: 'deklarasi_penuh',
+    sesudah: { tanggal_mulai: mulai, tenggat },
+    aktor_wa: a.wa,
+    aktor_nama: a.nama,
+  });
+  segarkan();
+
+  return {
+    ok: true,
+    pesan: 'Tautan konfirmasi siap dikirim.',
+    data: { waUrl: buildWaMeUrl(pengajar.whatsapp_number, teks), konfirmasiUrl: url },
+  };
+}
+
+export async function batalkanUsulan(input: { usulanId: string; alasan: string }): Promise<Hasil> {
+  const a = await aktor();
+  if (!input.alasan.trim()) return { ok: false, error: 'Pembatalan wajib disertai alasan.' };
+
+  const { data: usulan } = await supabaseAdmin
+    .from('ks_usulan')
+    .select('id, periode_id, status')
+    .eq('id', input.usulanId)
+    .maybeSingle();
+  if (!usulan) return { ok: false, error: 'Usulan tidak ditemukan.' };
+  if (usulan.status === 'dikirim') {
+    return { ok: false, error: 'Usulan sudah terkirim ke CMS tilawah — pembatalan harus dilakukan di sana.' };
+  }
+
+  // Peserta dikembalikan ke antrean, tidak dibuang: mereka tetap berhak.
+  const { data: peserta } = await supabaseAdmin
+    .from('ks_usulan_peserta')
+    .select('pendaftar_id')
+    .eq('usulan_id', input.usulanId);
+  for (const p of (peserta ?? []) as { pendaftar_id: string }[]) {
+    await supabaseAdmin.from('ks_pendaftar').update({ status: 'valid' }).eq('id', p.pendaftar_id);
+  }
+  await supabaseAdmin.from('ks_usulan_peserta').delete().eq('usulan_id', input.usulanId);
+  await supabaseAdmin
+    .from('ks_usulan')
+    .update({ status: 'batal', akses_token: null, alasan_tolak: input.alasan.trim() })
+    .eq('id', input.usulanId);
+
+  await catatKs({
+    periode_id: usulan.periode_id as string,
+    entitas: 'ks_usulan',
+    entitas_id: input.usulanId,
+    aksi: 'batalkan_usulan',
+    alasan: input.alasan.trim(),
+    aktor_wa: a.wa,
+    aktor_nama: a.nama,
+  });
+  segarkan();
+  return { ok: true, pesan: 'Usulan dibatalkan, pesertanya kembali ke antrean.' };
+}
+
+export async function sapuKedaluwarsa(input: { periodeId: string }): Promise<Hasil> {
+  await aktor();
+  const periode = await getPeriode(input.periodeId);
+  if (!periode) return { ok: false, error: 'Periode tidak ditemukan.' };
+  const h = await geserYangKedaluwarsa(periode, new Date());
+  segarkan();
+  return {
+    ok: true,
+    pesan: `${h.digeser} usulan digeser ke prioritas berikutnya, ${h.tanpaPengganti} tanpa pengganti.`,
+  };
+}
+
+/**
+ * Nyalakan pengiriman nyata ke CMS tilawah untuk satu periode.
+ * Dikunci superadmin: CMS tidak menyediakan endpoint hapus, sehingga halaqah
+ * dan akun murid yang salah terkirim hanya bisa dibereskan manual dari dalam CMS.
+ */
+export async function nyalakanKirimNyata(input: {
+  periodeId: string;
+  nyala: boolean;
+}): Promise<Hasil> {
+  const admin = await requireAdmin();
+  const periode = await getPeriode(input.periodeId);
+  if (!periode) return { ok: false, error: 'Periode tidak ditemukan.' };
+  if (input.nyala && (!periode.tilawah_batch_id || !periode.tilawah_program_id)) {
+    return { ok: false, error: 'Tetapkan program dan batch tujuan di CMS tilawah terlebih dahulu.' };
+  }
+
+  await supabaseAdmin
+    .from('ks_periode')
+    .update({ kirim_nyata: input.nyala, updated_at: new Date().toISOString() })
+    .eq('id', input.periodeId);
+
+  await catatKs({
+    periode_id: input.periodeId,
+    entitas: 'ks_periode',
+    entitas_id: input.periodeId,
+    aksi: input.nyala ? 'nyalakan_kirim_nyata' : 'matikan_kirim_nyata',
+    aktor_wa: admin.wa,
+    aktor_nama: 'superadmin',
+  });
+  segarkan();
+  return {
+    ok: true,
+    pesan: input.nyala
+      ? 'Pengiriman nyata dinyalakan. Outbox berikutnya akan memanggil CMS tilawah.'
+      : 'Pengiriman nyata dimatikan. Outbox kembali hanya mencatat payload.',
+  };
+}
+
+export async function tetapkanTujuanTilawah(input: {
+  periodeId: string;
+  programId: number | null;
+  batchId: number | null;
+}): Promise<Hasil> {
+  const a = await aktor();
+  await supabaseAdmin
+    .from('ks_periode')
+    .update({
+      tilawah_program_id: input.programId,
+      tilawah_batch_id: input.batchId,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', input.periodeId);
+
+  await catatKs({
+    periode_id: input.periodeId,
+    entitas: 'ks_periode',
+    entitas_id: input.periodeId,
+    aksi: 'tetapkan_tujuan_tilawah',
+    sesudah: { program: input.programId, batch: input.batchId },
+    aktor_wa: a.wa,
+    aktor_nama: a.nama,
+  });
+  segarkan();
+  return { ok: true, pesan: 'Tujuan CMS tilawah tersimpan.' };
+}
+
+/** Periode aktif untuk dipakai komponen klien tanpa menebak. */
+export async function periodeAktifRingkas(): Promise<Hasil> {
+  await requireOneOfRoles(['koordinator']);
+  const p = await getPeriodeAktif();
+  return p
+    ? { ok: true, pesan: p.nama, data: { id: p.id, nama: p.nama } }
+    : { ok: false, error: 'Belum ada periode aktif.' };
+}

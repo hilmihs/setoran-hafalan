@@ -1000,3 +1000,123 @@ export function tplReminderPengajarIsiData(args: {
     `Jazakumullahu khairan.`,
   ].join('\n');
 }
+
+// ── Ketersediaan Mengajar HITS ─────────────────────────────────────────────
+
+/**
+ * Ajakan konfirmasi ke pengajar setelah halaqahnya dinyatakan penuh.
+ * Sengaja menyebut jumlah peserta, bukan namanya: identitas murid baru terbuka
+ * setelah pengajar menyatakan bersedia.
+ */
+export function tplKonfirmasiHalaqahPenuh(args: {
+  pengajarName: string;
+  pengajarGender: Gender;
+  slotLabel: string;
+  level: string;
+  jumlahPeserta: number;
+  tanggalMulai: string;
+  batasKonfirmasi: string;
+  konfirmasiUrl: string;
+}): string {
+  return [
+    `Assalamu'alaikum ${salutation(args.pengajarGender)} ${args.pengajarName},`,
+    ``,
+    `Halaqah Anda sudah penuh dan siap dimulai:`,
+    `• Jadwal: ${args.slotLabel}`,
+    `• Level: ${args.level}`,
+    `• Peserta: ${args.jumlahPeserta} murid`,
+    `• Mulai mengajar: ${args.tanggalMulai}`,
+    ``,
+    `Mohon konfirmasi kesediaan melalui tautan berikut sebelum ${args.batasKonfirmasi}:`,
+    args.konfirmasiUrl,
+    ``,
+    `Setelah Anda menyetujui, daftar peserta akan terbuka beserta langkah pembuatan grup WhatsApp.`,
+    ``,
+    `Jazakumullahu khairan.`,
+  ].join('\n');
+}
+
+/** Pengingat sebelum tenggat konfirmasi habis. */
+export function tplIngatkanKonfirmasi(args: {
+  pengajarName: string;
+  pengajarGender: Gender;
+  slotLabel: string;
+  batasKonfirmasi: string;
+  konfirmasiUrl: string;
+}): string {
+  return [
+    `Assalamu'alaikum ${salutation(args.pengajarGender)} ${args.pengajarName},`,
+    ``,
+    `Mengingatkan konfirmasi halaqah *${args.slotLabel}* yang batasnya ${args.batasKonfirmasi}.`,
+    `Bila tidak dikonfirmasi, slot akan ditawarkan ke pengajar berikutnya.`,
+    ``,
+    args.konfirmasiUrl,
+  ].join('\n');
+}
+
+/**
+ * Undangan peserta. Tautannya ke halaman /undangan/<token>, bukan tautan grup
+ * mentah — supaya tautan grup tidak tersebar liar, pembukaannya bisa dicatat
+ * tanpa API WhatsApp, dan tautan grup dapat diganti tanpa mengubah undangan.
+ */
+export function tplUndanganPeserta(args: {
+  namaPeserta: string;
+  namaHalaqah: string;
+  slotLabel: string;
+  pengajarName: string;
+  tanggalMulai: string;
+  undanganUrl: string;
+}): string {
+  return [
+    `Assalamu'alaikum ${args.namaPeserta},`,
+    ``,
+    `Alhamdulillah, Anda terdaftar di halaqah HITS:`,
+    `• Halaqah: ${args.namaHalaqah}`,
+    `• Jadwal: ${args.slotLabel}`,
+    `• Pengajar: ${args.pengajarName}`,
+    `• Mulai: ${args.tanggalMulai}`,
+    ``,
+    `Silakan bergabung ke grup kelas melalui tautan berikut:`,
+    args.undanganUrl,
+    ``,
+    `Jazakumullahu khairan.`,
+  ].join('\n');
+}
+
+/** Ajakan ke pengajar untuk mengisi slot yang antreannya menumpuk. */
+export function tplButuhPengajarSlot(args: {
+  pengajarName: string;
+  pengajarGender: Gender;
+  slotLabel: string;
+  jumlahAntre: number;
+  formUrl: string;
+}): string {
+  return [
+    `Assalamu'alaikum ${salutation(args.pengajarGender)} ${args.pengajarName},`,
+    ``,
+    `Slot *${args.slotLabel}* sudah ditunggu ${args.jumlahAntre} pendaftar, tetapi belum ada pengajar yang tersedia.`,
+    `Bila Ustadz/Ustadzah berkenan mengambil slot ini, silakan perbarui ketersediaan di:`,
+    args.formUrl,
+    ``,
+    `Jazakumullahu khairan.`,
+  ].join('\n');
+}
+
+/** Pengingat menyegarkan ketersediaan sebelum statusnya dinonaktifkan. */
+export function tplSegarkanKetersediaan(args: {
+  pengajarName: string;
+  pengajarGender: Gender;
+  batas: string;
+  formUrl: string;
+}): string {
+  return [
+    `Assalamu'alaikum ${salutation(args.pengajarGender)} ${args.pengajarName},`,
+    ``,
+    `Data ketersediaan mengajar Anda perlu disegarkan sebelum ${args.batas}.`,
+    `Bila tidak diperbarui, ketersediaan Anda akan dinonaktifkan sementara dan tidak ikut pembagian halaqah.`,
+    ``,
+    args.formUrl,
+    ``,
+    `Cukup buka tautannya dan tekan simpan bila tidak ada perubahan.`,
+  ].join('\n');
+}
