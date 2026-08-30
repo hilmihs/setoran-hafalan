@@ -137,6 +137,20 @@ export const FEATURE_LINKS: FeatureLink[] = [
     match: (a) => a.role === 'pengajar',
   },
   {
+    href: '/ketersediaan/pengajar',
+    title: 'Ketersediaan Mengajar',
+    navLabel: 'Ketersediaan',
+    description: 'Nyatakan slot waktu yang Anda sanggupi — lihat jadwal Anda & peminat tiap slot',
+    match: (a) => a.role === 'pengajar',
+  },
+  {
+    href: '/ketersediaan/koordinator',
+    title: 'Kelola Ketersediaan',
+    navLabel: 'Kelola Ketersediaan',
+    description: 'Periode & master slot, verifikasi isian, pasokan vs permintaan per slot',
+    match: (a) => a.role === 'koordinator',
+  },
+  {
     href: '/evaluasi/pengajar',
     title: 'Evaluasi Halaqah',
     navLabel: 'Evaluasi Halaqah',

@@ -17,16 +17,20 @@ import {
  *     berjalan bersamaan (Juni, Januari, April, Nurul Iman, Safar ×2, ABK),
  *     dan seorang pengajar lazim memegang halaqah di lebih dari satu batch.
  *
- *  2. Halaqah hasil sistem ini yang sudah dikonfirmasi/terkirim. Ini wajib:
+ *  2. `kelas_hits` — kelas Maahir yang dipegangnya. Butir verifikasi ketiga
+ *     dokumen konsep menyebutnya terpisah dari HITS: "slot tidak bentrok dengan
+ *     kelas Maahir dan program wajib Maahir".
+ *
+ *  3. Halaqah hasil sistem ini yang sudah dikonfirmasi/terkirim. Ini wajib:
  *     halaqah yang dibentuk di sini masuk ke CMS tilawah, tetapi TIDAK otomatis
  *     muncul di `hits_halaqah` — tabel itu diisi dari Google Sheet yang disync
- *     manual per batch. Tanpa sumber kedua, pengajar yang baru saja mendapat
+ *     manual per batch. Tanpa sumber ketiga, pengajar yang baru saja mendapat
  *     halaqah lewat sistem ini terlihat kosong dan akan dijatah lagi pada jam
  *     yang sama.
  */
 
 export interface JadwalTerpakai {
-  sumber: 'hits' | 'usulan';
+  sumber: 'hits' | 'maahir' | 'usulan';
   /** Nama halaqah, untuk menerangkan kenapa sebuah slot terkunci. */
   nama: string;
   batch: string | null;
@@ -55,14 +59,26 @@ interface UsulanRow {
   } | null;
 }
 
+interface KelasRow {
+  id: string;
+  name: string;
+  jadwal_hari: string | null;
+  jadwal_waktu_mulai: string | null;
+  jadwal_waktu_selesai: string | null;
+}
+
 /** Semua jam yang sudah terpakai oleh seorang pengajar, siap dipakai penguncian slot. */
 export async function jadwalTerpakaiPengajar(pengajarId: string): Promise<JadwalTerpakai[]> {
-  const [{ data: halaqah }, { data: usulan }] = await Promise.all([
+  const [{ data: halaqah }, { data: kelas }, { data: usulan }] = await Promise.all([
     supabaseAdmin
       .from('hits_halaqah')
       .select('id, name, jadwal_raw, jadwal_hari, waktu_mulai, waktu_selesai, batch:batch_id(name)')
       .eq('pengajar_id', pengajarId)
       .eq('active', true),
+    supabaseAdmin
+      .from('kelas_hits')
+      .select('id, name, jadwal_hari, jadwal_waktu_mulai, jadwal_waktu_selesai')
+      .eq('pengajar_id', pengajarId),
     supabaseAdmin
       .from('ks_usulan')
       .select('id, nama_halaqah, slot:slot_id(label, hari_idx, waktu_mulai, waktu_selesai)')
@@ -84,6 +100,24 @@ export async function jadwalTerpakaiPengajar(pengajarId: string): Promise<Jadwal
       batch: h.batch?.name ?? null,
       rentang,
       label: h.jadwal_raw ?? '',
+    });
+  }
+
+  for (const k of (kelas ?? []) as KelasRow[]) {
+    // kelas_hits menyimpan hari sebagai satu teks ("Senin, Rabu"), bukan larik.
+    const rentang = rentangDariHalaqah({
+      jadwal_hari: k.jadwal_hari ? k.jadwal_hari.split(/[&,/]|\bdan\b/i) : null,
+      waktu_mulai: k.jadwal_waktu_mulai,
+      waktu_selesai: k.jadwal_waktu_selesai,
+      jadwal_raw: k.jadwal_hari,
+    });
+    if (!rentang) continue;
+    out.push({
+      sumber: 'maahir',
+      nama: k.name,
+      batch: null,
+      rentang,
+      label: `${k.jadwal_hari ?? ''} ${(k.jadwal_waktu_mulai ?? '').slice(0, 5)}-${(k.jadwal_waktu_selesai ?? '').slice(0, 5)}`.trim(),
     });
   }
 
@@ -136,7 +170,7 @@ export function kunciSlot(
  */
 export function alasanTerkunci(t: JadwalTerpakai): string {
   const dari = t.batch ? `${t.nama} (${t.batch})` : t.nama;
-  return t.sumber === 'usulan'
-    ? `Terisi — halaqah baru Anda ${dari} berada di jam ini`
-    : `Terisi — Anda mengajar ${dari} di jam ini`;
+  if (t.sumber === 'usulan') return `Terisi — halaqah baru Anda ${dari} berada di jam ini`;
+  if (t.sumber === 'maahir') return `Terisi — Anda mengajar kelas Maahir ${dari} di jam ini`;
+  return `Terisi — Anda mengajar ${dari} di jam ini`;
 }
