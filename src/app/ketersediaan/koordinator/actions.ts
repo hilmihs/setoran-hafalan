@@ -6,9 +6,15 @@ import { requireOneOfRoles } from '@/lib/session';
 import { requireAdmin } from '@/lib/admin-guard';
 import { getSessionWa } from '@/lib/program-kelas';
 import { absUrl } from '@/lib/url';
-import { buildWaMeUrl, tplKonfirmasiHalaqahPenuh } from '@/lib/whatsapp';
+import {
+  buildWaMeUrl,
+  tplButuhPengajarSlot,
+  tplKonfirmasiHalaqahPenuh,
+  tplSegarkanKetersediaan,
+} from '@/lib/whatsapp';
 import { catatKs } from '@/lib/ketersediaan-log';
 import { getPeriode, getPeriodeAktif, listSlot, siapkanSlot, SLOT_BAWAAN } from '@/lib/ketersediaan-periode';
+import { ringkasSlot } from '@/lib/ketersediaan-permintaan';
 import { susunLabel, uraikanSlot } from '@/lib/ketersediaan-slot';
 import { tarikSumber, tebakPemetaan } from '@/lib/ketersediaan-pendaftar';
 import { jalankanAlokasi } from '@/lib/ketersediaan-jalankan';
@@ -673,4 +679,154 @@ export async function periodeAktifRingkas(): Promise<Hasil> {
   return p
     ? { ok: true, pesan: p.nama, data: { id: p.id, nama: p.nama } }
     : { ok: false, error: 'Belum ada periode aktif.' };
+}
+
+// ── Pengingat lewat wa.me ──────────────────────────────────────────────────
+
+export interface Pengingat {
+  pengisian_id: string | null;
+  nama: string;
+  keterangan: string;
+  waUrl: string;
+}
+
+/**
+ * Susun daftar tautan wa.me siap klik.
+ *
+ * Maahir tidak punya gateway WhatsApp — seluruh repo memakai deep-link dan
+ * manusia yang menekan kirim. Membangun gateway adalah pekerjaan tersendiri
+ * (nomor bisnis, templat pesan yang disetujui Meta, langganan penyedia), jadi
+ * yang disediakan di sini adalah daftar terkurasi: siapa yang perlu dihubungi,
+ * dan teksnya sudah jadi.
+ *
+ * Dua jenis: pengajar yang ketersediaannya basi, dan pengajar yang bersedia di
+ * slot yang antreannya menumpuk tanpa pengajar bebas.
+ */
+export async function daftarPengingat(input: { periodeId: string }): Promise<Hasil> {
+  await requireOneOfRoles(['koordinator']);
+  const periode = await getPeriode(input.periodeId);
+  if (!periode) return { ok: false, error: 'Periode tidak ditemukan.' };
+
+  const formUrl = absUrl('/ketersediaan/pengajar');
+  const out: Pengingat[] = [];
+
+  // 1. Ketersediaan yang basi.
+  const { data: basi } = await supabaseAdmin
+    .from('ks_pengisian')
+    .select('id, status, pengingat_penyegaran_pada, pengajar:pengajar_id(name, gender, whatsapp_number)')
+    .eq('periode_id', input.periodeId)
+    .eq('status', 'basi');
+
+  const batas = new Date(Date.now() + periode.pengingat_penyegaran_hari * 86400000).toLocaleDateString(
+    'id-ID',
+    { timeZone: 'Asia/Jakarta' }
+  );
+  for (const b of (basi ?? []) as {
+    id: string;
+    pengingat_penyegaran_pada: string | null;
+    pengajar?: { name: string; gender: 'ikhwan' | 'akhwat'; whatsapp_number: string } | null;
+  }[]) {
+    if (!b.pengajar) continue;
+    out.push({
+      pengisian_id: b.id,
+      nama: b.pengajar.name,
+      keterangan: b.pengingat_penyegaran_pada
+        ? `sudah diingatkan ${new Date(b.pengingat_penyegaran_pada).toLocaleDateString('id-ID')}`
+        : 'belum diingatkan',
+      waUrl: buildWaMeUrl(
+        b.pengajar.whatsapp_number,
+        tplSegarkanKetersediaan({
+          pengajarName: b.pengajar.name,
+          pengajarGender: b.pengajar.gender,
+          batas,
+          formUrl,
+        })
+      ),
+    });
+  }
+
+  // 2. Slot yang antreannya menumpuk tanpa pengajar bebas.
+  const slots = await listSlot(input.periodeId, { hanyaAktif: true });
+  const ringkas = await ringkasSlot(periode, slots, new Date());
+  const butuh = slots.filter((s) => ringkas.get(s.id)?.butuh_pengajar);
+
+  if (butuh.length > 0) {
+    const { data: pengajarAktif } = await supabaseAdmin
+      .from('pengajar')
+      .select('id, name, gender, whatsapp_number')
+      .eq('active', true);
+    const semua = (pengajarAktif ?? []) as {
+      id: string;
+      name: string;
+      gender: 'ikhwan' | 'akhwat';
+      whatsapp_number: string;
+    }[];
+
+    // Yang dihubungi: pengajar segender yang BELUM menyatakan bersedia di slot
+    // itu. Menghubungi yang sudah bersedia hanya menambah kebisingan.
+    const { data: sudahBersedia } = await supabaseAdmin
+      .from('ks_ketersediaan')
+      .select('slot_id, pengisian:pengisian_id(pengajar_id, periode_id)');
+    const bersediaPerSlot = new Map<string, Set<string>>();
+    for (const k of (sudahBersedia ?? []) as {
+      slot_id: string;
+      pengisian?: { pengajar_id: string; periode_id: string } | null;
+    }[]) {
+      if (k.pengisian?.periode_id !== input.periodeId) continue;
+      if (!bersediaPerSlot.has(k.slot_id)) bersediaPerSlot.set(k.slot_id, new Set());
+      bersediaPerSlot.get(k.slot_id)!.add(k.pengisian.pengajar_id);
+    }
+
+    for (const s of butuh) {
+      const r = ringkas.get(s.id)!;
+      const sudah = bersediaPerSlot.get(s.id) ?? new Set<string>();
+      for (const pg of semua.filter((x) => x.gender === s.kelompok && !sudah.has(x.id))) {
+        out.push({
+          pengisian_id: null,
+          nama: pg.name,
+          keterangan: `slot "${s.label}" menunggu ${r.antre} pendaftar`,
+          waUrl: buildWaMeUrl(
+            pg.whatsapp_number,
+            tplButuhPengajarSlot({
+              pengajarName: pg.name,
+              pengajarGender: pg.gender,
+              slotLabel: s.label,
+              jumlahAntre: r.antre,
+              formUrl,
+            })
+          ),
+        });
+      }
+    }
+  }
+
+  return { ok: true, pesan: `${out.length} pengingat siap kirim.`, data: { pengingat: out } };
+}
+
+/**
+ * Tandai pengingat penyegaran sudah dikirim.
+ *
+ * Ini yang memulai hitungan mundur menuju nonaktif. Sengaja dipisahkan dari
+ * penyusunan daftar: sistem tidak boleh menganggap pesan terkirim hanya karena
+ * tautannya dibuat — yang menekan kirim adalah manusia.
+ */
+export async function tandaiPengingatTerkirim(input: { pengisianIds: string[] }): Promise<Hasil> {
+  const a = await aktor();
+  if (input.pengisianIds.length === 0) return { ok: false, error: 'Tidak ada yang ditandai.' };
+  const sekarang = new Date().toISOString();
+  for (const id of input.pengisianIds) {
+    await supabaseAdmin
+      .from('ks_pengisian')
+      .update({ pengingat_penyegaran_pada: sekarang, updated_at: sekarang })
+      .eq('id', id);
+  }
+  await catatKs({
+    entitas: 'ks_pengisian',
+    aksi: 'tandai_pengingat_terkirim',
+    sesudah: { jumlah: input.pengisianIds.length },
+    aktor_wa: a.wa,
+    aktor_nama: a.nama,
+  });
+  segarkan();
+  return { ok: true, pesan: `${input.pengisianIds.length} pengingat ditandai terkirim.` };
 }

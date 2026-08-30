@@ -115,7 +115,39 @@ Each module is `src/app/<module>/<role>/` + a cluster of `src/lib/<prefix>-*.ts`
 | Maahir (laporan/SP/pemutihan) | Reporting, warning letters (SP), attendance whitewash | `laporan`, `2in1/maahir-mandiri` | `maahir-sp.ts`, `maahir-rekap.ts`, `maahir-pemutihan*.ts` |
 | Shakwa | Public complaint/izin form + koordinator dashboard | `shakwa/*` | `shakwa.ts`, `shakwa-izin.ts`, `shakwa-rekap.ts` |
 | Evaluasi | Halaqah/pengajar evaluation (fed by hilmihs `eval_*`) | `evaluasi/{koordinator,pengajar}` | `evaluasi.ts`, `evaluasi-pengajar.ts` |
+| Ketersediaan (`ks_*`) | Teaching-availability → rolling halaqah formation → push to CMS tilawah | `ketersediaan/{pengajar,koordinator,konfirmasi/[token],undangan/[token]}` | `ketersediaan-*.ts`, `lib/tilawah/` |
 | Admin | Superadmin SQL console, users, audit, api-keys | `admin/*` | `admin-db.ts`, `admin-crud*.ts`, `admin-users.ts` |
+
+### Ketersediaan Mengajar HITS (`src/lib/ketersediaan-*.ts`, `src/lib/tilawah/`)
+
+Rolling teacher-availability → halaqah formation → outbound write to the **CMS
+tilawah** (a separate Laravel app). Design: `docs/superpowers/specs/2026-08-30-*.md`;
+CMS contract: `docs/API-TILAWAH.md`.
+
+- **Slots are stored decomposed**, not as text: `ks_slot.hari_idx` (0=Senin…6=Ahad)
+  + time. Real files mix `"16.00"` with `"16:00"` and `"Jumat"` with `"Jum'at"`, so
+  text comparison is unreliable. `hari_idx` deliberately matches tilawah's `int_days`.
+- **Conflict detection spans three sources**: `hits_halaqah` across *all* active
+  batches, `kelas_hits` (Maahir classes), and halaqah this module created —
+  the last is required because new halaqah do *not* appear in `hits_halaqah`
+  (that table comes from the manually-synced Google Sheet).
+- **Everything roots on `ks_periode` with cascade delete**, so a trial period can be
+  removed whole. (`0067` fixed two `RESTRICT` FKs that silently blocked this.)
+- **Writing to CMS tilawah is off by default** (`ks_periode.kirim_nyata`), unlocked
+  per period by superadmin. The CMS has no working delete for user accounts, so a
+  wrong write cannot be undone. Outbox is per-step and idempotent.
+- **CMS tilawah is a fragile contract**: no API token (Laravel session + XSRF),
+  resource key spelled three ways, `POST /api/users` answers *302 yet still creates*,
+  enrolment needs the full user body. All of it in `docs/API-TILAWAH.md` — read it
+  before touching `lib/tilawah/`.
+- **No WhatsApp gateway exists anywhere in this repo.** All notification is `wa.me`
+  deep-links a human clicks. WhatsApp Cloud API has no group endpoints at all, so
+  group creation is done by the teacher pasting an invite link.
+- Tests: `npm run test-ketersediaan` (pure), `test-ketersediaan-e2e` (dev DB, self-cleaning),
+  `test-tilawah-staging` (staging CMS; `KIRIM_NYATA=1` to actually write).
+- Periodic work: `POST /api/ketersediaan/berkala` (Bearer `CRON_SECRET`) pulls
+  registrants, shifts expired confirmations, ages out stale availability. It
+  deliberately does **not** run allocation — halaqah still wait for a coordinator.
 
 ### Public read-only API (`/api/v1/[...path]`)
 
@@ -174,4 +206,4 @@ Schema-touching changes need a new migration file **and** matching updates to
 **Gotcha — number collisions:** parallel feature branches have already produced
 duplicate prefixes (two `0052_*` exist: `evaluasi_sesi_dihapus` + `evaluasi_sync`).
 Apply order among same-numbered files isn't guaranteed, so never rely on it — and
-`ls supabase/migrations/ | tail -1` before picking the next number (next is `0053`).
+`ls supabase/migrations/ | tail -1` before picking the next number (next is `0068`).

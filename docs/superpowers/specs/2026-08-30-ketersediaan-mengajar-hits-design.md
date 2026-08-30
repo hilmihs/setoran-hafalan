@@ -1,7 +1,8 @@
 # Ketersediaan Mengajar HITS — Rancangan
 
 Tanggal: 30 Agustus 2026
-Status: rancangan disetujui bertahap (Bagian 1 disetujui dengan satu koreksi; Bagian 2–5 menunggu tinjauan)
+Status: **terimplementasi** (fase 1–5). Lihat §16 untuk keadaan sebenarnya, dan
+`docs/API-TILAWAH.md` untuk kontrak CMS yang sudah dikoreksi lewat verifikasi langsung.
 Sumber: `docs/Konsep_Penarikan_Ketersediaan_Mengajar_HITS.docx`,
 `docs/Template_Ketersediaan_Mengajar_HITS.xlsx`, `docs/Jadwal KBM - HITS Juni 2026.xlsx`,
 `/data/Downloads/04_Dev-Projects/dashboard_medu/API_MAP.md`
@@ -79,7 +80,7 @@ sosialisasi, bukan jadwal sistem.
 | Hak akses panel | Koordinator + superadmin |
 | Tenggat konfirmasi & jeda mulai | Angka default disetel per periode |
 | Siklus | Periode sendiri, lepas dari batch |
-| Bentrok jadwal | Slot yang bertabrakan tampil **terkunci**, disertai alasan dan tombol sanggah |
+| Bentrok jadwal | Slot yang bertabrakan tampil **terkunci**, disertai alasan dan tombol sanggah. Sumbernya tiga: `hits_halaqah` lintas batch, `kelas_hits` (kelas Maahir), dan halaqah hasil sistem ini |
 | Otomasi grup WA | Pengajar membuat grup sendiri saat konfirmasi dan menempel invite link; kolam grup cadangan untuk yang tak sanggup |
 | Undangan peserta | Lewat halaman `/undangan/<token>`, bukan menyebar `chat.whatsapp.com` mentah |
 | Gagal konfirmasi | Lewat tenggat → otomatis geser ke prioritas berikutnya, tercatat di log |
@@ -511,3 +512,62 @@ Empat blok wajib di layar utama:
 
 Ditambah antrean kerja: baris "perlu konfirmasi", pendaftar ditahan, sanggahan kunci bentrok,
 dan slot yang belum dipetakan ke tilawah.
+
+
+---
+
+## 16. Status implementasi (31 Agustus 2026)
+
+Fase 1–5 selesai dan terverifikasi. Fase 6 (pembuatan pertemuan) belum, menunggu
+keputusan pada §12 butir 2.
+
+### Yang dibangun
+
+| Bagian | Berkas |
+|---|---|
+| Skema | `supabase/migrations/0063`–`0067` (15 tabel `ks_*`) |
+| Tipe | `src/types/db.ts` |
+| Normalisasi slot & bentrok | `ketersediaan-slot.ts`, `ketersediaan-bentrok.ts` |
+| Periode & master slot | `ketersediaan-periode.ts` |
+| Permintaan per slot | `ketersediaan-permintaan.ts` |
+| Pendaftar (CSV + saringan) | `ketersediaan-pendaftar.ts` |
+| Prioritas | `ketersediaan-prioritas.ts` |
+| Mesin alokasi | `ketersediaan-alokasi.ts` (murni), `ketersediaan-jalankan.ts` (I/O) |
+| Konfirmasi & tenggat | `ketersediaan-konfirmasi.ts` |
+| Pekerjaan berkala | `ketersediaan-berkala.ts` + `POST /api/ketersediaan/berkala` |
+| Ekspor xlsx | `ketersediaan-export.ts` + `GET /api/ketersediaan/ekspor` |
+| CMS tilawah | `src/lib/tilawah/{client,types,map,push}.ts` |
+| Halaman | `ketersediaan/{pengajar,koordinator,koordinator/tilawah,konfirmasi/[token],undangan/[token]}` |
+
+### Verifikasi
+
+- `npm run test-ketersediaan` — 50 uji fungsi murni (penguraian ejaan campur,
+  bentrok, pengelompokan, kaidah pemerataan, usulan pemetaan).
+- `npm run test-ketersediaan-e2e` — alur penuh terhadap DB dev, termasuk
+  pembuktian bahwa data percobaannya benar-benar terhapus.
+- `npm run test-tilawah-staging` — terhadap CMS staging. Dengan `KIRIM_NYATA=1`
+  telah membentuk halaqah nyata `#239` beserta dua murid terenrol.
+
+### Yang berubah dari rancangan awal setelah berhadapan dengan sistem nyata
+
+1. **Cascade periode tidak pernah bekerja.** Dua rujukan `ON DELETE RESTRICT`
+   menahan penghapusan periode secara diam-diam. Diperbaiki di `0067`.
+2. **Kontrak CMS tilawah berbeda dari dokumentasinya** dalam empat hal yang
+   masing-masing mampu merusak data: ejaan kunci resource, mutasi yang membalas
+   redirect alih-alih JSON, enrolmen yang menuntut seluruh field, dan penghapusan
+   yang tidak dapat diandalkan. Seluruhnya tercatat di `docs/API-TILAWAH.md`.
+3. **`DELETE /api/halaqah/{id}` sebenarnya ada** — menghapus, lalu membalas 500.
+   `DELETE /api/users/{id}` membalas 302 dan tidak menghapus apa pun. Jadi akun
+   murid tetap tidak dapat dibatalkan lewat API, dan mode kirim-percobaan tetap
+   menjadi bawaan.
+4. **Sumber bentrok bertambah `kelas_hits`**, sesuai butir verifikasi ketiga
+   dokumen konsep yang menyebut kelas Maahir terpisah dari HITS.
+
+### Sisa pekerjaan operasional
+
+- Kolam grup WA cadangan (`ks_grup_pool`) belum punya layar pengisian; saat ini
+  hanya dapat diisi lewat konsol admin. Jalur utama (pengajar menempel tautan
+  sendiri) sudah jalan.
+- Penjadwal untuk `POST /api/ketersediaan/berkala` belum dipasang di VPS.
+- Halaqah uji `#239` beserta murid `#2257`/`#2258` masih ada di CMS staging;
+  murid tidak dapat dihapus lewat API.

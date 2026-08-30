@@ -10,6 +10,7 @@ import { PanelPeriode } from './PanelPeriode';
 import { PanelSlot } from './PanelSlot';
 import { PanelKerja, type BarisAntrean, type KartuUsulan } from './PanelKerja';
 import { PanelPendaftar } from './PanelPendaftar';
+import { PanelPengingat } from './PanelPengingat';
 import type { Gender, KsPendaftarSumber, KsSlot } from '@/types/db';
 
 export const dynamic = 'force-dynamic';
@@ -83,6 +84,8 @@ export default async function KetersediaanKoordinatorPage() {
         usulan={usulan}
         preset={preset.map((p) => ({ id: p.id, nama: p.nama, gender: p.gender, tipe: p.tipe }))}
       />
+
+      <PanelPengingat periodeId={periode.id} />
 
       <PanelPendaftar periodeId={periode.id} sumber={sumber} />
 
