@@ -874,6 +874,326 @@ export interface HaqibahFile {
   updated_at: string;
 }
 
+// ========== Ketersediaan Mengajar HITS (ks_*) ==========
+// Rancangan: docs/superpowers/specs/2026-08-30-ketersediaan-mengajar-hits-design.md
+// Model bergulir: form ketersediaan boleh selalu terbuka, pendaftaran murid tak
+// pernah ditutup per slot, halaqah lahir saat murid cukup + pengajar tersedia.
+
+export type KsMode = 'online' | 'offline';
+export type KsModePengajar = KsMode | 'keduanya';
+/** 0 = Senin … 6 = Ahad. Sejajar dengan `int_days` /api/days CMS tilawah. */
+export type KsHariIdx = 0 | 1 | 2 | 3 | 4 | 5 | 6;
+export type KsPitaUmur = '<=17' | '18-25' | '26-35' | '36-45' | '46+';
+
+export const KS_PITA_UMUR: KsPitaUmur[] = ['<=17', '18-25', '26-35', '36-45', '46+'];
+
+export interface KsPeriode {
+  id: string;
+  nama: string;
+  mulai: string;
+  selesai: string;
+  /** null = form sudah terbuka. */
+  form_buka: string | null;
+  /** null = tidak pernah ditutup (mode bergulir). */
+  form_tutup: string | null;
+  kapasitas_halaqah: number;
+  minimal_slot: number;
+  ambang_bentuk: number;
+  ambang_bawah: number;
+  usia_antrean_maks_hari: number;
+  jeda_mulai_hari: number;
+  tenggat_konfirmasi_jam: number;
+  penyegaran_hari: number;
+  pengingat_penyegaran_hari: number;
+  /** Gerbang kirim ke CMS tilawah. false = outbox hanya mencatat payload. */
+  kirim_nyata: boolean;
+  tilawah_program_id: number | null;
+  tilawah_batch_id: number | null;
+  aktif: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface KsSlot {
+  id: string;
+  periode_id: string;
+  kelompok: Gender;
+  mode: KsMode;
+  /** Teks tampilan & ekspor, mis. "Senin & Rabu 06:00 - 07:30 WIB". */
+  label: string;
+  hari: string[];
+  /** Kanonik untuk mesin — perbandingan teks hari tidak dapat diandalkan. */
+  hari_idx: KsHariIdx[];
+  waktu_mulai: string;
+  waktu_selesai: string;
+  lokasi: string | null;
+  aktif: boolean;
+  urutan: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export type KsPengisianStatus = 'aktif' | 'basi' | 'nonaktif';
+
+export interface KsPengisian {
+  id: string;
+  periode_id: string;
+  pengajar_id: string;
+  mode: KsModePengajar;
+  lokasi: string | null;
+  alasan_kurang_slot: string | null;
+  komitmen: boolean;
+  catatan_koordinator: string | null;
+  submitted_at: string | null;
+  disegarkan_pada: string | null;
+  pengingat_penyegaran_pada: string | null;
+  status: KsPengisianStatus;
+  terkunci: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export type KsKetersediaanStatus =
+  | 'diajukan'
+  | 'terverifikasi'
+  | 'perlu_konfirmasi'
+  | 'ditolak';
+
+/** Enam butir verifikasi dokumen konsep, disimpan apa adanya di kolom `cek`. */
+export interface KsCekButir {
+  nama_terdaftar?: boolean;
+  wa_sah?: boolean;
+  tanpa_bentrok_maahir?: boolean;
+  tanpa_bentrok_hits?: boolean;
+  slot_cukup?: boolean;
+  slot_aktif?: boolean;
+}
+
+export interface KsKetersediaan {
+  id: string;
+  pengisian_id: string;
+  slot_id: string;
+  status: KsKetersediaanStatus;
+  cek: KsCekButir;
+  /** Alasan pengajar saat menyanggah slot yang terkunci karena bentrok. */
+  bentrok_alasan: string | null;
+  sanggahan_status: 'menunggu' | 'diterima' | 'ditolak' | null;
+  sanggahan_catatan: string | null;
+  catatan: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+/** Kunci pemetaan kolom CSV responses Google Form pendaftaran murid. */
+export interface KsPemetaanKolom {
+  nama?: string;
+  wa?: string;
+  tanggal_lahir?: string;
+  gender?: string;
+  level?: string;
+  slot?: string;
+  timestamp?: string;
+}
+
+export interface KsPendaftarSumber {
+  id: string;
+  periode_id: string;
+  nama: string;
+  csv_url: string;
+  pemetaan_kolom: KsPemetaanKolom;
+  aktif: boolean;
+  terakhir_tarik: string | null;
+  terakhir_status: 'ok' | 'gagal' | null;
+  terakhir_pesan: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export type KsPendaftarStatus = 'valid' | 'ditahan' | 'dialokasikan' | 'batal';
+
+export interface KsPendaftar {
+  id: string;
+  periode_id: string;
+  sumber_id: string | null;
+  /** Cetakan timestamp + WA baris sheet. Tarikan ulang memperbarui, bukan menggandakan. */
+  sumber_row_key: string;
+  nama: string;
+  wa: string | null;
+  wa_normal: string | null;
+  tanggal_lahir: string | null;
+  umur: number | null;
+  pita_umur: KsPitaUmur | null;
+  gender: Gender | null;
+  level_pilihan: string | null;
+  slot_label_raw: string | null;
+  slot_id: string | null;
+  /** Timestamp baris sheet — dasar usia antrean. */
+  didaftar_pada: string | null;
+  status: KsPendaftarStatus;
+  alasan_ditahan: string[];
+  catatan: string | null;
+  ditarik_pada: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface KsPrioritasPreset {
+  id: string;
+  /** null = preset dipakai lintas periode. */
+  periode_id: string | null;
+  nama: string;
+  gender: Gender;
+  tipe: 'matrix' | 'manual';
+  /** YYYY-MM, wajib bila tipe = 'matrix'. */
+  matrix_bulan: string | null;
+  dibuat_oleh: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface KsPrioritasUrutan {
+  id: string;
+  preset_id: string;
+  pengajar_id: string;
+  urutan: number;
+  created_at: string;
+}
+
+export type KsUsulanStatus =
+  | 'usulan'
+  | 'disetujui'
+  | 'menunggu'
+  | 'dikonfirmasi'
+  | 'ditolak'
+  | 'kedaluwarsa'
+  | 'dikirim'
+  | 'gagal'
+  | 'batal';
+
+export interface KsUsulan {
+  id: string;
+  periode_id: string;
+  slot_id: string;
+  pengajar_id: string | null;
+  nama_halaqah: string | null;
+  level: string;
+  pita_umur: KsPitaUmur | null;
+  /** true bila dibentuk dengan pita digabung karena antrean sudah terlalu tua. */
+  pita_digabung: boolean;
+  /** Putaran alokasi berputar yang melahirkannya. */
+  putaran: number;
+  urutan_prioritas: number | null;
+  status: KsUsulanStatus;
+  tanggal_mulai: string | null;
+  akses_token: string | null;
+  token_kedaluwarsa: string | null;
+  dikonfirmasi_pada: string | null;
+  alasan_tolak: string | null;
+  grup_wa_link: string | null;
+  grup_sumber: 'pengajar' | 'kolam' | null;
+  tilawah_halaqah_id: number | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface KsUsulanPeserta {
+  id: string;
+  usulan_id: string;
+  pendaftar_id: string;
+  status: 'diusulkan' | 'terenroll' | 'gagal' | 'dikeluarkan';
+  tilawah_user_id: number | null;
+  undangan_token: string | null;
+  undangan_dibuka_pada: string | null;
+  catatan: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface KsGrupPool {
+  id: string;
+  periode_id: string;
+  gender: Gender;
+  invite_link: string;
+  status: 'kosong' | 'terpakai' | 'rusak';
+  usulan_id: string | null;
+  catatan: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface KsTilawahSlotMap {
+  id: string;
+  periode_id: string;
+  tilawah_batch_id: number;
+  slot_id: string;
+  day_id: number;
+  session_id: number;
+  /** true bila masih berisi tebakan mesin yang belum disahkan koordinator. */
+  usulan_otomatis: boolean;
+  disahkan_oleh: string | null;
+  disahkan_pada: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface KsTilawahLevelMap {
+  id: string;
+  periode_id: string;
+  tilawah_batch_id: number;
+  level_nama: string;
+  level_id: number;
+  disahkan_oleh: string | null;
+  disahkan_pada: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export type KsOutboxAksi = 'buat_halaqah' | 'cari_user' | 'buat_user' | 'enrol';
+
+export interface KsOutbox {
+  id: string;
+  usulan_id: string;
+  peserta_id: string | null;
+  aksi: KsOutboxAksi;
+  urutan: number;
+  payload: Record<string, unknown>;
+  status: 'antre' | 'terkirim' | 'gagal' | 'dilewati';
+  percobaan: number;
+  respons: Record<string, unknown> | null;
+  error_terakhir: string | null;
+  terkirim_pada: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface KsLog {
+  id: string;
+  periode_id: string | null;
+  entitas: string;
+  entitas_id: string | null;
+  aksi: string;
+  sebelum: Record<string, unknown> | null;
+  sesudah: Record<string, unknown> | null;
+  alasan: string | null;
+  aktor_wa: string | null;
+  aktor_nama: string | null;
+  created_at: string;
+}
+
+export interface KsSlotRiwayat {
+  id: string;
+  periode_label: string;
+  slot_label: string;
+  kelompok: Gender;
+  mode: KsMode;
+  halaqah_terbentuk: number;
+  halaqah_batal: number;
+  pendaftar: number;
+  sumber: 'impor' | 'sistem';
+  created_at: string;
+  updated_at: string;
+}
+
 // ========== Session types ==========
 
 export interface PesertaSession {
