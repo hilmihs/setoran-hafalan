@@ -433,6 +433,12 @@ dengan tebakan.
 dan menampilkannya di layar koordinator tanpa memanggil tilawah. Pengiriman nyata dinyalakan
 per periode oleh superadmin setelah satu halaqah uji berhasil.
 
+**Lingkungan uji.** Tersedia CMS tilawah staging. `TILAWAH_BASE_URL` diarahkan ke staging
+selama pengembangan; produksi hanya dipakai setelah alur lengkap terbukti di staging. Data
+dummy di maahir (periode, slot, pengajar, pendaftar percobaan) diperbolehkan dan dibersihkan
+setelah selesai — karena itu setiap tabel `ks_*` memakai `periode_id` sebagai akar, sehingga
+menghapus satu periode percobaan cukup dengan menghapus akarnya secara berjenjang.
+
 **Auth.** Akun layanan + cookie jar di server maahir, mekanisme login sesuai §5. Sesi dapat
 kedaluwarsa kapan saja (`?reason=expired`), sehingga outbox bekerja per-langkah dan idempoten:
 halaqah yang sudah terbuat tidak dibuat ulang, enrolment aman diulang.
@@ -452,14 +458,21 @@ halaqah yang sudah terbuat tidak dibuat ulang, enrolment aman diulang.
    memblokir karena pemetaan kolom dilakukan lewat layar, bukan kode.
 4. **Data historis peminat per slot** — akan dikirim pemilik proses, masuk `ks_slot_riwayat`
    lewat impor.
-5. **Kredensial akun layanan tilawah, izin menulis ke produksi, dan batch tujuan** — lihat §13.
+5. **Batch tujuan di tilawah** (`program_id` + `batch_id`) untuk periode berjalan. `API_MAP.md`
+   tidak menemukan endpoint pembuat batch — hanya `/api/batch/set-active` — sehingga batch
+   harus sudah ada, dibuat manual dari UI tilawah. Berlaku untuk staging maupun produksi.
+
+Kredensial akun layanan tilawah sudah dipegang pemilik proses dan diisi langsung ke
+`.env.local` (`TILAWAH_BASE_URL`, `TILAWAH_EMAIL`, `TILAWAH_PASSWORD`) — lihat `.env.example`.
+Pengembangan diarahkan ke CMS staging.
 
 ## 13. Risiko
 
 | Risiko | Sebab | Penanganan |
 |---|---|---|
 | Kredensial admin tilawah tersimpan di maahir | Tidak ada token API; auth hanya sesi Laravel | Akun layanan terpisah berhak minimum, bukan akun pribadi. Disimpan sebagai secret Azure. **Variabel rahasia Azure tidak muncul di `printenv` kecuali dipetakan eksplisit di `env:` task** — bila terlewat, aplikasi tetap boot dan integrasi gagal diam-diam |
-| Halaqah/murid salah dibuat di produksi | Tidak ada endpoint `DELETE` yang ditemukan; pembersihan hanya manual dari dalam tilawah | Mode kirim-percobaan sebagai default; pengiriman nyata dibuka per periode oleh superadmin setelah satu halaqah uji |
+| Halaqah/murid salah dibuat di produksi | Tidak ada endpoint `DELETE` yang ditemukan; pembersihan hanya manual dari dalam tilawah | Seluruh latihan dilakukan di CMS tilawah staging. Untuk produksi: mode kirim-percobaan sebagai default, pengiriman nyata dibuka per periode oleh superadmin setelah satu halaqah uji |
+| Data percobaan tertinggal di maahir | Periode dummy dibuat lalu terlupakan | Semua tabel `ks_*` berakar pada `periode_id` dengan hapus berjenjang, sehingga satu periode percobaan dapat dibuang utuh |
 | Sesi tilawah putus di tengah pengiriman | `?reason=expired` bisa datang kapan saja | Outbox per-langkah dan idempoten, bukan satu transaksi besar |
 | Pemetaan `day_id`/`session_id` salah | Master di-scope per program, ada baris tak terlihat di master | Slot belum dipetakan → halaqah ditahan |
 | Sheet HITS mengaktifkan lagi halaqah lama | `active` ditimpa sync bila baris masih ada di sheet | Slot terkunci disertai tombol sanggah; koordinator membuka kunci |
