@@ -29,13 +29,23 @@ interface DaftarProps {
   tombolLabel: string;
   back: () => void;
   mulai: () => void;
-  onReset?: () => void;
+  /** Hapus seluruh nilai sesi ini. Boleh async — tombol dikunci selama jalan. */
+  onReset?: () => void | Promise<void>;
+  /** Permintaan reset sedang berjalan (tombol dikunci, label berubah). */
+  resetBusy?: boolean;
+  /** Pesan galat reset dari server; null bila tak ada. */
+  resetError?: string | null;
   /** Buka menu cetak rapot rinci untuk sesi ini. */
   onPdf?: () => void;
 }
 
 export function Daftar(props: DaftarProps) {
   const [confirmReset, setConfirmReset] = useState(false);
+  // Konfirmasi dibiarkan terbuka selama permintaan berjalan supaya tombolnya
+  // tak melompat balik ke "Reset" sebelum server menjawab.
+  const tutupKonfirmasi = () => {
+    if (!props.resetBusy) setConfirmReset(false);
+  };
   return (
     <>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 16px', background: '#ffffff', borderBottom: '1px solid #e8e4dc' }}>
@@ -64,14 +74,19 @@ export function Daftar(props: DaftarProps) {
         {props.onReset && confirmReset && (
           <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
             <button
-              onClick={() => { props.onReset?.(); setConfirmReset(false); }}
-              style={{ height: 34, padding: '0 12px', borderRadius: 8, border: 'none', background: 'oklch(0.55 0.16 25)', font: 'inherit', fontSize: 12, fontWeight: 700, color: '#fff', cursor: 'pointer', whiteSpace: 'nowrap' }}
+              disabled={props.resetBusy}
+              onClick={async () => {
+                await props.onReset?.();
+                setConfirmReset(false);
+              }}
+              style={{ height: 34, padding: '0 12px', borderRadius: 8, border: 'none', background: 'oklch(0.55 0.16 25)', font: 'inherit', fontSize: 12, fontWeight: 700, color: '#fff', cursor: props.resetBusy ? 'default' : 'pointer', opacity: props.resetBusy ? 0.6 : 1, whiteSpace: 'nowrap' }}
             >
-              Ya, reset
+              {props.resetBusy ? 'Mereset…' : 'Ya, reset'}
             </button>
             <button
-              onClick={() => setConfirmReset(false)}
-              style={{ height: 34, padding: '0 10px', borderRadius: 8, border: '1px solid #e8e4dc', background: '#fff', font: 'inherit', fontSize: 12, fontWeight: 600, color: '#44423d', cursor: 'pointer' }}
+              disabled={props.resetBusy}
+              onClick={tutupKonfirmasi}
+              style={{ height: 34, padding: '0 10px', borderRadius: 8, border: '1px solid #e8e4dc', background: '#fff', font: 'inherit', fontSize: 12, fontWeight: 600, color: '#44423d', cursor: props.resetBusy ? 'default' : 'pointer', opacity: props.resetBusy ? 0.6 : 1 }}
             >
               Batal
             </button>
@@ -80,7 +95,13 @@ export function Daftar(props: DaftarProps) {
       </div>
 
       <div style={{ padding: '12px 16px 0' }}>
-        <div style={{ fontSize: 11, color: '#7a766f', lineHeight: 1.4 }}>Semua peserta dipilih otomatis. Ketuk untuk lepas centang bila tidak hadir hari ini.</div>
+        {props.resetError ? (
+          <div style={{ fontSize: 11, color: 'oklch(0.46 0.14 25)', background: 'oklch(0.97 0.02 25)', border: '1px solid oklch(0.85 0.08 25)', borderRadius: 8, padding: '8px 10px', lineHeight: 1.4 }}>
+            {props.resetError}
+          </div>
+        ) : (
+          <div style={{ fontSize: 11, color: '#7a766f', lineHeight: 1.4 }}>Semua peserta dipilih otomatis. Ketuk untuk lepas centang bila tidak hadir hari ini.</div>
+        )}
       </div>
 
       <div style={{ padding: '12px 16px 0', display: 'flex', flexDirection: 'column', gap: 8 }}>

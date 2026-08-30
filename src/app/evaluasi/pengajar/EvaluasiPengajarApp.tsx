@@ -181,6 +181,10 @@ export function EvaluasiPengajarApp({ initial }: { initial: EvaluasiInitial }) {
     return out;
   });
   const [kirimStatus, setKirimStatus] = useState<SaveStatus>('idle');
+  // Reset sesi: tombol dikunci selama permintaan berjalan, galat ditampilkan di
+  // layar daftar (dulu fire-and-forget — kegagalan diam-diam).
+  const [resetBusy, setResetBusy] = useState(false);
+  const [resetError, setResetError] = useState<string | null>(null);
   // Cetak rapot: pilih dokumen → menu pilih peserta → render lembar A4 → print.
   const [cetakMenu, setCetakMenu] = useState<DokCetak | null>(null);
   const [printReq, setPrintReq] = useState<{ dok: DokCetak; ids: string[] } | null>(null);
@@ -477,26 +481,88 @@ export function EvaluasiPengajarApp({ initial }: { initial: EvaluasiInitial }) {
     }
   };
 
-  // Reset semua nilai sesi (jenis+sesi) aktif. Mode Coba → lokal saja.
-  const resetSesi = () => {
-    setWork((prev) => {
-      const next = { ...prev };
-      for (const p of peserta) delete next[workKey(p.id, jenis, activeSession)];
-      return next;
-    });
-    setStatuses({});
-    if (cobaRef.current) return;
+  // Buang simpanan tertunda milik satu sesi. Tanpa ini, timer debounce 700ms
+  // yang masih antre akan menyala SESUDAH reset, membaca defaultWork, lalu
+  // menulis ulang baris yang barusan dihapus di server (baris kosong hantu).
+  const batalkanSimpanTertunda = useCallback((j: Jenis, session: number) => {
+    const akhiran = `|${j}|${session}`;
+    for (const key of Object.keys(pendingSaves.current)) {
+      if (!key.endsWith(akhiran)) continue;
+      delete pendingSaves.current[key];
+    }
+    for (const key of Object.keys(timers.current)) {
+      if (!key.endsWith(akhiran)) continue;
+      clearTimeout(timers.current[key]);
+      delete timers.current[key];
+    }
+  }, []);
+
+  // Reset semua nilai sesi (jenis+sesi) aktif — kembali persis seperti belum
+  // dinilai: skor hilang, semua peserta tercentang hadir lagi, progres 0.
+  // Server dulu baru lokal: kalau server menolak (mis. sesi sudah terkirim),
+  // tampilan tak boleh terlanjur kosong — nilai akan muncul lagi saat muat
+  // ulang dan pengajar mengira resetnya berhasil. Mode Coba → lokal saja.
+  const resetSesi = async () => {
+    if (resetBusy) return;
+    setResetError(null);
+
+    // Lokal: bersihkan work sesi ini + status simpan + posisi peserta.
+    const bersihkanLokal = () => {
+      batalkanSimpanTertunda(jenis, activeSession);
+      setWork((prev) => {
+        const next = { ...prev };
+        for (const p of peserta) delete next[workKey(p.id, jenis, activeSession)];
+        return next;
+      });
+      setStatuses({});
+      setActiveIdx(0);
+      setKirimStatus('idle');
+    };
+
+    if (cobaRef.current) {
+      bersihkanLokal();
+      return;
+    }
+
     const sesiId = sesiIdRef.current[`${jenis}|${activeSession}`];
-    if (!sesiId) return; // sesi belum pernah dibuat → tak ada di server
-    void fetch('/api/evaluasi/nilai/reset', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ sesi_id: sesiId }),
-    });
+    if (!sesiId) {
+      // Sesi belum pernah dibuat di server → tak ada yang perlu dihapus.
+      bersihkanLokal();
+      return;
+    }
+
+    setResetBusy(true);
+    // Batalkan simpanan tertunda SEBELUM permintaan berangkat, supaya tak ada
+    // upsert yang menyusul di belakang DELETE dan menghidupkan baris lagi.
+    batalkanSimpanTertunda(jenis, activeSession);
+    try {
+      const res = await fetch('/api/evaluasi/nilai/reset', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sesi_id: sesiId }),
+      });
+      if (!res.ok) {
+        const json = (await res.json().catch(() => null)) as { error?: string } | null;
+        setResetError(json?.error || 'Gagal mereset sesi. Coba lagi.');
+        return;
+      }
+      bersihkanLokal();
+      // Sesi yang nilainya dihapus kembali menjadi draft di sisi pengajar.
+      setSentSesi((prev) => {
+        const next = { ...prev };
+        delete next[`${jenis}|${activeSession}`];
+        return next;
+      });
+    } catch {
+      setResetError('Gagal mereset sesi — periksa koneksi lalu coba lagi.');
+    } finally {
+      setResetBusy(false);
+    }
   };
 
   const nav = (s: Screen) => {
     flushSaves();
+    setResetError(null);
     setScreen(s);
   };
 
@@ -521,6 +587,7 @@ export function EvaluasiPengajarApp({ initial }: { initial: EvaluasiInitial }) {
 
   const pickSession = (n: number) => {
     flushSaves();
+    setResetError(null);
     const sesi = initial.sesiList.find((s) => s.jenis === jenis && s.nomor_sesi === n);
     setActiveSession(n);
     if (sesi) {
@@ -1166,6 +1233,8 @@ export function EvaluasiPengajarApp({ initial }: { initial: EvaluasiInitial }) {
               setScreen('p-nilai');
             }}
             onReset={resetSesi}
+            resetBusy={resetBusy}
+            resetError={resetError}
             onPdf={() => setCetakMenu(dokDariSesi(jenis, activeSession))}
           />
         )}
