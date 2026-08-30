@@ -6,9 +6,16 @@ export const FORBIDDEN_COLUMNS: string[] = [
   'whatsapp_number', 'ketua_wa', 'wakil_wa', 'pengajar_wa', 'pelapor_wa',
   'magic_token',
   'new_password_plaintext',
-  // 'akses_token' = token /tabayyun/<token>: pemegangnya bisa mengirim
-  // klarifikasi atas nama pengajar. Setara kredensial, jangan pernah diekspos.
-  'token', 'akses_token',
+  // 'akses_token' = token /tabayyun/<token> dan /ketersediaan/konfirmasi/<token>:
+  // pemegangnya bisa mengirim klarifikasi atau menyatakan kesediaan mengajar atas
+  // nama pengajar. Setara kredensial, jangan pernah diekspos.
+  // 'undangan_token' = /ketersediaan/undangan/<token>: membuka identitas halaqah
+  // dan tautan grup WhatsApp kelas.
+  'token', 'akses_token', 'undangan_token',
+  // Nomor WA pendaftar, sebelum maupun sesudah dinormalisasi.
+  'wa', 'wa_normal',
+  // Tautan undangan grup WhatsApp — siapa pun yang memegangnya bisa masuk grup.
+  'grup_wa_link', 'invite_link',
   'audio_url',
   'masukan', 'ket_bacaan', 'ket_hafalan', 'catatan_umum',
 ];

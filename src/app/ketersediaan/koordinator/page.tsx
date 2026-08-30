@@ -64,6 +64,9 @@ export default async function KetersediaanKoordinatorPage() {
         <a className="btn btn-sm" href={`/api/ketersediaan/ekspor?periode=${periode.id}`}>
           Unduh xlsx
         </a>
+        <a className="btn btn-sm btn-ghost" href="/ketersediaan/koordinator/tilawah">
+          Pemetaan &amp; pengiriman CMS tilawah
+        </a>
       </div>
 
       <Bagian judul="Pasokan vs permintaan per slot">
