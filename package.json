@@ -54,7 +54,8 @@
     "test-cutoff": "tsx scripts/test-periode-cutoff.ts",
     "test-api": "tsx scripts/test-api-public.ts",
     "check-api": "tsx --env-file=.env.local scripts/check-api-registry.ts",
-    "test-ketersediaan": "tsx scripts/test-ketersediaan.ts"
+    "test-ketersediaan": "tsx scripts/test-ketersediaan.ts",
+    "test-ketersediaan-e2e": "NODE_PATH=./scripts/node-shims tsx --env-file=.env.local scripts/test-ketersediaan-e2e.ts"
   },
   "dependencies": {
     "@supabase/ssr": "^0.5.0",
