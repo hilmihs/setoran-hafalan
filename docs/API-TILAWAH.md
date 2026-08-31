@@ -24,6 +24,13 @@ POST /login  { email, password, remember }
 → 200 { "status": "success", "message": "Login successful" }
 ```
 
+**Akun staging tidak berlaku di produksi.** Probe 31 Agu 2026: kredensial yang sah di
+staging ditolak produksi dengan `422 {"message":"Invalid Muhajir Account credentials"}`.
+Penyebutan "Muhajir Account" menyiratkan produksi bersandar pada penyedia identitas
+tersendiri, bukan tabel user CMS. Konsekuensinya untuk Fase 4: **akun layanan produksi
+harus dibuat terpisah**, dan alur loginnya perlu diverifikasi ulang — belum tentu sama
+dengan borang `email`+`password` di staging.
+
 **Nama cookie sesi berbeda antar lingkungan** — `hits-cms-session` di produksi,
 `hits-cms-qa-session` di staging. Jangan pernah menuliskannya di kode; simpan
 seluruh `Set-Cookie` apa adanya. (`API_MAP.md` menyebut `laravel_session`; itu
@@ -128,6 +135,18 @@ Selain itu, **halaqah nyata di staging semuanya memakai `day_id 8` +
 `session_id 14`** (placeholder `00:00 - 00:00`), dengan jam sebenarnya disimpan
 per pertemuan. Jadi memilih sesi yang jamnya "benar" justru menyimpang dari
 kebiasaan yang berlaku — keputusan itu milik koordinator, bukan mesin.
+
+## 6b. Jebakan jaringan: IPv6 NAT64
+
+`tilawah.muhajirproject.org` menyelesaikan ke alamat NAT64 (`64:ff9b::…`) **dan** IPv4
+(`103.181.142.223`). Pada jaringan yang jalur NAT64-nya tidak tembus, Node mencoba IPv6
+lebih dulu lalu menggantung sampai batas connect undici (10 detik) dan gagal dengan
+`UND_ERR_CONNECT_TIMEOUT` — padahal IPv4 menjawab dalam ~30 ms.
+
+Gejalanya identik dengan "server lambat", jadi mudah salah didiagnosis. Bila ini muncul
+di VPS produksi, tambahkan `dns.setDefaultResultOrder('ipv4first')` **pada proses**, bukan
+di dalam `lib/tilawah/` — mengubah urutan resolusi diam-diam dari dalam satu modul akan
+memengaruhi seluruh permintaan keluar aplikasi (hilmihs, Google Sheets, dan lainnya).
 
 ## 7. Env
 
