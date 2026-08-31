@@ -2,8 +2,8 @@
 
 Acuan operasional untuk `src/lib/tilawah/`. Melengkapi **dan mengoreksi**
 `dashboard_medu/API_MAP.md`, yang disusun dari pembacaan lalu lintas peramban.
-Semua yang tertulis di sini diverifikasi langsung terhadap **staging** pada
-30 Agustus 2026, termasuk satu pembentukan halaqah nyata beserta enrolmennya.
+Diverifikasi langsung terhadap **staging** (30 Agu 2026, termasuk satu pembentukan
+halaqah nyata beserta enrolmennya) dan terhadap **produksi** secara baca-saja (1 Sep 2026).
 
 > Ini bukan API publik. Tidak ada token, tidak ada dokumentasi resmi, tidak ada
 > jaminan kestabilan. Perlakukan sebagai kontrak rapuh: setiap perubahan di CMS
@@ -131,10 +131,50 @@ akan melewatkannya. Dua-duanya salah tanpa terlihat. Karena itu `map.ts` hanya
 **mengusulkan** dan menyertakan tingkat keyakinan, dan pengesahannya di tangan
 koordinator.
 
-Selain itu, **halaqah nyata di staging semuanya memakai `day_id 8` +
-`session_id 14`** (placeholder `00:00 - 00:00`), dengan jam sebenarnya disimpan
-per pertemuan. Jadi memilih sesi yang jamnya "benar" justru menyimpang dari
-kebiasaan yang berlaku — keputusan itu milik koordinator, bukan mesin.
+Baris pincang yang sama ada di **produksi**, dan di sana jebakannya lebih tajam
+karena ada dua kandidat untuk hari yang sama:
+
+| id | nama | int_days | |
+|---|---|---|---|
+| 3 | Selasa, Jumat | `[1,4]` | benar |
+| 11 | **Selasa & Jum'at** | `[1]` | pincang — **namanya persis sama dengan label MASTER_SLOT** |
+| 8 | Senin - Jumat | `[]` | pincang |
+
+Slot `"Selasa & Jum'at 06:00 - 07:30 WIB"` akan cocok **sempurna lewat nama** ke baris
+`11` yang rusak, dan cocok lewat `int_days` ke baris `3` yang benar. Inilah alasan
+pencocokan dilakukan lewat `int_days`, bukan teks.
+
+### Placeholder sesi: kebiasaan per-program, bukan per-CMS
+
+Diperiksa langsung di produksi 1 Sep 2026:
+
+| Program | Halaqah | day_id / session_id |
+|---|---|---|
+| HITS Reguler (3), batch April_2026 | 64 | **sesi nyata** — `20:00-21:30` ×19, `06:00-07:30` ×15, dst. Nol placeholder |
+| HITS Masjid Nurul Iman (8), batch Juli 2026 | 10 | `day 12` "Sabtu" + `session 14` `00:00-00:45` — seluruhnya placeholder |
+
+`API_MAP.md` mengamati Nurul Iman, sehingga menyimpulkan "semua halaqah pakai
+placeholder". Untuk **HITS Reguler** — sasaran modul ketersediaan — itu tidak berlaku:
+di sana jadwal disimpan pada `session_id` yang jamnya sungguhan. Memetakan slot ke sesi
+nyata karena itu justru mengikuti kebiasaan yang berlaku, dan jadwal halaqah baru sudah
+benar tanpa perlu membuat pertemuan lebih dulu.
+
+### Nomor master BERBEDA antar lingkungan
+
+Bukan hanya berbeda — sebagian **tertukar**, sehingga memakai pemetaan staging di
+produksi akan menaruh kelas pada jam yang salah tanpa galat apa pun:
+
+| | staging | produksi |
+|---|---|---|
+| program HITS Reguler | 1 | **3** |
+| sesi `20:00 - 21:30` | 11 | **10** |
+| sesi `11:00 - 12:30` | 10 | **11** |
+| sesi id 14 | `00:00 - 00:00` | `00:00 - 00:45` |
+| hari `Sabtu, Ahad` | id 4 = `[5]` (pincang), id 10 = `[5,6]` | id 4 = `[5,6]` |
+
+Karena itu `ks_tilawah_slot_map` di-key per `tilawah_batch_id`: pemetaan satu lingkungan
+tidak pernah terpakai di lingkungan lain, dan slot yang belum dipetakan membuat
+halaqahnya ditahan.
 
 ## 6b. Jebakan jaringan: IPv6 NAT64
 
