@@ -2,6 +2,8 @@ import { requirePengajar } from '@/lib/session';
 import { supabaseAdmin } from '@/lib/supabase-admin';
 import { evalPengajarIdFor } from '@/lib/evaluasi-pengajar';
 import { columnsToCounts, JENIS, type Jenis } from '@/lib/evaluasi';
+import { namaHalaqahTampil, levelHalaqahTampil, type HalaqahTampil } from '@/lib/evaluasi-halaqah';
+import { namaPesertaTampil } from '@/lib/evaluasi-peserta';
 import { EvaluasiPengajarApp, type EvaluasiInitial, type EvWork } from './EvaluasiPengajarApp';
 
 export const dynamic = 'force-dynamic';
@@ -52,7 +54,7 @@ export default async function EvaluasiPengajarPage({
   const { data: halaqahRows } = evalPengajarId
     ? await supabaseAdmin
         .from('eval_halaqah')
-        .select('id, nama, gender, mustawa, level, ambang_ujian, batch_id')
+        .select('id, nama, nama_override, gender, mustawa, level, level_override, ambang_ujian, batch_id')
         .eq('pengajar_id', evalPengajarId)
         .order('nama')
     : { data: null };
@@ -61,7 +63,10 @@ export default async function EvaluasiPengajarPage({
   // Pilih halaqah aktif via ?halaqah=<id>; fallback ke yang pertama.
   const halaqah =
     allHalaqah.find((h) => h.id === searchParams.halaqah) ?? allHalaqah[0] ?? null;
-  const halaqahOptions = allHalaqah.map((h) => ({ id: h.id as string, nama: h.nama as string }));
+  const halaqahOptions = allHalaqah.map((h) => ({
+    id: h.id as string,
+    nama: namaHalaqahTampil(h as HalaqahTampil),
+  }));
 
   if (!halaqah) {
     return (
@@ -80,14 +85,14 @@ export default async function EvaluasiPengajarPage({
   // Peserta aktif, urut.
   const { data: pesertaRows } = await supabaseAdmin
     .from('eval_peserta')
-    .select('id, nama, is_ketua, urutan')
+    .select('id, nama, nama_override, is_ketua, urutan')
     .eq('halaqah_id', halaqah.id)
     .eq('aktif', true)
     .order('urutan', { ascending: true });
 
   const peserta = (pesertaRows ?? []).map((p) => ({
     id: p.id as string,
-    nama: p.nama as string,
+    nama: namaPesertaTampil(p as { nama: string; nama_override?: string | null }),
     is_ketua: !!p.is_ketua,
     urutan: (p.urutan as number) ?? 0,
   }));
@@ -173,10 +178,15 @@ export default async function EvaluasiPengajarPage({
     halaqahOptions,
     halaqah: {
       id: halaqah.id as string,
-      nama: halaqah.nama as string,
+      nama: namaHalaqahTampil(halaqah as HalaqahTampil),
       gender: halaqah.gender,
       mustawa: (halaqah.mustawa as number | null) ?? null,
-      level: (halaqah.level as string | null) ?? null,
+      level: levelHalaqahTampil(halaqah as HalaqahTampil),
+      // Nilai hulu + override mentah: layar edit perlu membedakan "ikut data
+      // pusat" dari "disunting kebetulan sama".
+      namaPusat: halaqah.nama as string,
+      levelPusat: (halaqah.level as string | null) ?? null,
+      levelOverride: (halaqah.level_override as string | null) ?? null,
       ambang_ujian: (halaqah.ambang_ujian as number) ?? 70,
       pesertaCount: peserta.length,
       batch: batchNama,

@@ -114,7 +114,7 @@ Each module is `src/app/<module>/<role>/` + a cluster of `src/lib/<prefix>-*.ts`
 | Matrix skill guru (`matrix_*`) | Teacher-skill indicator matrix (recomputed) | `matrix/koordinator` | `matrix-compute.ts`, `matrix-indicators.ts` |
 | Maahir (laporan/SP/pemutihan) | Reporting, warning letters (SP), attendance whitewash | `laporan`, `2in1/maahir-mandiri` | `maahir-sp.ts`, `maahir-rekap.ts`, `maahir-pemutihan*.ts` |
 | Shakwa | Public complaint/izin form + koordinator dashboard | `shakwa/*` | `shakwa.ts`, `shakwa-izin.ts`, `shakwa-rekap.ts` |
-| Evaluasi | Halaqah/pengajar evaluation (fed by hilmihs `eval_*`) | `evaluasi/{koordinator,pengajar}` | `evaluasi.ts`, `evaluasi-pengajar.ts` |
+| Evaluasi | Halaqah/pengajar evaluation (fed by hilmihs `eval_*`) | `evaluasi/{koordinator,pengajar}` | `evaluasi.ts`, `evaluasi-pengajar.ts`, `evaluasi-halaqah.ts`, `evaluasi-peserta.ts` |
 | Ketersediaan (`ks_*`) | Teaching-availability → rolling halaqah formation → push to CMS tilawah | `ketersediaan/{pengajar,koordinator,konfirmasi/[token],undangan/[token]}` | `ketersediaan-*.ts`, `lib/tilawah/` |
 | Admin | Superadmin SQL console, users, audit, api-keys | `admin/*` | `admin-db.ts`, `admin-crud*.ts`, `admin-users.ts` |
 
@@ -185,6 +185,15 @@ Bearer `AGENT_TOKEN`, docs `docs/API_hilmihswebid.md`) into local mirror tables
 (protected by `CRON_SECRET`, called from a VPS systemd timer) → `apply`. Pengajar are
 matched to eval halaqah by WA number, not maahir id.
 
+**Never edit a mirrored column in place.** `COMPARE` (`sync.ts`) lists the columns that
+decide "changed upstream" — for halaqah `nama, gender, level, pengajar_id, batch_id`, for
+peserta `nama, gender, halaqah_id, urutan`. Writing to one locally makes the next pull
+stage an `update` that reverts it. Local corrections go in dedicated `*_override` columns
+(`0068`: `eval_halaqah.nama_override/level_override`, `eval_peserta.nama_override`), which
+sync never reads or writes; the app displays `override ?? base` via `evaluasi-halaqah.ts` /
+`evaluasi-peserta.ts`. Rows the app invents get an id prefix instead (`manual:` peserta),
+which `diff.ts` skips when staging deactivations.
+
 ### Deploy (Azure Pipelines → self-hosted VPS)
 
 `azure-pipelines.yml` builds on `main`, ships env + build to the VPS over SSH/SCP, and
@@ -206,4 +215,4 @@ Schema-touching changes need a new migration file **and** matching updates to
 **Gotcha — number collisions:** parallel feature branches have already produced
 duplicate prefixes (two `0052_*` exist: `evaluasi_sesi_dihapus` + `evaluasi_sync`).
 Apply order among same-numbered files isn't guaranteed, so never rely on it — and
-`ls supabase/migrations/ | tail -1` before picking the next number (next is `0068`).
+`ls supabase/migrations/ | tail -1` before picking the next number (next is `0069`).

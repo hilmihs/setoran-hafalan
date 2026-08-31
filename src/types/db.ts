@@ -707,9 +707,13 @@ export interface EvalPengajar {
 export interface EvalHalaqah {
   id: string;
   nama: string;
+  /** Koreksi lokal atas `nama` (0068); NULL = ikut data pusat. Tak disentuh sinkron. */
+  nama_override: string | null;
   gender: Gender;
   mustawa: number | null;
   level: string | null;
+  /** Koreksi lokal atas `level` (0068) — "Dasar" | "Lanjutan" | NULL. */
+  level_override: string | null;
   pengajar_id: string | null;
   batch_id: string | null;
   ambang_ujian: number;
@@ -719,6 +723,8 @@ export interface EvalHalaqah {
 export interface EvalPeserta {
   id: string;
   nama: string;
+  /** Koreksi ejaan lokal atas `nama` (0068); NULL = ikut data pusat. */
+  nama_override: string | null;
   gender: Gender;
   halaqah_id: string | null;
   is_ketua: boolean;

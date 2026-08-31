@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { requireOneOfRoles } from '@/lib/session';
 import { supabaseAdmin } from '@/lib/supabase-admin';
 import { ALL_LAHN, AMBANG, columnsToCounts } from '@/lib/evaluasi';
+import { namaHalaqahTampil, levelHalaqahTampil, type HalaqahTampil } from '@/lib/evaluasi-halaqah';
 import { PrintButton } from '@/components/PrintButton';
 
 export const dynamic = 'force-dynamic';
@@ -36,7 +37,7 @@ export default async function KoordinatorEvaluasiPage() {
   // Halaqah binaan (per gender).
   const { data: halaqahRaw } = await supabaseAdmin
     .from('eval_halaqah')
-    .select('id, nama, gender, mustawa, level, pengajar_id')
+    .select('id, nama, nama_override, gender, mustawa, level, level_override, pengajar_id')
     .eq('gender', gender)
     .order('nama');
   const halaqahList = halaqahRaw ?? [];
@@ -152,14 +153,14 @@ export default async function KoordinatorEvaluasiPage() {
     const rata = a && a.selesai > 0 ? Math.round(a.skorSum / a.selesai) : null;
     const bermasalah = a?.bermasalah ?? 0;
     const lahnTop = a ? topLahnLabel(a.lahn) : '—';
-    const level = (h.level as string | null) ?? null;
+    const level = levelHalaqahTampil(h as HalaqahTampil);
     const mustawa = h.mustawa as number | null;
     const genderLabel = gender === 'ikhwan' ? 'Ikhwan' : 'Akhwat';
     const levelText = level ?? (mustawa != null ? `Mustawa ${mustawa}` : null);
     const sub = levelText ? `${genderLabel} · ${levelText}` : genderLabel;
     return {
       id: hid,
-      nama: h.nama as string,
+      nama: namaHalaqahTampil(h as HalaqahTampil),
       sub,
       pengajar: (h.pengajar_id && pengajarName.get(h.pengajar_id as string)) || '—',
       total,

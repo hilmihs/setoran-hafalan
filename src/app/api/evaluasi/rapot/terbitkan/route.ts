@@ -16,6 +16,8 @@ import {
   type RapotIdentitas,
   type SesiNilaiInput,
 } from '@/lib/rapot';
+import { namaHalaqahTampil, levelHalaqahTampil, type HalaqahTampil } from '@/lib/evaluasi-halaqah';
+import { namaPesertaTampil, type PesertaTampil } from '@/lib/evaluasi-peserta';
 
 /**
  * Sejak rotasi 0062 penerbitan HANYA melayani rapot per-track. Nama field di body
@@ -69,7 +71,7 @@ export async function POST(req: NextRequest) {
     // --- Halaqah + verifikasi kepemilikan pengajar ---
     const { data: halaqah } = await supabaseAdmin
       .from('eval_halaqah')
-      .select('id, pengajar_id, nama, gender, mustawa, level, batch_id, ambang_ujian')
+      .select('id, pengajar_id, nama, nama_override, gender, mustawa, level, level_override, batch_id, ambang_ujian')
       .eq('id', halaqah_id)
       .maybeSingle();
     if (!halaqah) {
@@ -83,7 +85,7 @@ export async function POST(req: NextRequest) {
     // --- Peserta ---
     const { data: peserta } = await supabaseAdmin
       .from('eval_peserta')
-      .select('id, nama, halaqah_id')
+      .select('id, nama, nama_override, halaqah_id')
       .eq('id', peserta_id)
       .maybeSingle();
     if (!peserta) {
@@ -198,10 +200,12 @@ export async function POST(req: NextRequest) {
     // sengaja tidak jadi syarat terbit.
 
     // --- Identitas & meta terbit ---
+    // Identitas dibekukan ke baris rapot, jadi yang dipakai adalah nama TAMPIL
+    // (koreksi pengajar bila ada) — bukan nilai mentah hulu yang mungkin keliru.
     const identitas: RapotIdentitas = {
-      peserta: peserta.nama as string,
-      halaqah: halaqah.nama as string,
-      level: (halaqah.level as string | null) ?? null,
+      peserta: namaPesertaTampil(peserta as PesertaTampil),
+      halaqah: namaHalaqahTampil(halaqah as HalaqahTampil),
+      level: levelHalaqahTampil(halaqah as HalaqahTampil),
       mustawa: (halaqah.mustawa as number | null) ?? null,
       gender: halaqah.gender as string,
       batch: batchNama,

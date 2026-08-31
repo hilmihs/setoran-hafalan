@@ -22,7 +22,7 @@ import { Setup } from './screens/Setup';
 import { Daftar } from './screens/Daftar';
 import { Nilai } from './screens/Nilai';
 import { Ringkasan } from './screens/Ringkasan';
-import { KelolaPeserta } from './screens/KelolaPeserta';
+import { EditHalaqah } from './screens/EditHalaqah';
 import RapotTrack from './screens/RapotTrack';
 import RapotTrackA4 from './rapot/RapotTrackA4';
 import RapotPrintStyle from './rapot/RapotPrintStyle';
@@ -71,6 +71,11 @@ export interface EvaluasiInitial {
     gender: Gender;
     mustawa: number | null;
     level: string | null;
+    /** Nama & level apa adanya dari hilmihs — pembanding di layar edit halaqah. */
+    namaPusat: string;
+    levelPusat: string | null;
+    /** Isi kolom level_override mentah; null berarti "ikut data pusat". */
+    levelOverride: string | null;
     ambang_ujian: number;
     pesertaCount: number;
     /** Nama batch (dari eval_batch) — dicetak di kop rapot. */
@@ -85,7 +90,7 @@ export interface EvaluasiInitial {
   currentSession: Record<Jenis, number>;
 }
 
-export type Screen = 'p-home' | 'p-setup' | 'p-daftar' | 'p-nilai' | 'p-ringkasan' | 'p-rapor' | 'p-peserta';
+export type Screen = 'p-home' | 'p-setup' | 'p-daftar' | 'p-nilai' | 'p-ringkasan' | 'p-rapor' | 'p-halaqah';
 export type SaveStatus = 'idle' | 'saving' | 'saved' | 'error';
 
 // Tile-color arrays (presentation, ported from mockup).
@@ -1040,19 +1045,21 @@ export function EvaluasiPengajarApp({ initial }: { initial: EvaluasiInitial }) {
               </div>
             )}
 
-            {/* Kelola peserta — pengajar sering menerima peserta baru sebelum data
-                pusat menyusul. Tanpa jalur ini orangnya tak bisa dinilai sama sekali. */}
+            {/* Edit halaqah — pengajar sering menerima peserta baru sebelum data
+                pusat menyusul, dan nomor/level halaqah kerap keliru di hulu.
+                Tanpa jalur ini orangnya tak bisa dinilai sama sekali, dan kop
+                rapotnya tercetak salah. */}
             <div style={{ padding: '18px 16px 0' }}>
               <button
-                onClick={() => nav('p-peserta')}
+                onClick={() => nav('p-halaqah')}
                 className="ev-press"
                 style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%', textAlign: 'left', padding: '12px 14px', borderRadius: 12, border: '1px solid #e8e4dc', background: '#ffffff', font: 'inherit', cursor: 'pointer' }}
               >
-                <span style={{ fontSize: 16, flexShrink: 0 }}>👥</span>
+                <span style={{ fontSize: 16, flexShrink: 0 }}>✏️</span>
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: 13, fontWeight: 600, color: '#1b1a17' }}>Peserta halaqah</div>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: '#1b1a17' }}>Edit halaqah</div>
                   <div style={{ fontSize: 11, color: '#a8a39a', marginTop: 1 }}>
-                    {peserta.length} peserta · tambah atau betulkan nama
+                    Nomor &amp; level · {peserta.length} peserta
                   </div>
                 </div>
                 <span style={{ fontSize: 15, color: '#d8d3c8' }}>›</span>
@@ -1160,10 +1167,13 @@ export function EvaluasiPengajarApp({ initial }: { initial: EvaluasiInitial }) {
           </>
         )}
 
-        {screen === 'p-peserta' && (
-          <KelolaPeserta
+        {screen === 'p-halaqah' && (
+          <EditHalaqah
             halaqahId={halaqah.id}
             halaqahNama={halaqah.nama}
+            halaqahNamaPusat={halaqah.namaPusat}
+            levelPusat={halaqah.levelPusat}
+            levelOverride={halaqah.levelOverride}
             peserta={peserta.map((p) => ({ id: p.id, nama: p.nama }))}
             coba={coba}
             back={() => nav('p-home')}

@@ -6,16 +6,21 @@ import {
   bersihkanNamaPeserta,
   buatIdPesertaManual,
   isPesertaManual,
+  namaPesertaTampil,
   URUTAN_MANUAL_DASAR,
 } from '@/lib/evaluasi-peserta';
 
 export const runtime = 'nodejs';
 
 /**
- * Tambah peserta baru ke halaqah, atau betulkan nama peserta yang sebelumnya
- * ditambahkan sendiri. Hanya baris `manual:` yang boleh diganti namanya —
- * nama peserta hilmihs datang dari hulu dan akan dikembalikan sinkron
- * berikutnya, jadi mengizinkannya cuma menipu pengajar.
+ * Tambah peserta baru ke halaqah, atau betulkan nama peserta yang sudah ada.
+ *
+ * Dua jalur simpan, karena asal barisnya beda:
+ * - baris `manual:` ditulis langsung ke `nama` — tak ada hulu yang memilikinya;
+ * - baris hilmihs ditulis ke `nama_override`, sebab `nama` ikut dibandingkan
+ *   sinkron dan suntingan langsung akan ditarik balik pull berikutnya
+ *   (migrasi 0068). Nama yang sama persis dengan hulu disimpan sebagai NULL
+ *   supaya pembetulan ejaan di hulu tetap mengalir.
  */
 export async function POST(req: NextRequest) {
   try {
@@ -55,7 +60,7 @@ export async function POST(req: NextRequest) {
     // Daftar sekarang dipakai dua kali: cek nama kembar dan hitung urutan.
     const { data: sudahAda } = await supabaseAdmin
       .from('eval_peserta')
-      .select('id, nama, urutan')
+      .select('id, nama, nama_override, urutan')
       .eq('halaqah_id', halaqahId)
       .eq('aktif', true);
     const daftar = sudahAda ?? [];
@@ -64,10 +69,12 @@ export async function POST(req: NextRequest) {
     const mengubah = typeof pesertaId === 'string' && pesertaId !== '';
 
     // Nama kembar hampir selalu berarti pengajar menambah orang yang sama dua
-    // kali (mis. sudah ada dari hilmihs dengan ejaan sedikit beda).
+    // kali (mis. sudah ada dari hilmihs dengan ejaan sedikit beda). Dibandingkan
+    // terhadap nama TAMPIL, karena itulah yang dilihat pengajar di daftar.
     const bentrok = daftar.find(
       (p) =>
-        String(p.nama).toLowerCase() === nama.toLowerCase() &&
+        namaPesertaTampil(p as { nama: string; nama_override?: string | null }).toLowerCase() ===
+          nama.toLowerCase() &&
         (!mengubah || p.id !== pesertaId)
     );
     if (bentrok) {
@@ -78,19 +85,16 @@ export async function POST(req: NextRequest) {
     }
 
     if (mengubah) {
-      if (!isPesertaManual(pesertaId)) {
-        return NextResponse.json(
-          { error: 'Peserta ini datang dari data pusat, namanya tak bisa diubah di sini.' },
-          { status: 403 }
-        );
-      }
-      const milikHalaqah = daftar.some((p) => p.id === pesertaId);
-      if (!milikHalaqah) {
+      const baris = daftar.find((p) => p.id === pesertaId);
+      if (!baris) {
         return NextResponse.json({ error: 'Peserta tidak ada di halaqah ini' }, { status: 404 });
       }
+      const patch = isPesertaManual(pesertaId)
+        ? { nama }
+        : { nama_override: nama === String(baris.nama) ? null : nama };
       const { error } = await supabaseAdmin
         .from('eval_peserta')
-        .update({ nama })
+        .update(patch)
         .eq('id', pesertaId);
       if (error) {
         return NextResponse.json({ error: error.message }, { status: 500 });
