@@ -1,4 +1,4 @@
--- 0069_ketersediaan_pertemuan.sql
+-- 0070_ketersediaan_pertemuan.sql
 -- Ketersediaan Mengajar HITS — pembuatan pertemuan di CMS tilawah.
 --
 -- Halaqah yang dikirim tanpa pertemuan tidak dapat dipakai: presensi di CMS

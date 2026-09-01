@@ -222,7 +222,7 @@ export default async function SyaikhDashboard() {
               Penilaian
             </Link>
             <Link
-              href="/2in1/koordinator/matrix"
+              href="/matrix/koordinator?tampilan=blok"
               className="btn btn-sm btn-ghost"
               style={{ height: 30, padding: '0 10px', textDecoration: 'none' }}
             >

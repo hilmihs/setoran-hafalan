@@ -524,7 +524,7 @@ Fase 1–6 selesai dan terverifikasi.
 
 | Bagian | Berkas |
 |---|---|
-| Skema | `supabase/migrations/0063`–`0067` (15 tabel `ks_*`) |
+| Skema | `supabase/migrations/0063`–`0067` + `0070` (15 tabel `ks_*`) |
 | Tipe | `src/types/db.ts` |
 | Normalisasi slot & bentrok | `ketersediaan-slot.ts`, `ketersediaan-bentrok.ts` |
 | Periode & master slot | `ketersediaan-periode.ts` |

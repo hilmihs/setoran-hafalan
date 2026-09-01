@@ -111,7 +111,7 @@ Each module is `src/app/<module>/<role>/` + a cluster of `src/lib/<prefix>-*.ts`
 | 2in1 (setoran) | Hafalan/tilawah recording + attendance | `2in1/`, `musyrif`, `syaikh`, `peserta` | `attendance.ts`, `laporan.ts`, `setoran-target.ts`, `week.ts` |
 | HITS soft-skill (`hits_*`) | Halaqah, pertemuan, pengajuan, ranking, disiplin/hutang | `hits/*` | ~30 `hits-*.ts` (`hits-ranking`, `hits-rekap`, `hits-pertemuan`, `hits-pengajuan`) |
 | Observasi ketua kelas | Class-monitor observation (new = `hits_keterangan_harian`) | `observasi/{ketua-kelas,koordinator}`, `hits/{ketua,koordinator}` | `hits-observasi.ts`, `hits-observasi-cakupan.ts` |
-| Matrix skill guru (`matrix_*`) | Teacher-skill indicator matrix (recomputed) | `matrix/koordinator` | `matrix-compute.ts`, `matrix-indicators.ts` |
+| Matrix skill guru (`matrix_*`) | Teacher-skill indicator matrix (recomputed) | `matrix/koordinator` (`?tampilan=blok\|tabel`) | `matrix-compute.ts`, `matrix-indicators.ts`, `matrix-blok*.ts` |
 | Maahir (laporan/SP/pemutihan) | Reporting, warning letters (SP), attendance whitewash | `laporan`, `2in1/maahir-mandiri` | `maahir-sp.ts`, `maahir-rekap.ts`, `maahir-pemutihan*.ts` |
 | Shakwa | Public complaint/izin form + koordinator dashboard | `shakwa/*` | `shakwa.ts`, `shakwa-izin.ts`, `shakwa-rekap.ts` |
 | Evaluasi | Halaqah/pengajar evaluation (fed by hilmihs `eval_*`) | `evaluasi/{koordinator,pengajar}` | `evaluasi.ts`, `evaluasi-pengajar.ts`, `evaluasi-halaqah.ts`, `evaluasi-peserta.ts` |
@@ -148,6 +148,18 @@ CMS contract: `docs/API-TILAWAH.md`.
 - Periodic work: `POST /api/ketersediaan/berkala` (Bearer `CRON_SECRET`) pulls
   registrants, shifts expired confirmations, ages out stale availability. It
   deliberately does **not** run allocation — halaqah still wait for a coordinator.
+
+### Matrix Skill Guru — one route, two views
+
+`/matrix/koordinator?tampilan=blok|tabel` is the **only** matrix page (koordinator
++ syaikh). `tabel` = 14 indicators, teguran, risk, finalized status, print, XLSX
+export; `blok` = ranking split by the Maahir class type the teacher *attends*
+(`matrix-blok.ts`: Takhassus → Tahfizh → Talaqqi → lintas → tanpa kelas), with
+podium and month-over-month deltas. Landing view is per role — koordinator gets
+`tabel`, syaikh gets `blok`. Both views are built from the same row set, and
+there is **one** detail page (`pengajar/[id]`); koordinator notes are hidden from
+syaikh. `/2in1/koordinator/matrix{,/[pengajar_id]}` are redirect stubs only —
+don't add features there. Blocks are ikhwan-only so far; akhwat render flat.
 
 ### Public read-only API (`/api/v1/[...path]`)
 
@@ -215,4 +227,14 @@ Schema-touching changes need a new migration file **and** matching updates to
 **Gotcha — number collisions:** parallel feature branches have already produced
 duplicate prefixes (two `0052_*` exist: `evaluasi_sesi_dihapus` + `evaluasi_sync`).
 Apply order among same-numbered files isn't guaranteed, so never rely on it — and
-`ls supabase/migrations/ | tail -1` before picking the next number (next is `0069`).
+`ls supabase/migrations/ | tail -1` before picking the next number — and check
+unmerged branches too. `0063`–`0067` and `0070` belong to the Ketersediaan
+module, `0068` to evaluasi overrides, `0069` to `program_kelas_anggota`
+(next free: `0071`).
+
+**Gotcha — DDL applied straight to prod:** some columns exist in production with
+no migration file at all, because they were added through `/api/admin/db`. A
+fresh local DB is therefore *not* equivalent to prod — `program_kelas_anggota`
+was missing `active`/`mulai_tanggal`/`selesai_tanggal` until `0069` backfilled
+the file. When a feature works in prod but dies locally, diff
+`information_schema.columns` before debugging the code.

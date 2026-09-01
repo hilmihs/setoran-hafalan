@@ -37,6 +37,9 @@ export interface Indikator {
   sumber: string;
 }
 
+/** Urutan tampil kategori. Satu sumber supaya tak ada daftar tulis-tangan. */
+export const KATEGORI_ORDER: readonly Kategori[] = ['hard', 'inspeksi', 'soft'];
+
 export const KATEGORI_LABEL: Record<Kategori, string> = {
   hard: 'Kompetensi Al-Qur’an (Hard Skill)',
   inspeksi: 'Inspeksi',

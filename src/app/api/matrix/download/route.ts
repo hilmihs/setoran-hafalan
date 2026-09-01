@@ -14,7 +14,7 @@ export const maxDuration = 60;
 
 export async function GET(req: NextRequest) {
   const s = await getSession();
-  // Halaman /2in1/koordinator/matrix dibuka koordinator DAN syaikh
+  // Halaman /matrix/koordinator dibuka koordinator DAN syaikh
   // (requireOneOfRoles di sana). Unduhannya harus mengikuti — dulu route ini
   // hanya menerima koordinator, jadi tombol unduh selalu 403 bagi syaikh.
   const accesses = s.accesses ?? (s.session ? [s.session] : []);
@@ -66,7 +66,7 @@ export async function GET(req: NextRequest) {
 
   const matrixByPengajar = new Map((matrixData ?? []).map((m) => [m.pengajar_id, m]));
 
-  // Blok ranking — sama persis dgn yang tampil di /2in1/koordinator/matrix,
+  // Blok ranking — sama persis dgn tampilan blok di /matrix/koordinator,
   // dan seperti di sana baru dipasang untuk ikhwan.
   const blokMap = await getBlokPengajar(
     (pengajarList ?? [])

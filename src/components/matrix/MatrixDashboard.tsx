@@ -13,7 +13,6 @@ import {
 export type MatrixListItem = {
   id: string;
   name: string;
-  gender: 'ikhwan' | 'akhwat';
   kelompok: string;
   hard: number | null;
   ped: number | null;
@@ -38,6 +37,15 @@ function skorColor(n: number | null): string {
 function fmt1(n: number | null): string {
   if (n === null || n === undefined) return '—';
   return Number(n).toFixed(1);
+}
+
+/**
+ * Halaman rincian dipakai bersama dengan tampilan tabel. `gender` ikut dibawa
+ * karena halaman itu menyaring pengajar per gender — tanpa parameter ini
+ * koordinator ikhwan yang membuka pengajar akhwat kena notFound().
+ */
+function detailHref(id: string, ym: string, gender: string): string {
+  return `/matrix/koordinator/pengajar/${id}?bulan=${ym}&gender=${gender}&tampilan=blok`;
 }
 
 /* ─── Delta ─────────────────────────────────────────────── */
@@ -204,9 +212,11 @@ function HeroStats({ items }: { items: MatrixListItem[] }) {
 function Podium({
   top3,
   ym,
+  gender,
 }: {
   top3: MatrixListItem[];
   ym: string;
+  gender: string;
 }) {
   if (top3.length === 0) return null;
 
@@ -222,7 +232,7 @@ function Podium({
         return (
           <Link
             key={it.id}
-            href={`/2in1/koordinator/matrix/${it.id}?bulan=${ym}`}
+            href={detailHref(it.id, ym, gender)}
             prefetch={false}
             style={{ textDecoration: 'none', flex: 1, maxWidth: 200 }}
           >
@@ -315,6 +325,7 @@ function RankedRow({
   showGlobal,
   highlightRank,
   ym,
+  gender,
 }: {
   item: MatrixListItem;
   rank: number | null;
@@ -327,12 +338,13 @@ function RankedRow({
    */
   highlightRank?: number | null;
   ym: string;
+  gender: string;
 }) {
   const sorot = highlightRank !== undefined ? highlightRank : rank;
   const isTop3 = sorot !== null && sorot <= 3;
   return (
     <Link
-      href={`/2in1/koordinator/matrix/${item.id}?bulan=${ym}`}
+      href={detailHref(item.id, ym, gender)}
       prefetch={false}
       style={{ textDecoration: 'none', color: 'inherit', display: 'block' }}
     >
@@ -395,7 +407,7 @@ function RankedRow({
             {item.name}
           </div>
           <div style={{ fontSize: 10, color: 'var(--muted-2)', marginTop: 1 }}>
-            {item.kelompok} · {item.gender}
+            {item.kelompok}
             {showGlobal && globalRank !== null && (
               <span style={{ marginLeft: 6, color: 'var(--muted)' }}>
                 (global #{globalRank})
@@ -461,25 +473,16 @@ function BlokHeader({ blok, count }: { blok: MatrixBlok; count: number }) {
   );
 }
 
-/* ─── FilterBar ──────────────────────────────────────────── */
-function FilterBar({
-  q,
-  setQ,
+/* ─── SortBar ────────────────────────────────────────────── */
+// Bulan, kelompok, gender, pencarian, dan tombol export tinggal di halaman
+// `/matrix/koordinator` — dipakai bersama tampilan tabel. Yang tersisa di sini
+// hanya yang khas daftar blok: dasar pengurutan.
+function SortBar({
   sortKey,
   setSortKey,
-  gender,
-  setGender,
-  ym,
-  monthOptions,
 }: {
-  q: string;
-  setQ: (v: string) => void;
   sortKey: SortKey;
   setSortKey: (v: SortKey) => void;
-  gender: 'all' | 'ikhwan' | 'akhwat';
-  setGender: (v: 'all' | 'ikhwan' | 'akhwat') => void;
-  ym: string;
-  monthOptions: string[];
 }) {
   const sortOptions: { key: SortKey; label: string }[] = [
     { key: 'total', label: 'Total' },
@@ -487,46 +490,24 @@ function FilterBar({
     { key: 'ped', label: 'Pedagogis' },
     { key: 'soft', label: 'Soft' },
   ];
-  const genderOptions: { key: 'all' | 'ikhwan' | 'akhwat'; label: string }[] = [
-    { key: 'all', label: 'Semua' },
-    { key: 'ikhwan', label: 'Ikhwan' },
-    { key: 'akhwat', label: 'Akhwat' },
-  ];
 
   return (
     <div
       style={{
         display: 'flex',
         flexWrap: 'wrap',
+        alignItems: 'center',
         gap: 8,
         marginBottom: 14,
-        padding: '12px',
+        padding: '10px 12px',
         background: 'var(--surface)',
         border: '1px solid var(--line)',
         borderRadius: 'var(--r-md)',
       }}
     >
-      {/* Search */}
-      <div className="search" style={{ minWidth: 160 }}>
-        <svg
-          width="13"
-          height="13"
-          viewBox="0 0 16 16"
-          fill="none"
-          xmlns="http://www.w3.org/2000/svg"
-        >
-          <circle cx="7" cy="7" r="5" stroke="currentColor" strokeWidth="1.5" />
-          <path d="M11 11L14 14" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-        </svg>
-        <input
-          type="search"
-          placeholder="Cari nama / kelompok…"
-          value={q}
-          onChange={(e) => setQ(e.target.value)}
-        />
-      </div>
-
-      {/* Sort */}
+      <span className="t-tiny" style={{ color: 'var(--muted-2)' }}>
+        Urut menurut
+      </span>
       <div style={{ display: 'flex', gap: 4 }}>
         {sortOptions.map((o) => (
           <button
@@ -539,100 +520,24 @@ function FilterBar({
           </button>
         ))}
       </div>
-
-      {/* Gender chips */}
-      <div style={{ display: 'flex', gap: 4 }}>
-        {genderOptions.map((o) => (
-          <button
-            key={o.key}
-            onClick={() => setGender(o.key)}
-            className={`btn btn-xs ${gender === o.key ? 'btn-primary' : 'btn-ghost'}`}
-          >
-            {o.label}
-          </button>
-        ))}
-      </div>
-
-      {/* Month chips as Links — server roundtrip for new data */}
-      <div
-        style={{
-          display: 'flex',
-          gap: 4,
-          marginLeft: 'auto',
-          flexWrap: 'wrap',
-        }}
-      >
-        {monthOptions.map((m) => (
-          <Link
-            key={m}
-            href={`?bulan=${m}`}
-            className={`btn btn-xs ${m === ym ? 'btn-primary' : 'btn-ghost'}`}
-            style={{ textDecoration: 'none' }}
-          >
-            {new Date(m + '-01T00:00:00').toLocaleDateString('id-ID', {
-              month: 'short',
-              year: '2-digit',
-            })}
-          </Link>
-        ))}
-      </div>
-
-      {/* Export — sengaja di sini, bukan di topbar, supaya ikut chip gender di
-          sebelahnya. Unduhan yang tak mengikuti filter layar hanya membingungkan. */}
-      <div style={{ display: 'flex', gap: 4, flexBasis: '100%' }}>
-        <a
-          href={`/api/matrix/download?bulan=${ym}&gender=${gender}`}
-          className="btn btn-xs btn-primary"
-          style={{ textDecoration: 'none' }}
-        >
-          ⬇ Export Excel — {bulanPendek(ym)}
-          {gender !== 'all' ? ` · ${gender === 'ikhwan' ? 'Ikhwan' : 'Akhwat'}` : ''}
-        </a>
-        <a
-          href={`/api/matrix/download?bulan=${ym}&gender=${gender}&incomplete=1`}
-          className="btn btn-xs btn-ghost"
-          style={{ textDecoration: 'none' }}
-          title="Hanya pengajar yang masih punya indikator kosong, beserta rincian bagian yang belum terisi"
-        >
-          ⬇ Yang belum lengkap
-        </a>
-      </div>
     </div>
   );
-}
-
-function bulanPendek(ym: string): string {
-  return new Date(ym + '-01T00:00:00').toLocaleDateString('id-ID', {
-    month: 'long',
-    year: 'numeric',
-  });
 }
 
 /* ─── MatrixDashboard (main export) ─────────────────────── */
 export function MatrixDashboard({
   items,
   ym,
-  monthLabel,
-  monthOptions,
+  gender,
 }: {
+  /** Sudah tersaring di server: gender, kelompok, dan pencarian nama. */
   items: MatrixListItem[];
   ym: string;
-  monthLabel: string;
-  monthOptions: string[];
+  gender: string;
 }) {
-  const [q, setQ] = useState('');
   const [sortKey, setSortKey] = useState<SortKey>('total');
-  const [gender, setGender] = useState<'all' | 'ikhwan' | 'akhwat'>('all');
 
-  const filtered = useMemo(() => {
-    const qLow = q.toLowerCase();
-    return items.filter((it) => {
-      if (gender !== 'all' && it.gender !== gender) return false;
-      if (qLow && !it.name.toLowerCase().includes(qLow) && !it.kelompok.toLowerCase().includes(qLow))
-        return false;
-      return true;
-    });
-  }, [items, q, gender]);
+  const filtered = items;
 
   const sorted = useMemo(() => {
     const key = sortKey;
@@ -657,13 +562,16 @@ export function MatrixDashboard({
     [sorted]
   );
 
-  const showGlobalCaption = gender !== 'all';
+  // Kalau daftar diurut selain Total, nomor baris tak lagi sama dengan
+  // peringkat resmi — peringkat itu ditampilkan terpisah supaya tak rancu.
+  const showGlobalCaption = sortKey !== 'total';
 
-  // Blok baru dipasang untuk ikhwan (akhwat menyusul). Nomor di badge = urutan
-  // baca dari atas ke bawah dan BERJALAN lintas blok: Takhassus 1..9, blok
-  // Tahfizh lanjut dari 10, dst. Peringkat skor global tetap ditampilkan di
-  // baris kedua ('global #N') karena keduanya beda arti.
-  const blocked = gender === 'ikhwan' && filtered.some((it) => it.blok !== null);
+  // Blok baru dipasang untuk ikhwan (akhwat menyusul; server mengisi `blok`
+  // null untuk mereka). Nomor di badge = urutan baca dari atas ke bawah dan
+  // BERJALAN lintas blok: Takhassus 1..9, blok Tahfizh lanjut dari 10, dst.
+  // Peringkat skor global tetap ditampilkan di baris kedua ('global #N')
+  // karena keduanya beda arti.
+  const blocked = filtered.some((it) => it.blok !== null);
 
   const groups = useMemo(() => {
     if (!blocked) return null;
@@ -679,31 +587,16 @@ export function MatrixDashboard({
   }, [blocked, sorted]);
 
   return (
-    <div
-      style={{
-        padding: '0 16px 80px',
-        maxWidth: 1200,
-        margin: '0 auto',
-        boxSizing: 'border-box',
-      }}
-    >
+    // Lebar & padding luar diatur halaman pembungkus, jangan digandakan di sini.
+    <div style={{ paddingBottom: 40 }}>
       {/* Hero Stats — derived from filtered set */}
       <HeroStats items={filtered} />
 
       {/* Podium */}
-      <Podium top3={top3} ym={ym} />
+      <Podium top3={top3} ym={ym} gender={gender} />
 
-      {/* Filter Bar */}
-      <FilterBar
-        q={q}
-        setQ={setQ}
-        sortKey={sortKey}
-        setSortKey={setSortKey}
-        gender={gender}
-        setGender={setGender}
-        ym={ym}
-        monthOptions={monthOptions}
-      />
+      {/* Sort */}
+      <SortBar sortKey={sortKey} setSortKey={setSortKey} />
 
       {/* Legend */}
       <div
@@ -749,7 +642,7 @@ export function MatrixDashboard({
         <>
           <p className="t-tiny" style={{ color: 'var(--muted-2)', paddingLeft: 4, marginBottom: 4 }}>
             Nomor urut berjalan lintas blok: Takhassus dulu, lalu Tahfizh, baru
-            sisanya. Angka dalam kurung = peringkat skor se-ikhwan.
+            sisanya. Angka dalam kurung = peringkat skor se-gender.
           </p>
           {groups.map((g) => (
             <div key={g.blok}>
@@ -763,6 +656,7 @@ export function MatrixDashboard({
                   showGlobal
                   highlightRank={it.ranking}
                   ym={ym}
+                  gender={gender}
                 />
               ))}
             </div>
@@ -777,6 +671,7 @@ export function MatrixDashboard({
             globalRank={it.ranking}
             showGlobal={showGlobalCaption}
             ym={ym}
+            gender={gender}
           />
         ))
       )}

@@ -11,8 +11,8 @@ import { NotesPanel } from '@/components/NotesPanel';
 import {
   INDIKATOR_BY_KATEGORI,
   KATEGORI_LABEL as KATEGORI_NAMA,
+  KATEGORI_ORDER,
   INDIKATOR,
-  type Kategori,
   type IndikatorKey,
 } from '@/lib/matrix-indicators';
 import { todayJakartaISO } from '@/lib/hits-observasi';
@@ -73,9 +73,12 @@ export default async function PengajarDetailPage({
   searchParams,
 }: {
   params: { id: string };
-  searchParams: { bulan?: string; gender?: string };
+  searchParams: { bulan?: string; gender?: string; tampilan?: string };
 }) {
-  const session = await requireOneOfRoles(['koordinator']);
+  const session = await requireOneOfRoles(['koordinator', 'syaikh']);
+  // Catatan koordinator bersifat internal antar-koordinator; syaikh membaca
+  // halaman ini untuk skornya, bukan untuk catatan itu.
+  const bolehCatatan = session.role === 'koordinator';
   const gender: Gender =
     searchParams.gender === 'ikhwan' || searchParams.gender === 'akhwat'
       ? searchParams.gender
@@ -198,16 +201,22 @@ export default async function PengajarDetailPage({
   };
   const radarData = INDIKATOR.map((ind) => ({ indikator: ind.short, skor: skorOf(ind.key), standar: ind.standar }));
 
+  // Kembali ke tampilan asal (blok / tabel), bukan selalu ke tabel.
+  const tampilanAsal = searchParams.tampilan === 'blok' ? 'blok' : 'tabel';
+  const kembaliHref = `/matrix/koordinator?bulan=${monthSel}&gender=${gender}&tampilan=${tampilanAsal}`;
+
   // Notes: tampilkan peer notes + own private notes
-  const sessionAuthorId = session.koordinator_id;
-  const { data: notesRaw } = await supabaseAdmin
-    .from('koordinator_notes')
-    .select('id, author_role, author_id, body, visibility, created_at')
-    .eq('target_type', 'pengajar')
-    .eq('target_id', params.id)
-    .or(`visibility.eq.peer,and(visibility.eq.private,author_id.eq.${sessionAuthorId})`)
-    .order('created_at', { ascending: false })
-    .limit(20);
+  const sessionAuthorId = session.role === 'koordinator' ? session.koordinator_id : null;
+  const { data: notesRaw } = bolehCatatan
+    ? await supabaseAdmin
+        .from('koordinator_notes')
+        .select('id, author_role, author_id, body, visibility, created_at')
+        .eq('target_type', 'pengajar')
+        .eq('target_id', params.id)
+        .or(`visibility.eq.peer,and(visibility.eq.private,author_id.eq.${sessionAuthorId})`)
+        .order('created_at', { ascending: false })
+        .limit(20)
+    : { data: [] };
 
   const authorIds = Array.from(new Set((notesRaw ?? []).map((n) => n.author_id)));
   const authorMap = new Map<string, string>();
@@ -238,7 +247,7 @@ export default async function PengajarDetailPage({
               <span className="mark">M</span> Pengajar
             </div>
             <div style={{ display: 'flex', gap: 8 }}>
-              <Link href={`/matrix/koordinator?bulan=${monthSel}&gender=${gender}`} className="btn btn-sm btn-ghost" style={{ height: 30, padding: '0 10px' }}>
+              <Link href={kembaliHref} className="btn btn-sm btn-ghost" style={{ height: 30, padding: '0 10px' }}>
                 {Icon.back(12)} Matrix
               </Link>
               <LogoutButton />
@@ -288,7 +297,12 @@ export default async function PengajarDetailPage({
                   </p>
                 </div>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 12 }}>
-                  {(['hard', 'pedagogis', 'soft'] as Kategori[]).map((kat) => (
+                  {/* Kategori tengah bernama 'inspeksi', bukan 'pedagogis'.
+                      Dulu di sini ada cast `as Kategori[]` yang menyembunyikan
+                      salah tulis itu dari tsc — halaman 500 untuk tiap pengajar
+                      yang punya baris matrix di bulan terpilih. Tanpa cast,
+                      salah tulis berikutnya ketahuan saat typecheck. */}
+                  {KATEGORI_ORDER.map((kat) => (
                     <div key={kat} style={{ background: 'var(--surface-2)', borderRadius: 'var(--r-md)', padding: 12 }}>
                       <div className="t-tiny" style={{ marginBottom: 8, color: 'var(--ink-2)' }}>{KATEGORI_NAMA[kat]}</div>
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
@@ -326,8 +340,8 @@ export default async function PengajarDetailPage({
             )}
           </div>
 
-          {/* Notes panel */}
-          <NotesPanel targetType="pengajar" targetId={params.id} notes={notes} />
+          {/* Notes panel — koordinator saja */}
+          {bolehCatatan && <NotesPanel targetType="pengajar" targetId={params.id} notes={notes} />}
 
           {/* Risk breakdown */}
           <h2 className="t-h2" style={{ marginBottom: 10 }}>Risk Profile</h2>
