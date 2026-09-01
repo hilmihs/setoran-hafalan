@@ -11,6 +11,7 @@ import { PanelSlot } from './PanelSlot';
 import { PanelKerja, type BarisAntrean, type KartuUsulan } from './PanelKerja';
 import { PanelPendaftar } from './PanelPendaftar';
 import { PanelPengingat } from './PanelPengingat';
+import { PanelGrupPool, type BarisGrup } from './PanelGrupPool';
 import type { Gender, KsPendaftarSumber, KsSlot } from '@/types/db';
 
 export const dynamic = 'force-dynamic';
@@ -48,6 +49,7 @@ export default async function KetersediaanKoordinatorPage() {
   ]);
 
   const pengajarRingkas = await muatPengajar(periode.id);
+  const grupPool = await muatGrupPool(periode.id);
 
   return (
     <Bingkai>
@@ -86,6 +88,8 @@ export default async function KetersediaanKoordinatorPage() {
       />
 
       <PanelPengingat periodeId={periode.id} />
+
+      <PanelGrupPool periodeId={periode.id} baris={grupPool} />
 
       <PanelPendaftar periodeId={periode.id} sumber={sumber} />
 
@@ -200,6 +204,28 @@ async function muatUsulan(periodeId: string): Promise<KartuUsulan[]> {
     tenggat: b.token_kedaluwarsa,
     tilawah_halaqah_id: b.tilawah_halaqah_id,
     grup_wa_link: b.grup_wa_link,
+  }));
+}
+
+async function muatGrupPool(periodeId: string): Promise<BarisGrup[]> {
+  const { data } = await supabaseAdmin
+    .from('ks_grup_pool')
+    .select('id, gender, invite_link, status, usulan:usulan_id(nama_halaqah, slot:slot_id(label))')
+    .eq('periode_id', periodeId)
+    .order('created_at', { ascending: true });
+
+  return ((data ?? []) as {
+    id: string;
+    gender: Gender;
+    invite_link: string;
+    status: string;
+    usulan?: { nama_halaqah: string | null; slot?: { label: string } | null } | null;
+  }[]).map((b) => ({
+    id: b.id,
+    gender: b.gender,
+    invite_link: b.invite_link,
+    status: b.status,
+    halaqah: b.usulan ? (b.usulan.nama_halaqah ?? b.usulan.slot?.label ?? 'terpakai') : null,
   }));
 }
 

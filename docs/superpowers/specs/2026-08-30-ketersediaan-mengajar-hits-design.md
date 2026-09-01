@@ -518,8 +518,7 @@ dan slot yang belum dipetakan ke tilawah.
 
 ## 16. Status implementasi (31 Agustus 2026)
 
-Fase 1–5 selesai dan terverifikasi. Fase 6 (pembuatan pertemuan) belum, menunggu
-keputusan pada §12 butir 2.
+Fase 1–6 selesai dan terverifikasi.
 
 ### Yang dibangun
 
@@ -565,9 +564,9 @@ keputusan pada §12 butir 2.
 
 ### Sisa pekerjaan operasional
 
-- Kolam grup WA cadangan (`ks_grup_pool`) belum punya layar pengisian; saat ini
-  hanya dapat diisi lewat konsol admin. Jalur utama (pengajar menempel tautan
-  sendiri) sudah jalan.
+- ~~Kolam grup WA cadangan belum punya layar pengisian~~ — **selesai**, koordinator
+  menempel banyak tautan sekaligus dan tautan kembar ditolak.
 - Penjadwal untuk `POST /api/ketersediaan/berkala` belum dipasang di VPS.
-- Halaqah uji `#239` beserta murid `#2257`/`#2258` masih ada di CMS staging;
-  murid tidak dapat dihapus lewat API.
+- Halaqah uji di CMS staging sudah dihapus seluruhnya. Yang tersisa hanya tiga
+  akun murid uji (`#2257`, `#2258`, `#2259`) — `DELETE /api/users/{id}` membalas
+  302 tanpa menghapus, jadi harus dibereskan dari dalam CMS.

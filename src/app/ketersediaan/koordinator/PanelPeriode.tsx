@@ -98,6 +98,7 @@ function AturanPeriode({ periode }: { periode: KsPeriode }) {
   const [jedaMulai, setJedaMulai] = useState(periode.jeda_mulai_hari);
   const [tenggat, setTenggat] = useState(periode.tenggat_konfirmasi_jam);
   const [penyegaran, setPenyegaran] = useState(periode.penyegaran_hari);
+  const [pertemuan, setPertemuan] = useState(periode.jumlah_pertemuan);
 
   return (
     <Bagian
@@ -113,7 +114,13 @@ function AturanPeriode({ periode }: { periode: KsPeriode }) {
         <Angka label="Jeda mulai (hari)" nilai={jedaMulai} ubah={setJedaMulai} min={0} max={90} />
         <Angka label="Tenggat konfirmasi (jam)" nilai={tenggat} ubah={setTenggat} min={1} max={720} />
         <Angka label="Penyegaran (hari)" nilai={penyegaran} ubah={setPenyegaran} min={1} max={365} />
+        <Angka label="Pertemuan per halaqah" nilai={pertemuan} ubah={setPertemuan} min={0} max={200} />
       </div>
+      <p className="t-small" style={{ color: 'var(--muted-2)', marginTop: 6 }}>
+        Pertemuan dibuat di CMS tilawah pada hari slot, berturut-turut sejak tanggal mulai.
+        Halaqah HITS Reguler di CMS lazimnya berisi 22 pertemuan. Isi 0 bila pertemuan
+        akan dibuat manual di sana.
+      </p>
       {tampilan}
       <button
         className="btn btn-sm"
@@ -131,6 +138,7 @@ function AturanPeriode({ periode }: { periode: KsPeriode }) {
               jedaMulaiHari: jedaMulai,
               tenggatKonfirmasiJam: tenggat,
               penyegaranHari: penyegaran,
+              jumlahPertemuan: pertemuan,
             })
           )
         }

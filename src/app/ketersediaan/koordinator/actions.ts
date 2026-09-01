@@ -114,6 +114,7 @@ export async function ubahAturanPeriode(input: {
   jedaMulaiHari: number;
   tenggatKonfirmasiJam: number;
   penyegaranHari: number;
+  jumlahPertemuan: number;
 }): Promise<Hasil> {
   const a = await aktor();
   const lama = await getPeriode(input.periodeId);
@@ -131,6 +132,7 @@ export async function ubahAturanPeriode(input: {
     jeda_mulai_hari: input.jedaMulaiHari,
     tenggat_konfirmasi_jam: input.tenggatKonfirmasiJam,
     penyegaran_hari: input.penyegaranHari,
+    jumlah_pertemuan: input.jumlahPertemuan,
     updated_at: new Date().toISOString(),
   };
   await supabaseAdmin.from('ks_periode').update(patch).eq('id', input.periodeId);
@@ -829,4 +831,114 @@ export async function tandaiPengingatTerkirim(input: { pengisianIds: string[] })
   });
   segarkan();
   return { ok: true, pesan: `${input.pengisianIds.length} pengingat ditandai terkirim.` };
+}
+
+// ── Kolam grup WhatsApp cadangan ───────────────────────────────────────────
+
+/**
+ * Isi kolam grup cadangan dari tempelan banyak tautan sekaligus.
+ *
+ * Jalur utama tetap pengajar membuat grupnya sendiri; kolam ini untuk yang tak
+ * sanggup. WhatsApp Cloud API resmi tidak punya endpoint grup sama sekali, jadi
+ * grupnya memang harus dibuat manusia lebih dulu — yang bisa diotomasi hanya
+ * pembagiannya.
+ */
+export async function tambahGrupPool(input: {
+  periodeId: string;
+  gender: 'ikhwan' | 'akhwat';
+  tempelan: string;
+}): Promise<Hasil> {
+  const a = await aktor();
+  const tautan = [...new Set(
+    input.tempelan
+      .split(/\s+/)
+      .map((t) => t.trim())
+      .filter((t) => /^https:\/\/chat\.whatsapp\.com\/[A-Za-z0-9]+/.test(t))
+  )];
+  if (tautan.length === 0) {
+    return {
+      ok: false,
+      error: 'Tidak ada tautan grup yang dikenali. Tempel tautan berformat https://chat.whatsapp.com/…',
+    };
+  }
+
+  const { data: ada } = await supabaseAdmin
+    .from('ks_grup_pool')
+    .select('invite_link')
+    .eq('periode_id', input.periodeId);
+  const sudahAda = new Set(((ada ?? []) as { invite_link: string }[]).map((r) => r.invite_link));
+
+  let masuk = 0;
+  let dilewati = 0;
+  for (const link of tautan) {
+    // Tautan kembar berbahaya: dua halaqah bisa mendapat grup yang sama dan
+    // muridnya tercampur tanpa siapa pun menyadarinya.
+    if (sudahAda.has(link)) {
+      dilewati++;
+      continue;
+    }
+    const { error } = await supabaseAdmin.from('ks_grup_pool').insert({
+      periode_id: input.periodeId,
+      gender: input.gender,
+      invite_link: link,
+    });
+    if (error) return { ok: false, error: `Gagal menyimpan tautan: ${error.message}` };
+    sudahAda.add(link);
+    masuk++;
+  }
+
+  await catatKs({
+    periode_id: input.periodeId,
+    entitas: 'ks_grup_pool',
+    aksi: 'tambah_grup_kolam',
+    sesudah: { gender: input.gender, masuk, dilewati },
+    aktor_wa: a.wa,
+    aktor_nama: a.nama,
+  });
+  segarkan();
+  return {
+    ok: true,
+    pesan: `${masuk} tautan masuk kolam${dilewati ? `, ${dilewati} dilewati karena sudah ada` : ''}.`,
+  };
+}
+
+export async function ubahStatusGrupPool(input: {
+  id: string;
+  status: 'kosong' | 'rusak';
+  catatan: string;
+}): Promise<Hasil> {
+  const a = await aktor();
+  const { data: baris } = await supabaseAdmin
+    .from('ks_grup_pool')
+    .select('id, periode_id, status, usulan_id')
+    .eq('id', input.id)
+    .maybeSingle();
+  if (!baris) return { ok: false, error: 'Tautan tidak ditemukan.' };
+  if (baris.status === 'terpakai' && baris.usulan_id) {
+    return {
+      ok: false,
+      error: 'Tautan ini sedang dipakai sebuah halaqah. Ganti tautan grupnya dari halaman konfirmasi pengajar.',
+    };
+  }
+
+  await supabaseAdmin
+    .from('ks_grup_pool')
+    .update({
+      status: input.status,
+      catatan: input.catatan.trim() || null,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', input.id);
+
+  await catatKs({
+    periode_id: baris.periode_id as string,
+    entitas: 'ks_grup_pool',
+    entitas_id: input.id,
+    aksi: input.status === 'rusak' ? 'tandai_grup_rusak' : 'kembalikan_grup_ke_kolam',
+    alasan: input.catatan.trim() || null,
+    aktor_wa: a.wa,
+    aktor_nama: a.nama,
+  });
+  segarkan();
+  return { ok: true, pesan: 'Status tautan diperbarui.' };
 }
