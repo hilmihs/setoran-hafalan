@@ -66,7 +66,11 @@ const GURU_MAAHIR: GuruManual[] = [
   { nama: 'Ruqayyah', gender: 'P', wa: '6289653402400', program: PROGRAM_NON_TAKHASSUS, sumber: 'eval_pengajar + pengajar' },
   { nama: 'Syaikh Ahmad', gender: 'L', wa: '6282260747373', program: '', sumber: 'syaikh' },
   { nama: 'Ahmad Abdus Syukur', gender: 'L', wa: '6285822950406', program: '', sumber: 'syaikh + eval_pengajar' },
-  { nama: 'Abdullah Mubarak Al Habsyi', gender: 'L', wa: '6285718965202', program: '', sumber: 'pengajar + eval_pengajar' },
+  // Sengaja TANPA WA. "Abdullah Mubarak Al Habsyi" (6285718965202) sempat
+  // dicocokkan ke sini karena namanya paling dekat, tapi dikoreksi koordinator
+  // (1 Sep 2026): dia guru HITS + peserta Maahir, BUKAN pengajar Maahir.
+  // Jangan cocokkan lagi ke nama itu.
+  { nama: 'Syaikh Abdullah', gender: 'L', wa: null, program: '', sumber: 'TIDAK ADA di sistem — nama dari koordinator' },
   { nama: 'Syaikhah Syaima', gender: 'P', wa: null, program: '', sumber: 'TIDAK ADA di sistem — nama dari koordinator' },
 ];
 
@@ -150,7 +154,12 @@ type Baris = {
   no_wa: string;
   status: string;
   jumlah_hadir: number | '';
-  sumber: string; // kolom tambahan; konsumen mengabaikannya
+  // Kolom tambahan (konsumen mengabaikannya) — menahan rincian yang hilang
+  // waktu baris digabung jadi satu orang satu baris.
+  hadir_kelas: number | '';
+  hadir_at_tibyan: number | '';
+  ikut_at_tibyan: string;
+  sumber: string;
 };
 
 // -------------------------------------------------------------------- utama
@@ -230,13 +239,35 @@ async function main() {
   );
   const kelasAdaTibyan = new Set(tibyanRows.map((r) => String(r.program_kelas_id)));
 
-  // --- 5. Susun baris peserta
-  const baris: Baris[] = [];
+  // --- 5. Gabungkan keanggotaan jadi SATU BARIS PER ORANG.
+  //
+  // Kunci penggabungan = nomor WA (lihat kontrol kualitas: 0 WA bernama beda,
+  // 0 nama ber-WA beda). Yang ikut >1 kelas dan yang punya sesi At-Tibyan tidak
+  // lagi menghasilkan baris tambahan — permintaan koordinator 1 Sep 2026, satu
+  // orang cukup sekali supaya konsumen tak perlu mendedup sendiri.
+  //
+  // Rinciannya tak dibuang, cuma pindah kolom: `kelas` menampung semua kelasnya
+  // dipisah ' | ', dan hadir kelas vs At-Tibyan tetap terbaca di kolom
+  // tambahan `hadir_kelas` / `hadir_at_tibyan`.
+  type Orang = {
+    nama: string;
+    wa: string;
+    gender: 'L' | 'P';
+    kelas: string[];
+    takhassus: boolean;
+    hadirKelas: number;
+    hadirTibyan: number;
+    adaTibyan: boolean;
+    status: string[];
+    masihAktif: boolean;
+  };
+  const orangByWa = new Map<string, Orang>();
+
   for (const a of anggotaRows) {
     const kelas = kelasById.get(String(a.program_kelas_id));
     if (!kelas) continue;
     const wa = a.whatsapp_number ? String(a.whatsapp_number) : '';
-    const gender: 'L' | 'P' = kelas.gender === 'ikhwan' ? 'L' : 'P';
+    if (!wa) continue; // tanpa WA tak ada kunci penggabungan yang bisa dipercaya
 
     // Alasan keluar tidak ada kolomnya di DB — jadi ditulis apa adanya, bukan
     // dikarang jadi "Mengundurkan diri".
@@ -246,52 +277,90 @@ async function main() {
       status = `Selesai per ${String(a.selesai_tanggal)}`;
     }
 
-    const dasar = {
+    const o: Orang = orangByWa.get(wa) ?? {
       nama: String(a.name ?? '').trim(),
-      peran: 'peserta' as const,
-      id_orang: wa,
-      kelas: kelas.name,
-      gender,
-      email: '',
-      no_wa: wa,
-      status,
-      sumber: 'program_kelas_anggota',
+      wa,
+      gender: kelas.gender === 'ikhwan' ? 'L' : 'P',
+      kelas: [],
+      takhassus: false,
+      hadirKelas: 0,
+      hadirTibyan: 0,
+      adaTibyan: false,
+      status: [],
+      masihAktif: false,
     };
 
-    baris.push({
-      ...dasar,
-      program: isTakhassusKelas(kelas.name) ? PROGRAM_TAKHASSUS : PROGRAM_NON_TAKHASSUS,
-      jumlah_hadir: hadirByKey.get(`${String(a.id)}|kelas_maahir`) ?? 0,
-    });
-
+    o.kelas.push(kelas.name);
+    // Ikut satu kelas Takhassus sudah cukup untuk dihitung Takhassus; di
+    // periode Juli 2026 cuma 1 orang yang menyeberang (Annidaul Jannah).
+    if (isTakhassusKelas(kelas.name)) o.takhassus = true;
+    o.hadirKelas += hadirByKey.get(`${String(a.id)}|kelas_maahir`) ?? 0;
     if (kelasAdaTibyan.has(String(a.program_kelas_id))) {
-      baris.push({
-        ...dasar,
-        program: PROGRAM_TIBYAN,
-        jumlah_hadir: hadirByKey.get(`${String(a.id)}|at_tibyan`) ?? 0,
-      });
+      o.adaTibyan = true;
+      o.hadirTibyan += hadirByKey.get(`${String(a.id)}|at_tibyan`) ?? 0;
     }
+    // Masih aktif di SATU kelas saja sudah berarti orangnya belum keluar —
+    // status keluar hanya ditulis kalau semua keanggotaannya sudah berakhir.
+    if (status) o.status.push(`${status} (${kelas.name})`);
+    else o.masihAktif = true;
+
+    orangByWa.set(wa, o);
   }
 
-  // --- 6. Baris pengajar.
-  // `kelas` kosong: peta kelas→guru tak ada di sistem dan koordinator belum
-  // memberikannya. `jumlah_hadir` kosong, BUKAN 0 — kehadiran pengajar memang
-  // tidak dicatat di mana pun, dan menulis 0 akan terbaca "tak pernah datang".
+  // --- 6. Pengajar menang atas peserta.
+  // 4 dari mereka juga anggota kelas Maahir (Radiatam, Salma, Ahmad Abdus
+  // Syukur, Ruqayyah). Karena satu orang cuma boleh satu baris, baris
+  // peserta-nya dilebur ke sini — tapi kehadirannya tetap dibawa, karena itu
+  // angka nyata, bukan tebakan.
+  const guruByWa = new Map(GURU_MAAHIR.filter((g) => g.wa).map((g) => [g.wa as string, g]));
+  const baris: Baris[] = [];
+
   for (const g of GURU_MAAHIR) {
+    const asPeserta = g.wa ? orangByWa.get(g.wa) : undefined;
     baris.push({
       nama: g.nama,
       peran: 'pengajar',
       id_orang: g.wa ?? '',
       program: g.program,
-      kelas: '',
+      // Bukan kelas yang DIAJAR — peta kelas→guru tak ada di sistem. Ini kelas
+      // yang ia IKUTI sebagai peserta, dan cuma terisi kalau memang ada.
+      kelas: asPeserta ? asPeserta.kelas.join(' | ') : '',
       gender: g.gender,
       email: '',
       no_wa: g.wa ?? '',
-      status: '',
-      jumlah_hadir: '',
-      sumber: g.sumber,
+      status: asPeserta && !asPeserta.masihAktif ? asPeserta.status.join('; ') : '',
+      // Kosong (bukan 0) bila ia tak punya keanggotaan: kehadiran pengajar
+      // memang tak dicatat di mana pun, dan 0 akan terbaca "tak pernah datang".
+      jumlah_hadir: asPeserta ? asPeserta.hadirKelas + asPeserta.hadirTibyan : '',
+      hadir_kelas: asPeserta ? asPeserta.hadirKelas : '',
+      hadir_at_tibyan: asPeserta ? asPeserta.hadirTibyan : '',
+      ikut_at_tibyan: asPeserta?.adaTibyan ? 'ya' : '',
+      sumber: asPeserta
+        ? `${g.sumber}; jumlah_hadir dari keanggotaannya sbg peserta`
+        : g.sumber,
     });
   }
+
+  for (const o of orangByWa.values()) {
+    if (guruByWa.has(o.wa)) continue; // sudah keluar sebagai baris pengajar
+    baris.push({
+      nama: o.nama,
+      peran: 'peserta',
+      id_orang: o.wa,
+      program: o.takhassus ? PROGRAM_TAKHASSUS : PROGRAM_NON_TAKHASSUS,
+      kelas: o.kelas.join(' | '),
+      gender: o.gender,
+      email: '',
+      no_wa: o.wa,
+      status: o.masihAktif ? '' : o.status.join('; '),
+      jumlah_hadir: o.hadirKelas + o.hadirTibyan,
+      hadir_kelas: o.hadirKelas,
+      hadir_at_tibyan: o.adaTibyan ? o.hadirTibyan : '',
+      ikut_at_tibyan: o.adaTibyan ? 'ya' : '',
+      sumber: 'program_kelas_anggota',
+    });
+  }
+  baris.sort((a, b) => a.peran.localeCompare(b.peran) || a.nama.localeCompare(b.nama));
 
   // --- 7. Dugaan akun ganda: nama sama, WA beda (kandidat orang yang sama).
   const waByNama = new Map<string, Set<string>>();
@@ -343,7 +412,10 @@ async function tulisXlsx(
     { header: 'no_wa', key: 'no_wa', width: 16 },
     { header: 'status', key: 'status', width: 24 },
     { header: 'jumlah_hadir', key: 'jumlah_hadir', width: 13 },
-    { header: 'sumber', key: 'sumber', width: 34 },
+    { header: 'hadir_kelas', key: 'hadir_kelas', width: 12 },
+    { header: 'hadir_at_tibyan', key: 'hadir_at_tibyan', width: 15 },
+    { header: 'ikut_at_tibyan', key: 'ikut_at_tibyan', width: 14 },
+    { header: 'sumber', key: 'sumber', width: 40 },
   ];
   // WA sebagai teks — Excel akan melahap angka 62xxx jadi notasi ilmiah.
   for (const b of baris) ws.addRow(b);
@@ -402,6 +474,23 @@ function cetakKontrolKualitas(
     console.log(`  ${label.padEnd(28)}: ${String(rows.length).padStart(4)} · ${unik(rows, (b) => b.id_orang)} orang`);
   }
 
+  // Penjaga aturan "satu orang satu baris". Kalau ini pernah bunyi, konsumen
+  // akan menghitung orangnya dua kali — jadi dicetak menyolok, bukan dilewat.
+  const barisPerId = new Map<string, number>();
+  for (const b of baris) {
+    if (b.id_orang) barisPerId.set(b.id_orang, (barisPerId.get(b.id_orang) ?? 0) + 1);
+  }
+  const idDobel = [...barisPerId.entries()].filter(([, n]) => n > 1);
+  console.log(`\nid_orang yang muncul >1 baris : ${idDobel.length}${idDobel.length ? '  ← MELANGGAR aturan satu orang satu baris' : '  ✓'}`);
+  for (const [id, n] of idDobel) {
+    console.log(`  ! ${id} muncul ${n}× → ${baris.filter((b) => b.id_orang === id).map((b) => b.peran).join(', ')}`);
+  }
+  const tanpaId = baris.filter((b) => !b.id_orang);
+  if (tanpaId.length > 0) {
+    console.log(`Baris tanpa id_orang         : ${tanpaId.length} (tak bisa didedup konsumen)`);
+    for (const b of tanpaId) console.log(`  · ${b.nama} (${b.peran}) — ${b.sumber}`);
+  }
+
   const namaBermasalah = baris.filter((b) => b.nama.trim().length < 3);
   console.log(`\nNama kosong / < 3 huruf : ${namaBermasalah.length}`);
   for (const b of namaBermasalah) console.log(`  ! "${b.nama}" (${b.peran}, ${b.kelas || '—'})`);
@@ -444,10 +533,14 @@ function cetakKontrolKualitas(
   console.log('             dan "Selesai per <tgl>" (selesai_tanggal). Tak ada yang dikarang jadi');
   console.log('             "Mengundurkan diri".');
   console.log('  · pengajar: peta kelas→guru tidak ada di sistem. Daftar guru ditulis tangan di');
-  console.log('             GURU_MAAHIR (scripts/export-majelis.ts), kolom kelas kosong, dan');
-  console.log('             jumlah_hadir kosong karena kehadiran pengajar memang tak dicatat.');
-  console.log('  · At-Tibyan bukan roster terpisah — sesi Sabtu di kelas yang sama, orang yang sama.');
-  console.log('             Satu orang wajar punya 2 baris dengan id_orang identik.');
+  console.log('             GURU_MAAHIR (scripts/export-majelis.ts). Kolom kelas pada baris pengajar');
+  console.log('             = kelas yang ia IKUTI sbg peserta, bukan yang ia ajar; kosong bila tak ada.');
+  console.log('  · At-Tibyan bukan roster terpisah — sesi Sabtu di kelas yang sama, orang yang sama,');
+  console.log('             jadi TIDAK dibuatkan baris sendiri. Kehadirannya sudah masuk jumlah_hadir;');
+  console.log('             rinciannya ada di kolom hadir_kelas / hadir_at_tibyan / ikut_at_tibyan.');
+  console.log('  · Satu orang = satu baris. Yang ikut >1 kelas digabung, nama kelasnya dipisah " | ".');
+  console.log('  · 4 guru yang juga anggota kelas Maahir ditulis peran=pengajar saja, dan');
+  console.log('             jumlah_hadir-nya diambil dari keanggotaannya sebagai peserta.');
   console.log('=================================================');
 }
 
