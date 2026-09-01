@@ -1,7 +1,7 @@
 import 'server-only';
 import { randomBytes } from 'node:crypto';
 import { supabaseAdmin } from '@/lib/supabase-admin';
-import type { Gender, KsPeriode } from '@/types/db';
+import type { Gender, KsHariIdx, KsPeriode } from '@/types/db';
 import { catatKs } from '@/lib/ketersediaan-log';
 import {
   adalahRedirect,
@@ -14,7 +14,18 @@ import {
   tilawahTerkonfigurasi,
   TilawahError,
 } from './client';
-import type { BuatHalaqahBody, BuatMuridBody, EnrolMuridBody, TilawahEnvelope } from './types';
+import type {
+  BuatHalaqahBody,
+  BuatMuridBody,
+  BuatPertemuanBody,
+  EnrolMuridBody,
+  TilawahEnvelope,
+} from './types';
+import {
+  namaPertemuan,
+  rentangPertemuan,
+  tanggalPertemuan,
+} from '@/lib/ketersediaan-pertemuan';
 
 /**
  * Pengiriman halaqah & peserta ke CMS tilawah.
@@ -31,6 +42,8 @@ import type { BuatHalaqahBody, BuatMuridBody, EnrolMuridBody, TilawahEnvelope } 
  *     adalah panggilan kedua, dan `move_reason` wajib diisi (422 bila kosong).
  */
 
+const tunggu = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
 const ALASAN_PINDAH = 'Pembentukan halaqah dari sistem ketersediaan mengajar Maahir';
 
 /** Susun antrean pengiriman untuk satu usulan yang sudah dikonfirmasi. */
@@ -42,27 +55,42 @@ export async function antrekanPengiriman(usulanId: string): Promise<void> {
     .limit(1);
   if ((adaOutbox ?? []).length > 0) return; // idempoten: jangan menumpuk antrean
 
-  await supabaseAdmin.from('ks_outbox').insert({
-    usulan_id: usulanId,
-    aksi: 'buat_halaqah',
-    urutan: 0,
-    payload: {},
-  });
+  // Kegagalan menyisipkan antrean TIDAK boleh lewat diam-diam. Pernah terjadi:
+  // batasan `aksi` belum memuat 'buat_pertemuan', keempat sisipan gagal tanpa
+  // suara, dan halaqah terkirim tanpa satu pun pertemuan — tidak ada yang tahu
+  // sampai kelasnya dibuka dan ternyata tak bisa diabsen.
+  const sisip = async (baris: Record<string, unknown>) => {
+    const { error } = await supabaseAdmin.from('ks_outbox').insert(baris);
+    if (error) {
+      throw new Error(`gagal menyusun antrean pengiriman (${baris.aksi}): ${error.message}`);
+    }
+  };
+
+  await sisip({ usulan_id: usulanId, aksi: 'buat_halaqah', urutan: 0, payload: {} });
+
+  // Pertemuan dibuat SEBELUM enrolmen supaya kelasnya sudah utuh saat murid
+  // mendarat. Tidak ada endpoint bulk, jadi satu baris antrean per pertemuan —
+  // itu juga yang membuat kegagalan di tengah bisa dilanjutkan, bukan diulang.
+  const { data: usulan } = await supabaseAdmin
+    .from('ks_usulan')
+    .select('periode:periode_id(jumlah_pertemuan)')
+    .eq('id', usulanId)
+    .maybeSingle();
+  const jumlahPertemuan =
+    (usulan?.periode as { jumlah_pertemuan: number } | null)?.jumlah_pertemuan ?? 0;
+
+  let urutan = 1;
+  for (let i = 1; i <= jumlahPertemuan; i++) {
+    await sisip({ usulan_id: usulanId, aksi: 'buat_pertemuan', urutan: urutan++, payload: { ke: i } });
+  }
 
   const { data: peserta } = await supabaseAdmin
     .from('ks_usulan_peserta')
     .select('id')
     .eq('usulan_id', usulanId);
 
-  let n = 1;
   for (const p of (peserta ?? []) as { id: string }[]) {
-    await supabaseAdmin.from('ks_outbox').insert({
-      usulan_id: usulanId,
-      peserta_id: p.id,
-      aksi: 'enrol',
-      urutan: n++,
-      payload: {},
-    });
+    await sisip({ usulan_id: usulanId, peserta_id: p.id, aksi: 'enrol', urutan: urutan++, payload: {} });
   }
 }
 
@@ -114,7 +142,7 @@ export async function prosesOutbox(
 
   const { data: antre } = await supabaseAdmin
     .from('ks_outbox')
-    .select('id, usulan_id, peserta_id, aksi, urutan, status, percobaan')
+    .select('id, usulan_id, peserta_id, aksi, urutan, status, percobaan, payload')
     .eq('status', 'antre')
     .order('urutan', { ascending: true })
     .limit(500);
@@ -126,6 +154,7 @@ export async function prosesOutbox(
     aksi: string;
     urutan: number;
     percobaan: number;
+    payload: Record<string, unknown> | null;
   }[])
     .filter((b) => usulanIds.has(b.usulan_id))
     .slice(0, batas);
@@ -136,7 +165,9 @@ export async function prosesOutbox(
       const payload =
         b.aksi === 'buat_halaqah'
           ? await susunPayloadHalaqah(periode, b.usulan_id)
-          : await susunPayloadEnrol(periode, b.peserta_id!);
+          : b.aksi === 'buat_pertemuan'
+            ? await susunPayloadPertemuan(periode, b.usulan_id, Number(b.payload?.ke ?? 0))
+            : await susunPayloadEnrol(periode, b.peserta_id!);
 
       // Simpan payload lebih dulu. Bila pengiriman gagal, inilah satu-satunya
       // bahan diagnosis — dan bila CMS ternyata sudah menerimanya, isi payload
@@ -153,7 +184,14 @@ export async function prosesOutbox(
       const respons =
         b.aksi === 'buat_halaqah'
           ? await kirimHalaqah(b.usulan_id, payload as BuatHalaqahBody)
-          : await kirimEnrol(periode, b.peserta_id!, payload as PayloadEnrol);
+          : b.aksi === 'buat_pertemuan'
+            ? await kirim<TilawahEnvelope<unknown>>('/api/pertemuans', payload as BuatPertemuanBody)
+            : await kirimEnrol(periode, b.peserta_id!, payload as PayloadEnrol);
+
+      // Jeda kecil antar-kiriman. Satu halaqah bisa berarti 22 panggilan
+      // pertemuan berturut-turut ke server produksi yang kecil; menghajarnya
+      // tanpa jeda tidak sopan dan mengundang pemutusan di tengah jalan.
+      await tunggu(150);
 
       await supabaseAdmin
         .from('ks_outbox')
@@ -245,6 +283,79 @@ async function susunPayloadHalaqah(periode: KsPeriode, usulanId: string): Promis
     description: `Dibentuk dari ketersediaan mengajar Maahir — ${slot.label}`,
     user_id: guruId,
     status: 1,
+  };
+}
+
+/**
+ * Payload satu pertemuan ke-`ke` (1-based).
+ *
+ * Tanggalnya diturunkan dari tanggal mulai halaqah + hari slot, mengikuti pola
+ * yang sudah dipakai di CMS: berturut-turut pada hari slot, tanpa melompati
+ * libur. Penyesuaian libur dilakukan koordinator langsung di CMS.
+ */
+async function susunPayloadPertemuan(
+  periode: KsPeriode,
+  usulanId: string,
+  ke: number
+): Promise<BuatPertemuanBody> {
+  const { data: u } = await supabaseAdmin
+    .from('ks_usulan')
+    .select(
+      'id, tanggal_mulai, tilawah_halaqah_id, slot:slot_id(hari_idx, waktu_mulai, waktu_selesai, mode, lokasi), pengajar:pengajar_id(name, whatsapp_number)'
+    )
+    .eq('id', usulanId)
+    .maybeSingle();
+  if (!u) throw new Error('Usulan tidak ditemukan.');
+  if (ke < 1) throw new Error('Nomor pertemuan tidak sah.');
+
+  const slot = u.slot as {
+    hari_idx: KsHariIdx[];
+    waktu_mulai: string;
+    waktu_selesai: string;
+    mode: string;
+    lokasi: string | null;
+  } | null;
+  const pengajar = u.pengajar as { name: string; whatsapp_number: string } | null;
+  if (!slot) throw new Error('Slot usulan tidak ditemukan.');
+  if (!pengajar) throw new Error('Pengajar usulan belum ditetapkan.');
+
+  const mulai = u.tanggal_mulai as string | null;
+  if (!mulai) throw new Error('Tanggal mulai halaqah belum ditetapkan.');
+
+  const halaqahId = u.tilawah_halaqah_id as number | null;
+  if (!halaqahId) {
+    throw new Error('Halaqah belum terbentuk di CMS tilawah — jalankan langkahnya lebih dulu.');
+  }
+
+  const tanggal = tanggalPertemuan(mulai, slot.hari_idx, ke)[ke - 1];
+  if (!tanggal) throw new Error(`Tanggal pertemuan ke-${ke} tidak dapat dihitung.`);
+
+  const rentang = rentangPertemuan(tanggal, slot.waktu_mulai, slot.waktu_selesai);
+  if (!rentang) {
+    throw new Error('Jam selesai tidak lebih besar dari jam mulai — CMS menolak pertemuan seperti itu.');
+  }
+
+  const batchId = periode.tilawah_batch_id!;
+  const guruId = await cariGuruId(batchId, pengajar.name, pengajar.whatsapp_number);
+
+  return {
+    name: namaPertemuan(ke),
+    order: ke,
+    type: slot.mode === 'offline' ? 'offline' : 'online',
+    start_session_date: rentang.mulai,
+    end_session_date: rentang.selesai,
+    guru_id: guruId,
+    online_url: '',
+    offline_place: slot.mode === 'offline' ? (slot.lokasi ?? '') : '',
+    notes: '',
+    task_name: '',
+    task_description: '',
+    task_due: null,
+    status: 1,
+    moduls: [],
+    schedule_date: tanggal,
+    halaqah_id: halaqahId,
+    batch_id: batchId,
   };
 }
 

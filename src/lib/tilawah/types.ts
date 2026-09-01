@@ -154,3 +154,32 @@ export interface EnrolMuridBody {
   move_reason: string;
   meta: { bio: string; wag: string };
 }
+
+/**
+ * Badan POST /api/pertemuans. Satu panggilan per pertemuan — tidak ada endpoint
+ * bulk, jadi 22 pertemuan berarti 22 panggilan.
+ *
+ * `end_session_date` HARUS lebih besar dari `start_session_date`; bila sama, CMS
+ * membalas 400 "The end session date field must be a date after start session date."
+ */
+export interface BuatPertemuanBody {
+  name: string;
+  order: number;
+  type: 'online' | 'offline' | 'hybrid';
+  /** "YYYY-MM-DD HH:MM:SS" */
+  start_session_date: string;
+  end_session_date: string;
+  guru_id: number;
+  online_url: string;
+  offline_place: string;
+  notes: string;
+  task_name: string;
+  task_description: string;
+  task_due: null;
+  status: 1;
+  moduls: [];
+  /** "YYYY-MM-DD" */
+  schedule_date: string;
+  halaqah_id: number;
+  batch_id: number;
+}

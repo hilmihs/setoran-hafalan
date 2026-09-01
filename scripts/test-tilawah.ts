@@ -171,6 +171,9 @@ async function main() {
       ambang_bentuk: 2,
       ambang_bawah: 2,
       minimal_slot: 1,
+      // Sengaja kecil: mekanismenya yang diuji di sini, sedangkan penanggalan
+      // 22 pertemuan sudah diuji terhadap data produksi di test-ketersediaan.
+      jumlah_pertemuan: 4,
       tilawah_program_id: programHits.id,
       tilawah_batch_id: batchId,
       kirim_nyata: KIRIM,
@@ -357,6 +360,10 @@ async function main() {
   eq(ph.session_id, petaSlot.find((p) => p.slot.id === slotUji.id)?.sesi, 'session_id dari pemetaan lingkungan ini');
   eq(ph.level_id, uLevelDasar.level_id, 'level_id dari pemetaan');
   eq(ph.user_id, guruBernomor.id, 'guru tercocokkan lewat nomor telepon');
+
+  const pp = rows.find((r) => r.aksi === 'buat_pertemuan')?.payload ?? {};
+  console.log('\n     payload pertemuan pertama:');
+  console.log('     ' + JSON.stringify(pp, null, 1).split('\n').join('\n     '));
 
   const pe = rows.find((r) => r.aksi === 'enrol')?.payload ?? {};
   console.log('\n     payload enrol yang AKAN dikirim:');

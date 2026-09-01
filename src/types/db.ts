@@ -911,6 +911,8 @@ export interface KsPeriode {
   tenggat_konfirmasi_jam: number;
   penyegaran_hari: number;
   pengingat_penyegaran_hari: number;
+  /** Banyak pertemuan yang dibuat di CMS tilawah per halaqah. 0 = tidak membuat. */
+  jumlah_pertemuan: number;
   /** Gerbang kirim ke CMS tilawah. false = outbox hanya mencatat payload. */
   kirim_nyata: boolean;
   tilawah_program_id: number | null;
@@ -1154,7 +1156,12 @@ export interface KsTilawahLevelMap {
   updated_at: string;
 }
 
-export type KsOutboxAksi = 'buat_halaqah' | 'cari_user' | 'buat_user' | 'enrol';
+export type KsOutboxAksi =
+  | 'buat_halaqah'
+  | 'buat_pertemuan'
+  | 'cari_user'
+  | 'buat_user'
+  | 'enrol';
 
 export interface KsOutbox {
   id: string;

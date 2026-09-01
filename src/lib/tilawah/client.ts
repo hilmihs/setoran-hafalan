@@ -92,9 +92,31 @@ function xsrf(): string {
   return t ? decodeURIComponent(t) : '';
 }
 
+const tunggu = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+/**
+ * Galat jaringan sesaat terjadi cukup sering pada CMS ini — server kecil, dan
+ * domainnya menyelesaikan ke NAT64 selain IPv4 sehingga sebagian percobaan
+ * menggantung lalu putus. `fetch failed` semacam itu bukan penolakan CMS dan
+ * tidak berarti mutasinya ditolak; mengulangnya aman karena setiap langkah
+ * outbox memastikan hasilnya lewat pembacaan ulang.
+ */
+async function fetchUlet(url: string, init: RequestInit, percobaan = 3): Promise<Response> {
+  let terakhir: unknown;
+  for (let i = 0; i < percobaan; i++) {
+    try {
+      return await fetch(url, init);
+    } catch (e) {
+      terakhir = e;
+      if (i < percobaan - 1) await tunggu(400 * (i + 1));
+    }
+  }
+  throw terakhir;
+}
+
 async function mentah(path: string, init: RequestInit = {}): Promise<Response> {
   const { base } = konfigurasi();
-  const res = await fetch(`${base}${path}`, {
+  const res = await fetchUlet(`${base}${path}`, {
     ...init,
     redirect: 'manual',
     cache: 'no-store',

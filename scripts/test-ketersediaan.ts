@@ -22,6 +22,11 @@ import {
   type SlotAlokasi,
 } from '@/lib/ketersediaan-alokasi';
 import { usulkanHari, usulkanSesi, hariTidakKonsisten } from '@/lib/tilawah/map';
+import {
+  namaPertemuan,
+  rentangPertemuan,
+  tanggalPertemuan,
+} from '@/lib/ketersediaan-pertemuan';
 import type { KsHariIdx } from '@/types/db';
 
 let failed = 0;
@@ -316,6 +321,47 @@ eq(
   usulkanSesi({ waktu_mulai: '08:00:00', waktu_selesai: '09:30:00', label: 'x' }, sessions).keyakinan,
   'tidak_ada',
   'tidak mencari sesi "terdekat" — placeholder 00:00 tidak boleh terpilih'
+);
+
+// ── Penanggalan pertemuan ──────────────────────────────────────────────────
+console.log('\n# penanggalan pertemuan');
+
+// Pola nyata halaqah #947 produksi: slot Senin & Rabu, mulai 27 Juli 2026.
+const p947 = tanggalPertemuan('2026-07-27', [0, 2], 22);
+eq(p947.length, 22, '22 pertemuan terbentuk');
+eq(p947[0], '2026-07-27', 'pertemuan 1 pada tanggal mulai (Senin)');
+eq(p947[1], '2026-07-29', 'pertemuan 2 Rabu berikutnya');
+eq(p947[2], '2026-08-03', 'pertemuan 3 Senin pekan berikutnya');
+eq(p947[21], '2026-10-07', 'pertemuan 22 sama dengan data produksi');
+// Tak ada tanggal yang jatuh di luar hari slot.
+eq(
+  p947.every((t) => {
+    const d = new Date(`${t}T00:00:00Z`);
+    return [0, 2].includes((d.getUTCDay() + 6) % 7);
+  }),
+  true,
+  'seluruh tanggal jatuh pada hari slot'
+);
+
+// Tanggal mulai yang bukan hari slot: pertemuan pertama bergeser ke hari terdekat.
+eq(tanggalPertemuan('2026-07-28', [0, 2], 1)[0], '2026-07-29', 'mulai di luar hari slot → geser ke hari slot');
+eq(tanggalPertemuan('2026-07-27', [0, 2], 0).length, 0, 'jumlah 0 → tak ada pertemuan');
+eq(tanggalPertemuan('2026-07-27', [], 5).length, 0, 'tanpa hari slot → tak ada pertemuan');
+eq(tanggalPertemuan('bukan-tanggal', [0], 3).length, 0, 'tanggal tak terbaca → tak ada pertemuan');
+eq(tanggalPertemuan('2026-07-27', [4], 3), ['2026-07-31', '2026-08-07', '2026-08-14'], 'slot sekali sepekan');
+
+eq(namaPertemuan(1), 'P1', 'nama pertemuan P1');
+eq(namaPertemuan(22), 'P22', 'nama pertemuan P22');
+
+eq(
+  rentangPertemuan('2026-07-27', '20:00:00', '21:30:00'),
+  { mulai: '2026-07-27 20:00:00', selesai: '2026-07-27 21:30:00' },
+  'rentang pertemuan berformat CMS'
+);
+eq(
+  rentangPertemuan('2026-07-27', '20:00:00', '20:00:00'),
+  null,
+  'jam kembar ditolak — CMS balas 400 untuk itu'
 );
 
 console.log(failed === 0 ? '\nSEMUA LULUS' : `\n${failed} GAGAL`);
