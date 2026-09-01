@@ -207,10 +207,31 @@ diam-diam.
 
 ## 8. Menguji
 
+Satu skrip, sadar lingkungan. **Bawaannya tidak menulis apa pun** — ia menyusun
+payload lengkap memakai master data sungguhan dari lingkungan yang sedang
+diarahkan, lalu menampilkannya.
+
 ```bash
-npm run test-tilawah-staging                 # mode percobaan: susun payload, tanpa menulis
-KIRIM_NYATA=1 npm run test-tilawah-staging   # benar-benar membuat satu halaqah uji
+npm run test-tilawah                          # kirim-percobaan (staging maupun produksi)
+KIRIM_NYATA=1 npm run test-tilawah            # menulis — hanya bila URL mengandung "staging"
+KIRIM_NYATA=1 PRODUKSI_OK=1 TILAWAH_BATCH=<id> npm run test-tilawah   # menulis ke produksi
 ```
 
-Menolak jalan bila `TILAWAH_BASE_URL` tidak mengandung `staging`, atau bila
-`DATABASE_URL` bukan host lokal.
+Menulis ke produksi menuntut dua penjaga tambahan, dan skrip **menolak** bila
+kurang — bukan bertanya. Alasannya di §5: akun murid yang salah masuk tidak dapat
+dibatalkan lewat API, jadi tujuannya harus batch uji tersendiri, bukan batch
+berjalan. `DATABASE_URL` tetap wajib host lokal karena skrip membuat data dummy
+di maahir dan menghapusnya di akhir.
+
+Hasil dry-run terhadap produksi, 1 Sep 2026 — **ke-27 slot MASTER_SLOT terpetakan
+"pasti", nol ragu, nol tanpa padanan**:
+
+```
+Sabtu & Ahad   06:00-07:30 → day 4  sesi 2      Selasa & Jum'at 06:00-07:30 → day 3  sesi 2
+Selasa & Kamis 06:00-07:30 → day 2  sesi 2      Senin & Rabu    20:00-21:30 → day 1  sesi 10
+Senin & Rabu   06:00-07:30 → day 1  sesi 2      Sabtu & Ahad    11:00-12:30 → day 4  sesi 11
+level: HITS Dasar → 1 · HITS Lanjutan → 2
+```
+
+Perhatikan `day 3` untuk Selasa & Jum'at: itu baris `int_days [1,4]` yang benar,
+**bukan** `#11` yang namanya persis sama tetapi berisi `[1]` saja.
