@@ -5,14 +5,17 @@
 // data sungguhan dari lingkungan yang sedang diarahkan, lalu menampilkannya —
 // tanpa satu pun POST ke sumber daya CMS.
 //
-// Untuk benar-benar menulis — HANYA staging:
+// Untuk benar-benar menulis — SELALU ke staging:
 //   KIRIM_NYATA=1 npm run test-tilawah
 //
-// Skrip ini TIDAK PERNAH menulis ke produksi, apa pun bendera yang diberikan, dan
-// ke mana pun TILAWAH_BASE_URL menunjuk. Percobaan menulis dilakukan di staging;
-// produksi hanya dibaca. Alasannya bukan sekadar kehati-hatian:
-// `DELETE /api/users/{id}` membalas 302 tanpa menghapus apa pun, sehingga akun
-// murid yang salah masuk ke batch nyata menetap di sana selamanya.
+// Membaca memakai TILAWAH_* (boleh diarahkan ke produksi). MENULIS selalu memakai
+// STAGING_BASE_URL / STAGING_EMAIL / STAGING_PASSWORD. Pemisahan ini struktural:
+// kredensial produksi tidak pernah dipakai saat menulis, sehingga tidak ada
+// bendera maupun salah ketik yang dapat mengarahkan tulisan ke produksi.
+//
+// Alasannya bukan sekadar kehati-hatian: `DELETE /api/users/{id}` membalas 302
+// tanpa menghapus apa pun, sehingga akun murid yang salah masuk ke batch nyata
+// menetap di sana selamanya.
 //
 // Menulis ke produksi adalah keputusan operasional, dan jalannya lewat aplikasi:
 // koordinator menyetujui usulan, superadmin menyalakan `ks_periode.kirim_nyata`.
@@ -35,34 +38,56 @@ import { antrekanPengiriman, prosesOutbox } from '@/lib/tilawah/push';
 import { siapkanSlot, SLOT_BAWAAN } from '@/lib/ketersediaan-periode';
 import type { KsPeriode, KsSlot } from '@/types/db';
 
-const base = process.env.TILAWAH_BASE_URL ?? '';
 const dbUrl = process.env.DATABASE_URL ?? '';
-const PRODUKSI = !/staging/i.test(base);
 const MINTA_KIRIM = process.env.KIRIM_NYATA === '1';
 const BATCH_ENV = process.env.TILAWAH_BATCH ? Number(process.env.TILAWAH_BATCH) : null;
 
-if (!tilawahTerkonfigurasi()) {
-  console.error('TILAWAH_BASE_URL / TILAWAH_EMAIL / TILAWAH_PASSWORD belum diset di .env.local.');
-  process.exit(1);
+/** Rapikan URL yang salah tulis, mis. skema tertulis dua kali. */
+function rapikanUrl(u: string): string {
+  return u.trim().replace(/^(https?:\/\/)+/i, 'https://').replace(/\/+$/, '');
 }
+
 if (!/@(localhost|127\.0\.0\.1|0\.0\.0\.0)[:/]/.test(dbUrl)) {
   console.error('DATABASE_URL bukan host lokal. Skrip ini membuat data dummy dan menolak jalan di luar dev.');
   process.exit(1);
 }
 
-// Penjaga produksi. Menolak, tanpa jalan pintas apa pun.
-if (MINTA_KIRIM && PRODUKSI) {
-  console.error(
-    'Menolak menulis ke PRODUKSI. Skrip uji hanya boleh menulis ke staging.\n' +
-      `  TILAWAH_BASE_URL = ${base}\n` +
-      '  Arahkan ke staging bila ingin mencoba menulis, atau jalankan tanpa\n' +
-      '  KIRIM_NYATA untuk memeriksa payload terhadap master produksi (nol tulis).\n' +
-      '  Pengiriman nyata ke produksi jalannya lewat aplikasi: koordinator\n' +
-      '  menyetujui usulan, superadmin menyalakan ks_periode.kirim_nyata.'
-  );
+// ── Pemilihan lingkungan ───────────────────────────────────────────────────
+// Membaca memakai TILAWAH_* (boleh produksi). MENULIS selalu memakai STAGING_*.
+// Aturan ini struktural, bukan sekadar penjaga: variabel produksi tidak pernah
+// dipakai saat menulis, jadi tidak ada bendera atau salah ketik yang bisa
+// mengarahkan tulisan ke produksi.
+if (MINTA_KIRIM) {
+  const sBase = rapikanUrl(process.env.STAGING_BASE_URL ?? '');
+  const sEmail = process.env.STAGING_EMAIL ?? '';
+  const sPass = process.env.STAGING_PASSWORD ?? '';
+  if (!sBase || !sEmail || !sPass) {
+    console.error(
+      'Menulis menuntut kredensial staging: STAGING_BASE_URL / STAGING_EMAIL / STAGING_PASSWORD.\n' +
+        '  Percobaan yang menulis dilakukan di staging; produksi hanya dibaca.'
+    );
+    process.exit(1);
+  }
+  if (!/staging/i.test(sBase)) {
+    console.error(`STAGING_BASE_URL tidak tampak seperti staging: ${sBase}. Menolak menulis.`);
+    process.exit(1);
+  }
+  // Klien membaca env saat dipanggil, jadi menimpanya di sini sudah cukup.
+  process.env.TILAWAH_BASE_URL = sBase;
+  process.env.TILAWAH_EMAIL = sEmail;
+  process.env.TILAWAH_PASSWORD = sPass;
+} else {
+  process.env.TILAWAH_BASE_URL = rapikanUrl(process.env.TILAWAH_BASE_URL ?? '');
+}
+
+const base = process.env.TILAWAH_BASE_URL ?? '';
+const PRODUKSI = !/staging/i.test(base);
+const KIRIM = MINTA_KIRIM;
+
+if (!tilawahTerkonfigurasi()) {
+  console.error('TILAWAH_BASE_URL / TILAWAH_EMAIL / TILAWAH_PASSWORD belum diset di .env.local.');
   process.exit(1);
 }
-const KIRIM = MINTA_KIRIM && !PRODUKSI;
 
 let gagal = 0;
 function eq(actual: unknown, expected: unknown, label: string) {
