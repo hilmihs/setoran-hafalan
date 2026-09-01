@@ -1,11 +1,13 @@
 // Target setoran hafalan peserta Takhassus — diisi koordinator, dipakai Laporan
 // Bulanan untuk menghitung persentase capaian.
 //
-// Target disimpan sebagai HALAMAN PER HARI, bukan per bulan. Takhassus Ikhwan
-// berjadwal 5 hari/pekan dan Akhwat 4 hari/pekan, jadi satu angka bulanan
-// menuntut hal berbeda dari dua kelas itu. Penyebutnya dihitung di
-// `laporan-maahir.ts` dengan mengalikan target harian ke sesi yang benar-benar
-// ditagih ke seorang peserta.
+// Target disimpan sebagai HALAMAN PER BULAN, satu angka bulat per periode
+// laporan (window 28–27). Penyebut capaian adalah angka itu sendiri: tidak
+// dikalikan jumlah sesi, tidak dipotong sakit, tidak dipotong libur. Peserta
+// dituntut menyelesaikan sekian halaman dalam sebulan, bagaimanapun ia membagi
+// hari-harinya — dan koordinator ingin angka yang ia setel muncul apa adanya di
+// laporan. Yang tetap membatalkan target: pemutihan sebulan penuh, dan periode
+// yang seluruhnya di luar masa keanggotaan peserta (lihat `laporan-maahir.ts`).
 //
 // Dua bentuk, dibedakan kolom `anggota_id`:
 //   anggota_id = NULL  → default seluruh kelas
@@ -34,15 +36,15 @@ export function berlakuPeriodeBerjalan(): string {
   return periodeStartDate(periodeBerjalan());
 }
 
-/** Batas atas kewajaran — menahan salah ketik (mis. 400 alih-alih 4,00). */
-const MAX_HALAMAN_PER_HARI = 20;
+/** Batas atas kewajaran — menahan salah ketik (mis. 800 alih-alih 80). */
+const MAX_HALAMAN_PER_BULAN = 400;
 
 export type SetoranTarget = {
   id: string;
   programKelasId: string;
   /** null = default seluruh kelas. */
   anggotaId: string | null;
-  halamanPerHari: number;
+  halamanPerBulan: number;
   berlakuMulai: string; // 'YYYY-MM-DD'
   catatan: string | null;
   dibuatOleh: string | null;
@@ -50,7 +52,7 @@ export type SetoranTarget = {
 };
 
 const COLS =
-  'id, program_kelas_id, anggota_id, halaman_per_hari, berlaku_mulai, catatan, dibuat_oleh, created_at';
+  'id, program_kelas_id, anggota_id, halaman_per_bulan, berlaku_mulai, catatan, dibuat_oleh, created_at';
 
 function mapRow(r: Record<string, unknown>): SetoranTarget {
   return {
@@ -59,7 +61,7 @@ function mapRow(r: Record<string, unknown>): SetoranTarget {
     anggotaId: (r.anggota_id as string | null) ?? null,
     // numeric → number lewat type parser di pg-core.ts; String() jaga-jaga bila
     // suatu saat parser itu hilang, supaya tak diam-diam jadi penggabungan teks.
-    halamanPerHari: Number(r.halaman_per_hari),
+    halamanPerBulan: Number(r.halaman_per_bulan),
     berlakuMulai: r.berlaku_mulai as string,
     catatan: (r.catatan as string | null) ?? null,
     dibuatOleh: (r.dibuat_oleh as string | null) ?? null,
@@ -80,15 +82,16 @@ export async function getSetoranTargets(kelasIds: string[]): Promise<SetoranTarg
 }
 
 /**
- * Resolver murni: berapa halaman/hari yang berlaku untuk seorang peserta pada
+ * Resolver murni: berapa halaman/bulan yang berlaku untuk seorang peserta pada
  * satu tanggal. Koreksi peserta menang atas default kelas; di antara versi,
  * yang `berlaku_mulai <= tanggal` dan paling akhir yang dipakai.
  *
+ * Tetap per-tanggal meski satuannya bulanan: `berlaku_mulai` boleh jatuh di
+ * tengah periode, jadi pemanggil harus memutuskan sendiri tanggal mana yang
+ * mewakili periodenya (`laporan-maahir.ts` memakai sesi terakhir yang ditagih).
+ *
  * null = belum diatur. Pemanggil harus memperlakukannya sebagai "tak ada
  * target", bukan nol — laporan menampilkan '—' alih-alih 0%.
- *
- * Baris dikelompokkan sekali di depan; pencarian per hari lalu hanya menyisir
- * larik pendek. Dipanggil ~13 peserta × ~22 hari tiap laporan.
  */
 export function targetResolver(
   rows: SetoranTarget[]
@@ -116,7 +119,7 @@ export function targetResolver(
       if (r.berlakuMulai > tanggal) break;
       hit = r;
     }
-    return hit ? hit.halamanPerHari : null;
+    return hit ? hit.halamanPerBulan : null;
   };
 
   return (kelasId, anggotaId, tanggal) => {
@@ -135,18 +138,18 @@ export function targetResolver(
 export async function simpanTarget(input: {
   programKelasId: string;
   anggotaId: string | null;
-  halamanPerHari: number;
+  halamanPerBulan: number;
   berlakuMulai: string;
   catatan: string | null;
   dibuatOleh: string | null;
 }): Promise<{ error?: string }> {
-  const { programKelasId, anggotaId, halamanPerHari, berlakuMulai, catatan, dibuatOleh } = input;
+  const { programKelasId, anggotaId, halamanPerBulan, berlakuMulai, catatan, dibuatOleh } = input;
 
-  if (!Number.isFinite(halamanPerHari) || halamanPerHari <= 0) {
-    return { error: 'Target harus lebih dari 0 halaman/hari.' };
+  if (!Number.isFinite(halamanPerBulan) || halamanPerBulan <= 0) {
+    return { error: 'Target harus lebih dari 0 halaman/bulan.' };
   }
-  if (halamanPerHari > MAX_HALAMAN_PER_HARI) {
-    return { error: `Target di atas ${MAX_HALAMAN_PER_HARI} halaman/hari — periksa lagi angkanya.` };
+  if (halamanPerBulan > MAX_HALAMAN_PER_BULAN) {
+    return { error: `Target di atas ${MAX_HALAMAN_PER_BULAN} halaman/bulan — periksa lagi angkanya.` };
   }
   if (!DATE_RE.test(berlakuMulai)) return { error: 'Tanggal berlaku tidak sah.' };
 
@@ -182,7 +185,7 @@ export async function simpanTarget(input: {
   if (ada?.id) {
     const { error } = await supabaseAdmin
       .from('maahir_setoran_target')
-      .update({ halaman_per_hari: halamanPerHari, catatan, dibuat_oleh: dibuatOleh })
+      .update({ halaman_per_bulan: halamanPerBulan, catatan, dibuat_oleh: dibuatOleh })
       .eq('id', ada.id as string);
     return error ? { error: error.message } : {};
   }
@@ -190,7 +193,7 @@ export async function simpanTarget(input: {
   const { error } = await supabaseAdmin.from('maahir_setoran_target').insert({
     program_kelas_id: programKelasId,
     anggota_id: anggotaId,
-    halaman_per_hari: halamanPerHari,
+    halaman_per_bulan: halamanPerBulan,
     berlaku_mulai: berlakuMulai,
     catatan,
     dibuat_oleh: dibuatOleh,

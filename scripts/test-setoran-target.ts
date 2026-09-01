@@ -1,12 +1,18 @@
 /**
- * test-setoran-target.ts — uji target setoran hafalan harian Takhassus terhadap
+ * test-setoran-target.ts — uji target setoran hafalan BULANAN Takhassus terhadap
  * Postgres sungguhan (PGlite via wire-protocol), memakai lib aplikasi apa
  * adanya: getLaporanMaahir, simpanTarget, hapusTarget, targetResolver.
  *
+ * Yang paling banyak dijaga di sini: target bulanan TIDAK diprorata. Libur,
+ * sakit, pemutihan per-tanggal, dan bergabung di tengah periode semuanya
+ * mengubah jumlah sesi tapi tak boleh menyentuh penyebutnya. Tiap fase yang
+ * memotong sesi karena itu memeriksa dua hal sekaligus: sesinya turun, targetnya
+ * tidak.
+ *
  * Angka harapan tidak diambil dari kode aplikasi. Skrip ini punya penghitung
  * hari jadwalnya sendiri (`hariJadwal`) sebagai pembanding merdeka — kalau
- * laporan diam-diam ikut menghitung sesi At-Tibyan tiap Sabtu, angkanya langsung
- * meleset.
+ * laporan diam-diam ikut menghitung sesi At-Tibyan tiap Sabtu, hitungan sesinya
+ * langsung meleset.
  *
  * Jalankan: npm run test-target
  */
@@ -129,7 +135,7 @@ CREATE TABLE maahir_setoran_target (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   program_kelas_id uuid NOT NULL REFERENCES program_kelas(id) ON DELETE CASCADE,
   anggota_id uuid REFERENCES program_kelas_anggota(id) ON DELETE CASCADE,
-  halaman_per_hari numeric(4,2) NOT NULL CHECK (halaman_per_hari > 0),
+  halaman_per_bulan numeric NOT NULL CHECK (halaman_per_bulan > 0),
   berlaku_mulai date NOT NULL,
   catatan text,
   dibuat_oleh text,
@@ -231,14 +237,14 @@ async function main() {
       check('benchmark null (bukan 80)', s.benchmark === null, String(s.benchmark));
     }
 
-    console.log('\n2. Default kelas — asimetri jadwal & At-Tibyan tak ikut');
+    console.log('\n2. Default kelas — angka bulanan dipakai apa adanya');
     {
       await simpanTarget({
-        programKelasId: K_IKH, anggotaId: null, halamanPerHari: 4,
+        programKelasId: K_IKH, anggotaId: null, halamanPerBulan: 80,
         berlakuMulai: ANCHOR, catatan: null, dibuatOleh: 'Ust Uji',
       });
       await simpanTarget({
-        programKelasId: K_AKH, anggotaId: null, halamanPerHari: 4,
+        programKelasId: K_AKH, anggotaId: null, halamanPerBulan: 32,
         berlakuMulai: ANCHOR, catatan: null, dibuatOleh: 'Ust Uji',
       });
       const s = await lap();
@@ -246,12 +252,12 @@ async function main() {
       const a = cari(s.peserta, 'Peserta Akhwat');
       check(`sesi ikhwan = ${SESI_IKHWAN}`, i?.sesiTarget === SESI_IKHWAN, String(i?.sesiTarget));
       check(`sesi akhwat = ${SESI_AKHWAT}`, a?.sesiTarget === SESI_AKHWAT, String(a?.sesiTarget));
-      check('4 Sabtu At-Tibyan tak ikut dihitung', i?.sesiTarget === SESI_IKHWAN);
-      check(`target ikhwan = ${SESI_IKHWAN * 4}`, i?.target === SESI_IKHWAN * 4, String(i?.target));
-      check(`target akhwat = ${SESI_AKHWAT * 4}`, a?.target === SESI_AKHWAT * 4, String(a?.target));
-      check('tarif harian sama, target beda', i!.target! > a!.target!);
-      check('targetHarian terbaca', i?.targetHarian === 4);
-      check('persen dari halaman/target', i?.persen === Math.round((10 / (SESI_IKHWAN * 4)) * 100), String(i?.persen));
+      check('4 Sabtu At-Tibyan tak ikut dihitung sesi', i?.sesiTarget === SESI_IKHWAN);
+      check('target ikhwan = 80 persis', i?.target === 80, String(i?.target));
+      check('target akhwat = 32 persis', a?.target === 32, String(a?.target));
+      check('jadwal beda, target tak ikut dibagi jumlah sesi',
+        i!.sesiTarget !== a!.sesiTarget && i?.target === 80 && a?.target === 32);
+      check('persen dari halaman/target', i?.persen === Math.round((10 / 80) * 100), String(i?.persen));
       check('agregat adaTarget true', s.adaTarget === true);
     }
 
@@ -264,40 +270,38 @@ async function main() {
     console.log('\n4. Koreksi peserta menang atas default kelas');
     {
       await simpanTarget({
-        programKelasId: K_IKH, anggotaId: A_KOREKSI, halamanPerHari: 6,
+        programKelasId: K_IKH, anggotaId: A_KOREKSI, halamanPerBulan: 120,
         berlakuMulai: ANCHOR, catatan: 'senior', dibuatOleh: 'Ust Uji',
       });
       const s = await lap();
       const k = cari(s.peserta, 'Peserta Koreksi');
       const d = cari(s.peserta, 'Peserta Default');
-      check(`koreksi target = ${SESI_IKHWAN * 6}`, k?.target === SESI_IKHWAN * 6, String(k?.target));
-      check('peserta lain tetap ikut default', d?.target === SESI_IKHWAN * 4, String(d?.target));
+      check('koreksi target = 120', k?.target === 120, String(k?.target));
+      check('peserta lain tetap ikut default 80', d?.target === 80, String(d?.target));
     }
 
-    console.log('\n5. Versi baru di tengah periode dihitung per hari');
+    console.log('\n5. Versi baru di tengah periode → versi terbaru yang ditagih');
     {
       const potong = '2026-07-13';
       await simpanTarget({
-        programKelasId: K_IKH, anggotaId: null, halamanPerHari: 8,
+        programKelasId: K_IKH, anggotaId: null, halamanPerBulan: 100,
         berlakuMulai: potong, catatan: null, dibuatOleh: 'Ust Uji',
       });
-      const sebelum = hariJadwal(IKHWAN_JADWAL, AWAL, '2026-07-12').length;
-      const sesudah = hariJadwal(IKHWAN_JADWAL, potong, AKHIR).length;
-      const harap = sebelum * 4 + sesudah * 8;
       const d = cari((await lap()).peserta, 'Peserta Default');
-      check(`campuran ${sebelum}×4 + ${sesudah}×8 = ${harap}`, d?.target === harap, String(d?.target));
+      // Bukan campuran per hari: satuannya bulanan, jadi versi yang berlaku pada
+      // sesi TERAKHIR periode itulah yang jadi penyebut seluruh bulan.
+      check('target = 100 (versi terbaru), bukan campuran', d?.target === 100, String(d?.target));
       check('sesi tetap utuh', d?.sesiTarget === SESI_IKHWAN, String(d?.sesiTarget));
-      check('targetHarian = tarif terakhir', d?.targetHarian === 8, String(d?.targetHarian));
 
-      // Kembalikan supaya fase berikutnya memakai tarif tunggal.
+      // Kembalikan supaya fase berikutnya memakai satu versi saja.
       const versi = await getSetoranTargets([K_IKH]);
       const baru = versi.find((v) => v.anggotaId === null && v.berlakuMulai === potong);
       await hapusTarget(baru!.id);
       const pulih = cari((await lap()).peserta, 'Peserta Default');
-      check('hapus versi mengembalikan target', pulih?.target === SESI_IKHWAN * 4, String(pulih?.target));
+      check('hapus versi mengembalikan target', pulih?.target === 80, String(pulih?.target));
     }
 
-    console.log('\n6. Libur memotong sesi');
+    console.log('\n6. Libur memotong sesi, TIDAK memotong target');
     {
       const liburDari = '2026-07-06';
       const liburSampai = '2026-07-10';
@@ -307,7 +311,7 @@ async function main() {
       const harapSesi = SESI_IKHWAN - liburTanggal.length;
       const d = cari((await lap()).peserta, 'Peserta Default');
       check(`libur ${liburTanggal.length} hari → sesi ${harapSesi}`, d?.sesiTarget === harapSesi, String(d?.sesiTarget));
-      check('target ikut turun', d?.target === harapSesi * 4, String(d?.target));
+      check('target TETAP 80 walau sesi berkurang', d?.target === 80, String(d?.target));
 
       const a = cari((await lap()).peserta, 'Peserta Akhwat');
       check('libur kelas lain tak mengenai Akhwat', a?.sesiTarget === SESI_AKHWAT, String(a?.sesiTarget));
@@ -317,21 +321,24 @@ async function main() {
         (cari((await lap()).peserta, 'Peserta Default'))?.sesiTarget === SESI_IKHWAN);
     }
 
-    console.log('\n7. Sakit dikeluarkan dari penyebut');
+    console.log('\n7. Sakit TIDAK mengurangi target (beda dari kehadiran)');
     {
       await hadir(K_IKH, A_SAKIT, '2026-06-29', { status: 'sakit' });
       await hadir(K_IKH, A_SAKIT, '2026-06-30', { status: 'sakit' });
       const s = cari((await lap()).peserta, 'Peserta Sakit');
-      check(`2 sakit → sesi ${SESI_IKHWAN - 2}`, s?.sesiTarget === SESI_IKHWAN - 2, String(s?.sesiTarget));
-      check('target ikut turun', s?.target === (SESI_IKHWAN - 2) * 4, String(s?.target));
+      // Kebijakan koordinator September 2026: sakit udzur untuk kehadiran, bukan
+      // untuk hafalan — halamannya tetap harus dikejar di hari lain.
+      check('sesi tak dipotong sakit', s?.sesiTarget === SESI_IKHWAN, String(s?.sesiTarget));
+      check('target tetap 80', s?.target === 80, String(s?.target));
     }
 
-    console.log('\n8. Rentang keanggotaan memotong sesi');
+    console.log('\n8. Gabung tengah periode memotong sesi, TIDAK memotong target');
     {
       const harap = hariJadwal(IKHWAN_JADWAL, GABUNG_TANGGAL, AKHIR).length;
       const g = cari((await lap()).peserta, 'Peserta Gabung');
       check(`gabung ${GABUNG_TANGGAL} → sesi ${harap}`, g?.sesiTarget === harap, String(g?.sesiTarget));
       check('lebih kecil dari sesi penuh', (g?.sesiTarget ?? 0) < SESI_IKHWAN);
+      check('target tetap 80 penuh', g?.target === 80, String(g?.target));
     }
 
     console.log('\n9. Pemutihan');
@@ -342,6 +349,7 @@ async function main() {
                      VALUES ('${A_DEFAULT}', '${MONTH}', '${satu}', 'uji per-tanggal');`);
       const d = cari((await lap()).peserta, 'Peserta Default');
       check('pemutihan per-tanggal memotong 1 sesi', d?.sesiTarget === SESI_IKHWAN - 1, String(d?.sesiTarget));
+      check('tapi target tetap 80', d?.target === 80, String(d?.target));
 
       // Sebulan penuh: target null, BUKAN 100%.
       await db.exec(`INSERT INTO maahir_pemutihan (anggota_id, month, tanggal, alasan)
@@ -371,52 +379,59 @@ async function main() {
     {
       const rows = await getSetoranTargets([K_IKH, K_AKH]);
       const r = targetResolver(rows);
-      check('koreksi menang', r(K_IKH, A_KOREKSI, '2026-07-01') === 6);
-      check('default kelas dipakai', r(K_IKH, A_DEFAULT, '2026-07-01') === 4);
+      check('koreksi menang', r(K_IKH, A_KOREKSI, '2026-07-01') === 120);
+      check('default kelas dipakai', r(K_IKH, A_DEFAULT, '2026-07-01') === 80);
       check('sebelum berlaku → null', r(K_IKH, A_DEFAULT, '2026-05-31') === null);
       check('kelas tanpa baris → null', r('kelas-hantu', A_DEFAULT, '2026-07-01') === null);
     }
 
     console.log('\n12. Validasi masukan');
     {
-      const nol = await simpanTarget({ programKelasId: K_IKH, anggotaId: null, halamanPerHari: 0, berlakuMulai: ANCHOR, catatan: null, dibuatOleh: 'x' });
-      check('0 hal/hari ditolak', !!nol.error, JSON.stringify(nol));
-      const minus = await simpanTarget({ programKelasId: K_IKH, anggotaId: null, halamanPerHari: -2, berlakuMulai: ANCHOR, catatan: null, dibuatOleh: 'x' });
+      const nol = await simpanTarget({ programKelasId: K_IKH, anggotaId: null, halamanPerBulan: 0, berlakuMulai: ANCHOR, catatan: null, dibuatOleh: 'x' });
+      check('0 hal/bulan ditolak', !!nol.error, JSON.stringify(nol));
+      const minus = await simpanTarget({ programKelasId: K_IKH, anggotaId: null, halamanPerBulan: -2, berlakuMulai: ANCHOR, catatan: null, dibuatOleh: 'x' });
       check('negatif ditolak', !!minus.error);
-      const besar = await simpanTarget({ programKelasId: K_IKH, anggotaId: null, halamanPerHari: 400, berlakuMulai: ANCHOR, catatan: null, dibuatOleh: 'x' });
-      check('400 hal/hari ditolak (salah ketik)', !!besar.error);
-      const tglSalah = await simpanTarget({ programKelasId: K_IKH, anggotaId: null, halamanPerHari: 4, berlakuMulai: '13-08-2026', catatan: null, dibuatOleh: 'x' });
+      const besar = await simpanTarget({ programKelasId: K_IKH, anggotaId: null, halamanPerBulan: 800, berlakuMulai: ANCHOR, catatan: null, dibuatOleh: 'x' });
+      check('800 hal/bulan ditolak (salah ketik)', !!besar.error);
+      const batas = await simpanTarget({ programKelasId: K_IKH, anggotaId: null, halamanPerBulan: 400, berlakuMulai: ANCHOR, catatan: null, dibuatOleh: 'x' });
+      check('400 masih diterima (batas atas)', !batas.error, JSON.stringify(batas));
+      const tglSalah = await simpanTarget({ programKelasId: K_IKH, anggotaId: null, halamanPerBulan: 80, berlakuMulai: '13-08-2026', catatan: null, dibuatOleh: 'x' });
       check('tanggal cacat ditolak', !!tglSalah.error);
-      const kelasHantu = await simpanTarget({ programKelasId: '39999999-9999-4999-8999-999999999999', anggotaId: null, halamanPerHari: 4, berlakuMulai: ANCHOR, catatan: null, dibuatOleh: 'x' });
+      const kelasHantu = await simpanTarget({ programKelasId: '39999999-9999-4999-8999-999999999999', anggotaId: null, halamanPerBulan: 80, berlakuMulai: ANCHOR, catatan: null, dibuatOleh: 'x' });
       check('kelas tak dikenal ditolak', !!kelasHantu.error);
-      const salahKelas = await simpanTarget({ programKelasId: K_IKH, anggotaId: A_AKHWAT, halamanPerHari: 4, berlakuMulai: ANCHOR, catatan: null, dibuatOleh: 'x' });
+      const salahKelas = await simpanTarget({ programKelasId: K_IKH, anggotaId: A_AKHWAT, halamanPerBulan: 80, berlakuMulai: ANCHOR, catatan: null, dibuatOleh: 'x' });
       check('peserta kelas lain ditolak', !!salahKelas.error, JSON.stringify(salahKelas));
+
+      // `batas` di atas menimpa default kelas ikhwan jadi 400 — kembalikan ke 80
+      // supaya fase berikutnya tak membaca angka uji validasi.
+      await simpanTarget({ programKelasId: K_IKH, anggotaId: null, halamanPerBulan: 80, berlakuMulai: ANCHOR, catatan: null, dibuatOleh: 'Ust Uji' });
+      check('default kelas pulih ke 80',
+        cari((await lap()).peserta, 'Peserta Default')?.target === 80);
     }
 
-    console.log('\n13. Desimal 0,5 hal/hari');
+    console.log('\n13. Desimal 37,5 hal/bulan');
     {
       await simpanTarget({
-        programKelasId: K_AKH, anggotaId: A_AKHWAT, halamanPerHari: 0.5,
+        programKelasId: K_AKH, anggotaId: A_AKHWAT, halamanPerBulan: 37.5,
         berlakuMulai: ANCHOR, catatan: 'pemula', dibuatOleh: 'Ust Uji',
       });
       const rows = await getSetoranTargets([K_AKH]);
       const v = rows.find((x) => x.anggotaId === A_AKHWAT);
-      check('tersimpan sebagai number 0.5', v?.halamanPerHari === 0.5, JSON.stringify(v?.halamanPerHari));
-      check('tipenya number, bukan string', typeof v?.halamanPerHari === 'number');
+      check('tersimpan sebagai number 37.5', v?.halamanPerBulan === 37.5, JSON.stringify(v?.halamanPerBulan));
+      check('tipenya number, bukan string', typeof v?.halamanPerBulan === 'number');
       const a = cari((await lap()).peserta, 'Peserta Akhwat');
-      check(`0.5 dikalikan, bukan disambung → ${SESI_AKHWAT * 0.5}`,
-        a?.target === SESI_AKHWAT * 0.5, String(a?.target));
+      check('37.5 dipakai apa adanya, bukan disambung', a?.target === 37.5, String(a?.target));
     }
 
     console.log('\n14. Simpan ulang tanggal sama = perbarui versi, bukan duplikat');
     {
       await simpanTarget({
-        programKelasId: K_AKH, anggotaId: A_AKHWAT, halamanPerHari: 2,
+        programKelasId: K_AKH, anggotaId: A_AKHWAT, halamanPerBulan: 40,
         berlakuMulai: ANCHOR, catatan: 'naik', dibuatOleh: 'Ust Uji',
       });
       const rows = (await getSetoranTargets([K_AKH])).filter((x) => x.anggotaId === A_AKHWAT);
       check('tetap 1 versi', rows.length === 1, String(rows.length));
-      check('nilainya diperbarui', rows[0]?.halamanPerHari === 2, String(rows[0]?.halamanPerHari));
+      check('nilainya diperbarui', rows[0]?.halamanPerBulan === 40, String(rows[0]?.halamanPerBulan));
     }
 
     console.log('\n15. Kunci tanggal berlaku untuk peserta & ketua');
@@ -432,7 +447,7 @@ async function main() {
       // Juli yang sudah lewat.
       const sebelum = cari((await lap()).peserta, 'Peserta Koreksi')?.target;
       await simpanTarget({
-        programKelasId: K_IKH, anggotaId: A_KOREKSI, halamanPerHari: 1,
+        programKelasId: K_IKH, anggotaId: A_KOREKSI, halamanPerBulan: 10,
         berlakuMulai: berlakuPeriodeBerjalan(), catatan: null, dibuatOleh: 'Peserta Koreksi',
       });
       const sesudah = cari((await lap()).peserta, 'Peserta Koreksi')?.target;

@@ -22,7 +22,7 @@ export type RemindResult = { ok?: boolean; error?: string; waUrl?: string };
 export type TargetResult = { ok?: boolean; error?: string };
 
 /**
- * Peserta Takhassus Ikhwan menetapkan target hafalan HARIANNYA SENDIRI.
+ * Peserta Takhassus Ikhwan menetapkan target hafalan BULANANNYA SENDIRI.
  *
  * Kelas itu presensi-mandiri dan tak punya ketua di alur presensi, jadi
  * pesertanya yang memasang sendiri. Tanggal berlakunya dikunci ke awal periode
@@ -43,12 +43,12 @@ export async function simpanTargetSaya(
     return { error: 'Target setoran hanya untuk kelas Maahir Takhassus.' };
   }
 
-  // Koma sebagai pemisah desimal — "0,5" adalah cara mengetik yang paling wajar.
-  const halamanPerHari = Number(String(fd.get('halaman_per_hari') ?? '').replace(',', '.'));
+  // Koma sebagai pemisah desimal — "37,5" adalah cara mengetik yang paling wajar.
+  const halamanPerBulan = Number(String(fd.get('halaman_per_bulan') ?? '').replace(',', '.'));
   const res = await simpanTarget({
     programKelasId: m.kelas.id,
     anggotaId: m.anggotaId,
-    halamanPerHari,
+    halamanPerBulan,
     berlakuMulai: berlakuPeriodeBerjalan(),
     catatan: null,
     dibuatOleh: m.anggotaName,

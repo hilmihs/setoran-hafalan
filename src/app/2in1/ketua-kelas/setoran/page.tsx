@@ -147,7 +147,7 @@ export default async function SetoranKetuaPage({
     })
     .filter((b) => b.pert.length > 0 && b.pes.length > 0);
 
-  // Target hafalan harian per peserta. Dipisah dari `blocks` supaya panelnya
+  // Target hafalan bulanan per peserta. Dipisah dari `blocks` supaya panelnya
   // tetap muncul pada bulan yang belum punya pertemuan sama sekali — target
   // justru paling perlu dipasang sebelum kelas berjalan.
   const targetRows = await getSetoranTargets(kelasIds);
