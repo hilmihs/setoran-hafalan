@@ -212,16 +212,20 @@ payload lengkap memakai master data sungguhan dari lingkungan yang sedang
 diarahkan, lalu menampilkannya.
 
 ```bash
-npm run test-tilawah                          # kirim-percobaan (staging maupun produksi)
-KIRIM_NYATA=1 npm run test-tilawah            # menulis — hanya bila URL mengandung "staging"
-KIRIM_NYATA=1 PRODUKSI_OK=1 TILAWAH_BATCH=<id> npm run test-tilawah   # menulis ke produksi
+npm run test-tilawah                # kirim-percobaan (staging maupun produksi)
+KIRIM_NYATA=1 npm run test-tilawah  # menulis — HANYA bila URL mengandung "staging"
 ```
 
-Menulis ke produksi menuntut dua penjaga tambahan, dan skrip **menolak** bila
-kurang — bukan bertanya. Alasannya di §5: akun murid yang salah masuk tidak dapat
-dibatalkan lewat API, jadi tujuannya harus batch uji tersendiri, bukan batch
-berjalan. `DATABASE_URL` tetap wajib host lokal karena skrip membuat data dummy
-di maahir dan menghapusnya di akhir.
+**Skrip uji tidak pernah menulis ke produksi**, apa pun bendera yang diberikan.
+Percobaan menulis dilakukan di staging; produksi hanya dibaca. Alasannya di §5:
+akun murid yang salah masuk tidak dapat dibatalkan lewat API.
+
+Menulis ke produksi adalah keputusan operasional, dan jalannya lewat aplikasi —
+koordinator menyetujui usulan, superadmin menyalakan `ks_periode.kirim_nyata` —
+bukan lewat skrip uji.
+
+`DATABASE_URL` tetap wajib host lokal karena skrip membuat data dummy di maahir
+dan menghapusnya di akhir.
 
 Hasil dry-run terhadap produksi, 1 Sep 2026 — **ke-27 slot MASTER_SLOT terpetakan
 "pasti", nol ragu, nol tanpa padanan**:

@@ -5,13 +5,18 @@
 // data sungguhan dari lingkungan yang sedang diarahkan, lalu menampilkannya —
 // tanpa satu pun POST ke sumber daya CMS.
 //
-// Untuk benar-benar menulis:
-//   staging   : KIRIM_NYATA=1 npm run test-tilawah
-//   produksi  : KIRIM_NYATA=1 PRODUKSI_OK=1 TILAWAH_BATCH=<id> npm run test-tilawah
+// Untuk benar-benar menulis — HANYA staging:
+//   KIRIM_NYATA=1 npm run test-tilawah
 //
-// Produksi menuntut dua penjaga tambahan karena `DELETE /api/users/{id}` membalas
-// 302 tanpa menghapus apa pun: akun murid yang salah masuk ke batch nyata menetap
-// di sana selamanya. Pakai batch uji tersendiri, bukan batch yang sedang berjalan.
+// Skrip ini TIDAK PERNAH menulis ke produksi, apa pun bendera yang diberikan, dan
+// ke mana pun TILAWAH_BASE_URL menunjuk. Percobaan menulis dilakukan di staging;
+// produksi hanya dibaca. Alasannya bukan sekadar kehati-hatian:
+// `DELETE /api/users/{id}` membalas 302 tanpa menghapus apa pun, sehingga akun
+// murid yang salah masuk ke batch nyata menetap di sana selamanya.
+//
+// Menulis ke produksi adalah keputusan operasional, dan jalannya lewat aplikasi:
+// koordinator menyetujui usulan, superadmin menyalakan `ks_periode.kirim_nyata`.
+// Bukan lewat skrip uji.
 //
 // Data dummy maahir dibuat di DATABASE_URL lokal dan dihapus di akhir.
 import { supabaseAdmin } from '@/lib/supabase-admin';
@@ -45,22 +50,19 @@ if (!/@(localhost|127\.0\.0\.1|0\.0\.0\.0)[:/]/.test(dbUrl)) {
   process.exit(1);
 }
 
-// Penjaga produksi. Sengaja menolak, bukan bertanya.
-let KIRIM = MINTA_KIRIM;
+// Penjaga produksi. Menolak, tanpa jalan pintas apa pun.
 if (MINTA_KIRIM && PRODUKSI) {
-  if (process.env.PRODUKSI_OK !== '1' || !BATCH_ENV) {
-    console.error(
-      'Menolak menulis ke PRODUKSI tanpa penjaga lengkap.\n' +
-        '  Wajib: PRODUKSI_OK=1 dan TILAWAH_BATCH=<id batch uji>\n' +
-        '  Alasan: DELETE /api/users/{id} membalas 302 tanpa menghapus — akun murid\n' +
-        '  yang salah masuk ke batch nyata tidak dapat dibatalkan lewat API.'
-    );
-    process.exit(1);
-  }
+  console.error(
+    'Menolak menulis ke PRODUKSI. Skrip uji hanya boleh menulis ke staging.\n' +
+      `  TILAWAH_BASE_URL = ${base}\n` +
+      '  Arahkan ke staging bila ingin mencoba menulis, atau jalankan tanpa\n' +
+      '  KIRIM_NYATA untuk memeriksa payload terhadap master produksi (nol tulis).\n' +
+      '  Pengiriman nyata ke produksi jalannya lewat aplikasi: koordinator\n' +
+      '  menyetujui usulan, superadmin menyalakan ks_periode.kirim_nyata.'
+  );
+  process.exit(1);
 }
-if (MINTA_KIRIM && !PRODUKSI && !BATCH_ENV) {
-  // staging: batch 1 aman sebagai bawaan
-}
+const KIRIM = MINTA_KIRIM && !PRODUKSI;
 
 let gagal = 0;
 function eq(actual: unknown, expected: unknown, label: string) {
@@ -339,8 +341,8 @@ async function main() {
     ok(rows.every((r) => r.status === 'antre'), 'tidak ada baris yang terkirim — nol tulis ke CMS');
     console.log(
       PRODUKSI
-        ? '\n     Untuk benar-benar mengirim ke produksi, siapkan batch uji tersendiri lalu:\n' +
-            '       KIRIM_NYATA=1 PRODUKSI_OK=1 TILAWAH_BATCH=<id> npm run test-tilawah'
+        ? '\n     Produksi hanya dibaca. Pengiriman nyata jalannya lewat aplikasi:\n' +
+            '     koordinator menyetujui usulan, superadmin menyalakan kirim_nyata.'
         : '\n     Untuk benar-benar mengirim ke staging: KIRIM_NYATA=1 npm run test-tilawah'
     );
   } else {
