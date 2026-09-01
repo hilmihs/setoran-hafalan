@@ -97,11 +97,11 @@ export function RankingTable({
           </div>
         </div>
         <Link
-          href="/2in1/koordinator/matrix"
+          href="/matrix/koordinator?tampilan=blok"
           className="btn btn-sm btn-primary"
           style={{ height: 30, padding: '0 12px', textDecoration: 'none', fontSize: 12 }}
         >
-          Kontribusi Tajwid →
+          Matrix Skill Guru →
         </Link>
       </div>
 

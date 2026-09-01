@@ -5,11 +5,11 @@ import {
   INDIKATOR,
   INDIKATOR_BY_KATEGORI,
   KATEGORI_LABEL,
+  KATEGORI_ORDER,
   KATEGORI_STANDAR,
   KATEGORI_RATA_KEY,
   STANDAR_KESELURUHAN,
   scoreColor,
-  type Kategori,
 } from '@/lib/matrix-indicators';
 import { MatrixRadarChart } from '@/components/charts/MatrixRadarChart';
 import { MonthNavSelect } from '@/components/MonthNavSelect';
@@ -20,7 +20,7 @@ import type { MatrixRekap } from '@/types/db';
 export const dynamic = 'force-dynamic';
 
 const ANCHOR_MONTH = '2026-01';
-const KATEGORI_ORDER: Kategori[] = ['hard', 'inspeksi', 'soft'];
+// Urutan kategori dipakai bersama halaman matrix lain — lihat matrix-indicators.
 
 function fmt(v: number | null | undefined): string {
   return v === null || v === undefined ? '—' : v.toFixed(1);

@@ -7,9 +7,12 @@ import { FeatureNav } from '@/components/FeatureNav';
 import { StatCard } from '@/components/ui/StatCard';
 import { MatrixTable, type MatrixTableRow } from '@/components/MatrixTable';
 import { MatrixRekapAspek } from '@/components/matrix/MatrixRekapAspek';
+import { MatrixDashboard, type MatrixListItem } from '@/components/matrix/MatrixDashboard';
 import Link from 'next/link';
 import { computeRiskPengajar, levelColor, levelLabel, type RiskResult } from '@/lib/risk';
 import { syncMatrixIfStale, isLiveMatrixMonth } from '@/lib/matrix-compute';
+import { acuanTanggalBlok, getBlokPengajar } from '@/lib/matrix-blok-data';
+import type { MatrixBlok } from '@/lib/matrix-blok';
 import { INDIKATOR, scoreColor, KATEGORI_BOBOT, type IndikatorKey } from '@/lib/matrix-indicators';
 import type { Gender } from '@/types/db';
 
@@ -24,13 +27,31 @@ function fmtNum(n: number | null | undefined): string {
   return n.toFixed(2);
 }
 
+function prevYm(ym: string): string {
+  const [y, m] = ym.split('-').map(Number);
+  const d = new Date(Date.UTC(y, m - 2, 1)); // m-1 = bulan ini, m-2 = bulan lalu
+  return d.toISOString().slice(0, 7);
+}
+
 interface SearchParams {
   bulan?: string;
   kelompok?: string;
   gender?: string;
   sync?: string;
   q?: string;
+  tampilan?: string;
 }
+
+/**
+ * Dua cara membaca matrix yang sama:
+ * - `tabel`  — 14 indikator, teguran, risk, status final. Alat kerja koordinator,
+ *              bisa dicetak.
+ * - `blok`   — peringkat dipecah per jenis kelas Maahir yang diikuti pengajar
+ *              (Takhassus → Tahfizh → Talaqqi). Dipakai saat membahas ranking.
+ * Dulu keduanya halaman terpisah (`/2in1/koordinator/matrix`) dengan halaman
+ * rincian sendiri-sendiri; disatukan supaya tak ada versi yang tertinggal.
+ */
+type Tampilan = 'tabel' | 'blok';
 
 const SCORE_COLS =
   'pengajar_id, year_month, skor_bacaan, skor_tajwid, skor_kehadiran_maahir, skor_kehadiran_tibyan, rata_rata_hard_skill, skor_metode_pengajaran, skor_kepatuhan_silabus, skor_manajemen_halaqah, skor_evaluasi_penguasaan, rata_rata_pedagogis, skor_kedisiplinan_waktu, skor_komitmen_jadwal, skor_tanggung_jawab, skor_kepatuhan_sop, rata_rata_soft_skill, rata_rata_keseluruhan, ranking, total_teguran_bulan, total_teguran_kumulatif, finalized_at';
@@ -40,7 +61,7 @@ export default async function MatrixKoordinatorPage({
 }: {
   searchParams: SearchParams;
 }) {
-  const session = await requireOneOfRoles(['koordinator']);
+  const session = await requireOneOfRoles(['koordinator', 'syaikh']);
   const selectedMonth = searchParams.bulan || currentYearMonth();
   const selectedKelompok = searchParams.kelompok || '';
   const q = (searchParams.q || '').trim();
@@ -49,7 +70,15 @@ export default async function MatrixKoordinatorPage({
       ? searchParams.gender
       : session.gender;
   const isKoordinator = session.role === 'koordinator';
-  const backHref = isKoordinator ? '/2in1/koordinator' : '/observasi/koordinator';
+  const backHref = isKoordinator ? '/2in1/koordinator' : '/2in1/syaikh';
+  // Koordinator tetap mendarat di tabel (alat kerjanya), syaikh di blok —
+  // dia datang lewat tombol "Matrix" untuk membaca peringkat, bukan mengaudit.
+  const tampilan: Tampilan =
+    searchParams.tampilan === 'blok' || searchParams.tampilan === 'tabel'
+      ? searchParams.tampilan
+      : isKoordinator
+      ? 'tabel'
+      : 'blok';
   const live = isLiveMatrixMonth(selectedMonth);
 
   // Sinkronisasi hemat: hanya recompute bila data basi (>5 mnt) atau ?sync=1 (tombol).
@@ -68,7 +97,7 @@ export default async function MatrixKoordinatorPage({
 
   let pengajarQuery = supabaseAdmin
     .from('pengajar')
-    .select('id, name, kelompok_id, active')
+    .select('id, name, kelompok_id, active, whatsapp_number')
     .eq('gender', gender)
     .neq('matrix_exclude', true); // guru observasi-saja (mis. DPQ) tak masuk matrix
   if (selectedKelompok) {
@@ -101,8 +130,42 @@ export default async function MatrixKoordinatorPage({
     new Set([currentYearMonth(), ...(availableMonths ?? []).map((m) => m.year_month)])
   ).sort().reverse();
 
+  // Blok jenis kelas — baru dipasang untuk ikhwan (akhwat menyusul). Untuk
+  // akhwat peta ini kosong dan daftar blok tampil rata seperti biasa.
+  const blokMap: Map<string, MatrixBlok> =
+    gender === 'ikhwan'
+      ? await getBlokPengajar(
+          (pengajarList ?? []).map((p) => ({
+            id: p.id as string,
+            whatsapp_number: (p.whatsapp_number as string | null) ?? null,
+          })),
+          acuanTanggalBlok(selectedMonth)
+        )
+      : new Map();
+
+  // Snapshot bulan lalu untuk panah naik/turun di tampilan blok — read-only,
+  // JANGAN recompute bulan lampau.
+  const { data: prevRows } = pengajarIds.length
+    ? await supabaseAdmin
+        .from('matrix_rekap')
+        .select('pengajar_id, rata_rata_keseluruhan, ranking')
+        .eq('year_month', prevYm(selectedMonth))
+        .in('pengajar_id', pengajarIds)
+    : { data: [] };
+  const prevMap = new Map(
+    (prevRows ?? []).map((r) => [
+      r.pengajar_id as string,
+      {
+        total: r.rata_rata_keseluruhan != null ? Number(r.rata_rata_keseluruhan) : null,
+        ranking: r.ranking != null ? Number(r.ranking) : null,
+      },
+    ])
+  );
+
+  // Risk = satu rangkaian query per pengajar. Tampilan blok tak memakainya,
+  // jadi jangan dibayar di sana.
   const riskByPengajar = new Map<string, RiskResult>();
-  if (pengajarIds.length) {
+  if (pengajarIds.length && tampilan === 'tabel') {
     const results = await Promise.all(
       pengajarIds.map(async (id) => [id, await computeRiskPengajar(id)] as const)
     );
@@ -146,6 +209,29 @@ export default async function MatrixKoordinatorPage({
     return a.name.localeCompare(b.name);
   });
 
+  // DTO tampilan blok — sumbernya `rows` yang sama, jadi kedua tampilan tak
+  // mungkin berbeda isi.
+  const items: MatrixListItem[] = rows.map((r) => {
+    const prev = prevMap.get(r.id);
+    return {
+      id: r.id,
+      name: r.name,
+      kelompok: r.kelompokName,
+      hard: r.hard,
+      ped: r.pedagogis,
+      soft: r.soft,
+      total: r.keseluruhan,
+      ranking: r.ranking,
+      deltaTotal:
+        r.keseluruhan !== null && prev?.total != null
+          ? Math.round((r.keseluruhan - prev.total) * 10) / 10
+          : null,
+      deltaRank:
+        r.ranking !== null && prev?.ranking != null ? prev.ranking - r.ranking : null,
+      blok: blokMap.get(r.id) ?? null,
+    } satisfies MatrixListItem;
+  });
+
   const totalPengajar = rows.length;
   const withMatrix = rows.filter((r) => r.hasMatrix);
   const avgKeseluruhan = withMatrix.length
@@ -162,10 +248,12 @@ export default async function MatrixKoordinatorPage({
     const b = over.bulan ?? selectedMonth;
     const k = over.kelompok ?? selectedKelompok;
     const qq = over.q ?? q;
+    const t = (over.tampilan as Tampilan | undefined) ?? tampilan;
     if (g !== session.gender) p.set('gender', g);
     if (b !== currentYearMonth()) p.set('bulan', b);
     if (k) p.set('kelompok', k);
     if (qq) p.set('q', qq);
+    p.set('tampilan', t); // selalu eksplisit — link dibagikan lintas peran
     const s = p.toString();
     return s ? `/matrix/koordinator?${s}` : '/matrix/koordinator';
   };
@@ -206,9 +294,38 @@ export default async function MatrixKoordinatorPage({
               <div>
                 <h1 className="t-h1" style={{ marginBottom: 4 }}>Matrix Skill Pengajar</h1>
                 <p className="t-small" style={{ color: 'var(--muted)' }}>
-                  Rekap 14 indikator · {gender === 'ikhwan' ? 'Ikhwan' : 'Akhwat'} · {selectedMonth}
+                  {tampilan === 'blok' ? 'Peringkat per blok kelas' : 'Rekap 14 indikator'} ·{' '}
+                  {gender === 'ikhwan' ? 'Ikhwan' : 'Akhwat'} · {selectedMonth}
                   {live ? ' · sinkron live' : ' · data final'}
                 </p>
+              </div>
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              {/* Tampilan toggle */}
+              <div className="no-print" style={{ display: 'inline-flex', background: 'var(--surface-3)', borderRadius: 999, padding: 3, gap: 2 }}>
+                {([
+                  { key: 'blok' as Tampilan, label: 'Blok' },
+                  { key: 'tabel' as Tampilan, label: 'Tabel' },
+                ]).map((t) => (
+                  <Link
+                    key={t.key}
+                    href={qs({ tampilan: t.key })}
+                    className="btn btn-sm"
+                    style={{
+                      height: 32,
+                      borderRadius: 999,
+                      background: tampilan === t.key ? 'var(--accent)' : 'transparent',
+                      color: tampilan === t.key ? '#fff' : 'var(--ink-2)',
+                      border: 'none',
+                    }}
+                    title={
+                      t.key === 'blok'
+                        ? 'Peringkat dipecah per jenis kelas Maahir yang diikuti pengajar'
+                        : 'Tabel 14 indikator + teguran, risk, status final'
+                    }
+                  >
+                    {t.label}
+                  </Link>
+                ))}
               </div>
               {/* Gender toggle */}
               <div style={{ display: 'inline-flex', background: 'var(--surface-3)', borderRadius: 999, padding: 3, gap: 2 }}>
@@ -229,20 +346,26 @@ export default async function MatrixKoordinatorPage({
                   </Link>
                 ))}
               </div>
+              </div>
             </div>
 
-            <div className="matrix-stat-grid" style={{ marginTop: 18 }}>
-              <StatCard value={totalPengajar} label="Pengajar" />
-              <StatCard value={fmtNum(avgKeseluruhan)} mono label="Rata-rata" valueColor={scoreColor(avgKeseluruhan, 3.5)} />
-              <StatCard value={belowStd} label="Di bawah standar" valueColor={belowStd > 0 ? 'var(--merah-ink)' : undefined} />
-              <StatCard value={flaggedTeguran} label="Teguran ≥3" valueColor={flaggedTeguran > 0 ? 'var(--merah-ink)' : undefined} />
-              <StatCard value={`${finalizedCount}/${withMatrix.length}`} label="Finalized" />
-            </div>
+            {/* Tampilan blok punya ringkasannya sendiri (distribusi skor +
+                % memenuhi standar) di dalam MatrixDashboard. */}
+            {tampilan === 'tabel' && (
+              <div className="matrix-stat-grid" style={{ marginTop: 18 }}>
+                <StatCard value={totalPengajar} label="Pengajar" />
+                <StatCard value={fmtNum(avgKeseluruhan)} mono label="Rata-rata" valueColor={scoreColor(avgKeseluruhan, 3.5)} />
+                <StatCard value={belowStd} label="Di bawah standar" valueColor={belowStd > 0 ? 'var(--merah-ink)' : undefined} />
+                <StatCard value={flaggedTeguran} label="Teguran ≥3" valueColor={flaggedTeguran > 0 ? 'var(--merah-ink)' : undefined} />
+                <StatCard value={`${finalizedCount}/${withMatrix.length}`} label="Finalized" />
+              </div>
+            )}
           </div>
 
           {/* Filter bar */}
           <form method="get" className="card-flat no-print" style={{ padding: 12, marginBottom: 16, display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'flex-end' }}>
             <input type="hidden" name="gender" value={gender} />
+            <input type="hidden" name="tampilan" value={tampilan} />
             <div style={{ flex: '1 1 150px', minWidth: 130 }}>
               <label className="t-tiny" htmlFor="matrix_bulan" style={{ display: 'block', marginBottom: 4 }}>Bulan</label>
               <select id="matrix_bulan" name="bulan" defaultValue={selectedMonth} className="select" style={{ height: 38 }}>
@@ -298,7 +421,11 @@ export default async function MatrixKoordinatorPage({
             </div>
           )}
 
-          {withMatrix.length > 0 && (
+          {withMatrix.length > 0 && tampilan === 'blok' && (
+            <MatrixDashboard items={items} ym={selectedMonth} gender={gender} />
+          )}
+
+          {withMatrix.length > 0 && tampilan === 'tabel' && (
             <>
               <div
                 className="card-flat"
