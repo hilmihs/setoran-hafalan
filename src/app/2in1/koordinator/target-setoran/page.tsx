@@ -85,7 +85,7 @@ export default async function TargetSetoranPage() {
       .sort((a, b) => (a.berlakuMulai < b.berlakuMulai ? 1 : -1))
       .map((t) => ({
         id: t.id,
-        halamanPerHari: t.halamanPerHari,
+        halamanPerBulan: t.halamanPerBulan,
         berlakuLabel: tanggalPendek(t.berlakuMulai),
         catatan: t.catatan,
         oleh: t.dibuatOleh,
@@ -98,7 +98,7 @@ export default async function TargetSetoranPage() {
       id: k.id,
       name: k.name,
       gender: k.gender,
-      defaultBerlaku: defaultVersi.length ? defaultVersi[0].halamanPerHari : null,
+      defaultBerlaku: defaultVersi.length ? defaultVersi[0].halamanPerBulan : null,
       defaultVersi,
       anggota: anggotaList
         .filter((a) => a.program_kelas_id === k.id)
@@ -108,7 +108,7 @@ export default async function TargetSetoranPage() {
             id: a.id,
             name: a.name,
             // null = ikut default kelas (resolver mengembalikan angka kelas).
-            koreksi: versi.length ? versi[0].halamanPerHari : null,
+            koreksi: versi.length ? versi[0].halamanPerBulan : null,
             efektif: berlakuHariIni(k.id, a.id, hariIni),
             versi,
           };
@@ -126,13 +126,14 @@ export default async function TargetSetoranPage() {
 
         <div className="page">
           <div style={{ marginBottom: 14 }}>
-            <h1 className="t-h2" style={{ marginBottom: 2 }}>Target setoran hafalan Takhassus</h1>
+            <h1 className="t-h2" style={{ marginBottom: 2 }}>Target setoran hafalan bulanan Takhassus</h1>
             <p className="t-small" style={{ color: 'var(--muted-2)' }}>
-              Target ditetapkan sebagai <strong>halaman per hari</strong>, bukan per bulan. Takhassus
-              Ikhwan berjadwal 5 hari/pekan dan Akhwat 4 hari/pekan — satu angka bulanan menuntut hal
-              yang berbeda dari dua kelas itu. Laporan Bulanan mengalikan target harian ini dengan
-              sesi kelas yang seharusnya berjalan bagi tiap peserta, lalu menampilkan persentase
-              capaiannya.
+              Target ditetapkan sebagai <strong>halaman per bulan</strong> — satu angka bulat per
+              periode laporan (28–27), dan Laporan Bulanan memakainya apa adanya sebagai penyebut
+              capaian. <strong>Tanpa prorata:</strong> sakit, tanggal libur, dan bergabung di tengah
+              periode tidak menguranginya. Peserta dituntut sekian halaman dalam sebulan,
+              bagaimanapun ia membagi hari-harinya — Takhassus Ikhwan berjadwal 5 hari/pekan dan
+              Akhwat 3 hari/pekan, dan perbedaan itu sudah kamu perhitungkan saat memilih angkanya.
             </p>
             <p className="t-tiny" style={{ color: 'var(--muted-2)', marginTop: 4 }}>
               Yang mengisi sehari-hari <strong>bukan koordinator</strong>: peserta Takhassus Ikhwan

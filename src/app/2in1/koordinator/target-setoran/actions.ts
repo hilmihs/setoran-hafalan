@@ -40,15 +40,15 @@ export async function simpanTargetAction(
   const berlakuMulai = String(fd.get('berlaku_mulai') ?? '');
   const catatan = String(fd.get('catatan') ?? '').trim() || null;
   // Koma dipakai sebagai pemisah desimal di Indonesia — terima keduanya
-  // daripada menolak "0,5" yang mengetiknya paling wajar.
-  const halamanPerHari = Number(String(fd.get('halaman_per_hari') ?? '').replace(',', '.'));
+  // daripada menolak "37,5" yang mengetiknya paling wajar.
+  const halamanPerBulan = Number(String(fd.get('halaman_per_bulan') ?? '').replace(',', '.'));
 
   if (!programKelasId) return { error: 'Kelas belum dipilih.' };
 
   const res = await simpanTarget({
     programKelasId,
     anggotaId,
-    halamanPerHari,
+    halamanPerBulan,
     berlakuMulai,
     catatan,
     dibuatOleh: oleh,

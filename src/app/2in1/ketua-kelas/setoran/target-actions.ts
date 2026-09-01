@@ -7,7 +7,7 @@ import { berlakuPeriodeBerjalan, simpanTarget } from '@/lib/setoran-target';
 export type TargetKetuaResult = { ok?: boolean; error?: string; anggotaId?: string };
 
 /**
- * Ketua/wakil kelas Takhassus Akhwat menetapkan target hafalan harian
+ * Ketua/wakil kelas Takhassus Akhwat menetapkan target hafalan bulanan
  * pesertanya.
  *
  * Kelas Akhwat bukan presensi-mandiri, jadi pesertanya tak punya jalur untuk
@@ -31,13 +31,13 @@ export async function simpanTargetPeserta(
   const anggotaId = String(fd.get('anggota_id') ?? '');
   if (!anggotaId) return { error: 'Peserta belum dipilih.' };
 
-  const halamanPerHari = Number(String(fd.get('halaman_per_hari') ?? '').replace(',', '.'));
+  const halamanPerBulan = Number(String(fd.get('halaman_per_bulan') ?? '').replace(',', '.'));
   // simpanTarget yang memastikan anggota itu benar-benar milik kelas tsb, jadi
   // ketua kelas lain tak bisa menyetel target peserta orang.
   const res = await simpanTarget({
     programKelasId,
     anggotaId,
-    halamanPerHari,
+    halamanPerBulan,
     berlakuMulai: berlakuPeriodeBerjalan(),
     catatan: null,
     dibuatOleh: `Ketua ${kelas.name}`,

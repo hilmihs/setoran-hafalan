@@ -300,7 +300,7 @@ function TakhassusBlock({ lap }: { lap: Awaited<ReturnType<typeof getLaporanMaah
           notes={
             t.setoran.adaTarget
               ? 'Total halaman ÷ total target periode; peserta tanpa setoran dihitung 0'
-              : 'Target harian belum diatur koordinator'
+              : 'Target bulanan belum diatur koordinator'
           }
         />
         <ObsRow no="3" hal="Kehadiran peserta per bulan" aktual={pct(t.kehadiran.aktual)} benchmark={`${t.kehadiran.benchmark}%`} />
@@ -317,7 +317,7 @@ function TakhassusBlock({ lap }: { lap: Awaited<ReturnType<typeof getLaporanMaah
               <th>Peserta</th>
               <th style={{ width: 60 }}>Gender</th>
               <th style={{ width: 110 }}>Setoran (hal)</th>
-              <th style={{ width: 100 }} title="Target harian × sesi yang ditagih dalam periode ini">
+              <th style={{ width: 100 }} title="Target halaman/bulan yang ditetapkan koordinator">
                 Target (hal)
               </th>
               <th style={{ width: 70 }}>%</th>
@@ -340,7 +340,7 @@ function TakhassusBlock({ lap }: { lap: Awaited<ReturnType<typeof getLaporanMaah
                     <>
                       {p.target}
                       <span style={{ color: 'var(--muted-2)' }}>
-                        {' '}({p.targetHarian}×{p.sesiTarget})
+                        {' '}/bln · {p.sesiTarget} sesi
                       </span>
                     </>
                   )}
@@ -358,12 +358,13 @@ function TakhassusBlock({ lap }: { lap: Awaited<ReturnType<typeof getLaporanMaah
         </table>
       </div>
       <p className="t-tiny" style={{ color: 'var(--muted-2)', marginBottom: 12 }}>
-        Target dihitung dari halaman/hari yang ditetapkan koordinator dikalikan sesi kelas yang
-        <strong> seharusnya berjalan</strong> pada periode ini — sudah dipotong tanggal libur, sesi
-        sebelum peserta bergabung, dan sesi sakit. Penyebut ini sengaja berbeda dari persentase
-        kehadiran, yang memakai sesi terisi: sesi yang lalai diisi tak boleh menerbitkan alpa, tapi
-        untuk setoran ia berarti memang tak ada halaman tercatat. Peserta yang diputihkan sebulan
-        penuh tampil “—”, bukan 100% — pemutihan menghapus ketidakhadiran, bukan mengarang hafalan.
+        Target adalah <strong>halaman per bulan</strong> yang ditetapkan koordinator, dipakai apa
+        adanya: sakit, libur, dan bergabung di tengah periode <strong>tidak</strong> menguranginya —
+        peserta dituntut sekian halaman dalam sebulan, bagaimanapun ia membagi hari-harinya. Ini
+        sengaja berbeda dari persentase kehadiran, yang justru memotong semua itu. Angka sesi di
+        sebelah target hanya konteks banyaknya pertemuan, bukan pembagi. Peserta yang diputihkan
+        sebulan penuh tampil “—”, bukan 100% — pemutihan menghapus ketidakhadiran, bukan mengarang
+        hafalan.
       </p>
 
       <GenderRata ikhwan={t.kehadiran.avgIkhwan} akhwat={t.kehadiran.avgAkhwat} rata={t.kehadiran.aktual} />
