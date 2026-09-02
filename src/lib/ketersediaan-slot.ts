@@ -100,21 +100,51 @@ export interface SlotTerurai {
   waktu_mulai: string;
   waktu_selesai: string;
   mode: KsMode | null;
+  /** Teks lokasi yang menempel pada pilihan offline, bila ada. */
+  lokasi: string | null;
   /** Label yang sudah dirapikan, siap disimpan & ditampilkan. */
   label: string;
+}
+
+/** Pola satu rentang jam, mis. "06:00 - 07:30" atau "10.00 -11.30". */
+const POLA_RENTANG = /(\d{1,2}\s*[.:]\s*\d{2})\s*[-–—]\s*(\d{1,2}\s*[.:]\s*\d{2})/g;
+
+/**
+ * Nama hari di mana pun dalam sepotong teks, berurut kemunculan.
+ *
+ * Memindai nama, bukan memotong pemisah, karena pilihan offline di Google Form
+ * menyelipkan lokasi sebelum harinya:
+ *   "Offline di Masjid Al Kautsar Matraman Jakarta Timur Selasa & Kamis 16.00 - 17.30 WIB"
+ * Memotong pada "&" akan menjadikan "…Jakarta Timur Selasa" satu potongan yang
+ * tak dikenali, sehingga Selasa hilang dan slotnya terbaca Kamis saja.
+ */
+function pindaiHari(teks: string): { idx: KsHariIdx[]; posisiAwal: number } {
+  const pola = /\b(senin|selasa|rabu|kamis|jum[''`´]?\s?at|jumat|sabtu|ahad|minggu)\b/gi;
+  const out: KsHariIdx[] = [];
+  let posisiAwal = -1;
+  for (const m of teks.matchAll(pola)) {
+    const i = hariKeIdx(m[1]);
+    if (i === null) continue;
+    if (posisiAwal < 0) posisiAwal = m.index ?? 0;
+    if (!out.includes(i)) out.push(i);
+  }
+  return { idx: out.sort((a, b) => a - b), posisiAwal };
 }
 
 /**
  * Urai satu teks jadwal menjadi bentuk kanonik.
  *
- * Menerima bentuk yang beredar:
+ * Menerima bentuk yang beredar, termasuk pilihan Google Form yang menempelkan
+ * lokasi:
  *   "Senin & Rabu 06:00 - 07:30 WIB"
- *   "Online Selasa & Jum'at 06:00 - 07:30 WIB"      ← hits_halaqah.jadwal_raw
- *   "Offline Selasa & Kamis 10.00 -11.30 WIB"
- *   "Selasa, Kamis 20:00-21:30"
+ *   "Online Selasa & Jum'at 06:00 - 07:30 WIB"          ← hits_halaqah.jadwal_raw
+ *   "Offline di Pejaten Senin & Rabu 16:30 - 18:00 WIB" ← pilihan form pendaftaran
  *
- * Mengembalikan null bila hari atau jam tidak dapat dibaca — pemanggil harus
- * menampilkannya sebagai baris bermasalah, bukan menebak.
+ * Mengembalikan null bila hari atau jam tidak dapat dibaca, DAN bila teksnya
+ * memuat lebih dari satu rentang jam — mis. "Senin 07.30 - 09.00 WIB & Selasa
+ * 13.00 - 14.30 WIB", yang berarti dua jadwal berbeda dan tidak dapat diwakili
+ * satu slot. Menebaknya akan menaruh kelas pada jam yang salah, jadi baris
+ * seperti itu ditahan untuk diperiksa manusia.
  */
 export function uraikanSlot(teks: string): SlotTerurai | null {
   if (!teks) return null;
@@ -128,24 +158,20 @@ export function uraikanSlot(teks: string): SlotTerurai | null {
     sisa = sisa.slice(modeMatch[0].length).trim();
   }
 
-  // Potong pada angka pertama: sebelumnya nama hari, sesudahnya rentang jam.
-  const angka = sisa.search(/\d/);
-  if (angka <= 0) return null;
-  const bagianHari = sisa.slice(0, angka);
-  const bagianJam = sisa.slice(angka);
+  const rentang = [...sisa.matchAll(POLA_RENTANG)];
+  if (rentang.length === 0) return null;
+  if (rentang.length > 1) return null; // dua jadwal berbeda — bukan satu slot
 
-  const namaHari = bagianHari
-    .split(/[&,/]|\bdan\b/i)
-    .map((s) => s.trim())
-    .filter(Boolean);
-  const hari_idx = hariKeIdxSet(namaHari);
+  const { idx: hari_idx, posisiAwal } = pindaiHari(sisa.slice(0, rentang[0].index ?? sisa.length));
   if (hari_idx.length === 0) return null;
 
-  const jam = bagianJam.match(/(\d{1,2}\s*[.:]\s*\d{2})\s*[-–—]\s*(\d{1,2}\s*[.:]\s*\d{2})/);
-  if (!jam) return null;
-  const mulai = jamKeMenit(jam[1]);
-  const selesai = jamKeMenit(jam[2]);
+  const mulai = jamKeMenit(rentang[0][1]);
+  const selesai = jamKeMenit(rentang[0][2]);
   if (mulai === null || selesai === null || selesai <= mulai) return null;
+
+  // Teks sebelum nama hari pertama adalah lokasi, bila ada. "di Pejaten" → "Pejaten".
+  const depan = posisiAwal > 0 ? sisa.slice(0, posisiAwal).trim() : '';
+  const lokasi = depan.replace(/^di\s+/i, '').trim() || null;
 
   const hari = hari_idx.map(idxKeHari);
   return {
@@ -154,6 +180,7 @@ export function uraikanSlot(teks: string): SlotTerurai | null {
     waktu_mulai: menitKeJam(mulai),
     waktu_selesai: menitKeJam(selesai),
     mode,
+    lokasi,
     label: `${hari.join(' & ')} ${menitKeJam(mulai)} - ${menitKeJam(selesai)} WIB`,
   };
 }

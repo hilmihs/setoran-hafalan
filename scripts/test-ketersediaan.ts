@@ -22,6 +22,7 @@ import {
   type SlotAlokasi,
 } from '@/lib/ketersediaan-alokasi';
 import { usulkanHari, usulkanSesi, hariTidakKonsisten } from '@/lib/tilawah/map';
+import { bacaTanggal, deteksiFormatTanggal } from '@/lib/ketersediaan-pendaftar';
 import {
   namaPertemuan,
   rentangPertemuan,
@@ -80,6 +81,40 @@ eq(
 eq(susunLabel([0, 2], '06:00', '07:30'), 'Senin & Rabu 06:00 - 07:30 WIB', 'susunLabel baku');
 eq(hariKeIdxSet(['Selasa', "Jum'at", 'Selasa']), [1, 4], 'hariKeIdxSet unik & terurut');
 
+// Nilai sungguhan dari pilihan Google Form pendaftaran murid.
+console.log('\n# pilihan slot dari form pendaftaran');
+eq(
+  uraikanSlot('Offline di Pejaten Senin & Rabu 16:30 - 18:00 WIB')?.hari_idx,
+  [0, 2],
+  'lokasi sebelum nama hari tidak menelan harinya'
+);
+eq(
+  uraikanSlot('Offline di Pejaten Senin & Rabu 16:30 - 18:00 WIB')?.lokasi,
+  'Pejaten',
+  'lokasi terambil, awalan "di" dibuang'
+);
+eq(
+  uraikanSlot('Offline di Masjid Al Kautsar Matraman Jakarta Timur Selasa & Kamis 16.00 - 17.30 WIB')?.hari_idx,
+  [1, 3],
+  'lokasi panjang berisi banyak kata tetap tidak merusak pembacaan hari'
+);
+eq(
+  uraikanSlot("Offline Al Kautsar Selasa & Jum'at 07.30 - 09.00 WIB")?.lokasi,
+  'Al Kautsar',
+  'lokasi tanpa kata "di"'
+);
+eq(
+  uraikanSlot('Offline Al Kautsar Senin 07.30 - 09.00 WIB & Selasa 13.00 - 14.30 WIB'),
+  null,
+  'dua rentang jam berbeda ditolak, bukan ditebak'
+);
+eq(
+  uraikanSlot('Online Selasa & Kamis 10.00 -11.30 WIB')?.waktu_selesai,
+  '11:30',
+  'spasi pincang sebelum jam selesai tetap terbaca'
+);
+eq(uraikanSlot('Online Sabtu & Ahad 06:00 - 07:30 WIB')?.lokasi, null, 'slot online tanpa lokasi');
+
 // ── Bentrok ────────────────────────────────────────────────────────────────
 console.log('\n# deteksi bentrok');
 
@@ -120,6 +155,17 @@ eq(
   null,
   'halaqah tanpa jam tidak mengunci apa pun'
 );
+
+// ── Format tanggal per kolom ───────────────────────────────────────────────
+console.log('\n# format tanggal ditentukan dari seluruh kolom');
+eq(deteksiFormatTanggal(['12/23/1999', '5/26/2003', '10/6/1989']), 'mdy', 'bagian kedua >12 → M/D/YYYY');
+eq(deteksiFormatTanggal(['23/12/1999', '26/5/2003']), 'dmy', 'bagian pertama >12 → D/M/YYYY');
+eq(deteksiFormatTanggal(['5/6/2003', '1/2/2000']), 'dmy', 'ambigu → jatuh ke kebiasaan setempat');
+eq(deteksiFormatTanggal([]), 'dmy', 'kolom kosong → D/M/YYYY');
+eq(bacaTanggal('12/23/1999', 'mdy'), '1999-12-23', 'tanggal M/D/YYYY terbaca benar');
+eq(bacaTanggal('23/12/1999', 'dmy'), '1999-12-23', 'tanggal D/M/YYYY terbaca benar');
+eq(bacaTanggal('12/23/1999', 'dmy'), null, 'format salah ditolak, bukan dibaca terbalik');
+eq(bacaTanggal('1999-12-23'), '1999-12-23', 'ISO tetap terbaca apa pun formatnya');
 
 // ── Umur & pita ────────────────────────────────────────────────────────────
 console.log('\n# umur & pita');

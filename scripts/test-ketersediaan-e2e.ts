@@ -111,7 +111,10 @@ async function main() {
     'tiap slot punya hari_idx sepadan'
   );
   const offline = slots.filter((s) => s.mode === 'offline');
-  ok(offline.length === 4 && offline.every((s) => s.lokasi === 'Belum ditentukan'), '4 slot offline menuntut lokasi diisi');
+  ok(
+    offline.length === 4 && offline.every((s) => s.lokasi === 'Offline'),
+    '4 slot offline berlokasi bawaan "Offline"'
+  );
 
   const slotSeninRabuPagi = slots.find(
     (s) => s.kelompok === 'ikhwan' && s.mode === 'online' && s.label.startsWith('Senin & Rabu 06:00')
@@ -220,8 +223,8 @@ async function main() {
     'nama kosong tertangkap'
   );
   ok(
-    ditahan.some((d) => d.alasan_ditahan.some((a) => a.includes('tidak ada di master'))),
-    'slot ngawur tertangkap'
+    ditahan.some((d) => d.alasan_ditahan.some((a) => a.includes('tidak dapat diurai'))),
+    'slot ngawur tertangkap dengan alasan yang tepat'
   );
   // Ejaan "06.00" (titik) pada CSV harus cocok ke master yang memakai "06:00".
   ok(

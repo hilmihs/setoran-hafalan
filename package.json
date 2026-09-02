@@ -57,7 +57,8 @@
     "test-ketersediaan": "tsx scripts/test-ketersediaan.ts",
     "test-ketersediaan-e2e": "NODE_PATH=./scripts/node-shims tsx --env-file=.env.local scripts/test-ketersediaan-e2e.ts",
     "test-tilawah": "NODE_PATH=./scripts/node-shims tsx --env-file=.env.local scripts/test-tilawah.ts",
-    "emit-ketersediaan-sql": "tsx scripts/emit-ketersediaan-sql.ts"
+    "emit-ketersediaan-sql": "tsx scripts/emit-ketersediaan-sql.ts",
+    "test-pendaftar-sheet": "NODE_PATH=./scripts/node-shims tsx scripts/test-pendaftar-sheet.ts"
   },
   "dependencies": {
     "@supabase/ssr": "^0.5.0",

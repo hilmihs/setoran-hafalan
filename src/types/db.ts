@@ -997,10 +997,14 @@ export interface KsPemetaanKolom {
   nama?: string;
   wa?: string;
   tanggal_lahir?: string;
+  /** Kolom usia langsung. Dipakai bila tanggal lahir kosong atau tak terbaca. */
+  umur?: string;
   gender?: string;
   level?: string;
   slot?: string;
   timestamp?: string;
+  /** Tautan rekaman bacaan — bahan verifikasi pendaftar HITS Lanjutan. */
+  rekaman?: string;
 }
 
 export interface KsPendaftarSumber {
@@ -1035,6 +1039,8 @@ export interface KsPendaftar {
   level_pilihan: string | null;
   slot_label_raw: string | null;
   slot_id: string | null;
+  /** Tautan rekaman bacaan dari form, bila diisi. */
+  rekaman_url: string | null;
   /** Timestamp baris sheet — dasar usia antrean. */
   didaftar_pada: string | null;
   status: KsPendaftarStatus;

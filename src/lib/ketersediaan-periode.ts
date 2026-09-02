@@ -150,7 +150,7 @@ export function siapkanSlot(
       // Batasan basis data: mode offline wajib berlokasi. Dokumen konsep mencatat
       // daftar offline belum diverifikasi ke koordinator lokasi, jadi diberi
       // penanda yang jelas-jelas menuntut diisi, bukan lokasi karangan.
-      lokasi: s.mode === 'offline' ? (s.lokasi ?? opts?.lokasiWajibDefault ?? 'Belum ditentukan') : null,
+      lokasi: s.mode === 'offline' ? (s.lokasi ?? opts?.lokasiWajibDefault ?? 'Offline') : null,
       urutan: i,
     });
   });

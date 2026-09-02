@@ -455,8 +455,11 @@ halaqah yang sudah terbuat tidak dibuat ulang, enrolment aman diulang.
    pertemuan; 26 pertemuan × ratusan halaqah berarti ribuan panggilan ke server produksi
    kecil), dan maahir belum punya sumber kalender akademik berisi tanggal tiap pertemuan.
    Diusulkan sebagai fase 6 tersendiri.
-3. **Tautan Google Sheet responses pendaftaran murid** beserta daftar pertanyaannya. Tidak
-   memblokir karena pemetaan kolom dilakukan lewat layar, bukan kode.
+3. ~~Tautan Google Sheet responses pendaftaran murid~~ — **diterima 2 Sep 2026**.
+   Responses (akhwat): `.../2PACX-1vSS59U324L1rNSO5xKtHt7vqVdaca7HsdelFIbQdH4VCxPSYfMYAjPvCl_91Y0WcBb-lNmxTY8bLYdg/pub?output=csv`
+   Berkas kerja: `.../2PACX-1vR1MSjqq6TvZSt7ibdZz9R9my2uvmM0JOn6a36YRZx4n_MHXJVrVKrjqpqrPjjCnzNN6jvT9thmm4iv/pub?output=csv`
+   Diuji lewat `npm run test-pendaftar-sheet`: 1.341 baris, 867 sah, 474 ditahan.
+   Sheet ikhwan belum diterima — baris pada tab ini seluruhnya perempuan.
 4. **Data historis peminat per slot** — akan dikirim pemilik proses, masuk `ks_slot_riwayat`
    lewat impor.
 5. **Batch tujuan di tilawah** (`program_id` + `batch_id`) untuk periode berjalan. `API_MAP.md`
