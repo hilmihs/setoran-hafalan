@@ -118,6 +118,26 @@ export function trackOfUjianSesi(nomor: number): Track | null {
   return nomor === UJIAN_QN_SESI ? 'qn' : nomor === UJIAN_PB_SESI ? 'pb' : null;
 }
 
+/**
+ * Jenis rapot yang bersumber dari sebuah sesi — penjaga "buka kunci" sesi
+ * terkirim. Membuka sesi yang rapotnya masih aktif berarti membiarkan dokumen
+ * ber-QR memuat angka yang sudah tak berlaku, jadi pembukaan ditolak selama
+ * masih ada rapot aktif dengan salah satu jenis di daftar ini.
+ *
+ * Sesi berkala menyuplai rapot track-nya sendiri; sesi ujian menyuplai track
+ * pemiliknya (`trackOfUjianSesi`). Rapot era lama ikut terdaftar karena
+ * `nilaiAkhirOf` membangunnya dari kolam berkala QN+PB digabung DAN Ujian PB —
+ * jadi sesi mana pun bisa jadi sumbernya.
+ */
+export function jenisRapotDariSesi(jenis: Jenis, nomorSesi: number): string[] {
+  if (jenis === 'ujian') {
+    const track = trackOfUjianSesi(nomorSesi);
+    if (!track) return ['ujian']; // nomor di luar 1/2 — hanya rapot era lama
+    return [track, 'ujian', `ujian_${track}`];
+  }
+  return [jenis, 'berkala', 'ujian'];
+}
+
 /** Peran dokumen: PB menentukan kelulusan level, QN prasyarat yang wajib tuntas. */
 export function peranTrack(track: Track): 'penentu' | 'prasyarat' {
   return track === 'pb' ? 'penentu' : 'prasyarat';

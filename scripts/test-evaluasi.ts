@@ -3,7 +3,7 @@
 import {
   JALIY, KHAFIY, ALL_LAHN, LAHN_BY_KEY, emptyCounts,
   scoreOf, tierOf, AMBANG, columnFor,
-  buildTrackGeometry, nilaiAkhirOf, nilaiAkhirTrackOf, lantaiNilai, lantaiNilaiOpt,
+  buildTrackGeometry, nilaiAkhirOf, nilaiAkhirTrackOf, lantaiNilai, lantaiNilaiOpt, jenisRapotDariSesi,
   type LahnCounts,
 } from '@/lib/evaluasi';
 import { buildTrackRapotPayload, type RapotIdentitas, type SesiNilaiInput } from '@/lib/rapot';
@@ -231,6 +231,16 @@ eq(nilaiAkhirTrackOf('pb', [80, 81], 78).berkalaAvg, 81, 'bulat: rata 80.5 → 8
   eq(rapotLantai.nilaiAkhir, 55, 'lantai builder: nilai akhir 55');
   eq(rapotLantai.lulus, false, 'lantai builder: tetap MENGULANG');
   eq(rapotLantai.rincianUjian.map((r) => r.count), [10], 'lantai builder: jumlah kesalahan tetap apa adanya');
+}
+
+// ── Penjaga buka-kunci: jenis rapot yang bersumber dari sebuah sesi ──
+// Salah petakan = sesi bisa dibuka padahal rapot ber-QR-nya masih beredar.
+{
+  eq(jenisRapotDariSesi('qn', 3), ['qn', 'berkala', 'ujian'], 'buka-kunci: sesi berkala QN');
+  eq(jenisRapotDariSesi('pb', 1), ['pb', 'berkala', 'ujian'], 'buka-kunci: sesi berkala PB');
+  eq(jenisRapotDariSesi('ujian', 1), ['qn', 'ujian', 'ujian_qn'], 'buka-kunci: Ujian QN = sesi 1');
+  eq(jenisRapotDariSesi('ujian', 2), ['pb', 'ujian', 'ujian_pb'], 'buka-kunci: Ujian PB = sesi 2');
+  eq(jenisRapotDariSesi('ujian', 3), ['ujian'], 'buka-kunci: nomor ujian di luar 1/2 → rapot era lama saja');
 }
 
 // ── Kunci aritmetika rapot ERA LAMA (nilaiAkhirOf, @deprecated) ──
