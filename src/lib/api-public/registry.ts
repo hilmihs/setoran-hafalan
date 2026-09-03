@@ -105,12 +105,13 @@ export const ENTITIES: Record<string, EntityDef> = {
     order: { column: 'urutan', dir: 'asc' },
   },
   'setoran-target': {
-    // Target setoran hafalan Takhassus, halaman PER HARI. anggota_id kosong =
-    // default seluruh kelas; berlaku_mulai membedakan versi, baris lama tak
-    // dihapus saat target berubah.
+    // Target setoran hafalan Takhassus, halaman PER BULAN (sejak migrasi 0070;
+    // sebelumnya kolomnya bernama `halaman_per_hari` dan bersatuan hari).
+    // anggota_id kosong = default seluruh kelas; berlaku_mulai membedakan versi,
+    // baris lama tak dihapus saat target berubah.
     route: 'setoran-target', table: 'maahir_setoran_target', scope: 'maahir',
     columns: [
-      'id', 'program_kelas_id', 'anggota_id', 'halaman_per_hari',
+      'id', 'program_kelas_id', 'anggota_id', 'halaman_per_bulan',
       'berlaku_mulai', 'catatan', 'dibuat_oleh', 'created_at',
     ],
     filters: [

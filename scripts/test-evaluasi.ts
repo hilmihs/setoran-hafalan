@@ -3,7 +3,7 @@
 import {
   JALIY, KHAFIY, ALL_LAHN, LAHN_BY_KEY, emptyCounts,
   scoreOf, tierOf, AMBANG, columnFor,
-  buildTrackGeometry, nilaiAkhirOf, nilaiAkhirTrackOf,
+  buildTrackGeometry, nilaiAkhirOf, nilaiAkhirTrackOf, lantaiNilai, lantaiNilaiOpt, jenisRapotDariSesi,
   type LahnCounts,
 } from '@/lib/evaluasi';
 import { buildTrackRapotPayload, type RapotIdentitas, type SesiNilaiInput } from '@/lib/rapot';
@@ -191,6 +191,56 @@ eq(nilaiAkhirTrackOf('pb', [80, 81], 78).berkalaAvg, 81, 'bulat: rata 80.5 → 8
   eq(saja.nilaiAkhir, 88, 'ujianSaja builder qn: nilai murni skor Ujian QN');
   eq(saja.berkalaAvg, null, 'ujianSaja builder qn: berkalaAvg null');
   eq(saja.akumulasi, [], 'ujianSaja builder qn: akumulasi berkala dikosongkan');
+}
+
+// ── Lantai nilai 55 (kebijakan Majelis, Sept 2026) ──
+// Lantai memagari ANGKA yang dicetak, bukan ambang kelulusan: 55 tetap MENGULANG.
+// Jumlah kesalahan di tabel rincian tak pernah ikut dilantai.
+{
+  eq(lantaiNilai(0), 55, 'lantai: skor 0 → 55');
+  eq(lantaiNilai(54), 55, 'lantai: 54 → 55');
+  eq(lantaiNilai(55), 55, 'lantai: 55 tetap 55');
+  eq(lantaiNilai(88), 88, 'lantai: nilai di atas lantai tak diutak-atik');
+  eq(lantaiNilaiOpt(null), null, 'lantai: null tetap null, bukan 55');
+
+  // scoreOf TIDAK dilantai — rapot butuh skor mentah untuk aritmetika & audit.
+  eq(scoreOf({ ...emptyCounts(), huruf: 17 }).skor, 0, 'lantai: scoreOf tetap mentah (0)');
+
+  const bawah = nilaiAkhirTrackOf('pb', [], 20, { ujianSaja: true });
+  eq(bawah.ujianSkor, 55, 'lantai ujianSaja: skor ujian 20 → 55');
+  eq(bawah.nilai, 55, 'lantai ujianSaja: nilai akhir 55');
+  eq(bawah.lulus, false, 'lantai ujianSaja: 55 di bawah ambang 70 → MENGULANG');
+
+  // Mode 30/70: lantai dipasang di skor ujian dulu, lalu sekali lagi di hasil.
+  eq(nilaiAkhirTrackOf('pb', [60, 60, 60, 60], 30).ujianSkor, 55, 'lantai 30/70: skor ujian 30 → 55');
+  eq(nilaiAkhirTrackOf('pb', [60, 60, 60, 60], 30).nilai, 57, 'lantai 30/70: 0.3*60 + 0.7*55 = 56.5 → 57');
+  eq(nilaiAkhirTrackOf('pb', [0, 0, 0, 0], 0).nilai, 55, 'lantai 30/70: hasil 38.5 tetap tak turun di bawah 55');
+  eq(nilaiAkhirTrackOf('pb', [], null, { ujianSaja: true }).nilai, null,
+    'lantai: tanpa ujian tetap null, jangan jadi 55');
+
+  // Lewat builder rapot: snap ujian yang dicetak ikut terlantai.
+  const idn: RapotIdentitas = { peserta: 'Uji Lantai', halaqah: 'H1', level: null, mustawa: null, gender: 'ikhwan', batch: null };
+  const sesiLantai: SesiNilaiInput[] = [
+    { jenis: 'ujian', nomor_sesi: 2, counts: { ...emptyCounts(), huruf: 10 }, catatan: '', tgl: '2026-01-20', done: true, hadir: true },
+  ];
+  const rapotLantai = buildTrackRapotPayload({
+    track: 'pb', identitas: idn, penerbit: 'Penguji', tanggal: '2026-01-21T00:00:00.000Z',
+    sesi: sesiLantai, ujianSaja: true,
+  }).trackRapot;
+  eq(rapotLantai.ujian?.skor, 55, 'lantai builder: skor Ujian PB 40 → 55');
+  eq(rapotLantai.nilaiAkhir, 55, 'lantai builder: nilai akhir 55');
+  eq(rapotLantai.lulus, false, 'lantai builder: tetap MENGULANG');
+  eq(rapotLantai.rincianUjian.map((r) => r.count), [10], 'lantai builder: jumlah kesalahan tetap apa adanya');
+}
+
+// ── Penjaga buka-kunci: jenis rapot yang bersumber dari sebuah sesi ──
+// Salah petakan = sesi bisa dibuka padahal rapot ber-QR-nya masih beredar.
+{
+  eq(jenisRapotDariSesi('qn', 3), ['qn', 'berkala', 'ujian'], 'buka-kunci: sesi berkala QN');
+  eq(jenisRapotDariSesi('pb', 1), ['pb', 'berkala', 'ujian'], 'buka-kunci: sesi berkala PB');
+  eq(jenisRapotDariSesi('ujian', 1), ['qn', 'ujian', 'ujian_qn'], 'buka-kunci: Ujian QN = sesi 1');
+  eq(jenisRapotDariSesi('ujian', 2), ['pb', 'ujian', 'ujian_pb'], 'buka-kunci: Ujian PB = sesi 2');
+  eq(jenisRapotDariSesi('ujian', 3), ['ujian'], 'buka-kunci: nomor ujian di luar 1/2 → rapot era lama saja');
 }
 
 // ── Kunci aritmetika rapot ERA LAMA (nilaiAkhirOf, @deprecated) ──

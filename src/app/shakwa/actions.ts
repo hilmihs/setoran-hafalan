@@ -21,6 +21,7 @@ import {
   type ShakwaTujuan,
 } from '@/lib/shakwa';
 import { uploadLampiran, validasiLampiran } from '@/lib/shakwa-storage';
+import { adalahBerkas } from '@/lib/haqibah-storage';
 import { backfillTabayyunDariIzin, type IzinCocok } from '@/lib/shakwa-izin';
 import type { Gender, PengajarSession } from '@/types/db';
 
@@ -204,8 +205,11 @@ export async function kirimShakwa(
   }
 
   // Lampiran divalidasi SEBELUM baris disimpan supaya tak ada aduan setengah jadi.
+  // `adalahBerkas` memeriksa bentuk, bukan `instanceof File`: global File tak ada
+  // di runtime Node produksi, dan ekspresi `f instanceof File` di sana melempar
+  // ReferenceError begitu ada berkas yang benar-benar dilampirkan.
   const berkas = def.pakaiLampiran
-    ? (fd.getAll('lampiran').filter((f): f is File => f instanceof File && f.size > 0))
+    ? fd.getAll('lampiran').filter((f): f is File => adalahBerkas(f) && f.size > 0)
     : [];
   if (berkas.length > MAX_LAMPIRAN) return { error: `Maksimal ${MAX_LAMPIRAN} lampiran.` };
   for (const f of berkas) {

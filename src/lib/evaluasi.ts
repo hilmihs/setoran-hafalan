@@ -79,6 +79,27 @@ export const AMBANG_LULUS_AKHIR = 70; // ambang lulus nilai akhir (fix)
 export const UJIAN_QN_SESI = 1;
 export const UJIAN_PB_SESI = 2;
 
+/**
+ * Lantai nilai peserta (kebijakan Majelis Pendidikan, September 2026): skor ujian
+ * dan nilai akhir tidak pernah dicetak di bawah 55, berapa pun lahn-nya.
+ *
+ * Ini BUKAN ambang kelulusan — ambang lulus tetap `AMBANG_LULUS_AKHIR` (70),
+ * jadi peserta bernilai 55 tetap dinyatakan MENGULANG. Lantai hanya menahan
+ * angka yang dicetak; jumlah kesalahan di tabel rincian tetap apa adanya.
+ *
+ * Skor sesi evaluasi berkala TIDAK dilantai — yang dilantai hanya skor ujian
+ * (lewat `nilaiAkhirTrackOf` dan `ujianSnap` di `rapot.ts`) dan nilai akhir.
+ */
+export const NILAI_MINIMUM = 55;
+
+export function lantaiNilai(n: number): number {
+  return Math.max(NILAI_MINIMUM, n);
+}
+
+export function lantaiNilaiOpt(n: number | null): number | null {
+  return n == null ? null : lantaiNilai(n);
+}
+
 /** Track penilaian. Satu rapot = satu track. */
 export type Track = 'qn' | 'pb';
 export const TRACKS: readonly Track[] = ['qn', 'pb'] as const;
@@ -95,6 +116,26 @@ export const UJIAN_SESI_BY_TRACK: Record<Track, number> = {
 /** Track pemilik sebuah sesi ujian; null bila nomornya di luar 1/2. */
 export function trackOfUjianSesi(nomor: number): Track | null {
   return nomor === UJIAN_QN_SESI ? 'qn' : nomor === UJIAN_PB_SESI ? 'pb' : null;
+}
+
+/**
+ * Jenis rapot yang bersumber dari sebuah sesi — penjaga "buka kunci" sesi
+ * terkirim. Membuka sesi yang rapotnya masih aktif berarti membiarkan dokumen
+ * ber-QR memuat angka yang sudah tak berlaku, jadi pembukaan ditolak selama
+ * masih ada rapot aktif dengan salah satu jenis di daftar ini.
+ *
+ * Sesi berkala menyuplai rapot track-nya sendiri; sesi ujian menyuplai track
+ * pemiliknya (`trackOfUjianSesi`). Rapot era lama ikut terdaftar karena
+ * `nilaiAkhirOf` membangunnya dari kolam berkala QN+PB digabung DAN Ujian PB —
+ * jadi sesi mana pun bisa jadi sumbernya.
+ */
+export function jenisRapotDariSesi(jenis: Jenis, nomorSesi: number): string[] {
+  if (jenis === 'ujian') {
+    const track = trackOfUjianSesi(nomorSesi);
+    if (!track) return ['ujian']; // nomor di luar 1/2 — hanya rapot era lama
+    return [track, 'ujian', `ujian_${track}`];
+  }
+  return [jenis, 'berkala', 'ujian'];
 }
 
 /** Peran dokumen: PB menentukan kelulusan level, QN prasyarat yang wajib tuntas. */
@@ -171,22 +212,28 @@ export function nilaiAkhirTrackOf(
     ? Math.round(berkalaScoresTrack.reduce((a, b) => a + b, 0) / berkalaScoresTrack.length)
     : null;
 
+  // Lantai `NILAI_MINIMUM` dipasang di skor ujian, lalu sekali lagi di nilai akhir
+  // — supaya angka yang tampil di rekap koordinator sama persis dengan rapot.
+  const ujianSkorLantai = lantaiNilaiOpt(ujianSkor);
+
   // Mode ujianSaja: berkala memang tidak ada, jadi ketiadaannya bukan alasan
   // menahan nilai. Mode normal: kedua komponen wajib ada.
-  const lengkap = ujianSaja ? ujianSkor != null : berkalaAvg != null && ujianSkor != null;
+  const lengkap = ujianSaja ? ujianSkorLantai != null : berkalaAvg != null && ujianSkorLantai != null;
 
   let nilai: number | null = null;
-  if (lengkap && ujianSkor != null) {
+  if (lengkap && ujianSkorLantai != null) {
     nilai = ujianSaja
-      ? ujianSkor
-      : Math.round(BOBOT_BERKALA * (berkalaAvg as number) + BOBOT_UJIAN_AKHIR * ujianSkor);
+      ? ujianSkorLantai
+      : lantaiNilai(
+          Math.round(BOBOT_BERKALA * (berkalaAvg as number) + BOBOT_UJIAN_AKHIR * ujianSkorLantai)
+        );
   }
 
   return {
     track,
     nilai,
     berkalaAvg: ujianSaja ? null : berkalaAvg,
-    ujianSkor,
+    ujianSkor: ujianSkorLantai,
     lengkap,
     lulus: nilai == null ? null : nilai >= AMBANG_LULUS_AKHIR,
     ujianSaja,

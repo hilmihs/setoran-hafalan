@@ -67,7 +67,7 @@ export default async function MaahirMandiriPage() {
     </Link>
   );
 
-  // Target hafalan harian — hanya kelas Takhassus yang menyetor. Pesertanya
+  // Target hafalan bulanan — hanya kelas Takhassus yang menyetor. Pesertanya
   // memasang sendiri karena kelas ini presensi-mandiri dan tak punya ketua di
   // alur presensi.
   const targetBlock = isTakhassusKelas(kelas.name) ? await renderTargetBlock(kelas.id, anggotaId) : null;

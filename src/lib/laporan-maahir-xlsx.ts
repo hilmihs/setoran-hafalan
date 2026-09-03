@@ -259,8 +259,8 @@ export async function buildLaporanMaahirWorkbook(lap: LaporanMaahir, bulan: stri
     {
       ink: inkForPct(t.setoran.persen, 100),
       notes: t.setoran.adaTarget
-        ? 'Total halaman ÷ total target periode (target harian × sesi yang seharusnya berjalan); peserta tanpa setoran dihitung 0'
-        : 'Target harian belum diatur koordinator',
+        ? 'Total halaman ÷ total target bulanan koordinator (tanpa prorata sakit/libur); peserta tanpa setoran dihitung 0'
+        : 'Target bulanan belum diatur koordinator',
     },
     true
   );

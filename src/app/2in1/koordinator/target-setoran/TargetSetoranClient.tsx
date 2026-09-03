@@ -6,7 +6,7 @@ import type { Gender } from '@/types/db';
 
 export type VersiRow = {
   id: string;
-  halamanPerHari: number;
+  halamanPerBulan: number;
   berlakuLabel: string;
   catatan: string | null;
   oleh: string | null;
@@ -91,7 +91,7 @@ export function TargetSetoranClient({
             {k.gender === 'ikhwan' ? 'Ikhwan' : 'Akhwat'} · {k.anggota.length} peserta ·{' '}
             {k.defaultBerlaku === null
               ? 'default kelas belum diatur'
-              : `default kelas ${k.defaultBerlaku} hal/hari`}
+              : `default kelas ${k.defaultBerlaku} hal/bln`}
           </div>
 
           <Baris
@@ -120,9 +120,9 @@ export function TargetSetoranClient({
                 label={a.name}
                 sublabel={
                   a.koreksi !== null
-                    ? `koreksi ${a.koreksi} hal/hari`
+                    ? `koreksi ${a.koreksi} hal/bln`
                     : a.efektif !== null
-                      ? `ikut default (${a.efektif} hal/hari)`
+                      ? `ikut default (${a.efektif} hal/bln)`
                       : 'belum ada target'
                 }
                 nilai={a.koreksi}
@@ -191,13 +191,13 @@ function Baris({
             style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'flex-end' }}
           >
             <div style={{ flex: '0 1 130px' }}>
-              <label className="t-tiny" style={{ display: 'block', marginBottom: 2 }}>Halaman/hari</label>
+              <label className="t-tiny" style={{ display: 'block', marginBottom: 2 }}>Halaman/bulan</label>
               <input
                 type="text"
                 inputMode="decimal"
-                name="halaman_per_hari"
+                name="halaman_per_bulan"
                 defaultValue={nilai ?? ''}
-                placeholder="mis. 4 atau 0,5"
+                placeholder="mis. 80 atau 32"
                 className="input"
                 style={{ height: 34 }}
                 required
@@ -233,7 +233,7 @@ function Baris({
                   style={{ alignItems: 'center', gap: 8, padding: '3px 0', color: 'var(--muted-2)' }}
                 >
                   <span>
-                    <strong style={{ color: 'var(--ink)' }}>{v.halamanPerHari} hal/hari</strong>{' '}
+                    <strong style={{ color: 'var(--ink)' }}>{v.halamanPerBulan} hal/bln</strong>{' '}
                     sejak {v.berlakuLabel}
                     {v.catatan ? ` · ${v.catatan}` : ''} · {v.oleh || '—'} · {v.pada}
                   </span>

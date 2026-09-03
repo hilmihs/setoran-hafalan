@@ -13,7 +13,7 @@ export type TargetBaris = {
 };
 
 /**
- * Ketua kelas Takhassus Akhwat memasang target hafalan harian tiap pesertanya.
+ * Ketua kelas Takhassus Akhwat memasang target hafalan bulanan tiap pesertanya.
  * Disimpan per baris, bukan borongan: tiap simpan menerbitkan satu versi
  * bertanggal, jadi menyimpan sekaligus akan membuat belasan versi untuk angka
  * yang sebenarnya tak berubah.
@@ -45,12 +45,12 @@ export function TargetPesertaPanel({
   return (
     <div className="card-flat" style={{ padding: 12, marginBottom: 16 }}>
       <div className="t-small" style={{ fontWeight: 600, marginBottom: 2 }}>
-        Target hafalan harian — {kelasName}
+        Target hafalan bulanan — {kelasName}
       </div>
       <p className="t-tiny" style={{ color: 'var(--muted-2)', marginBottom: 8 }}>
-        Halaman per hari untuk tiap peserta. Laporan bulanan mengalikannya dengan jumlah pertemuan
-        kelas dalam sebulan, lalu menampilkan persentase capaiannya. Berlaku mulai {berlakuLabel}{' '}
-        (periode berjalan) — bulan yang sudah lewat tak ikut berubah.
+        Halaman per bulan untuk tiap peserta. Laporan bulanan memakainya apa adanya — sakit dan
+        libur tidak menguranginya — lalu menampilkan persentase capaiannya. Berlaku mulai{' '}
+        {berlakuLabel} (periode berjalan) — bulan yang sudah lewat tak ikut berubah.
       </p>
 
       {hasil?.error && (
@@ -84,16 +84,16 @@ export function TargetPesertaPanel({
               {b.nilai === null
                 ? 'belum diatur'
                 : b.sumberDefault
-                  ? `ikut default kelas (${b.nilai} hal/hari)`
-                  : `${b.nilai} hal/hari`}
+                  ? `ikut default kelas (${b.nilai} hal/bln)`
+                  : `${b.nilai} hal/bln`}
             </div>
           </div>
           <input
             type="text"
             inputMode="decimal"
-            name="halaman_per_hari"
+            name="halaman_per_bulan"
             defaultValue={b.nilai ?? ''}
-            placeholder="hal/hari"
+            placeholder="hal/bln"
             className="input"
             style={{ height: 32, width: 92, flexShrink: 0 }}
             required

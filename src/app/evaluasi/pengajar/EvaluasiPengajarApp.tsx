@@ -190,6 +190,11 @@ export function EvaluasiPengajarApp({ initial }: { initial: EvaluasiInitial }) {
   // layar daftar (dulu fire-and-forget — kegagalan diam-diam).
   const [resetBusy, setResetBusy] = useState(false);
   const [resetError, setResetError] = useState<string | null>(null);
+  // Buka kunci sesi terkirim (riwayat): kunci per sesi supaya dua kartu tak
+  // saling mematikan tombol, konfirmasi dua ketukan seperti tombol Reset.
+  const [bukaKonfirmasi, setBukaKonfirmasi] = useState<string | null>(null);
+  const [bukaBusy, setBukaBusy] = useState<string | null>(null);
+  const [bukaError, setBukaError] = useState<string | null>(null);
   // Cetak rapot: pilih dokumen → menu pilih peserta → render lembar A4 → print.
   const [cetakMenu, setCetakMenu] = useState<DokCetak | null>(null);
   const [printReq, setPrintReq] = useState<{ dok: DokCetak; ids: string[] } | null>(null);
@@ -565,9 +570,54 @@ export function EvaluasiPengajarApp({ initial }: { initial: EvaluasiInitial }) {
     }
   };
 
+  // Buka kunci sesi terkirim dari kartu riwayat: status server kembali 'draft'
+  // sehingga nilainya bisa disunting (dan direset) lagi. Nilai lamanya utuh —
+  // "kosongkan dari nol" tetap lewat tombol Reset di layar daftar.
+  const bukaKunciSesi = async (sesiId: string, jenis: Jenis, nomor: number) => {
+    if (bukaBusy) return;
+    setBukaError(null);
+
+    const lepasKunciLokal = () => {
+      setSentSesi((prev) => {
+        const next = { ...prev };
+        delete next[`${jenis}|${nomor}`];
+        return next;
+      });
+      setBukaKonfirmasi(null);
+    };
+
+    if (cobaRef.current) {
+      lepasKunciLokal();
+      return;
+    }
+
+    setBukaBusy(sesiId);
+    try {
+      const res = await fetch('/api/evaluasi/sesi/buka-kunci', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sesi_id: sesiId }),
+      });
+      if (!res.ok) {
+        const json = (await res.json().catch(() => null)) as { error?: string } | null;
+        // Penolakan karena rapot masih aktif datang lewat sini — pesannya
+        // menyebut nama peserta, jadi tampilkan apa adanya.
+        setBukaError(json?.error || 'Gagal membuka kunci sesi. Coba lagi.');
+        return;
+      }
+      lepasKunciLokal();
+    } catch {
+      setBukaError('Gagal membuka kunci sesi — periksa koneksi lalu coba lagi.');
+    } finally {
+      setBukaBusy(null);
+    }
+  };
+
   const nav = (s: Screen) => {
     flushSaves();
     setResetError(null);
+    setBukaError(null);
+    setBukaKonfirmasi(null);
     setScreen(s);
   };
 
@@ -1152,14 +1202,53 @@ export function EvaluasiPengajarApp({ initial }: { initial: EvaluasiInitial }) {
                           {r.hadirCount}/{r.total} peserta · rata-rata {r.avg ?? '—'}
                         </div>
                       </div>
-                      <button
-                        onClick={() => setCetakMenu(dokDariSesi(r.jenis, r.nomor))}
-                        style={{ height: 28, padding: '0 10px', borderRadius: 7, border: '1px solid #d8d3c8', background: '#ffffff', font: 'inherit', fontSize: 11, fontWeight: 600, color: '#44423d', cursor: 'pointer' }}
-                      >
-                        🖨 Cetak
-                      </button>
+                      {bukaKonfirmasi === r.key ? (
+                        <>
+                          <button
+                            disabled={bukaBusy === r.key}
+                            onClick={() => bukaKunciSesi(r.key, r.jenis, r.nomor)}
+                            style={{ height: 28, padding: '0 10px', borderRadius: 7, border: 'none', background: 'oklch(0.55 0.16 25)', font: 'inherit', fontSize: 11, fontWeight: 700, color: '#fff', cursor: bukaBusy === r.key ? 'default' : 'pointer', opacity: bukaBusy === r.key ? 0.6 : 1, whiteSpace: 'nowrap' }}
+                          >
+                            {bukaBusy === r.key ? 'Membuka…' : 'Ya, buka'}
+                          </button>
+                          <button
+                            disabled={bukaBusy === r.key}
+                            onClick={() => { setBukaKonfirmasi(null); setBukaError(null); }}
+                            style={{ height: 28, padding: '0 10px', borderRadius: 7, border: '1px solid #e8e4dc', background: '#fff', font: 'inherit', fontSize: 11, fontWeight: 600, color: '#44423d', cursor: 'pointer' }}
+                          >
+                            Batal
+                          </button>
+                        </>
+                      ) : (
+                        <>
+                          <button
+                            title="Kembalikan sesi ini jadi draft supaya nilainya bisa diperbaiki"
+                            onClick={() => { setBukaKonfirmasi(r.key); setBukaError(null); }}
+                            style={{ height: 28, padding: '0 10px', borderRadius: 7, border: '1px solid oklch(0.85 0.08 25)', background: '#ffffff', font: 'inherit', fontSize: 11, fontWeight: 600, color: 'oklch(0.46 0.14 25)', cursor: 'pointer', whiteSpace: 'nowrap' }}
+                          >
+                            🔓 Buka kunci
+                          </button>
+                          <button
+                            onClick={() => setCetakMenu(dokDariSesi(r.jenis, r.nomor))}
+                            style={{ height: 28, padding: '0 10px', borderRadius: 7, border: '1px solid #d8d3c8', background: '#ffffff', font: 'inherit', fontSize: 11, fontWeight: 600, color: '#44423d', cursor: 'pointer' }}
+                          >
+                            🖨 Cetak
+                          </button>
+                        </>
+                      )}
                     </div>
                   ))}
+                </div>
+              )}
+              {bukaError ? (
+                <div style={{ marginTop: 8, fontSize: 11, color: 'oklch(0.46 0.14 25)', background: 'oklch(0.97 0.02 25)', border: '1px solid oklch(0.85 0.08 25)', borderRadius: 8, padding: '8px 10px', lineHeight: 1.4 }}>
+                  {bukaError}
+                </div>
+              ) : (
+                <div style={{ marginTop: 8, fontSize: 11, color: '#a8a39a', lineHeight: 1.4 }}>
+                  Sesi terkirim terkunci. Buka kuncinya untuk memperbaiki nilai — nilai lama tetap ada,
+                  dan tombol Reset di layar daftar bisa mengosongkannya. Rapot yang sudah terbit harus
+                  dicabut lebih dulu.
                 </div>
               )}
             </div>

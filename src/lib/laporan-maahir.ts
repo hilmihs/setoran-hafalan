@@ -60,11 +60,9 @@ export type SetoranPeserta = {
   halaman: number | null; // total halaman sebulan; null bila belum pernah isi
   pertemuanSetor: number; // jumlah pertemuan yang diisi setorannya
   rincian: string; // 'DD/MM: N hal · …' per pertemuan
-  /** Target halaman/hari yang berlaku di akhir periode — label saja. */
-  targetHarian: number | null;
-  /** Sesi kelas_maahir yang benar-benar ditagih ke dia (sesudah libur & sakit). */
+  /** Sesi kelas_maahir yang ditagih ke dia (sesudah libur) — konteks, bukan penyebut. */
   sesiTarget: number;
-  /** Σ target harian sepanjang sesi itu. null = target belum diatur / diputihkan. */
+  /** Target halaman/bulan, tanpa prorata. null = belum diatur / diputihkan. */
   target: number | null;
   /** halaman/target × 100. null bila tak ada target. */
   persen: number | null;
@@ -390,62 +388,58 @@ export async function getLaporanMaahir(month: string): Promise<LaporanMaahir> {
   const takhBawah = takhStudents
     .filter((s) => s.persen !== null && s.persen < 80)
     .sort((a, b) => (a.persen ?? 0) - (b.persen ?? 0));
-  // Target setoran harian koordinator (halaman/hari), per kelas dgn koreksi
+  // Target setoran bulanan koordinator (halaman/bulan), per kelas dgn koreksi
   // per peserta. Hanya kelas takhassus yang punya setoran, jadi hanya itu yang
   // ditarik.
   const takhKelasIds = kelasList.filter((k) => isTakhassus(k.name)).map((k) => k.id);
-  const targetHarianPada = targetResolver(await getSetoranTargets(takhKelasIds));
+  const targetBulananPada = targetResolver(await getSetoranTargets(takhKelasIds));
 
   /**
-   * Penyebut capaian setoran seorang peserta: Σ target harian sepanjang sesi
-   * kelas_maahir yang benar-benar ditagih kepadanya.
+   * Penyebut capaian setoran seorang peserta: angka bulanan yang disetel
+   * koordinator, apa adanya.
    *
-   * Sengaja memakai sesi yang SEHARUSNYA ada, bukan sesi yang presensinya
-   * terisi — kebalikan dari penyebut kehadiran di `studentsFor`. Kehadiran
-   * memakai sesi terisi supaya sesi yang lalai diisi tak menerbitkan alpa palsu;
-   * setoran punya kegagalan sebaliknya, karena sesi yang tak terisi juga berarti
-   * tak ada halaman tercatat, sehingga penyebut berbasis sesi terisi runtuh jadi
-   * 0/0 dan kelas yang tak menyetor apa pun justru terbaca 100%.
+   * Tidak diprorata. Sakit, libur, dan bergabung di tengah periode TIDAK
+   * memotongnya — kebijakan koordinator (September 2026): peserta dituntut
+   * sekian halaman dalam sebulan, bagaimanapun ia membagi hari-harinya, dan
+   * angka yang disetel harus muncul apa adanya di laporan. Beda tajam dari
+   * penyebut kehadiran di `studentsFor`, yang justru memotong semua itu.
+   *
+   * Sesi tetap disusuri untuk dua hal yang bukan prorata: memastikan periode ini
+   * memang menagih peserta tsb sama sekali, dan memutuskan versi target mana
+   * yang berlaku (versi pada sesi TERAKHIR yang ditagih — bila koordinator
+   * menaikkan target di tengah periode, yang baru itulah yang ditagih).
    */
   function targetPeserta(
     a: (typeof anggotaList)[number],
-    kelas: ProgramKelasRow,
-    sakit: number
-  ): { targetHarian: number | null; sesiTarget: number; target: number | null } {
+    kelas: ProgramKelasRow
+  ): { sesiTarget: number; target: number | null } {
     // Pemutihan sebulan penuh → tak ada target sama sekali, bukan 100%.
     // Pemutihan menghapus KETIDAKHADIRAN; memaksa setoran jadi penuh akan
     // mengarang hafalan yang tak pernah disetorkan.
-    if (pemutihan.has(a.id)) return { targetHarian: null, sesiTarget: 0, target: null };
+    if (pemutihan.has(a.id)) return { sesiTarget: 0, target: null };
 
     const mulaiKelas = anchorKelas(kelas);
     const dari = mulaiKelas > start ? mulaiKelas : start;
-    if (dari > end) return { targetHarian: null, sesiTarget: 0, target: null };
+    if (dari > end) return { sesiTarget: 0, target: null };
 
-    const harian: number[] = [];
+    let sesiTarget = 0;
+    let tanggalTerakhir: string | null = null;
     for (const d of expectedDaysInRange(kelas, dari, end, liburByKelas.get(kelas.id))) {
       // WAJIB: kelas takhassus ber-presensi_sifat 'harian', dan
       // expectedDaysInRange menyelipkan satu sesi at_tibyan tiap Sabtu. Tanpa
-      // saringan ini tiap target membengkak ~4 sesi/periode.
+      // saringan ini hitungan sesinya membengkak ~4 sesi/periode.
       if (d.program !== 'kelas_maahir') continue;
       if (!dalamPeriode(a, d.tanggal, start, end)) continue;
       if (pemutihanTanggal.has(`${a.id}|${d.tanggal}`)) continue;
-      const t = targetHarianPada(kelas.id, a.id, d.tanggal);
-      if (t === null) continue; // hari sebelum target berlaku — tak ditagih
-      harian.push(t);
+      if (targetBulananPada(kelas.id, a.id, d.tanggal) === null) continue; // target belum berlaku
+      sesiTarget += 1;
+      tanggalTerakhir = d.tanggal;
     }
-    if (harian.length === 0) return { targetHarian: null, sesiTarget: 0, target: null };
+    // Tak satu pun sesi menagih peserta ini (belum bergabung, kelas belum mulai,
+    // atau target belum berlaku sepanjang periode) → '—', bukan 0%.
+    if (tanggalTerakhir === null) return { sesiTarget: 0, target: null };
 
-    // Sakit = udzur, sesinya dikeluarkan dari penyebut sebagaimana kehadiran.
-    // Yang dibuang sesi TERAKHIR: bila target naik di tengah periode, tarif
-    // yang berlaku saat sakit itulah yang paling mendekati.
-    const sesiTarget = Math.max(0, harian.length - sakit);
-    const dipakai = harian.slice(0, sesiTarget);
-    const target = dipakai.reduce((s, v) => s + v, 0);
-    return {
-      targetHarian: harian[harian.length - 1],
-      sesiTarget,
-      target: sesiTarget > 0 ? Math.round(target * 100) / 100 : 0,
-    };
+    return { sesiTarget, target: targetBulananPada(kelas.id, a.id, tanggalTerakhir) };
   }
 
   // Setoran: list semua anggota 2 kelas takhassus (ikhwan dulu, lalu akhwat, lalu nama).
@@ -461,8 +455,7 @@ export async function getLaporanMaahir(month: string): Promise<LaporanMaahir> {
         p.tanggal < q.tanggal ? -1 : p.tanggal > q.tanggal ? 1 : 0
       );
       const halaman = rows.reduce((s, rw) => s + rw.halaman, 0);
-      const sakit = statByAnggotaScope.get(`${x.a.id}|kelas_maahir`)?.S ?? 0;
-      const { targetHarian, sesiTarget, target } = targetPeserta(x.a, x.kelas!, sakit);
+      const { sesiTarget, target } = targetPeserta(x.a, x.kelas!);
       return {
         anggotaId: x.a.id,
         name: x.a.name,
@@ -473,7 +466,6 @@ export async function getLaporanMaahir(month: string): Promise<LaporanMaahir> {
         rincian: rows
           .map((rw) => `${rw.tanggal.slice(8, 10)}/${rw.tanggal.slice(5, 7)}: ${rw.halaman} hal`)
           .join(' · '),
-        targetHarian,
         sesiTarget,
         target,
         persen: target !== null && target > 0 ? Math.round((halaman / target) * 100) : null,
