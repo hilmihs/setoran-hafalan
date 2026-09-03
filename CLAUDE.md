@@ -228,9 +228,10 @@ Schema-touching changes need a new migration file **and** matching updates to
 duplicate prefixes (two `0052_*` exist: `evaluasi_sesi_dihapus` + `evaluasi_sync`).
 Apply order among same-numbered files isn't guaranteed, so never rely on it — and
 `ls supabase/migrations/ | tail -1` before picking the next number — and check
-unmerged branches too. `0063`–`0067` and `0070` belong to the Ketersediaan
-module, `0068` to evaluasi overrides, `0069` to `program_kelas_anggota`
-(next free: `0071`).
+unmerged branches too. It has already bitten twice on this branch: `0069` and
+`0070` were both taken by `main` while Ketersediaan was in flight. Ketersediaan
+owns `0063`–`0067`, `0071`, `0072`; `0068` evaluasi overrides; `0069`
+`program_kelas_anggota`; `0070` setoran target (next free: `0073`).
 
 **Gotcha — DDL applied straight to prod:** some columns exist in production with
 no migration file at all, because they were added through `/api/admin/db`. A
