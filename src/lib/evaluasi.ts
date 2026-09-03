@@ -79,6 +79,27 @@ export const AMBANG_LULUS_AKHIR = 70; // ambang lulus nilai akhir (fix)
 export const UJIAN_QN_SESI = 1;
 export const UJIAN_PB_SESI = 2;
 
+/**
+ * Lantai nilai peserta (kebijakan Majelis Pendidikan, September 2026): skor ujian
+ * dan nilai akhir tidak pernah dicetak di bawah 55, berapa pun lahn-nya.
+ *
+ * Ini BUKAN ambang kelulusan — ambang lulus tetap `AMBANG_LULUS_AKHIR` (70),
+ * jadi peserta bernilai 55 tetap dinyatakan MENGULANG. Lantai hanya menahan
+ * angka yang dicetak; jumlah kesalahan di tabel rincian tetap apa adanya.
+ *
+ * Skor sesi evaluasi berkala TIDAK dilantai — yang dilantai hanya skor ujian
+ * (lewat `nilaiAkhirTrackOf` dan `ujianSnap` di `rapot.ts`) dan nilai akhir.
+ */
+export const NILAI_MINIMUM = 55;
+
+export function lantaiNilai(n: number): number {
+  return Math.max(NILAI_MINIMUM, n);
+}
+
+export function lantaiNilaiOpt(n: number | null): number | null {
+  return n == null ? null : lantaiNilai(n);
+}
+
 /** Track penilaian. Satu rapot = satu track. */
 export type Track = 'qn' | 'pb';
 export const TRACKS: readonly Track[] = ['qn', 'pb'] as const;
@@ -171,22 +192,28 @@ export function nilaiAkhirTrackOf(
     ? Math.round(berkalaScoresTrack.reduce((a, b) => a + b, 0) / berkalaScoresTrack.length)
     : null;
 
+  // Lantai `NILAI_MINIMUM` dipasang di skor ujian, lalu sekali lagi di nilai akhir
+  // — supaya angka yang tampil di rekap koordinator sama persis dengan rapot.
+  const ujianSkorLantai = lantaiNilaiOpt(ujianSkor);
+
   // Mode ujianSaja: berkala memang tidak ada, jadi ketiadaannya bukan alasan
   // menahan nilai. Mode normal: kedua komponen wajib ada.
-  const lengkap = ujianSaja ? ujianSkor != null : berkalaAvg != null && ujianSkor != null;
+  const lengkap = ujianSaja ? ujianSkorLantai != null : berkalaAvg != null && ujianSkorLantai != null;
 
   let nilai: number | null = null;
-  if (lengkap && ujianSkor != null) {
+  if (lengkap && ujianSkorLantai != null) {
     nilai = ujianSaja
-      ? ujianSkor
-      : Math.round(BOBOT_BERKALA * (berkalaAvg as number) + BOBOT_UJIAN_AKHIR * ujianSkor);
+      ? ujianSkorLantai
+      : lantaiNilai(
+          Math.round(BOBOT_BERKALA * (berkalaAvg as number) + BOBOT_UJIAN_AKHIR * ujianSkorLantai)
+        );
   }
 
   return {
     track,
     nilai,
     berkalaAvg: ujianSaja ? null : berkalaAvg,
-    ujianSkor,
+    ujianSkor: ujianSkorLantai,
     lengkap,
     lulus: nilai == null ? null : nilai >= AMBANG_LULUS_AKHIR,
     ujianSaja,

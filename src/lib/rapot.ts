@@ -11,8 +11,10 @@ import {
   tierOf,
   sumCounts,
   nilaiAkhirTrackOf,
+  lantaiNilai,
   peranTrack,
   AMBANG_LULUS_AKHIR,
+  NILAI_MINIMUM,
   AMBANG_UJIAN_DEFAULT,
   UJIAN_SESI_BY_TRACK,
   type Jenis,
@@ -224,16 +226,20 @@ function ujianSnap(sesi: SesiNilaiInput[], nomor: number, label: string, ambang:
   const r = sesi.find((s) => s.jenis === 'ujian' && s.nomor_sesi === nomor && s.done && s.hadir !== false);
   if (!r) return null;
   const sc = scoreOf(r.counts);
+  // Lantai `NILAI_MINIMUM` (55): skor ujian yang dicetak tak pernah di bawah itu.
+  // Badge lulus memakai skor yang sama dengan yang dicetak supaya angka dan
+  // statusnya tak saling membantah di lembar yang sama.
+  const skor = lantaiNilai(sc.skor);
   return {
     sesi: nomor,
     label,
-    skor: sc.skor,
+    skor,
     jaliy: sc.jaliyCount,
     khafiy: sc.khafiyCount,
     counts: r.counts,
     tgl: r.tgl,
     catatan: r.catatan.trim(),
-    lulus: sc.skor >= ambang,
+    lulus: skor >= ambang,
   };
 }
 
@@ -311,4 +317,4 @@ export function buildTrackRapotPayload(args: {
 }
 
 // Re-export supaya konsumen cukup impor dari satu modul.
-export { JALIY, KHAFIY, AMBANG_LULUS_AKHIR };
+export { JALIY, KHAFIY, AMBANG_LULUS_AKHIR, NILAI_MINIMUM };
