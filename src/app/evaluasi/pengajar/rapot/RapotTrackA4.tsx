@@ -1,35 +1,40 @@
 import type { ReactElement } from 'react';
 import type { RapotPayloadTrack, RapotTrackSnap, RapotLahnRow } from '@/lib/rapot';
+import { NILAI_MINIMUM } from '@/lib/rapot';
 import RapotKop from './RapotKop';
 
-// Rapot Evaluasi per-track (0062) — cetak A4 potret DUA lembar (794×1123px per
-// lembar), presentasional murni: tanpa 'use client', tanpa hooks, tanpa fetch.
+// Rapot Evaluasi per-track (0062) — cetak A4 potret, presentasional murni:
+// tanpa 'use client', tanpa hooks, tanpa fetch.
 //
-// Komponen mengembalikan dua elemen `.a4-sheet` bersaudara, BUKAN satu. Pemanggil
-// wajib membungkusnya dalam `.a4-stack`: aturan pemisah halaman ada di `.a4-sheet`
-// sendiri, tapi pengecualian lembar terakhir memakai `:last-child` — tanpa
-// pembungkus, `:last-child` di dalam `.a4-print-wrap` justru jatuh ke tombol
-// Cetak/Cabut dan tiap cetakan berakhir dengan satu halaman kosong.
+// Jumlah lembarnya ikut bentuk dokumennya:
+// - batch normal → DUA lembar, dikembalikan sebagai dua `.a4-sheet` bersaudara;
+// - batch `ujianSaja` → SATU lembar (isinya memang jauh lebih sedikit).
+// Pemanggil WAJIB membungkusnya dalam `.a4-stack`: aturan pemisah halaman ada di
+// `.a4-sheet` sendiri, tapi pengecualian lembar terakhir memakai `:last-child` —
+// tanpa pembungkus, `:last-child` di dalam `.a4-print-wrap` justru jatuh ke
+// tombol Cetak/Cabut dan tiap cetakan berakhir dengan satu halaman kosong.
 //
-// Kenapa dua: isi dokumen 1400–1850px sementara kotak cetak hanya 296mm (≈1119px).
-// Sebelumnya dipaksa satu lembar, dan karena lembar adalah kolom flex bertinggi
-// pasti, kelebihan itu tidak meluber melainkan menggencet setiap blok sampai
-// tabelnya menelan barisnya sendiri — baris skor ujian dan baris total nilai akhir
-// raib dari kertas tanpa jejak.
+// Kenapa dua untuk batch normal: isinya 1400–1850px sementara kotak cetak hanya
+// 296mm (≈1119px). Sebelumnya dipaksa satu lembar, dan karena lembar adalah kolom
+// flex bertinggi pasti, kelebihan itu tidak meluber melainkan menggencet setiap
+// blok sampai tabelnya menelan barisnya sendiri — baris skor ujian dan baris total
+// nilai akhir raib dari kertas tanpa jejak.
 //
 // Batas halaman: halaman 1 = vonis + nilai mentahnya (pita status, identitas,
-// A tabel sesi berkala, B ujian); halaman 2 = cara nilai itu dibentuk dan
-// dirinci (C komponen 30/70, D akumulasi kesalahan, E catatan sesi, F catatan
-// penguji) + QR & tanda tangan.
+// A tabel sesi berkala, B ujian); halaman 2 = cara nilai itu dibentuk dan dirinci
+// (C komponen 30/70, D akumulasi kesalahan, E catatan sesi, F catatan penguji)
+// + QR & tanda tangan.
 //
-// Aturannya satu kalimat: SELURUH teks bebas hidup di halaman 2. Halaman 1
-// bertinggi pasti dan memotong kelebihannya, jadi ia hanya boleh memuat blok
-// yang jumlah barisnya terkunci. Catatan sesi dan catatan penguji sama-sama
-// tanpa batas panjang — keduanya ada di halaman 2, yang boleh tumbuh.
+// Aturannya satu kalimat: SELURUH teks bebas hidup di lembar terakhir. Lembar
+// yang bukan penutup bertinggi pasti dan memotong kelebihannya, jadi ia hanya
+// boleh memuat blok yang jumlah barisnya terkunci. Catatan sesi dan catatan
+// penguji sama-sama tanpa batas panjang — keduanya di lembar penutup, yang boleh
+// tumbuh lewat kelas `.a4-sheet-akhir`.
 //
 // Satu dokumen = satu track (QN atau PB) dan memuat SELURUH isinya:
 // seluruh sesi evaluasi berkala track itu + ujian akhir track itu.
-// Nilai akhir = 30% rata sesi berkala track + 70% ujian track, ambang lulus 70.
+// Nilai akhir = 30% rata sesi berkala track + 70% ujian track, ambang lulus 70,
+// dengan lantai cetak `NILAI_MINIMUM` (55) — lantai itu BUKAN ambang kelulusan.
 //
 // Komponen ini terparameterisasi track (bukan dua file kembar): semua yang
 // berbeda antara QN dan PB datang dari `payload.trackRapot` —
@@ -37,9 +42,11 @@ import RapotKop from './RapotKop';
 //
 // Dua bentuk khusus yang wajib ditangani, keduanya datang dari data:
 // - `ujianSaja` (batch `eval_batch.rapot_ujian_terpisah`): tidak ada sesi berkala
-//   sama sekali, `berkalaAvg` null dan `akumulasi` kosong. Bagian A diganti
-//   keterangan dan bagian C DIHAPUS — jangan cetak tabel 4 sesi kosong, dan
-//   jangan pula cetak tabel bobot 30/70 yang tak punya apa-apa untuk diurai.
+//   sama sekali, `berkalaAvg` null dan `akumulasi` kosong. Dokumennya diringkas
+//   jadi SATU tabel penilaian (jenis kesalahan · kelompok · jumlah + skor) —
+//   tanpa tabel 4 sesi, tanpa tabel bobot 30/70, tanpa kolom "Sesi berkala".
+//   Judulnya pun "RAPOT UJIAN PB", bukan "RAPOT EVALUASI PB": batch ini
+//   menentukan kelulusan lewat ujian, bukan lewat evaluasi berkala.
 // - `nilaiAkhir` null (komponen belum lengkap): cetak "Belum ada", bukan angka 0
 //   dan bukan em-dash 44px (yang terbaca sebagai garis coret).
 
@@ -235,25 +242,6 @@ function IdentRow({
   );
 }
 
-/** Kotak keterangan pengganti tabel (dipakai bagian A saat `ujianSaja`). */
-function Keterangan({ teks }: { teks: string }): ReactElement {
-  return (
-    <div
-      style={{
-        border: `1px dashed ${BORDER_STRONG}`,
-        borderRadius: 8,
-        background: CARD_BG,
-        padding: '11px 14px',
-        fontSize: 12,
-        color: '#44423d',
-        textWrap: 'pretty',
-      }}
-    >
-      {teks}
-    </div>
-  );
-}
-
 /**
  * Gabung akumulasi kesalahan sesi berkala dengan rincian kesalahan ujian jadi
  * satu daftar baris dua kolom. Urut menurun total supaya kesalahan terbanyak
@@ -377,8 +365,11 @@ export default function RapotTrackA4({ payload, qr, logoSrc }: Props): ReactElem
       ? `Rapot QN adalah prasyarat. Kelulusan level ditentukan Rapot PB.`
       : `Menentukan kelulusan level.`;
 
-  // Keterangan pengganti bagian A & C untuk batch tanpa sesi evaluasi berkala.
-  const ketUjianSaja = `Nilai akhir 100% dari ${ujianLabel} (batch tanpa sesi evaluasi berkala).`;
+  const peranLabel = t.peran === 'penentu' ? 'penentu kelulusan' : 'prasyarat';
+
+  // Batch ujian-terpisah: dokumen ini murni hasil ujian, jadi judul dan penamaan
+  // jenis rapotnya tidak menyebut "Evaluasi" sama sekali.
+  const judul = t.ujianSaja ? `RAPOT ${ujianLabel.toUpperCase()}` : `RAPOT ${t.label.toUpperCase()}`;
 
   const lulus = t.lulus;
   const statusColor = lulus === true ? GREEN_DARK : lulus === false ? RED : MUTED;
@@ -402,8 +393,13 @@ export default function RapotTrackA4({ payload, qr, logoSrc }: Props): ReactElem
     { label: 'Level', value: levelVal },
     { label: 'Batch', value: batchVal },
     { label: 'Penguji', value: payload.penerbit },
-    { label: 'Jenis rapot', value: `${t.label} · ${t.peran === 'penentu' ? 'penentu kelulusan' : 'prasyarat'}` },
+    { label: 'Jenis rapot', value: `${t.ujianSaja ? ujianLabel : t.label} · ${peranLabel}` },
   ];
+  // Tanggal ujian pindah ke identitas: tabel penilaian batch ujian-terpisah tak
+  // lagi punya kolom tanggal.
+  if (t.ujianSaja && t.ujian?.tgl) {
+    idRows.push({ label: 'Tanggal ujian', value: fmtTgl(t.ujian.tgl) });
+  }
 
   // Komponen 30/70 — hanya relevan bila ada sesi berkala.
   const kontribBerkala = t.berkalaAvg == null ? null : 0.3 * t.berkalaAvg;
@@ -418,10 +414,12 @@ export default function RapotTrackA4({ payload, qr, logoSrc }: Props): ReactElem
 
   const komponenGrid = '1fr 110px 100px 120px';
   const ujianGrid = '1fr 78px 78px 74px 130px';
+  // Tabel tunggal batch ujian-terpisah: jenis kesalahan · kelompok · jumlah.
+  const penilaianGrid = '1fr 110px 110px';
 
   // Jejak identitas untuk kaki halaman & kop lanjutan. Halaman 2 sering terlepas
   // dari halaman 1, jadi ia wajib memuat nama peserta sendiri.
-  const jejakDok = `${identitas.peserta} · Rapot ${t.label}`;
+  const jejakDok = `${identitas.peserta} · ${t.ujianSaja ? `Rapot ${ujianLabel}` : `Rapot ${t.label}`}`;
   const subLanjutan = [
     identitas.peserta,
     identitas.halaqah ? `Halaqah ${identitas.halaqah}` : null,
@@ -430,10 +428,69 @@ export default function RapotTrackA4({ payload, qr, logoSrc }: Props): ReactElem
     .filter(Boolean)
     .join(' · ');
 
+  // Dipakai di dua tempat: lembar penutup rapot dua-lembar, dan lembar tunggal
+  // batch ujian-terpisah. `flex: 1` membuat kotaknya menyerap sisa ruang lembar
+  // — tanpa itu ada 300–470px putih menganga di antara catatan dan tanda tangan,
+  // yang terbaca sebagai cetakan gagal, bukan sebagai jarak.
+  const kotakCatatanPenguji = (
+    <div
+      style={{
+        flex: 1,
+        border: `1px solid ${BORDER}`,
+        borderRadius: 8,
+        padding: '11px 16px',
+        background: CARD_BG,
+        fontSize: 12,
+        lineHeight: 1.6,
+        color: '#44423d',
+        textWrap: 'pretty',
+      }}
+    >
+      {t.catatanPenguji.trim() || 'Tidak ada catatan penguji.'}
+    </div>
+  );
+
+  const blokQrTtd = (
+    <div
+      style={{
+        marginTop: 'auto',
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'flex-end',
+        gap: 20,
+        paddingTop: 22,
+      }}
+    >
+      {qr ? (
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={qr} alt="QR verifikasi rapot" style={{ width: 62, height: 62, display: 'block' }} />
+          <div style={{ fontSize: 8.5, color: FAINT }}>Cek keaslian rapot</div>
+        </div>
+      ) : (
+        <div style={{ fontSize: 8.5, color: FAINT, maxWidth: 190, lineHeight: 1.5 }}>
+          Cetakan pratinjau — rapot belum diterbitkan, jadi belum ada QR verifikasi.
+        </div>
+      )}
+      {/* Satu tanda tangan saja: penguji. Kolom koordinator dibuang — tak pernah
+          ditandatangani, dan keaslian dokumen dijamin QR verifikasi. */}
+      <div style={{ textAlign: 'center' }}>
+        <div style={{ fontSize: 11, color: MUTED, marginBottom: 2 }}>{fmtTanggal(payload.tanggal)}</div>
+        <div style={{ fontSize: 11, color: MUTED }}>Penguji</div>
+        <div style={{ height: 34 }} />
+        <div style={{ fontSize: 12, fontWeight: 700, borderTop: `1px solid ${INK}`, paddingTop: 4, minWidth: 180 }}>
+          {payload.penerbit}
+        </div>
+      </div>
+    </div>
+  );
+
   return (
     <>
       {/* ══════════ HALAMAN 1 — vonis, identitas, dan angka pembentuk nilai ══════════ */}
-      <div className="a4-sheet" style={PAGE}>
+      {/* Batch ujian-terpisah cukup SATU lembar, jadi lembar ini sekaligus
+          lembar penutup dan berhak tumbuh (`a4-sheet-akhir`). */}
+      <div className={t.ujianSaja ? "a4-sheet a4-sheet-akhir" : "a4-sheet"} style={PAGE}>
         <RapotKop
           identitas={identitas}
           logoSrc={logoSrc}
@@ -443,7 +500,7 @@ export default function RapotTrackA4({ payload, qr, logoSrc }: Props): ReactElem
 
         <div style={{ textAlign: 'center', marginBottom: 12 }}>
           <div style={{ fontSize: 19, fontWeight: 800, letterSpacing: '0.06em' }}>
-            RAPOT {t.label.toUpperCase()}
+            {judul}
           </div>
           <div style={{ fontSize: 12, color: MUTED, marginTop: 4 }}>
             {t.ujianSaja
@@ -591,82 +648,156 @@ export default function RapotTrackA4({ payload, qr, logoSrc }: Props): ReactElem
           ))}
         </div>
 
-        {/* A. Nilai sesi berkala — diganti keterangan bila batch tanpa sesi berkala. */}
-        <div style={SECTION_LABEL}>A. Nilai sesi evaluasi berkala {trackUp}</div>
         {t.ujianSaja ? (
-          <div style={{ marginBottom: 14 }}>
-            <Keterangan teks={ketUjianSaja} />
-          </div>
+          /* Batch ujian-terpisah: SATU tabel penilaian — jenis kesalahan,
+             kelompok, jumlah — ditutup baris skor yang sekaligus nilai akhir.
+             Tak ada sesi berkala, jadi tak ada tabel 4 sesi, tabel bobot 30/70,
+             maupun kolom "Sesi berkala". Seluruh dokumen muat satu lembar. */
+          <>
+            <div style={SECTION_LABEL}>A. Penilaian {ujianLabel}</div>
+            <div style={{ border: `1px solid ${BORDER_STRONG}`, borderRadius: 8, overflow: 'hidden', marginBottom: 6 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: penilaianGrid, alignItems: 'center', ...HEAD }}>
+                <div style={{ padding: '8px 14px', borderRight: `1px solid ${BORDER_STRONG}` }}>Jenis kesalahan</div>
+                <div style={{ padding: '8px', borderRight: `1px solid ${BORDER_STRONG}` }}>Kelompok</div>
+                <div style={{ padding: '8px', textAlign: 'center' }}>Jumlah</div>
+              </div>
+              {t.ujian == null ? (
+                <div style={{ padding: '11px 14px', fontSize: 12, color: FAINT }}>{ujianLabel} belum dinilai.</div>
+              ) : barisLahn.length === 0 ? (
+                <div style={{ padding: '11px 14px', fontSize: 12, color: FAINT }}>Tidak ada kesalahan tercatat.</div>
+              ) : (
+                barisLahn.map((r) => {
+                  const isJaliy = r.group === 'jaliy';
+                  return (
+                    <div
+                      key={r.key}
+                      style={{
+                        display: 'grid',
+                        gridTemplateColumns: penilaianGrid,
+                        alignItems: 'center',
+                        fontSize: 11.5,
+                        borderBottom: '1px solid #f4f2ed',
+                      }}
+                    >
+                      <div style={{ padding: '6px 14px', borderRight: '1px solid #f4f2ed', color: '#44423d' }}>{r.label}</div>
+                      <div
+                        style={{
+                          padding: '6px 8px',
+                          borderRight: '1px solid #f4f2ed',
+                          fontSize: 10,
+                          fontWeight: 700,
+                          color: isJaliy ? RED : 'oklch(0.48 0.10 75)',
+                        }}
+                      >
+                        {isJaliy ? 'Jaliy' : 'Khafiy'}
+                      </div>
+                      <div style={{ padding: '6px 8px', textAlign: 'center', fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>
+                        {r.ujian}
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+              <div style={{ display: 'grid', gridTemplateColumns: penilaianGrid, alignItems: 'center', fontSize: 11.5, borderBottom: `1px solid ${BORDER_STRONG}`, background: CARD_BG }}>
+                <div style={{ padding: '7px 14px', borderRight: `1px solid ${BORDER}`, fontWeight: 700 }}>Total kesalahan</div>
+                <div style={{ padding: '7px 8px', borderRight: `1px solid ${BORDER}` }} />
+                <div style={{ padding: '7px 8px', textAlign: 'center', fontWeight: 800, fontVariantNumeric: 'tabular-nums' }}>
+                  {t.ujian == null ? '—' : totalUjian}
+                </div>
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: penilaianGrid, alignItems: 'center', fontSize: 12, background: HEAD_BG }}>
+                <div style={{ padding: '9px 14px', borderRight: `1px solid ${BORDER_STRONG}`, gridColumn: '1 / span 2', fontWeight: 800 }}>
+                  Skor {ujianLabel} — sekaligus nilai akhir
+                </div>
+                <div style={{ padding: '9px 8px', textAlign: 'center', fontWeight: 800, fontSize: 14, color: statusColor, fontVariantNumeric: 'tabular-nums' }}>
+                  {num(t.nilaiAkhir)}
+                </div>
+              </div>
+            </div>
+            <div style={{ fontSize: 9.5, color: MUTED, marginBottom: 14 }}>
+              Skor = 100 − (Lahn Jaliy × 6) − (Lahn Khafiy × 2), dengan nilai minimum {NILAI_MINIMUM}. Nilai
+              akhir 100% dari {ujianLabel} — batch ini tidak menjalankan sesi evaluasi berkala. Ambang lulus{' '}
+              {payload.ambang}.
+            </div>
+
+            <div style={SECTION_LABEL}>B. Catatan penguji</div>
+            {kotakCatatanPenguji}
+
+            {blokQrTtd}
+
+            <KakiHalaman n={1} total={1} teks={jejakDok} mt={12} />
+          </>
         ) : (
-          // Hanya tabelnya. Catatan sesi (teks bebas, tanpa batas panjang) pindah
-          // ke halaman 2 — halaman 1 bertinggi PASTI, jadi satu-satunya blok yang
-          // boleh tumbuh di sini adalah yang jumlah barisnya terkunci.
-          // Selebar halaman, seirama dengan tabel B dan D. Versi 260px-nya dulu
-          // berdampingan dengan kotak catatan sesi; setelah catatan itu pindah ke
-          // halaman 2, kolom sempit itu tinggal terdampar di kiri.
-          <div style={{ marginBottom: 14 }}>
-            <TrackTable track={t.berkala} />
-          </div>
+          <>
+            {/* A. Nilai sesi berkala — hanya tabelnya. Catatan sesi (teks bebas,
+                tanpa batas panjang) pindah ke halaman 2: halaman 1 bertinggi PASTI,
+                jadi ia hanya boleh memuat blok yang jumlah barisnya terkunci.
+                Selebar halaman, seirama dengan tabel B dan D. */}
+            <div style={SECTION_LABEL}>A. Nilai sesi evaluasi berkala {trackUp}</div>
+            <div style={{ marginBottom: 14 }}>
+              <TrackTable track={t.berkala} />
+            </div>
+
+            {/* B. Ujian track ini */}
+            <div style={SECTION_LABEL}>B. {ujianLabel}</div>
+            <div style={{ border: `1px solid ${BORDER_STRONG}`, borderRadius: 8, overflow: 'hidden', marginBottom: 8 }}>
+              {/* Header kolom hanya bila ada barisnya — kalau tidak, JALIY/KHAFIY/
+                  SKOR/TANGGAL menggantung di atas satu kalimat. */}
+              {t.ujian && (
+                <div style={{ display: 'grid', gridTemplateColumns: ujianGrid, alignItems: 'center', ...HEAD }}>
+                  <div style={{ padding: '8px 14px', borderRight: `1px solid ${BORDER_STRONG}` }}>Ujian</div>
+                  <div style={{ padding: '8px', borderRight: `1px solid ${BORDER_STRONG}`, textAlign: 'center' }}>Jaliy</div>
+                  <div style={{ padding: '8px', borderRight: `1px solid ${BORDER_STRONG}`, textAlign: 'center' }}>Khafiy</div>
+                  <div style={{ padding: '8px', borderRight: `1px solid ${BORDER_STRONG}`, textAlign: 'center' }}>Skor</div>
+                  <div style={{ padding: '8px 14px' }}>Tanggal</div>
+                </div>
+              )}
+              {t.ujian ? (
+                <div style={{ display: 'grid', gridTemplateColumns: ujianGrid, alignItems: 'center', fontSize: 12 }}>
+                  <div style={{ padding: '9px 14px', borderRight: `1px solid ${BORDER}`, fontWeight: 700 }}>
+                    {t.ujian.label}
+                  </div>
+                  <div style={{ padding: '9px 8px', borderRight: `1px solid ${BORDER}`, textAlign: 'center', fontVariantNumeric: 'tabular-nums' }}>
+                    {t.ujian.jaliy}
+                  </div>
+                  <div style={{ padding: '9px 8px', borderRight: `1px solid ${BORDER}`, textAlign: 'center', fontVariantNumeric: 'tabular-nums' }}>
+                    {t.ujian.khafiy}
+                  </div>
+                  <div style={{ padding: '9px 8px', borderRight: `1px solid ${BORDER}`, textAlign: 'center', fontWeight: 800, fontVariantNumeric: 'tabular-nums' }}>
+                    {num(t.ujian.skor)}
+                  </div>
+                  <div style={{ padding: '9px 14px', color: MUTED }}>{fmtTgl(t.ujian.tgl)}</div>
+                </div>
+              ) : (
+                <div style={{ padding: '11px 14px', fontSize: 12, color: FAINT }}>
+                  {ujianLabel} belum dinilai.
+                </div>
+              )}
+            </div>
+            {/* Rumus skor ikut halaman 1: di sinilah angka Jaliy/Khafiy dan skornya
+                dicetak, jadi di sini pula ia harus bisa dicocokkan. Kalimat nilai
+                akhir tetap menemani tabel komponen di halaman 2.
+                Ambang sengaja TIDAK disebut: `payload.ambang` adalah ambang nilai
+                akhir, bukan ambang ujian. Ambang lulus tetap di pita status. */}
+            <div style={{ fontSize: 9.5, color: MUTED }}>
+              Skor = 100 − (Lahn Jaliy × 6) − (Lahn Khafiy × 2), dengan nilai minimum {NILAI_MINIMUM}.
+            </div>
+
+            <KakiHalaman
+              n={1}
+              total={2}
+              teks="Bersambung ke halaman 2 — komponen nilai, rincian kesalahan, catatan, dan tanda tangan."
+              mt="auto"
+            />
+          </>
         )}
-
-        {/* B. Ujian track ini */}
-        <div style={SECTION_LABEL}>B. {ujianLabel}</div>
-        <div style={{ border: `1px solid ${BORDER_STRONG}`, borderRadius: 8, overflow: 'hidden', marginBottom: 8 }}>
-          {/* Header kolom hanya bila ada barisnya — kalau tidak, JALIY/KHAFIY/
-              SKOR/TANGGAL menggantung di atas satu kalimat. */}
-          {t.ujian && (
-            <div style={{ display: 'grid', gridTemplateColumns: ujianGrid, alignItems: 'center', ...HEAD }}>
-              <div style={{ padding: '8px 14px', borderRight: `1px solid ${BORDER_STRONG}` }}>Ujian</div>
-              <div style={{ padding: '8px', borderRight: `1px solid ${BORDER_STRONG}`, textAlign: 'center' }}>Jaliy</div>
-              <div style={{ padding: '8px', borderRight: `1px solid ${BORDER_STRONG}`, textAlign: 'center' }}>Khafiy</div>
-              <div style={{ padding: '8px', borderRight: `1px solid ${BORDER_STRONG}`, textAlign: 'center' }}>Skor</div>
-              <div style={{ padding: '8px 14px' }}>Tanggal</div>
-            </div>
-          )}
-          {t.ujian ? (
-            <div style={{ display: 'grid', gridTemplateColumns: ujianGrid, alignItems: 'center', fontSize: 12 }}>
-              <div style={{ padding: '9px 14px', borderRight: `1px solid ${BORDER}`, fontWeight: 700 }}>
-                {t.ujian.label}
-              </div>
-              <div style={{ padding: '9px 8px', borderRight: `1px solid ${BORDER}`, textAlign: 'center', fontVariantNumeric: 'tabular-nums' }}>
-                {t.ujian.jaliy}
-              </div>
-              <div style={{ padding: '9px 8px', borderRight: `1px solid ${BORDER}`, textAlign: 'center', fontVariantNumeric: 'tabular-nums' }}>
-                {t.ujian.khafiy}
-              </div>
-              <div style={{ padding: '9px 8px', borderRight: `1px solid ${BORDER}`, textAlign: 'center', fontWeight: 800, fontVariantNumeric: 'tabular-nums' }}>
-                {num(t.ujian.skor)}
-              </div>
-              <div style={{ padding: '9px 14px', color: MUTED }}>{fmtTgl(t.ujian.tgl)}</div>
-            </div>
-          ) : (
-            <div style={{ padding: '11px 14px', fontSize: 12, color: FAINT }}>
-              {ujianLabel} belum dinilai.
-            </div>
-          )}
-        </div>
-        {/* Rumus skor ikut halaman 1: di sinilah angka Jaliy/Khafiy dan skornya
-            dicetak, jadi di sini pula ia harus bisa dicocokkan. Kalimat nilai
-            akhir tetap menemani tabel komponen di halaman 2. */}
-        {/* Ambang sengaja TIDAK disebut di sini: `payload.ambang` adalah ambang
-            nilai akhir, bukan ambang ujian — dan yang dijelaskan baris ini cuma
-            cara skor ujian dihitung. Ambang lulus tetap di pita status. */}
-        <div style={{ fontSize: 9.5, color: MUTED }}>
-          Skor = 100 − (Lahn Jaliy × 6) − (Lahn Khafiy × 2).
-        </div>
-
-        <KakiHalaman
-          n={1}
-          total={2}
-          teks="Bersambung ke halaman 2 — komponen nilai, rincian kesalahan, catatan, dan tanda tangan."
-          mt="auto"
-        />
       </div>
 
       {/* ══════════ HALAMAN 2 — rincian kesalahan, catatan, tanda tangan ══════════ */}
+      {!t.ujianSaja && (
       <div className="a4-sheet a4-sheet-akhir" style={PAGE}>
         <KopLanjutan
-          judul={`RAPOT ${t.label.toUpperCase()}`}
+          judul={judul}
           sub={subLanjutan}
           logoSrc={logoSrc}
         />
@@ -829,62 +960,14 @@ export default function RapotTrackA4({ payload, qr, logoSrc }: Props): ReactElem
         )}
 
         {/* F. Catatan penguji */}
-        <div style={SECTION_LABEL}>{t.ujianSaja ? 'E' : 'F'}. Catatan penguji</div>
-        {/* `flex: 1` — kotak ini menyerap sisa ruang lembar. Tanpa itu halaman 2
-            menyisakan 300–470px putih menganga di antara catatan dan tanda
-            tangan, yang terbaca sebagai cetakan gagal, bukan sebagai jarak. */}
-        <div
-          style={{
-            flex: 1,
-            border: `1px solid ${BORDER}`,
-            borderRadius: 8,
-            padding: '11px 16px',
-            background: CARD_BG,
-            fontSize: 12,
-            lineHeight: 1.6,
-            color: '#44423d',
-            textWrap: 'pretty',
-          }}
-        >
-          {t.catatanPenguji.trim() || 'Tidak ada catatan penguji.'}
-        </div>
+        <div style={SECTION_LABEL}>F. Catatan penguji</div>
+        {kotakCatatanPenguji}
 
-        {/* QR + tanda tangan */}
-        <div
-          style={{
-            marginTop: 'auto',
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'flex-end',
-            gap: 20,
-            paddingTop: 22,
-          }}
-        >
-          {qr ? (
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, flexShrink: 0 }}>
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={qr} alt="QR verifikasi rapot" style={{ width: 62, height: 62, display: 'block' }} />
-              <div style={{ fontSize: 8.5, color: FAINT }}>Cek keaslian rapot</div>
-            </div>
-          ) : (
-            <div style={{ fontSize: 8.5, color: FAINT, maxWidth: 190, lineHeight: 1.5 }}>
-              Cetakan pratinjau — rapot belum diterbitkan, jadi belum ada QR verifikasi.
-            </div>
-          )}
-          {/* Satu tanda tangan saja: penguji. Kolom koordinator dihapus —
-              ia tak pernah diisi dan hanya menyisakan garis kosong. */}
-          <div style={{ textAlign: 'center' }}>
-            <div style={{ fontSize: 11, color: MUTED, marginBottom: 2 }}>{fmtTanggal(payload.tanggal)}</div>
-            <div style={{ fontSize: 11, color: MUTED }}>Penguji</div>
-            <div style={{ height: 34 }} />
-            <div style={{ fontSize: 12, fontWeight: 700, borderTop: `1px solid ${INK}`, paddingTop: 4, minWidth: 150 }}>
-              {payload.penerbit}
-            </div>
-          </div>
-        </div>
+        {blokQrTtd}
 
         <KakiHalaman n={2} total={2} teks={jejakDok} mt={12} />
       </div>
+      )}
     </>
   );
 }
