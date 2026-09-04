@@ -1,3 +1,4 @@
+import type { Metadata } from 'next';
 import { supabaseAdmin } from '@/lib/supabase-admin';
 import { absUrl } from '@/lib/url';
 import { getSession } from '@/lib/session';
@@ -15,6 +16,36 @@ import AutoPrint from '../AutoPrint';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
+
+/**
+ * Judul dokumen = nama berkas PDF-nya. Chrome dan Edge memakai `document.title`
+ * sebagai nama bawaan saat "Simpan sebagai PDF", jadi tanpa ini setiap rapot
+ * semua santri tersimpan sebagai "Muhajir Project Tilawah.pdf" dan saling
+ * bertumpuk di folder Unduhan pengajar.
+ */
+export async function generateMetadata({
+  params,
+}: {
+  params: { token: string };
+}): Promise<Metadata> {
+  const { data: row } = await supabaseAdmin
+    .from('evaluasi_rapot')
+    .select('payload, jenis_rapot')
+    .eq('token', params.token)
+    .maybeSingle();
+
+  const payload = row?.payload as RapotPayload | undefined;
+  const nama = payload?.identitas?.peserta?.trim();
+  if (!nama) return { title: 'Rapot Evaluasi', robots: { index: false, follow: false } };
+
+  const jenis = String(row?.jenis_rapot ?? '');
+  const label = jenis === 'qn' ? 'QN' : jenis === 'pb' ? 'PB' : 'Evaluasi';
+  const batch = payload?.identitas?.batch?.trim();
+  return {
+    title: [`Rapot ${label}`, nama, batch].filter(Boolean).join(' - '),
+    robots: { index: false, follow: false },
+  };
+}
 
 function Kartu({ judul, teks }: { judul: string; teks: string }) {
   return (

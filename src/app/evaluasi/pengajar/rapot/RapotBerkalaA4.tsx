@@ -21,15 +21,21 @@ const BORDER_STRONG = '#d8d3c8';
 const CARD_BG = '#faf8f4';
 const HEAD_BG = '#efece5';
 
-const ID_MONTHS = [
-  'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
-  'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember',
-];
-
+// Tanggal terbit SELALU dibaca sebagai waktu Jakarta. `payload.tanggal` adalah
+// ISO UTC, dan `getDate()` memakai zona waktu mesin yang merender — VPS produksi
+// berjalan UTC, jadi rapot yang terbit sebelum pukul 07.00 WIB mencetak tanggal
+// KEMARIN, sementara halaman verifikasinya sendiri (yang memang memaksa
+// Asia/Jakarta) menampilkan tanggal hari ini. Dokumen jadi membantah QR-nya.
 function fmtTanggal(iso: string): string {
+  if (!iso) return '—';
   const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return iso;
-  return `${d.getDate()} ${ID_MONTHS[d.getMonth()]} ${d.getFullYear()}`;
+  if (Number.isNaN(d.getTime())) return '—';
+  return d.toLocaleDateString('id-ID', {
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+    timeZone: 'Asia/Jakarta',
+  });
 }
 
 function num(v: number | null): string {

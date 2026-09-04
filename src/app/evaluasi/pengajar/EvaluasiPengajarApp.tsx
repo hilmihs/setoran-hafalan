@@ -170,6 +170,13 @@ export function EvaluasiPengajarApp({ initial }: { initial: EvaluasiInitial }) {
   // (0062), jadi ini SATU-SATUNYA penentu dokumen — bukan `jenis`/`activeSession`.
   const [rapotTrack, setRapotTrack] = useState<Track>('qn');
   const [terbitStatus, setTerbitStatus] = useState<'idle' | 'saving' | 'done' | 'error'>('idle');
+  // Token rapot yang baru terbit — satu-satunya jejaknya di aplikasi, jadi ia
+  // harus tampil di layar, bukan cuma dibawa `window.open` yang bisa diblokir.
+  const [terbitToken, setTerbitToken] = useState<string | null>(null);
+  // Pesan galat dari server ditampilkan apa adanya; endpoint terbitkan
+  // mengembalikan kalimat Indonesia yang jelas ("Sesi evaluasi QN baru 2 dari 4")
+  // dan membuangnya jadi "Gagal · ulangi" membuat pengajar tak pernah tahu sebabnya.
+  const [terbitPesan, setTerbitPesan] = useState<string | null>(null);
   const [waOpen, setWaOpen] = useState(false);
   const [surat, setSurat] = useState('Al-Baqarah');
   const [ayatMulai, setAyatMulai] = useState<number>(142);
@@ -822,6 +829,8 @@ export function EvaluasiPengajarApp({ initial }: { initial: EvaluasiInitial }) {
           // ditampilkan; setelah itu pengajar bebas pindah QN ⇄ PB di layarnya.
           setRapotTrack(dokDariSesi(jenis, activeSession));
           setTerbitStatus('idle');
+          setTerbitToken(null);
+          setTerbitPesan(null);
           setScreen('p-rapor');
         },
       };
@@ -905,7 +914,10 @@ export function EvaluasiPengajarApp({ initial }: { initial: EvaluasiInitial }) {
       track: t,
       identitas: idn,
       penerbit: initial.pengajarName,
-      tanggal: '',
+      // Pratinjau & cetak cepat memakai tanggal hari ini. Sebelumnya string
+      // kosong, dan lembar A4-nya mencetak baris tanggal yang benar-benar kosong
+      // tepat di atas garis tanda tangan "Penguji".
+      tanggal: new Date().toISOString(),
       sesi,
       namaTrack: namaTrack(t),
       ambangUjianSesi: halaqah.ambang_ujian,
@@ -946,6 +958,7 @@ export function EvaluasiPengajarApp({ initial }: { initial: EvaluasiInitial }) {
   const terbitkanRapot = async (jenis_rapot: Track) => {
     if (cobaRef.current) return; // Mode Coba: tak menerbitkan rapot resmi.
     setTerbitStatus('saving');
+    setTerbitPesan(null);
     try {
       const res = await fetch('/api/evaluasi/rapot/terbitkan', {
         method: 'POST',
@@ -954,9 +967,17 @@ export function EvaluasiPengajarApp({ initial }: { initial: EvaluasiInitial }) {
       });
       const json = await res.json();
       if (!res.ok || !json.token) throw new Error(json.error || 'gagal');
+      // Token disimpan ke state DULU, baru tab dibuka. `window.open` di sini
+      // dipanggil setelah `await`, jadi gesture pengguna sudah habis dan Safari
+      // maupun Chrome HP memblokirnya — dan tak ada satu pun daftar rapot terbit
+      // di aplikasi ini. Kalau token cuma hidup di tab yang diblokir itu, rapot
+      // yang sudah masuk DB jadi tak bisa dibuka lagi, dan satu-satunya jalan
+      // adalah menerbitkan ulang — yang mencabut lembar yang sudah dibagikan.
+      setTerbitToken(json.token);
       setTerbitStatus('done');
       window.open(`/evaluasi/pengajar/rapot/${json.token}`, '_blank');
-    } catch {
+    } catch (e) {
+      setTerbitPesan(e instanceof Error && e.message !== 'gagal' ? e.message : null);
       setTerbitStatus('error');
     }
   };
@@ -993,7 +1014,22 @@ export function EvaluasiPengajarApp({ initial }: { initial: EvaluasiInitial }) {
           </button>
           <button
             type="button"
-            onClick={() => window.print()}
+            onClick={() => {
+              // `document.title` jadi nama berkas bawaan saat "Simpan sebagai
+              // PDF". Tanpa disetel, seluruh cetakan tersimpan sebagai
+              // "Muhajir Project Tilawah.pdf" dan saling bertumpuk.
+              const judulLama = document.title;
+              const satu = built.length === 1 ? peserta.find((p) => p.id === built[0].pid)?.nama : null;
+              document.title = [
+                `Rapot ${trackShort(printReq.dok)}`,
+                satu ?? `${built.length} peserta`,
+                halaqah.nama,
+              ]
+                .filter(Boolean)
+                .join(' - ');
+              window.print();
+              document.title = judulLama;
+            }}
             style={{ height: 38, padding: '0 16px', borderRadius: 8, border: 'none', background: 'oklch(0.58 0.09 165)', font: 'inherit', fontSize: 13, fontWeight: 700, color: '#ffffff', cursor: 'pointer' }}
           >
             ⬇ Cetak / Simpan PDF
@@ -1408,10 +1444,14 @@ export function EvaluasiPengajarApp({ initial }: { initial: EvaluasiInitial }) {
             onBack={() => nav('p-ringkasan')}
             onTerbitkan={() => terbitkanRapot(rapotTrack)}
             terbitStatus={terbitStatus}
+            terbitToken={terbitToken}
+            terbitPesan={terbitPesan}
             onCetak={() => setPrintReq({ dok: rapotTrack, ids: [rId] })}
             onPilihTrack={(t) => {
               setRapotTrack(t);
               setTerbitStatus('idle');
+              setTerbitToken(null);
+              setTerbitPesan(null);
             }}
           />
         )}

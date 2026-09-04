@@ -5,6 +5,7 @@
 // PLUS ujian akhir track itu. Nilai akhir 30% berkala + 70% ujian (atau 100% ujian
 // pada batch `rapot_ujian_terpisah`), ambang lulus 70.
 
+import { useState } from 'react';
 import type { RapotPayloadTrack, RapotUjianSnap } from '@/lib/rapot';
 import {
   buildTrackGeometry,
@@ -13,12 +14,21 @@ import {
   TRACKS,
   type Track,
 } from '@/lib/evaluasi';
+import { absUrl } from '@/lib/url';
 
 interface Props {
   payload: RapotPayloadTrack;
   onBack: () => void;
   onTerbitkan: () => void;
   terbitStatus?: 'idle' | 'saving' | 'done' | 'error';
+  /**
+   * Token rapot yang baru terbit. WAJIB ditampilkan: tak ada daftar rapot terbit
+   * di aplikasi ini, jadi kalau token cuma dibawa `window.open` yang diblokir
+   * peramban, rapot yang sudah masuk DB tak bisa dibuka lagi.
+   */
+  terbitToken?: string | null;
+  /** Pesan galat apa adanya dari server (mis. "Sesi evaluasi QN baru 2 dari 4"). */
+  terbitPesan?: string | null;
   /** Cetak lembar A4 peserta ini tanpa menerbitkan rapot resmi. */
   onCetak?: () => void;
   /** Pindah dokumen QN ⇄ PB tanpa keluar layar. */
@@ -193,9 +203,12 @@ export default function RapotTrack({
   onBack,
   onTerbitkan,
   terbitStatus = 'idle',
+  terbitToken = null,
+  terbitPesan = null,
   onCetak,
   onPilihTrack,
 }: Props) {
+  const [tersalin, setTersalin] = useState(false);
   const { identitas: id, penerbit, ambang } = payload;
   const tr = payload.trackRapot;
   const short = shortOf(tr.track);
@@ -217,7 +230,11 @@ export default function RapotTrack({
   }
   if (alasan.length === 0 && tr.nilaiAkhir == null) alasan.push('Nilai akhir belum lengkap');
   const bolehTerbit = alasan.length === 0 && tr.nilaiAkhir != null;
-  const btnDisabled = saving || !bolehTerbit;
+  // `done` ikut mengunci tombol. Menerbitkan ulang mencetak token BARU dan
+  // menandai yang lama 'digantikan' — lembar yang sudah dibagikan langsung tak
+  // berlaku. Itu tak boleh terjadi hanya karena tombolnya ter-tap dua kali.
+  const sudahTerbit = terbitStatus === 'done';
+  const btnDisabled = saving || sudahTerbit || !bolehTerbit;
   const alasanTeks = alasan.join(' · ');
 
   // Tombol ini MENERBITKAN rapot resmi (ber-QR) lalu membukanya di tab baru —
@@ -343,6 +360,142 @@ export default function RapotTrack({
           }}
         >
           Belum bisa diterbitkan — {alasanTeks}
+        </div>
+      )}
+
+      {/* Sebab kegagalan apa adanya dari server, bukan "Gagal · ulangi". */}
+      {terbitStatus === 'error' && terbitPesan && (
+        <div
+          className="no-print"
+          style={{
+            margin: '12px 16px 0',
+            background: MERAH_BG,
+            border: `1px solid ${MERAH_BORDER}`,
+            borderRadius: 10,
+            padding: '9px 12px',
+            fontSize: 11.5,
+            fontWeight: 700,
+            color: MERAH,
+            lineHeight: 1.45,
+          }}
+        >
+          Gagal menerbitkan — {terbitPesan}
+        </div>
+      )}
+
+      {/* Rapot sudah terbit: tampilkan tautannya. Ini satu-satunya tempat token
+          itu muncul di aplikasi — tanpa panel ini, tab yang diblokir peramban
+          berarti rapot yang sudah masuk DB tak bisa dibuka lagi. */}
+      {terbitToken && (
+        <div
+          className="no-print"
+          style={{
+            margin: '12px 16px 0',
+            background: BANNER_BG,
+            border: `1px solid ${BANNER_BORDER}`,
+            borderRadius: 10,
+            padding: '12px 14px',
+          }}
+        >
+          <div style={{ fontSize: 12, fontWeight: 800, color: HIJAU, marginBottom: 3 }}>
+            Rapot {short} terbit
+          </div>
+          <div style={{ fontSize: 11.5, color: '#44423d', lineHeight: 1.5, marginBottom: 10 }}>
+            Simpan tautannya sekarang. Menerbitkan ulang akan membuat tautan ini
+            tidak berlaku.
+          </div>
+
+          <div
+            style={{
+              fontSize: 11,
+              fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+              color: '#44423d',
+              background: '#ffffff',
+              border: '1px solid #e8e4dc',
+              borderRadius: 8,
+              padding: '8px 10px',
+              marginBottom: 10,
+              overflowWrap: 'anywhere',
+            }}
+          >
+            {absUrl(`/evaluasi/rapot/cek/${terbitToken}`)}
+          </div>
+
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+            <a
+              href={`/evaluasi/pengajar/rapot/${terbitToken}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{
+                flex: '1 1 140px',
+                minHeight: 44,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                borderRadius: 8,
+                background: HIJAU_BTN,
+                color: '#ffffff',
+                font: 'inherit',
+                fontSize: 13,
+                fontWeight: 700,
+                textDecoration: 'none',
+              }}
+            >
+              Buka &amp; cetak
+            </a>
+            <button
+              type="button"
+              onClick={() => {
+                navigator.clipboard
+                  ?.writeText(absUrl(`/evaluasi/rapot/cek/${terbitToken}`))
+                  .then(() => {
+                    setTersalin(true);
+                    setTimeout(() => setTersalin(false), 2000);
+                  })
+                  .catch(() => setTersalin(false));
+              }}
+              style={{
+                flex: '1 1 120px',
+                minHeight: 44,
+                borderRadius: 8,
+                border: '1px solid #d8d3c8',
+                background: '#ffffff',
+                font: 'inherit',
+                fontSize: 13,
+                fontWeight: 700,
+                color: '#44423d',
+                cursor: 'pointer',
+              }}
+            >
+              {tersalin ? 'Tersalin ✓' : 'Salin tautan'}
+            </button>
+            <a
+              href={`https://wa.me/?text=${encodeURIComponent(
+                `Rapot ${short} ${id.peserta} — Halaqah ${id.halaqah}. Cek keasliannya di ${absUrl(
+                  `/evaluasi/rapot/cek/${terbitToken}`,
+                )}`,
+              )}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{
+                flex: '1 1 120px',
+                minHeight: 44,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                borderRadius: 8,
+                border: 'none',
+                background: 'oklch(0.58 0.12 155)',
+                color: '#ffffff',
+                font: 'inherit',
+                fontSize: 13,
+                fontWeight: 700,
+                textDecoration: 'none',
+              }}
+            >
+              Kirim via WhatsApp
+            </a>
+          </div>
         </div>
       )}
 
