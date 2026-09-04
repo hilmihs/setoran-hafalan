@@ -18,6 +18,7 @@ import {
   HUTANG_ANCHOR,
   type HutangRincian,
 } from '@/lib/hits-hutang';
+import { HALAQAH_SCOPE_COLS, lolosScope, type HalaqahScope } from '@/lib/hits-halaqah-scope';
 import { berasalDariIzin } from '@/lib/shakwa-izin';
 import type { Gender } from '@/types/db';
 
@@ -112,16 +113,17 @@ export type DisiplinRankingHasil = {
 export async function getDisiplinRanking(opts: {
   start: string; // 'YYYY-MM-DD' inklusif
   end: string;   // 'YYYY-MM-DD' eksklusif
-  gender?: Gender;
-}): Promise<DisiplinRankingHasil> {
+} & HalaqahScope): Promise<DisiplinRankingHasil> {
   let hq = supabaseAdmin
     .from('hits_halaqah')
-    .select('id, name, pengajar_id, pengajar_nama_sheet, gender')
+    .select(`id, name, pengajar_id, pengajar_nama_sheet, gender, ${HALAQAH_SCOPE_COLS}`)
     .eq('active', true)
     .not('pengajar_id', 'is', null);
   if (opts.gender) hq = hq.eq('gender', opts.gender);
   const { data: halaqahList } = await hq;
-  const halaqah = halaqahList ?? [];
+  // Batch & online/offline disaring di sini, bukan di query: online = "tak ada
+  // kata Offline di jadwal", dan shim tak punya negasi ilike.
+  const halaqah = (halaqahList ?? []).filter((h) => lolosScope(h, opts));
   if (!halaqah.length) return { rows: [], hutangByPengajar: new Map() };
 
   const halaqahIds = halaqah.map((h) => h.id as string);
@@ -359,18 +361,19 @@ function tabayyunStatusOf(status: string | undefined): InsidenTabayyunStatus {
 export async function getInsidenDetailByPengajar(opts: {
   start: string;
   end: string;
-  gender?: Gender;
-}): Promise<Map<string, InsidenDetail[]>> {
+} & HalaqahScope): Promise<Map<string, InsidenDetail[]>> {
   const result = new Map<string, InsidenDetail[]>();
 
   let hq = supabaseAdmin
     .from('hits_halaqah')
-    .select('id, name, pengajar_id')
+    .select(`id, name, pengajar_id, ${HALAQAH_SCOPE_COLS}`)
     .eq('active', true)
     .not('pengajar_id', 'is', null);
   if (opts.gender) hq = hq.eq('gender', opts.gender);
   const { data: halaqahList } = await hq;
-  const halaqah = (halaqahList ?? []) as Array<{ id: string; name: string; pengajar_id: string }>;
+  const halaqah = ((halaqahList ?? []) as Array<{
+    id: string; name: string; pengajar_id: string; batch_id: string | null; jadwal_raw: string | null;
+  }>).filter((h) => lolosScope(h, opts));
   if (!halaqah.length) return result;
 
   const halaqahIds = halaqah.map((h) => h.id);

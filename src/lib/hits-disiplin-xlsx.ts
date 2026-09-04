@@ -109,7 +109,9 @@ export async function buildHitsDisiplinWorkbook(rekap: HitsKoordinatorRekap) {
   wb.creator = 'Maahir HITS';
   wb.created = new Date();
 
-  const sub = `${rekap.mode === 'minggu' ? 'Mingguan' : 'Bulanan'} · ${rekap.periodeLabel} · ${rekap.genderLabel} · ${rekap.ranked.length} pengajar berperingkat`;
+  // Cakupan halaqah (batch / online-offline) ikut disebut — tanpa itu file yang
+  // sudah disaring gampang disangka daftar lengkap.
+  const sub = `${rekap.mode === 'minggu' ? 'Mingguan' : 'Bulanan'} · ${rekap.periodeLabel} · ${rekap.genderLabel}${rekap.scopeLabel ? ` · ${rekap.scopeLabel}` : ''} · ${rekap.ranked.length} pengajar berperingkat`;
 
   // ── Sheet 1: Ranking ──────────────────────────────────────────────
   {

@@ -6,8 +6,10 @@ import {
   parseRekapFilter,
   filterQuery,
   filterLabel,
+  scopeQuery,
   type HitsMode,
 } from '@/lib/hits-koordinator-rekap';
+import { parseBatchId, parseKelasMode } from '@/lib/hits-halaqah-scope';
 import { HUTANG_RUMUS } from '@/lib/hits-ranking';
 import { weekStartMonday } from '@/lib/week';
 import type { Gender } from '@/types/db';
@@ -39,7 +41,10 @@ function pctInk(p: number | null): string | undefined {
 export default async function CetakHitsKoordinatorPage({
   searchParams,
 }: {
-  searchParams: { mode?: string; month?: string; week?: string; gender?: string; masalah?: string; obs?: string };
+  searchParams: {
+    mode?: string; month?: string; week?: string; gender?: string; masalah?: string; obs?: string;
+    batch?: string; kelas?: string;
+  };
 }) {
   const s = await getSession();
   const accesses = s.accesses ?? (s.session ? [s.session] : []);
@@ -61,7 +66,9 @@ export default async function CetakHitsKoordinatorPage({
       : undefined;
 
   const filter = parseRekapFilter({ masalah: searchParams.masalah, obs: searchParams.obs });
-  const r = await getHitsKoordinatorRekap({ mode, month, week, gender, filter });
+  const batchId = parseBatchId(searchParams.batch);
+  const kelas = parseKelasMode(searchParams.kelas);
+  const r = await getHitsKoordinatorRekap({ mode, month, week, gender, batchId, kelas, filter });
   // Judul menyebut filter aktif — kertas hasil cetak gampang disangka daftar lengkap.
   const labelFilter = filterLabel(filter);
 
@@ -69,6 +76,7 @@ export default async function CetakHitsKoordinatorPage({
     `/hits/koordinator?mode=${mode}` +
     (mode === 'minggu' ? `&week=${week}` : `&month=${month}`) +
     (gender ? `&gender=${gender}` : '') +
+    scopeQuery({ batchId, kelas }) +
     filterQuery(filter);
 
   const semua = [...r.ranked, ...r.noData];
@@ -96,6 +104,7 @@ export default async function CetakHitsKoordinatorPage({
       <h1 className="t-h2" style={{ marginBottom: 2 }}>Ranking Disiplin Pengajar</h1>
       <p className="t-small" style={{ color: 'var(--muted-2)', marginBottom: 14 }}>
         {mode === 'minggu' ? 'Mingguan' : 'Bulanan'} · {r.periodeLabel} · {r.genderLabel} ·{' '}
+        {r.scopeLabel ? `${r.scopeLabel} · ` : ''}
         {r.ranked.length} pengajar berperingkat
         {r.noData.length > 0 && `, ${r.noData.length} tanpa data`}
         {labelFilter && (

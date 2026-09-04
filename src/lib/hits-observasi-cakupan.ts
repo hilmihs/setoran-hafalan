@@ -17,6 +17,7 @@ import {
   type PertemuanOverride,
 } from '@/lib/hits-pertemuan';
 import { ROLE_PRAGENERATE, todayJakartaISO } from '@/lib/hits-observasi';
+import { lolosScope, type HalaqahScope } from '@/lib/hits-halaqah-scope';
 import type { Gender, HitsLevel } from '@/types/db';
 
 export type StatusObservasi =
@@ -54,27 +55,27 @@ export type CakupanPengajar = {
 export async function getCakupanObservasi(opts: {
   start: string;
   end: string;
-  gender?: Gender;
-}): Promise<Map<string, CakupanPengajar>> {
+} & HalaqahScope): Promise<Map<string, CakupanPengajar>> {
   const { start, end, gender } = opts;
   const today = todayJakartaISO();
 
   let hq = supabaseAdmin
     .from('hits_halaqah')
-    .select('id, batch_id, name, program, jadwal_hari, start_date, pengajar_id')
+    .select('id, batch_id, name, program, jadwal_hari, jadwal_raw, start_date, pengajar_id')
     .eq('active', true)
     .not('pengajar_id', 'is', null);
   if (gender) hq = hq.eq('gender', gender);
   const { data: halaqahList } = await hq;
-  const halaqah = (halaqahList ?? []) as Array<{
+  const halaqah = ((halaqahList ?? []) as Array<{
     id: string;
     batch_id: string;
     name: string;
     program: string;
     jadwal_hari: string[] | null;
+    jadwal_raw: string | null;
     start_date: string | null;
     pengajar_id: string;
-  }>;
+  }>).filter((h) => lolosScope(h, opts));
   if (!halaqah.length) return new Map();
 
   const halaqahIds = halaqah.map((h) => h.id);

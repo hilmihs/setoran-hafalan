@@ -3,7 +3,7 @@ import { supabaseAdmin } from '@/lib/supabase-admin';
 import { requireKetuaKelas } from '@/lib/session';
 import { absUrl } from '@/lib/url';
 import { buildWaMeUrl, tplKoreksiPertemuanApproval } from '@/lib/whatsapp';
-import { determineKoreksiApprover, validateKoreksiItems, type KoreksiItemInput } from '@/lib/hits-koreksi';
+import { determineKoreksiApprover, urutanKoreksi, validateKoreksiItems, type KoreksiItemInput } from '@/lib/hits-koreksi';
 import { logAudit } from '@/lib/audit';
 
 export type SubmitKoreksiResult = { ok?: boolean; error?: string; waUrl?: string };
@@ -37,7 +37,10 @@ export async function submitKoreksi(halaqahId: string, items: KoreksiItemInput[]
   const vErr = await validateKoreksiItems(halaqahId, items);
   if (vErr) return { error: vErr };
 
-  const approver = await determineKoreksiApprover((h.gender as 'ikhwan' | 'akhwat') ?? 'ikhwan');
+  const gender = (h.gender as 'ikhwan' | 'akhwat') ?? 'ikhwan';
+  // Giliran dihitung sebelum baris pengajuan disimpan — sisi ikhwan dipegang
+  // dua koordinator dan dibagi bergantian.
+  const approver = await determineKoreksiApprover(gender, await urutanKoreksi(gender));
   if (!approver) return { error: 'Tidak ada koordinator ketua kelas ber-WA untuk menyetujui.' };
 
   const token = crypto.randomUUID();
