@@ -97,6 +97,7 @@ export function ReportErrorButton({ user }: { user?: UserInfo | null }) {
       <button
         onClick={handleOpen}
         aria-label="Laporkan Error"
+        className="no-print"
         style={{
           position: 'fixed',
           bottom: 20,
@@ -129,6 +130,7 @@ export function ReportErrorButton({ user }: { user?: UserInfo | null }) {
       {/* Backdrop + Modal */}
       {open && (
         <div
+          className="no-print"
           style={{
             position: 'fixed',
             inset: 0,

@@ -1,5 +1,5 @@
-import { headers } from 'next/headers';
 import { supabaseAdmin } from '@/lib/supabase-admin';
+import { absUrl } from '@/lib/url';
 import { getSession } from '@/lib/session';
 import { evalPengajarIdFor } from '@/lib/evaluasi-pengajar';
 import { qrSvgDataUri } from '@/lib/qr';
@@ -119,18 +119,13 @@ export default async function RapotPengajarPage({
 
   const payload = row.payload as RapotPayload;
 
-  // URL verifikasi absolut + QR. Pakai NEXT_PUBLIC_APP_URL sbg basis kanonik agar
-  // QR selalu menunjuk domain publik walau dicetak dari host lain (LAN/preview).
-  const base = (process.env.NEXT_PUBLIC_APP_URL || '').replace(/\/$/, '');
-  let verifyUrl: string;
-  if (base) {
-    verifyUrl = `${base}/evaluasi/rapot/cek/${token}`;
-  } else {
-    const h = await headers();
-    const host = h.get('host');
-    const proto = host?.includes('localhost') ? 'http' : 'https';
-    verifyUrl = `${proto}://${host}/evaluasi/rapot/cek/${token}`;
-  }
+  // URL verifikasi absolut + QR. Wajib lewat absUrl(): QR ini tercetak di kertas
+  // dan tidak bisa ditarik kembali, jadi ia tidak boleh pernah memuat host
+  // internal. Header `Host` di balik reverse proxy VPS bisa berisi 0.0.0.0:3000
+  // (lihat catatan yang sama di src/middleware.ts), dan NEXT_PUBLIC_APP_URL bisa
+  // saja kosong di prod — variabel rahasia Azure tidak otomatis masuk printenv.
+  // absUrl() menutup dua-duanya dengan fallback ke domain produksi.
+  const verifyUrl = absUrl(`/evaluasi/rapot/cek/${token}`);
   const qr = await qrSvgDataUri(verifyUrl);
 
   return (
@@ -157,7 +152,16 @@ export default async function RapotPengajarPage({
             : 'RAPOT DIGANTIKAN — ADA VERSI TERBARU'}
         </div>
       )}
-      <RapotDokumen payload={payload} qr={qr} />
+      {/*
+        Bungkus `.a4-stack` wajib: rapot track terdiri dari dua `.a4-sheet`, dan
+        aturan cetak mematikan pemisah halaman lewat `.a4-sheet:last-child`.
+        Tanpa pembungkus ini, `:last-child` di dalam `.a4-print-wrap` adalah
+        tombol Cetak/Cabut — jadi lembar terakhir tetap memaksa page-break dan
+        setiap cetakan berakhir dengan satu halaman kosong.
+      */}
+      <div className="a4-stack">
+        <RapotDokumen payload={payload} qr={qr} />
+      </div>
       <PrintButton />
       <CabutButton token={token} status={(row.status as string | undefined) ?? 'aktif'} />
     </div>

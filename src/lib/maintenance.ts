@@ -26,7 +26,14 @@ const BYPASS_PARAM = 'maintenance_bypass';
 // Path yang tetap boleh diakses walau maintenance aktif.
 // /api/admin/db = endpoint SQL admin (sudah token-gated) → tetap jalan saat
 // maintenance supaya bisa selesaikan aduan/perbaikan data tanpa buka situs.
-const ALLOW_PREFIXES = ['/api/health', '/maintenance', '/api/admin/db'];
+// /evaluasi/rapot/cek = tujuan QR yang sudah tercetak di lembar rapot; itu satu-
+// satunya URL yang beredar di luar dan tidak bisa ditarik kembali kalau mati.
+const ALLOW_PREFIXES = [
+  '/api/health',
+  '/maintenance',
+  '/api/admin/db',
+  '/evaluasi/rapot/cek',
+];
 
 export function isMaintenanceActive(now = new Date()): boolean {
   const mode = (apiEnv('MAINTENANCE_MODE') ?? 'auto').toLowerCase();

@@ -12,6 +12,12 @@ const PROTECTED = [
   '/shakwa/koordinator', '/evaluasi',
 ];
 
+// Pengecualian di dalam prefix terproteksi. `/evaluasi` dilindungi seluruhnya,
+// tapi halaman cek keaslian rapot adalah tujuan QR yang tercetak di kertas —
+// yang memindai adalah wali/peserta yang tidak punya akun. Tanpa carve-out ini
+// setiap QR yang sudah tercetak berujung di form login.
+const PUBLIC_EXCEPTIONS = ['/evaluasi/rapot/cek'];
+
 const SESSION_COOKIE = 'maahir-hits-session';
 
 export function middleware(req: NextRequest) {
@@ -27,6 +33,10 @@ export function middleware(req: NextRequest) {
     h.set('x-pathname', pathname + (search || ''));
     return NextResponse.next({ request: { headers: h } });
   };
+  const isPublicException = PUBLIC_EXCEPTIONS.some(
+    (p) => pathname === p || pathname.startsWith(p + '/'),
+  );
+  if (isPublicException) return withPath();
   const isProtected = PROTECTED.some((p) => pathname === p || pathname.startsWith(p + '/'));
   if (!isProtected) return withPath();
   if (req.cookies.has(SESSION_COOKIE)) return withPath();

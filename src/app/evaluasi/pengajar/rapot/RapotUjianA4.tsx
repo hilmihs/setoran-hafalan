@@ -292,7 +292,13 @@ export default function RapotUjianA4({ payload, qr, logoSrc }: Props) {
       </div>
 
       {/* ============ HALAMAN 2 ============ */}
-      <div className="a4-sheet" style={{ ...PAGE, pageBreakBefore: 'always', breakBefore: 'page' }}>
+      {/* `a4-sheet-akhir`: lembar penutup boleh tumbuh melewati 296mm. Catatan
+          penguji di sini teks bebas — kalau ia kepanjangan, biarkan dokumen
+          bertambah halaman, jangan sampai QR dan tanda tangannya yang hilang. */}
+      <div
+        className="a4-sheet a4-sheet-akhir"
+        style={{ ...PAGE, pageBreakBefore: 'always', breakBefore: 'page' }}
+      >
         <RapotKop identitas={identitas} logoSrc={logoSrc} sub={lampiran} pageLabel="Halaman 2 dari 2" />
 
         {/* Rincian kesalahan — gabungan: dua kolom (QN & PB); per-ujian: satu kolom. */}
