@@ -226,9 +226,13 @@ function ujianSnap(sesi: SesiNilaiInput[], nomor: number, label: string, ambang:
   const r = sesi.find((s) => s.jenis === 'ujian' && s.nomor_sesi === nomor && s.done && s.hadir !== false);
   if (!r) return null;
   const sc = scoreOf(r.counts);
-  // Lantai `NILAI_MINIMUM` (55): skor ujian yang dicetak tak pernah di bawah itu.
-  // Badge lulus memakai skor yang sama dengan yang dicetak supaya angka dan
-  // statusnya tak saling membantah di lembar yang sama.
+  // Lantai `NILAI_MINIMUM` (55): skor ujian yang DICETAK tak pernah di bawah itu.
+  //
+  // Badge lulus tetap dihitung dari skor MENTAH. Lantai adalah aturan pencetakan,
+  // bukan aturan penilaian — ia tidak boleh meluluskan siapa pun. `ambang` di sini
+  // adalah `eval_halaqah.ambang_ujian`, smallint bebas isi yang default lamanya 65
+  // dan masih 65 di skrip seed; halaqah mana pun berambang ≤55 akan mencap skor
+  // mentah 10 sebagai "Lulus" kalau badge-nya ikut dilantai.
   const skor = lantaiNilai(sc.skor);
   return {
     sesi: nomor,
@@ -239,7 +243,7 @@ function ujianSnap(sesi: SesiNilaiInput[], nomor: number, label: string, ambang:
     counts: r.counts,
     tgl: r.tgl,
     catatan: r.catatan.trim(),
-    lulus: skor >= ambang,
+    lulus: sc.skor >= ambang,
   };
 }
 

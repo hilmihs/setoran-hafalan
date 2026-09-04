@@ -222,11 +222,15 @@ export function nilaiAkhirTrackOf(
 
   let nilai: number | null = null;
   if (lengkap && ujianSkorLantai != null) {
+    // Pembobotan dihitung dengan BILANGAN BULAT, bukan `0.3*a + 0.7*b`.
+    // Perkalian pecahan biner membuat sebagian hasil ".5" jatuh ke bawah:
+    // berkalaAvg 17 & ujian 92 secara eksak 69,5 → seharusnya membulat ke 70
+    // (LULUS), tapi JS menghitungnya 69.49999999999999 → 69 (MENGULANG), dan
+    // lembar rapotnya sendiri mencetak "69,5 → 69". Ada 172 pasangan seperti itu
+    // di rentang 0–100, satu di antaranya melewati ambang kelulusan.
     nilai = ujianSaja
       ? ujianSkorLantai
-      : lantaiNilai(
-          Math.round(BOBOT_BERKALA * (berkalaAvg as number) + BOBOT_UJIAN_AKHIR * ujianSkorLantai)
-        );
+      : lantaiNilai(Math.round((3 * (berkalaAvg as number) + 7 * ujianSkorLantai) / 10));
   }
 
   return {
