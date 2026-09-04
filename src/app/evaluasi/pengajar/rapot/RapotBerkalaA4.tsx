@@ -284,40 +284,23 @@ export default function RapotBerkalaA4({ payload, qr, logoSrc }: Props): ReactEl
             Cetakan pratinjau — rapot belum diterbitkan, jadi belum ada QR verifikasi.
           </div>
         )}
-        <div style={{ display: 'flex', gap: 28, textAlign: 'center' }}>
-          <div>
-            <div style={{ fontSize: 11, color: MUTED, marginBottom: 2 }}>
-              {fmtTanggal(payload.tanggal)}
-            </div>
-            <div style={{ fontSize: 11, color: MUTED }}>Pengajar Halaqah</div>
-            <div style={{ height: 34 }} />
-            <div
-              style={{
-                fontSize: 12,
-                fontWeight: 700,
-                borderTop: `1px solid ${INK}`,
-                paddingTop: 4,
-                minWidth: 150,
-              }}
-            >
-              {payload.penerbit}
-            </div>
+        {/* Kolom tanda tangan koordinator dihapus — tak pernah diisi. */}
+        <div style={{ textAlign: 'center' }}>
+          <div style={{ fontSize: 11, color: MUTED, marginBottom: 2 }}>
+            {fmtTanggal(payload.tanggal)}
           </div>
-          <div>
-            <div style={{ fontSize: 11, color: MUTED, marginBottom: 2 }}>&nbsp;</div>
-            <div style={{ fontSize: 11, color: MUTED }}>Koordinator</div>
-            <div style={{ height: 34 }} />
-            <div
-              style={{
-                fontSize: 12,
-                fontWeight: 700,
-                borderTop: `1px solid ${INK}`,
-                paddingTop: 4,
-                minWidth: 150,
-              }}
-            >
-              &nbsp;
-            </div>
+          <div style={{ fontSize: 11, color: MUTED }}>Pengajar Halaqah</div>
+          <div style={{ height: 34 }} />
+          <div
+            style={{
+              fontSize: 12,
+              fontWeight: 700,
+              borderTop: `1px solid ${INK}`,
+              paddingTop: 4,
+              minWidth: 150,
+            }}
+          >
+            {payload.penerbit}
           </div>
         </div>
       </div>

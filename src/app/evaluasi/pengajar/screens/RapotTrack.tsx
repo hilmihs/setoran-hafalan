@@ -556,21 +556,15 @@ export default function RapotTrack({
               {tr.catatanPenguji || '—'}
             </div>
 
-            {/* Tanda tangan */}
-            <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, paddingTop: 14, borderTop: '1px solid #e8e4dc' }}>
-              <div style={{ textAlign: 'center', flex: 1 }}>
+            {/* Tanda tangan — penguji saja; kolom koordinator sudah dihapus,
+                sejalan dengan lembar A4-nya. */}
+            <div style={{ paddingTop: 14, borderTop: '1px solid #e8e4dc' }}>
+              <div style={{ textAlign: 'center', maxWidth: 200, margin: '0 auto' }}>
                 <div style={{ height: 36 }} />
                 <div style={{ fontSize: 10, color: '#a8a39a', borderTop: '1px solid #d8d3c8', paddingTop: 4 }}>
                   {penerbit}
                   <br />
                   Pengajar / Penguji
-                </div>
-              </div>
-              <div style={{ textAlign: 'center', flex: 1 }}>
-                <div style={{ height: 36 }} />
-                <div style={{ fontSize: 10, color: '#a8a39a', borderTop: '1px solid #d8d3c8', paddingTop: 4 }}>
-                  <br />
-                  Koordinator
                 </div>
               </div>
             </div>

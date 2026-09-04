@@ -274,19 +274,12 @@ export default function RapotUjianA4({ payload, qr, logoSrc }: Props) {
               Cetakan pratinjau — rapot belum diterbitkan, jadi belum ada QR verifikasi.
             </div>
           )}
-          <div style={{ display: 'flex', gap: 28, textAlign: 'center' }}>
-            <div>
-              <div style={{ fontSize: 11, color: '#7a766f', marginBottom: 2 }}>{fmtTgl(payload.tanggal)}</div>
-              <div style={{ fontSize: 11, color: '#7a766f' }}>Penguji</div>
-              <div style={{ height: 34 }}></div>
-              <div style={{ fontSize: 12, fontWeight: 700, borderTop: '1px solid #1b1a17', paddingTop: 4, minWidth: 150 }}>{payload.penerbit}</div>
-            </div>
-            <div>
-              <div style={{ fontSize: 11, color: '#7a766f', marginBottom: 2 }}>&nbsp;</div>
-              <div style={{ fontSize: 11, color: '#7a766f' }}>Koordinator</div>
-              <div style={{ height: 34 }}></div>
-              <div style={{ fontSize: 12, fontWeight: 700, borderTop: '1px solid #1b1a17', paddingTop: 4, minWidth: 150 }}>&nbsp;</div>
-            </div>
+          {/* Kolom tanda tangan koordinator dihapus — tak pernah diisi. */}
+          <div style={{ textAlign: 'center' }}>
+            <div style={{ fontSize: 11, color: '#7a766f', marginBottom: 2 }}>{fmtTgl(payload.tanggal)}</div>
+            <div style={{ fontSize: 11, color: '#7a766f' }}>Penguji</div>
+            <div style={{ height: 34 }}></div>
+            <div style={{ fontSize: 12, fontWeight: 700, borderTop: '1px solid #1b1a17', paddingTop: 4, minWidth: 150 }}>{payload.penerbit}</div>
           </div>
         </div>
       </div>

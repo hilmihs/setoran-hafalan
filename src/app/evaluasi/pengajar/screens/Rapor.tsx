@@ -85,14 +85,11 @@ export function Rapor(props: RaporProps) {
           <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.05em', textTransform: 'uppercase', color: '#7a766f', marginBottom: 6 }}>Catatan pengajar</div>
           <div style={{ fontSize: 12.5, lineHeight: 1.55, color: '#44423d', background: '#faf8f4', border: '1px solid #e8e4dc', borderRadius: 8, padding: '10px 12px', marginBottom: 18 }}>{props.catatan}</div>
 
-          <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, paddingTop: 14, borderTop: '1px solid #e8e4dc' }}>
-            <div style={{ textAlign: 'center', flex: 1 }}>
+          {/* Tanda tangan pengajar saja; kolom koordinator sudah dihapus. */}
+          <div style={{ paddingTop: 14, borderTop: '1px solid #e8e4dc' }}>
+            <div style={{ textAlign: 'center', maxWidth: 200, margin: '0 auto' }}>
               <div style={{ height: 36 }} />
               <div style={{ fontSize: 10, color: '#a8a39a', borderTop: '1px solid #d8d3c8', paddingTop: 4 }}>Pengajar</div>
-            </div>
-            <div style={{ textAlign: 'center', flex: 1 }}>
-              <div style={{ height: 36 }} />
-              <div style={{ fontSize: 10, color: '#a8a39a', borderTop: '1px solid #d8d3c8', paddingTop: 4 }}>Koordinator</div>
             </div>
           </div>
         </div>
