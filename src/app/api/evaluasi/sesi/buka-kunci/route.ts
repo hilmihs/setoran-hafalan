@@ -2,18 +2,13 @@ import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase-admin';
 import { getSession } from '@/lib/session';
 import { evalPengajarIdFor } from '@/lib/evaluasi-pengajar';
-import { jenisRapotDariSesi, type Jenis } from '@/lib/evaluasi';
+import { type Jenis } from '@/lib/evaluasi';
+import { rapotAktifPenghalangBuka } from '@/lib/evaluasi-kunci';
 import { logAudit } from '@/lib/audit';
 
 export const runtime = 'nodejs';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
-/** Nama peserta untuk pesan galat: tiga dulu, sisanya diringkas. */
-function ringkasNama(nama: string[]): string {
-  if (nama.length <= 3) return nama.join(', ');
-  return `${nama.slice(0, 3).join(', ')} dan ${nama.length - 3} lainnya`;
-}
 
 // Buka kunci sesi yang sudah dikirim: status kembali 'draft' supaya nilainya
 // bisa disunting lagi (atau direset lewat /api/evaluasi/nilai/reset). Nilai
@@ -64,28 +59,15 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: true, sudah_draft: true });
     }
 
-    // --- Penjaga rapot aktif ---
-    const jenisRapot = jenisRapotDariSesi(sesi.jenis as Jenis, sesi.nomor_sesi as number);
-    const { data: rapotAktif } = await supabaseAdmin
-      .from('evaluasi_rapot')
-      .select('id, peserta_id, jenis_rapot')
-      .eq('halaqah_id', sesi.halaqah_id)
-      .eq('status', 'aktif')
-      .in('jenis_rapot', jenisRapot);
-
-    const rapotRows = (rapotAktif ?? []) as { peserta_id: string; jenis_rapot: string }[];
-    if (rapotRows.length > 0) {
-      const { data: pesertaRows } = await supabaseAdmin
-        .from('eval_peserta')
-        .select('id, nama')
-        .in('id', rapotRows.map((r) => r.peserta_id));
-      const namaById = new Map((pesertaRows ?? []).map((p) => [p.id as string, p.nama as string]));
-      const nama = rapotRows.map((r) => namaById.get(r.peserta_id) ?? 'peserta');
+    // --- Penjaga rapot aktif (dipakai bersama /api/evaluasi/nilai/reset) ---
+    const penghalang = await rapotAktifPenghalangBuka(
+      sesi.halaqah_id as string,
+      sesi.jenis as Jenis,
+      sesi.nomor_sesi as number
+    );
+    if (penghalang) {
       return NextResponse.json(
-        {
-          error: `Rapot masih aktif untuk ${ringkasNama(nama)}. Cabut rapotnya dulu, baru sesi ini bisa dibuka.`,
-          rapot_aktif: rapotRows.length,
-        },
+        { error: penghalang.pesan, rapot_aktif: penghalang.jumlah },
         { status: 409 }
       );
     }
