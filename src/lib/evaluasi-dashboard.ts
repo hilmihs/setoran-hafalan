@@ -48,6 +48,12 @@ export interface GrupDashboard {
 export interface BarisHalaqah {
   id: string;
   nama: string;
+  /**
+   * Dipakai halaman untuk memutuskan apakah tautan Detail ditampilkan: halaman
+   * detail (`[halaqahId]`) masih mengunci gender dan akan 404 untuk gender lain.
+   * Tanpa field ini halaman hanya punya `sub` — string — untuk menebaknya.
+   */
+  gender: Gender;
   /** "Ikhwan · HITS Reguler Juni 2026 · M1" */
   sub: string;
   pengajar: string;
@@ -72,6 +78,11 @@ export interface HasilDashboard {
   opsiBatch: OpsiPilih[];
   /** Nilai batch yang benar-benar dipakai — '' bila query-string sudah basi. */
   batchTerpilih: string;
+  /** Nilai program yang benar-benar dipakai — '' bila slug-nya tak dikenal. */
+  programTerpilih: string;
+  /** Ringkas penyaring aktif untuk subjudul, mis. "HITS Reguler · Juni 2026 ·
+   *  Ikhwan & Akhwat". Ikut tercetak, supaya PDF menerangkan cakupannya sendiri. */
+  ringkasFilter: string;
   grup: GrupDashboard[];
   halaqah: BarisHalaqah[];
   total: TotalDashboard;
@@ -116,17 +127,26 @@ export function susunOpsiBatch(batches: BarisBatch[], family: string): OpsiPilih
   if (anggota.length < 2) return [];
   return [...anggota].sort(urutAnggota).map((b) => ({
     value: b.id,
-    label: b.batch_label ?? namaProgram(b.nama),
+    // Cadangan memakai nama MENTAH, bukan namaProgram(): fungsi itu ada justru
+    // untuk membuang "(Batch ...)", satu-satunya bagian yang membedakan sesama
+    // anggota family. Lewat namaProgram, dua angkatan jadi berlabel sama persis.
+    label: b.batch_label ?? b.nama,
   }));
 }
 
 /**
- * Batch yang benar-benar dipakai. Query-string yang tertinggal dari program
- * sebelumnya dibuang, supaya hasilnya bukan halaman kosong tanpa sebab.
+ * Batch yang benar-benar dipakai. Query-string basi dibuang, supaya hasilnya
+ * bukan halaman kosong — atau penyaring tak terlihat — tanpa sebab.
+ *
+ * Batch tanpa program juga dibuang. Dropdown batch hanya muncul di bawah sebuah
+ * program, jadi `?batch=` tanpa `?program=` adalah keadaan yang tak punya
+ * kendali di layar: pemakai memilih program, memilih batch, lalu mengembalikan
+ * program ke "semua" — dropdown batch lenyap sementara penyaringnya diam-diam
+ * masih menyaring, tanpa apa pun yang bisa dipakai membatalkannya.
  */
 export function batchTerpakai(batches: BarisBatch[], program: string, batch: string): string {
-  if (!batch) return '';
-  const cakupan = program ? batches.filter((b) => b.family === program) : batches;
+  if (!batch || !program) return '';
+  const cakupan = batches.filter((b) => b.family === program);
   return cakupan.some((b) => b.id === batch) ? batch : '';
 }
 
@@ -171,15 +191,24 @@ export function pilihNamaTrack(
 
 /** Baca penyaring dari query-string. Gender default = gender pemakai. */
 export function bacaFilter(
-  sp: { program?: string; batch?: string; gender?: string },
+  // Next memberi `string | string[]` — parameter yang diulang di URL datang
+  // sebagai larik. Diketik apa adanya supaya tak ada kejutan saat upgrade.
+  sp: { program?: string | string[]; batch?: string | string[]; gender?: string | string[] },
   genderPemakai: Gender
 ): FilterDashboard {
-  const g = sp.gender;
+  const satu = (v: string | string[] | undefined): string =>
+    (Array.isArray(v) ? v[0] : v) ?? '';
+  const g = satu(sp.gender);
   return {
-    program: sp.program ?? '',
-    batch: sp.batch ?? '',
+    program: satu(sp.program),
+    batch: satu(sp.batch),
     gender: g === 'ikhwan' || g === 'akhwat' || g === 'semua' ? g : genderPemakai,
   };
+}
+
+/** Label gender untuk subjudul dan kolom ringkasan. */
+export function labelGender(g: GenderFilter): string {
+  return g === 'ikhwan' ? 'Ikhwan' : g === 'akhwat' ? 'Akhwat' : 'Ikhwan & Akhwat';
 }
 
 function labelBulan(): string {
@@ -195,7 +224,6 @@ function labelBulan(): string {
 interface SesiRow { id: string; halaqah_id: string; nomor_sesi: number }
 interface NilaiRow extends Record<string, unknown> {
   sesi_id: string;
-  peserta_id: string;
   skor: number;
   done: boolean;
 }
@@ -220,6 +248,17 @@ export async function muatDashboard(f: FilterDashboard): Promise<HasilDashboard>
   const idsLolos = idBatchLolos(batches, f.program, f.batch);
   const batchById = new Map(batches.map((b) => [b.id, b]));
   const namaFamily = new Map(opsiProgram.map((o) => [o.value, o.label]));
+  // Slug program yang tak dikenal (URL diketik tangan) tetap MENYARING lewat
+  // idsLolos = [] → nol baris, tapi dropdown tak boleh menampilkannya sebagai
+  // pilihan yang tak ada; dikosongkan supaya jatuh ke "Semua program".
+  const programTerpilih = namaFamily.has(f.program) ? f.program : '';
+  const ringkasFilter = [
+    programTerpilih ? namaFamily.get(programTerpilih) : 'Semua program',
+    batchTerpilih ? batchById.get(batchTerpilih)?.batch_label ?? null : null,
+    labelGender(f.gender),
+  ]
+    .filter(Boolean)
+    .join(' · ');
 
   let qHalaqah = supabaseAdmin
     .from('eval_halaqah')
@@ -290,7 +329,7 @@ export async function muatDashboard(f: FilterDashboard): Promise<HasilDashboard>
   const { data: nilaiRaw } = await supabaseAdmin
     .from('evaluasi_nilai')
     .select(
-      'sesi_id, peserta_id, skor, done, ' +
+      'sesi_id, skor, done, ' +
         'jk_huruf, jk_harakat, jk_mad, jk_tasydid, kh_izhar, kh_idgham_bighunnah, kh_idgham_bilaghunnah, kh_idgham_mimi, kh_iqlab, kh_ikhfa_hakiki, kh_ikhfa_syafawi'
     )
     .in('sesi_id', currentSesiIds.length ? currentSesiIds : NO_ID);
@@ -326,7 +365,14 @@ export async function muatDashboard(f: FilterDashboard): Promise<HasilDashboard>
     return best >= 0 && bestVal > 0 ? ALL_LAHN[best].label : '—';
   };
 
-  const grupMap = new Map<string, GrupDashboard>();
+  // Jumlah skor per grup ditumpuk TERPISAH, bukan dititipkan sementara ke
+  // GrupDashboard.rata. Menitipkannya membuat sebuah field bertipe "rata-rata"
+  // berisi "jumlah" di antara dua lintasan: benar hari ini, tapi satu `return`
+  // lebih awal atau satu filter yang disisipkan di tengah sudah cukup untuk
+  // mengirim jumlah mentah ke layar sebagai skor, tanpa ada yang meledak.
+  interface AggGrup extends Omit<GrupDashboard, 'rata'> { skorSum: number }
+  const grupMap = new Map<string, AggGrup>();
+
   const halaqah: BarisHalaqah[] = halaqahList.map((h) => {
     const total = pesertaCount.get(h.id) ?? 0;
     const a = aggByHalaqah.get(h.id);
@@ -337,7 +383,10 @@ export async function muatDashboard(f: FilterDashboard): Promise<HasilDashboard>
     const programNama = (programId && namaFamily.get(programId)) || 'Tanpa program';
     const genderLabel = h.gender === 'ikhwan' ? 'Ikhwan' : 'Akhwat';
     const levelText = h.level ?? (h.mustawa != null ? `Mustawa ${h.mustawa}` : null);
-    const asal = b?.batch_label ? `${programNama} ${b.batch_label}` : programNama;
+    // Halaqah tanpa batch tak menuliskan asal sama sekali. "Tanpa program"
+    // berguna sebagai judul kelompok di tabel ringkasan, tapi sebagai keterangan
+    // per-baris ia cuma derau — dan baris lama pun tak memuatnya.
+    const asal = b ? (b.batch_label ? `${programNama} ${b.batch_label}` : programNama) : null;
 
     const kunci = `${h.batch_id ?? ''}|${h.gender}`;
     let g = grupMap.get(kunci);
@@ -347,7 +396,7 @@ export async function muatDashboard(f: FilterDashboard): Promise<HasilDashboard>
         batchId: h.batch_id, batchLabel: b?.batch_label ?? null,
         batchOrder: b?.batch_order ?? null,
         gender: h.gender,
-        halaqah: 0, total: 0, selesai: 0, rata: null, bermasalah: 0,
+        halaqah: 0, total: 0, selesai: 0, bermasalah: 0, skorSum: 0,
       };
       grupMap.set(kunci, g);
     }
@@ -355,12 +404,12 @@ export async function muatDashboard(f: FilterDashboard): Promise<HasilDashboard>
     g.total += total;
     g.selesai += selesai;
     g.bermasalah += bermasalah;
-    // rata dihitung ulang setelah semua halaqah terkumpul (lihat di bawah)
-    g.rata = (g.rata ?? 0) + (a?.skorSum ?? 0);
+    g.skorSum += a?.skorSum ?? 0;
 
     return {
       id: h.id,
       nama: h.nama,
+      gender: h.gender,
       sub: [genderLabel, asal, levelText].filter(Boolean).join(' · '),
       pengajar: (h.pengajar_id && pengajarName.get(h.pengajar_id)) || '—',
       total,
@@ -371,10 +420,10 @@ export async function muatDashboard(f: FilterDashboard): Promise<HasilDashboard>
     };
   });
 
-  // g.rata sementara menampung jumlah skor; ubah jadi rata-rata sebenarnya.
-  for (const g of grupMap.values()) {
-    g.rata = g.selesai > 0 ? Math.round((g.rata ?? 0) / g.selesai) : null;
-  }
+  const grup: GrupDashboard[] = Array.from(grupMap.values()).map(({ skorSum, ...g }) => ({
+    ...g,
+    rata: g.selesai > 0 ? Math.round(skorSum / g.selesai) : null,
+  }));
 
   const totalPeserta = halaqah.reduce((a, r) => a + r.total, 0);
   const totalSelesai = halaqah.reduce((a, r) => a + r.selesai, 0);
@@ -388,7 +437,9 @@ export async function muatDashboard(f: FilterDashboard): Promise<HasilDashboard>
     opsiProgram,
     opsiBatch,
     batchTerpilih,
-    grup: urutkanGrup(Array.from(grupMap.values())),
+    programTerpilih,
+    ringkasFilter,
+    grup: urutkanGrup(grup),
     halaqah,
     total: {
       halaqah: halaqahList.length,

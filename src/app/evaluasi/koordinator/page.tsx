@@ -20,7 +20,7 @@ export default async function KoordinatorEvaluasiPage({
   const filter = bacaFilter(searchParams, session.gender);
   const d = await muatDashboard(filter);
 
-  const adaFilter = !!(filter.program || d.batchTerpilih || filter.gender !== session.gender);
+  const adaFilter = !!(d.programTerpilih || d.batchTerpilih || filter.gender !== session.gender);
   const tampilkanKolomGender = filter.gender === 'semua';
   const tampilkanRingkasan = d.grup.length > 1;
 
@@ -33,8 +33,14 @@ export default async function KoordinatorEvaluasiPage({
             <div className="t-h1" style={{ fontSize: 20 }}>
               Dashboard Koordinator
             </div>
+            {/* Cakupan penyaring ikut di subjudul, bukan cuma di bar penyaring:
+                bar-nya no-print, jadi tanpa ini PDF hasil cetak tak menerangkan
+                data siapa yang sedang dilihat. */}
             <div className="t-small" style={{ marginTop: 2 }}>
-              {session.name} · {d.total.halaqah} halaqah · {d.namaPeriode}
+              {session.name} · {d.total.halaqah} halaqah binaan · {d.namaPeriode}
+            </div>
+            <div className="t-small" style={{ marginTop: 2 }}>
+              {d.ringkasFilter}
             </div>
           </div>
           <div className="no-print" style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
@@ -58,7 +64,7 @@ export default async function KoordinatorEvaluasiPage({
         >
           <QueryNavSelect
             param="program"
-            value={filter.program}
+            value={d.programTerpilih}
             options={d.opsiProgram}
             ariaLabel="Pilih program"
             allLabel="Semua program"
@@ -297,13 +303,21 @@ export default async function KoordinatorEvaluasiPage({
                                 Ingatkan
                               </button>
                             )}
-                            <Link
-                              href={`/evaluasi/koordinator/${h.id}`}
-                              className="btn btn-ghost btn-sm"
-                              style={{ height: 30, padding: '0 10px', fontSize: 12, textDecoration: 'none' }}
-                            >
-                              Detail
-                            </Link>
+                            {/* Halaman detail masih mengunci gender dan akan 404
+                                untuk halaqah gender lain. Rekap lintas-gender di
+                                sini memang disengaja, tapi menawarkan tautan yang
+                                pasti mental lebih buruk daripada tak menawarkan. */}
+                            {h.gender !== session.gender ? (
+                              <span className="t-small" style={{ color: 'var(--line-2)' }}>—</span>
+                            ) : (
+                              <Link
+                                href={`/evaluasi/koordinator/${h.id}`}
+                                className="btn btn-ghost btn-sm"
+                                style={{ height: 30, padding: '0 10px', fontSize: 12, textDecoration: 'none' }}
+                              >
+                                Detail
+                              </Link>
+                            )}
                           </td>
                         </tr>
                       );

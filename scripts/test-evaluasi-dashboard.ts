@@ -2,7 +2,7 @@
 // yang sah, dan urutan grup. Jalankan: npm run test-evaluasi-dashboard
 import {
   susunOpsiProgram, susunOpsiBatch, batchTerpakai, idBatchLolos,
-  urutkanGrup, pilihNamaTrack,
+  urutkanGrup, pilihNamaTrack, bacaFilter,
   type BarisBatch, type GrupDashboard,
 } from '@/lib/evaluasi-dashboard';
 
@@ -55,11 +55,28 @@ eq(
 );
 eq(susunOpsiBatch(BATCHES, 'dpq'), [], 'program berangkatan tunggal tak punya dropdown batch');
 eq(susunOpsiBatch(BATCHES, ''), [], 'tanpa program terpilih tak ada opsi batch');
+// Cadangan saat batch_label kosong harus memakai nama MENTAH. Lewat namaProgram
+// suffix "(Batch ...)" terbuang — padahal cuma itu yang membedakan sesama
+// anggota family — dan kedua opsi jadi berlabel sama persis.
+eq(
+  susunOpsiBatch(
+    [
+      { id: 'x-jan', nama: 'X (Batch Januari 2026)', family: 'x', batch_label: null, batch_order: 1 },
+      { id: 'x-jun', nama: 'X (Batch Juni 2026)', family: 'x', batch_label: null, batch_order: 2 },
+    ],
+    'x'
+  ).map((o) => o.label),
+  ['X (Batch Januari 2026)', 'X (Batch Juni 2026)'],
+  'cadangan label batch tetap membedakan angkatan'
+);
 
 // ── batchTerpakai: query-string basi diabaikan ──
 eq(batchTerpakai(BATCHES, 'hits-regular', 'hits-regular-apr'), 'hits-regular-apr', 'batch sah dipertahankan');
 eq(batchTerpakai(BATCHES, 'dpq', 'hits-regular-apr'), '', 'batch dari program lain dibuang');
-eq(batchTerpakai(BATCHES, '', 'hits-regular-apr'), 'hits-regular-apr', 'batch tanpa program tetap sah');
+// Batch tanpa program adalah penyaring TANPA KENDALI di layar: dropdown batch
+// cuma muncul di bawah sebuah program, jadi setelah program dikembalikan ke
+// "semua", dropdown itu lenyap sementara ?batch= diam-diam masih menyaring.
+eq(batchTerpakai(BATCHES, '', 'hits-regular-apr'), '', 'batch tanpa program dibuang');
 eq(batchTerpakai(BATCHES, 'hits-regular', 'tidak-ada'), '', 'batch tak dikenal dibuang');
 eq(batchTerpakai(BATCHES, 'hits-regular', ''), '', 'batch kosong tetap kosong');
 
@@ -67,10 +84,14 @@ eq(batchTerpakai(BATCHES, 'hits-regular', ''), '', 'batch kosong tetap kosong');
 eq(idBatchLolos(BATCHES, '', ''), null, 'tanpa penyaring: tak ada pembatasan');
 eq(idBatchLolos(BATCHES, 'hits-safar', ''), ['hits-safar', 'hits-safar-jan'], 'saring per program');
 eq(idBatchLolos(BATCHES, 'hits-regular', 'hits-regular-apr'), ['hits-regular-apr'], 'saring per batch');
-eq(idBatchLolos(BATCHES, '', 'hits-regular-apr'), ['hits-regular-apr'], 'batch tanpa program');
+eq(idBatchLolos(BATCHES, '', 'hits-regular-apr'), null, 'batch tanpa program tak menyaring apa pun');
 // Batch basi tidak boleh mengosongkan hasil — halaman kosong tanpa sebab itu
 // membingungkan; yang benar adalah mundur ke seluruh batch program terpilih.
 eq(idBatchLolos(BATCHES, 'dpq', 'hits-regular-apr'), ['dpq'], 'batch basi mundur ke program');
+// Program tak dikenal → daftar KOSONG, bukan null. Bedanya menentukan: [] jadi
+// sentinel NO_ID dan menghasilkan nol baris, null berarti tak menyaring sama
+// sekali. Tertukar, penyaring yang gagal malah menampilkan seluruh data.
+eq(idBatchLolos(BATCHES, 'tidak-ada', ''), [], 'program tak dikenal → daftar kosong, bukan null');
 
 // ── urutkanGrup ──
 const grup = (programNama: string, batchOrder: number | null, gender: 'ikhwan' | 'akhwat'): GrupDashboard => ({
@@ -111,6 +132,23 @@ eq(
 );
 eq(pilihNamaTrack([], 'semua'), 'Evaluasi QN', 'tanpa config → default');
 eq(pilihNamaTrack([], 'ikhwan'), 'Evaluasi QN', 'tanpa config gender → default');
+
+// ── bacaFilter ──
+// Tanpa parameter gender, yang berlaku adalah gender pemakai sendiri. Ini yang
+// menjaga halaman berperilaku persis seperti sebelum penyaring ada; lintas
+// gender harus jadi pilihan yang diketik, bukan bawaan.
+eq(bacaFilter({}, 'ikhwan'), { program: '', batch: '', gender: 'ikhwan' }, 'tanpa param → gender pemakai');
+eq(bacaFilter({}, 'akhwat').gender, 'akhwat', 'tanpa param → gender pemakai (akhwat)');
+eq(bacaFilter({ gender: 'semua' }, 'ikhwan').gender, 'semua', 'semua harus eksplisit');
+eq(bacaFilter({ gender: 'akhwat' }, 'ikhwan').gender, 'akhwat', 'gender lain dipilih terang-terangan');
+// Nilai ngawur jangan sampai melebarkan cakupan diam-diam.
+eq(bacaFilter({ gender: 'xyz' }, 'ikhwan').gender, 'ikhwan', 'gender ngawur jatuh ke gender pemakai');
+eq(bacaFilter({ gender: '' }, 'akhwat').gender, 'akhwat', 'gender kosong jatuh ke gender pemakai');
+eq(
+  bacaFilter({ program: 'hits-regular', batch: 'hits-regular-apr' }, 'ikhwan'),
+  { program: 'hits-regular', batch: 'hits-regular-apr', gender: 'ikhwan' },
+  'program dan batch diteruskan apa adanya'
+);
 
 if (failed) { console.error(`\n${failed} gagal`); process.exit(1); }
 console.log('\nsemua lulus');
