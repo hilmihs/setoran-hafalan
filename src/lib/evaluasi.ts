@@ -302,3 +302,16 @@ export function buildTrackGeometry(history: (number | null)[]): TrackGeometry {
 
   return { points, sessions, avg, trend, ambangY: yFor(AMBANG), chartW: W, chartH: H, padX };
 }
+
+/**
+ * Nama program tanpa embel-embel angkatan, untuk label dropdown penyaring.
+ * "HITS Reguler (Batch April 2026)" → "HITS Reguler".
+ *
+ * Polanya sengaja khusus "(Batch …)" di ujung, bukan sembarang kurung: nama
+ * seperti "Tahsin Al-Fatihah Mustahik (LAZ)" dan "HKM — Presensi (Halaqah
+ * Keluarga Muhajir)" harus lolos utuh, kalau tidak program yang berbeda bisa
+ * bertabrakan jadi satu label.
+ */
+export function namaProgram(namaBatch: string): string {
+  return namaBatch.replace(/\s*\(Batch\s+[^)]*\)\s*$/i, '').trim();
+}

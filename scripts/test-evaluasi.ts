@@ -4,6 +4,7 @@ import {
   JALIY, KHAFIY, ALL_LAHN, LAHN_BY_KEY, emptyCounts,
   scoreOf, tierOf, AMBANG, columnFor,
   buildTrackGeometry, nilaiAkhirOf, nilaiAkhirTrackOf, lantaiNilai, lantaiNilaiOpt, jenisRapotDariSesi,
+  namaProgram,
   type LahnCounts,
 } from '@/lib/evaluasi';
 import { buildTrackRapotPayload, type RapotIdentitas, type SesiNilaiInput } from '@/lib/rapot';
@@ -265,6 +266,18 @@ eq(nilaiAkhirTrackOf('pb', [80, 81], 78).berkalaAvg, 81, 'bulat: rata 80.5 → 8
   eq(nilaiAkhirOf([70], 70).lulus, true, 'legacy nilaiAkhirOf: tepat 70 → lulus');
   eq(nilaiAkhirOf([69], 69).lulus, false, 'legacy nilaiAkhirOf: 69 → tidak lulus');
 }
+
+// ── nama program untuk dropdown penyaring ──
+eq(namaProgram('HITS Reguler (Batch April 2026)'), 'HITS Reguler', 'buang suffix batch');
+eq(namaProgram('HITS Reguler (Batch Juni 2026)'), 'HITS Reguler', 'suffix batch bulan lain');
+// Kurung yang bukan angkatan harus lolos utuh — kalau tidak, dua program berbeda
+// bisa bertabrakan jadi satu label.
+eq(namaProgram('Tahsin Al-Fatihah Mustahik (LAZ)'), 'Tahsin Al-Fatihah Mustahik (LAZ)', 'kurung non-batch dibiarkan');
+eq(namaProgram('HKM — Presensi (Halaqah Keluarga Muhajir)'), 'HKM — Presensi (Halaqah Keluarga Muhajir)', 'kurung penjelas dibiarkan');
+eq(namaProgram('DPQ'), 'DPQ', 'nama tanpa kurung');
+eq(namaProgram('  HITS Safar  '), 'HITS Safar', 'spasi tepi dirapikan');
+// Suffix hanya dibuang di ujung, bukan di tengah.
+eq(namaProgram('Kelas (Batch A) Lanjutan'), 'Kelas (Batch A) Lanjutan', 'suffix di tengah dibiarkan');
 
 if (failed) { console.error(`\n${failed} FAILED`); process.exit(1); }
 console.log('\nAll evaluasi tests passed.');
