@@ -6,7 +6,7 @@
 // pada batch `rapot_ujian_terpisah`), ambang lulus 70.
 
 import { useState } from 'react';
-import type { RapotPayloadTrack, RapotUjianSnap } from '@/lib/rapot';
+import { alasanBelumTerbit, type RapotPayloadTrack, type RapotUjianSnap } from '@/lib/rapot';
 import {
   buildTrackGeometry,
   tierOf,
@@ -218,18 +218,11 @@ export default function RapotTrack({
   if (id.level) metaParts.push(id.level);
   if (id.mustawa != null) metaParts.push(`Level ${id.mustawa}`);
 
-  // ── Kelengkapan: CERMIN guard server (/api/evaluasi/rapot/terbitkan).
-  // Server menolak bila ujian track belum dinilai, atau (di luar mode ujianSaja)
-  // sesi berkala track belum genap 4. Urutan alasan sengaja sama dgn server.
+  // ── Kelengkapan: fungsi yang SAMA dengan guard server
+  // (/api/evaluasi/rapot/terbitkan) — lihat `alasanBelumTerbit` di lib/rapot.ts.
   const sesiTerisi = tr.berkala.history.filter((v) => v != null).length;
-  const adaUjian = tr.ujian != null;
-  const alasan: string[] = [];
-  if (!adaUjian) alasan.push(`Belum ada Ujian ${short}`);
-  if (!tr.ujianSaja && sesiTerisi < SESI_BERKALA_PER_TRACK) {
-    alasan.push(`Sesi ${short} baru ${sesiTerisi} dari ${SESI_BERKALA_PER_TRACK}`);
-  }
-  if (alasan.length === 0 && tr.nilaiAkhir == null) alasan.push('Nilai akhir belum lengkap');
-  const bolehTerbit = alasan.length === 0 && tr.nilaiAkhir != null;
+  const alasan = alasanBelumTerbit(tr);
+  const bolehTerbit = alasan.length === 0;
   // `done` ikut mengunci tombol. Menerbitkan ulang mencetak token BARU dan
   // menandai yang lama 'digantikan' — lembar yang sudah dibagikan langsung tak
   // berlaku. Itu tak boleh terjadi hanya karena tombolnya ter-tap dua kali.

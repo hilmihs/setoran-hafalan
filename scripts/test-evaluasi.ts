@@ -7,7 +7,12 @@ import {
   namaProgram,
   type LahnCounts,
 } from '@/lib/evaluasi';
-import { buildTrackRapotPayload, type RapotIdentitas, type SesiNilaiInput } from '@/lib/rapot';
+import {
+  alasanBelumTerbit,
+  buildTrackRapotPayload,
+  type RapotIdentitas,
+  type SesiNilaiInput,
+} from '@/lib/rapot';
 import { isPesertaManual, buatIdPesertaManual, bersihkanNamaPeserta } from '@/lib/evaluasi-peserta';
 
 let failed = 0;
@@ -180,6 +185,38 @@ eq(nilaiAkhirTrackOf('pb', [80, 81], 78).berkalaAvg, 81, 'bulat: rata 80.5 → 8
   // Rincian ujian juga tidak boleh tertukar antar track.
   eq(rapotPb.rincianUjian.map((r) => r.key), ['izhar'], 'isolasi pb: rincian dari Ujian PB saja');
   eq(rapotQn.rincianUjian.map((r) => r.key), ['huruf'], 'isolasi qn: rincian dari Ujian QN saja');
+
+  // ── Syarat terbit (dipakai bersama layar pengajar & guard server) ──
+  // Fixture di atas lengkap, jadi dua-duanya boleh terbit.
+  eq(alasanBelumTerbit(rapotQn), [], 'syarat terbit: QN lengkap → boleh');
+  eq(alasanBelumTerbit(rapotPb), [], 'syarat terbit: PB lengkap → boleh');
+
+  // Tanpa sesi ujian track itu, rapotnya tak punya komponen 70% sama sekali.
+  const tanpaUjianPb = buildTrackRapotPayload({
+    track: 'pb',
+    ...args,
+    sesi: fixture.filter((s) => !(s.jenis === 'ujian' && s.nomor_sesi === 2)),
+  }).trackRapot;
+  eq(alasanBelumTerbit(tanpaUjianPb), ['Belum ada Ujian PB'], 'syarat terbit: tanpa Ujian PB');
+
+  // Berkala kurang dari 4 → ditolak; angkanya disebut supaya pengajar tahu
+  // berapa lagi yang kurang.
+  const berkalaKurang = buildTrackRapotPayload({
+    track: 'pb',
+    ...args,
+    sesi: fixture.filter((s) => !(s.jenis === 'pb' && s.nomor_sesi >= 3)),
+  }).trackRapot;
+  eq(alasanBelumTerbit(berkalaKurang), ['Sesi PB baru 2 dari 4'], 'syarat terbit: berkala kurang');
+
+  // Batch ujianSaja tak menjalankan sesi berkala sama sekali — kelengkapannya
+  // tak boleh jadi syarat di sana.
+  const ujianSajaPb = buildTrackRapotPayload({
+    track: 'pb',
+    ...args,
+    sesi: fixture.filter((s) => s.jenis === 'ujian'),
+    ujianSaja: true,
+  }).trackRapot;
+  eq(alasanBelumTerbit(ujianSajaPb), [], 'syarat terbit: ujianSaja tak menuntut sesi berkala');
 
   // Payload track: diskriminan + ambang nilai akhir fix 70 untuk kedua track.
   const payloadPb = buildTrackRapotPayload({ track: 'pb', ...args });

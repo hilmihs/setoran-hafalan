@@ -1,8 +1,13 @@
 import { requirePengajar } from '@/lib/session';
 import { supabaseAdmin } from '@/lib/supabase-admin';
 import { evalPengajarIdFor } from '@/lib/evaluasi-pengajar';
-import { columnsToCounts, JENIS, type Jenis } from '@/lib/evaluasi';
-import { EvaluasiPengajarApp, type EvaluasiInitial, type EvWork } from './EvaluasiPengajarApp';
+import { columnsToCounts, JENIS, type Jenis, type Track } from '@/lib/evaluasi';
+import {
+  EvaluasiPengajarApp,
+  type EvaluasiInitial,
+  type EvWork,
+  type RapotTerbit,
+} from './EvaluasiPengajarApp';
 
 export const dynamic = 'force-dynamic';
 
@@ -124,6 +129,33 @@ export default async function EvaluasiPengajarPage({
     batchNama = (batchRow?.nama as string | undefined) ?? null;
   }
 
+  // Rapot yang SUDAH terbit untuk halaqah ini.
+  //
+  // Wajib dimuat di sini: token rapot dulu hanya muncul sekali, di panel setelah
+  // penerbitan berhasil. `window.open` yang menyusul diblokir peramban HP, dan
+  // panel itu musnah begitu pengajar pindah layar — rapot yang sudah masuk DB
+  // jadi tak bisa dibuka lagi, dan satu-satunya jalan adalah menerbitkan ulang,
+  // yang mencabut lembar yang sudah dibagikan. Dengan daftar ini, token selalu
+  // bisa ditemukan kembali di Pusat Rapot.
+  const { data: rapotRows } = await supabaseAdmin
+    .from('evaluasi_rapot')
+    .select('token, peserta_id, jenis_rapot, nilai_akhir, lulus, diterbitkan_at')
+    .eq('halaqah_id', halaqah.id)
+    .eq('status', 'aktif');
+
+  const rapotTerbit: RapotTerbit[] = (rapotRows ?? [])
+    // Baris era lama ('berkala', 'ujian', …) tak punya padanan dokumen yang bisa
+    // diterbitkan lagi, jadi tak ditampilkan sebagai status track.
+    .filter((r) => r.jenis_rapot === 'qn' || r.jenis_rapot === 'pb')
+    .map((r) => ({
+      token: r.token as string,
+      peserta_id: r.peserta_id as string,
+      track: r.jenis_rapot as Track,
+      nilai_akhir: (r.nilai_akhir as number | null) ?? null,
+      lulus: (r.lulus as boolean | null) ?? null,
+      diterbitkan_at: (r.diterbitkan_at as string | null) ?? null,
+    }));
+
   // Config per gender.
   const { data: configRow } = await supabaseAdmin
     .from('eval_config')
@@ -198,6 +230,7 @@ export default async function EvaluasiPengajarPage({
     })),
     work,
     currentSession,
+    rapotTerbit,
   };
 
   return <EvaluasiPengajarApp initial={initial} />;

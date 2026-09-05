@@ -17,6 +17,7 @@ import {
   NILAI_MINIMUM,
   AMBANG_UJIAN_DEFAULT,
   UJIAN_SESI_BY_TRACK,
+  SESI_BERKALA_PER_TRACK,
   type Jenis,
   type LahnCounts,
   type Track,
@@ -137,6 +138,34 @@ export interface RapotTrackAkhir {
   rincianUjian: RapotLahnRow[]; // kesalahan pada ujian track ini
   catatanPenguji: string;
   peran: 'penentu' | 'prasyarat'; // pb menentukan kelulusan, qn prasyarat
+}
+
+/**
+ * Kenapa rapot track ini belum boleh diterbitkan — kosong berarti boleh.
+ *
+ * SATU sumber untuk klien dan server. Dulu aturannya ditulis dua kali: sekali di
+ * `screens/RapotTrack.tsx` (untuk mengunci tombol) dan sekali di
+ * `/api/evaluasi/rapot/terbitkan` (untuk menolak). Keduanya sudah pernah
+ * berbeda, dan bedanya muncul sebagai tombol yang menyala lalu gagal 400 —
+ * pengajar tak punya cara menebak mana yang benar.
+ *
+ * Dibangun dari payload yang sudah jadi, bukan dari baris sesi mentah, supaya
+ * pemanggilnya tak perlu tahu nomor sesi ujian tiap track.
+ */
+export function alasanBelumTerbit(tr: RapotTrackAkhir): string[] {
+  const short = tr.track === 'qn' ? 'QN' : 'PB';
+  const alasan: string[] = [];
+  if (tr.ujian == null) alasan.push(`Belum ada Ujian ${short}`);
+  if (!tr.ujianSaja) {
+    // Rapot track memuat SELURUH sesi berkala track itu, jadi keempatnya wajib
+    // sudah dinilai — bukan sekadar "ada satu" seperti era sebelum 0062.
+    const terisi = tr.berkala.history.filter((v) => v != null).length;
+    if (terisi < SESI_BERKALA_PER_TRACK) {
+      alasan.push(`Sesi ${short} baru ${terisi} dari ${SESI_BERKALA_PER_TRACK}`);
+    }
+  }
+  if (alasan.length === 0 && tr.nilaiAkhir == null) alasan.push('Nilai akhir belum lengkap');
+  return alasan;
 }
 
 /** ERA LAMA — bentuk payload yang sudah tersimpan. JANGAN diubah selamanya. */

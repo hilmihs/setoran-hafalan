@@ -12,7 +12,6 @@ import {
   AMBANG,
   JENIS,
   TRACKS,
-  UJIAN_SESI_BY_TRACK,
   trackOfUjianSesi,
   type Jenis,
   type LahnCounts,
@@ -23,10 +22,17 @@ import { Daftar } from './screens/Daftar';
 import { Nilai } from './screens/Nilai';
 import { Ringkasan } from './screens/Ringkasan';
 import { KelolaPeserta } from './screens/KelolaPeserta';
+import { KelolaHalaqah } from './screens/KelolaHalaqah';
+import { PusatRapot } from './screens/PusatRapot';
 import RapotTrack from './screens/RapotTrack';
 import RapotTrackA4 from './rapot/RapotTrackA4';
 import RapotPrintStyle from './rapot/RapotPrintStyle';
-import { buildTrackRapotPayload, type RapotPayloadTrack, type SesiNilaiInput } from '@/lib/rapot';
+import {
+  alasanBelumTerbit,
+  buildTrackRapotPayload,
+  type RapotPayloadTrack,
+  type SesiNilaiInput,
+} from '@/lib/rapot';
 
 // ── Types shared with the RSC page ──
 export interface EvPeserta {
@@ -83,9 +89,30 @@ export interface EvaluasiInitial {
   sesiList: EvSesi[];
   work: Record<string, EvWork>;
   currentSession: Record<Jenis, number>;
+  /** Rapot berstatus 'aktif' milik halaqah ini — sumber token yang bisa dibuka lagi. */
+  rapotTerbit: RapotTerbit[];
 }
 
-export type Screen = 'p-home' | 'p-setup' | 'p-daftar' | 'p-nilai' | 'p-ringkasan' | 'p-rapor' | 'p-peserta';
+/** Satu rapot resmi yang sedang berlaku (ber-QR), diringkas untuk layar pengajar. */
+export interface RapotTerbit {
+  token: string;
+  peserta_id: string;
+  track: Track;
+  nilai_akhir: number | null;
+  lulus: boolean | null;
+  diterbitkan_at: string | null;
+}
+
+export type Screen =
+  | 'p-home'
+  | 'p-setup'
+  | 'p-daftar'
+  | 'p-nilai'
+  | 'p-ringkasan'
+  | 'p-rapor'
+  | 'p-peserta'
+  | 'p-halaqah'
+  | 'p-rapot';
 export type SaveStatus = 'idle' | 'saving' | 'saved' | 'error';
 
 // Tile-color arrays (presentation, ported from mockup).
@@ -126,8 +153,12 @@ export type DokCetak = Track;
  * cetak sudah berupa track, jadi baris riwayat "Ujian QN" tak lagi bisa nyasar
  * ke dokumen PB.
  */
-function dokDariSesi(j: Jenis, nomor: number): DokCetak {
-  return j === 'ujian' ? trackOfUjianSesi(nomor) ?? 'pb' : j;
+function dokDariSesi(j: Jenis, nomor: number): DokCetak | null {
+  if (j !== 'ujian') return j;
+  // Baris ujian bernomor di luar 1/2 hanya ada di data era lama. Dulu diam-diam
+  // jatuh ke 'pb' — tombol Cetak-nya lalu membuka dokumen PB yang sama sekali
+  // bukan miliknya. Lebih baik tak punya dokumen daripada salah dokumen.
+  return trackOfUjianSesi(nomor);
 }
 
 // Label sesi utk riwayat & menu PDF. Ujian dinamai per jenisnya ("Ujian PB"),
@@ -197,9 +228,14 @@ export function EvaluasiPengajarApp({ initial }: { initial: EvaluasiInitial }) {
   const [bukaKonfirmasi, setBukaKonfirmasi] = useState<string | null>(null);
   const [bukaBusy, setBukaBusy] = useState<string | null>(null);
   const [bukaError, setBukaError] = useState<string | null>(null);
-  // Cetak rapot: pilih dokumen → menu pilih peserta → render lembar A4 → print.
-  const [cetakMenu, setCetakMenu] = useState<DokCetak | null>(null);
+  // Cetak rapot: Pusat Rapot (layar 'p-rapot') → render lembar A4 → print.
   const [printReq, setPrintReq] = useState<{ dok: DokCetak; ids: string[] } | null>(null);
+  // Rapot resmi yang sedang berlaku. Dimuat dari server (page.tsx) DAN diperbarui
+  // di sini tiap penerbitan berhasil, supaya tokennya langsung terlihat di baris
+  // peserta — tak bergantung pada `window.open` yang diblokir peramban HP.
+  const [rapotTerbit, setRapotTerbit] = useState<RapotTerbit[]>(initial.rapotTerbit);
+  // peserta_id yang penerbitannya sedang berjalan (dipakai Pusat Rapot).
+  const [terbitBusyId, setTerbitBusyId] = useState<string | null>(null);
   // Sesi ujian yang di-soft-delete pengajar (per nomor_sesi).
   const [ujianDihapus, setUjianDihapus] = useState<Set<number>>(
     () => new Set(initial.sesiList.filter((s) => s.jenis === 'ujian' && s.dihapus).map((s) => s.nomor_sesi))
@@ -396,7 +432,15 @@ export function EvaluasiPengajarApp({ initial }: { initial: EvaluasiInitial }) {
       if (batal) return;
       requestAnimationFrame(() => {
         window.print();
-        setPrintReq(null);
+        // JANGAN `setPrintReq(null)` di sini. Di Safari iOS `window.print()`
+        // TIDAK memblokir: ia kembali seketika lalu lembar cetak dibuka
+        // belakangan, dan snapshot dokumennya diambil PADA SAAT ITU. Menutup
+        // overlay tepat setelah print() membuat React sempat memasang kembali
+        // layar aplikasi lebih dulu — yang tercetak lalu halaman awal Evaluasi,
+        // bukan rapotnya. Overlay dibiarkan terbuka dan ditutup pengajar lewat
+        // tombol "← Tutup"; 'afterprint' sengaja TIDAK dipakai untuk menutup
+        // otomatis, sebab dukungannya di Safari iOS tak bisa diandalkan dan
+        // kegagalannya berbentuk halaman salah cetak lagi.
       });
     };
     void jalan();
@@ -620,6 +664,12 @@ export function EvaluasiPengajarApp({ initial }: { initial: EvaluasiInitial }) {
     setResetError(null);
     setBukaError(null);
     setBukaKonfirmasi(null);
+    // Galat penerbitan tak boleh ikut pindah layar: pesannya menyebut peserta
+    // dan sesi tertentu, dan menempel di layar berikutnya cuma membingungkan.
+    if (terbitStatus === 'error') {
+      setTerbitStatus('idle');
+      setTerbitPesan(null);
+    }
     setScreen(s);
   };
 
@@ -827,7 +877,8 @@ export function EvaluasiPengajarApp({ initial }: { initial: EvaluasiInitial }) {
           setRaporId(p.id);
           // Sesi yang sedang dibuka cuma menentukan rapot mana yang PERTAMA
           // ditampilkan; setelah itu pengajar bebas pindah QN ⇄ PB di layarnya.
-          setRapotTrack(dokDariSesi(jenis, activeSession));
+          const dok = dokDariSesi(jenis, activeSession);
+          if (dok) setRapotTrack(dok);
           setTerbitStatus('idle');
           setTerbitToken(null);
           setTerbitPesan(null);
@@ -935,50 +986,92 @@ export function EvaluasiPengajarApp({ initial }: { initial: EvaluasiInitial }) {
     return buildTrackPayload(idn, assembleSesi(pid), track);
   };
 
-  const dokLabel = (dok: DokCetak): string => `Rapot ${trackShort(dok)}`;
-  const dokKey = (dok: DokCetak): string => dok;
+  // `pesertaUntukDok` DIHAPUS bersama menu cetak lama: ambangnya (cukup SATU
+  // sesi dinilai) tak pernah sama dengan syarat terbit, dan itulah yang membuat
+  // "2 peserta siap dicetak" di beranda tak berarti apa-apa. Kelayakan sekarang
+  // dihitung satu pintu lewat `alasanBelumTerbit`.
 
-  // Peserta yang datanya cukup untuk dokumen ini: minimal satu sesi track itu —
-  // sesi berkala mana pun, atau ujian track itu — sudah dinilai & hadir.
-  const pesertaUntukDok = (dok: DokCetak): EvPeserta[] =>
-    peserta.filter((p) => {
-      const dinilai = (j: Jenis, n: number) => {
-        const w = getWork(p.id, j, n);
-        return w.done && w.hadir !== false;
-      };
-      if (dinilai('ujian', UJIAN_SESI_BY_TRACK[dok])) return true;
-      return !terpisah && [1, 2, 3, 4].some((n) => dinilai(dok, n));
-    });
+  /**
+   * Buka Pusat Rapot dari sebuah sesi. Track hanya diganti bila sesi itu memang
+   * punya dokumen — sesi ujian lawas (nomor di luar 1/2) membuka Pusat Rapot apa
+   * adanya, tanpa memaksa dokumen yang bukan miliknya.
+   */
+  const bukaPusatRapot = (j: Jenis, nomor: number) => {
+    const dok = dokDariSesi(j, nomor);
+    if (dok) setRapotTrack(dok);
+    nav('p-rapot');
+  };
 
-  // Dokumen yang ditawarkan di kartu "Cetak rapot" di layar awal: satu per track.
-  const dokTersedia: DokCetak[] = [...TRACKS];
+  /**
+   * Ringkasan untuk kartu beranda. Memakai `alasanBelumTerbit` — aturan yang SAMA
+   * dengan tombol Terbitkan dan guard server. Kartu lama memakai
+   * `pesertaUntukDok` (cukup SATU sesi dinilai), jadi "2 peserta siap dicetak"
+   * bisa berarti nol peserta yang benar-benar bisa diterbitkan.
+   */
+  const ringkasRapot = TRACKS.reduce(
+    (acc, t) => {
+      for (const p of peserta) {
+        const lengkap = alasanBelumTerbit(buildRapotFor(p.id, t).trackRapot).length === 0;
+        if (lengkap) acc.siap += 1;
+        else acc.belum += 1;
+      }
+      acc.terbit += rapotTerbit.filter((r) => r.track === t).length;
+      return acc;
+    },
+    { siap: 0, belum: 0, terbit: 0 }
+  );
 
-  const cetakPeserta = cetakMenu ? pesertaUntukDok(cetakMenu) : [];
-
-  const terbitkanRapot = async (jenis_rapot: Track) => {
-    if (cobaRef.current) return; // Mode Coba: tak menerbitkan rapot resmi.
+  /**
+   * Terbitkan rapot resmi (ber-QR) satu peserta.
+   *
+   * `pesertaId` diberikan pemanggil: layar detail memakai peserta yang sedang
+   * dibuka, Pusat Rapot memakai baris yang di-tap. Dulu terikat mati ke `rId`,
+   * sehingga penerbitan hanya mungkin dari satu layar.
+   */
+  const terbitkanRapot = async (jenis_rapot: Track, pesertaId: string) => {
+    if (cobaRef.current) {
+      // Dulu `return` senyap: tombol ditekan, tak ada yang terjadi, tak ada
+      // penjelasan. Sekarang sebabnya disebut.
+      setTerbitStatus('error');
+      setTerbitPesan('Mode Coba menyala — matikan dulu untuk menerbitkan rapot resmi.');
+      return;
+    }
+    setTerbitBusyId(pesertaId);
     setTerbitStatus('saving');
     setTerbitPesan(null);
     try {
       const res = await fetch('/api/evaluasi/rapot/terbitkan', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ halaqah_id: halaqah.id, peserta_id: rId, jenis_rapot }),
+        body: JSON.stringify({ halaqah_id: halaqah.id, peserta_id: pesertaId, jenis_rapot }),
       });
       const json = await res.json();
       if (!res.ok || !json.token) throw new Error(json.error || 'gagal');
+      // Daftar rapot terbit diperbarui di tempat: satu rapot aktif per
+      // (peserta, halaqah, track) — terbit ulang MENGGANTI, bukan menambah.
+      setRapotTerbit((prev) => [
+        ...prev.filter((r) => !(r.peserta_id === pesertaId && r.track === jenis_rapot)),
+        {
+          token: json.token as string,
+          peserta_id: pesertaId,
+          track: jenis_rapot,
+          nilai_akhir: null,
+          lulus: null,
+          diterbitkan_at: new Date().toISOString(),
+        },
+      ]);
       // Token disimpan ke state DULU, baru tab dibuka. `window.open` di sini
       // dipanggil setelah `await`, jadi gesture pengguna sudah habis dan Safari
-      // maupun Chrome HP memblokirnya — dan tak ada satu pun daftar rapot terbit
-      // di aplikasi ini. Kalau token cuma hidup di tab yang diblokir itu, rapot
-      // yang sudah masuk DB jadi tak bisa dibuka lagi, dan satu-satunya jalan
-      // adalah menerbitkan ulang — yang mencabut lembar yang sudah dibagikan.
+      // maupun Chrome HP memblokirnya. Kini itu tak lagi fatal: tokennya sudah
+      // masuk `rapotTerbit` dan selalu bisa ditemukan lagi di Pusat Rapot.
       setTerbitToken(json.token);
       setTerbitStatus('done');
       window.open(`/evaluasi/pengajar/rapot/${json.token}`, '_blank');
     } catch (e) {
       setTerbitPesan(e instanceof Error && e.message !== 'gagal' ? e.message : null);
       setTerbitStatus('error');
+    } finally {
+      setTerbitBusyId(null);
     }
   };
 
@@ -1027,8 +1120,22 @@ export function EvaluasiPengajarApp({ initial }: { initial: EvaluasiInitial }) {
               ]
                 .filter(Boolean)
                 .join(' - ');
+              // Judul dikembalikan lewat 'afterprint', BUKAN tepat setelah
+              // print(). Di Safari iOS `window.print()` tak memblokir: lembar
+              // cetaknya dibuka belakangan dan membaca judul PADA SAAT ITU —
+              // mengembalikannya seketika membuat berkasnya bernama
+              // "Muhajir Project Tilawah.pdf" lagi. Timeout jadi jaring
+              // pengaman untuk peramban yang tak pernah mengirim 'afterprint'.
+              let dipulihkan = false;
+              const pulihkan = () => {
+                if (dipulihkan) return;
+                dipulihkan = true;
+                document.title = judulLama;
+                window.removeEventListener('afterprint', pulihkan);
+              };
+              window.addEventListener('afterprint', pulihkan);
+              setTimeout(pulihkan, 60_000);
               window.print();
-              document.title = judulLama;
             }}
             style={{ height: 38, padding: '0 16px', borderRadius: 8, border: 'none', background: 'oklch(0.58 0.09 165)', font: 'inherit', fontSize: 13, fontWeight: 700, color: '#ffffff', cursor: 'pointer' }}
           >
@@ -1138,7 +1245,24 @@ export function EvaluasiPengajarApp({ initial }: { initial: EvaluasiInitial }) {
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ fontSize: 13, fontWeight: 600, color: '#1b1a17' }}>Peserta halaqah</div>
                   <div style={{ fontSize: 11, color: '#a8a39a', marginTop: 1 }}>
-                    {peserta.length} peserta · tambah atau betulkan nama
+                    {peserta.length} peserta · tambah, betulkan nama, keluarkan
+                  </div>
+                </div>
+                <span style={{ fontSize: 15, color: '#d8d3c8' }}>›</span>
+              </button>
+
+              {/* Nama & level halaqah ikut tercetak di kop rapot, jadi salah ejaan
+                  dari data pusat harus bisa dibetulkan pengajar sendiri. */}
+              <button
+                onClick={() => nav('p-halaqah')}
+                className="ev-press"
+                style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%', textAlign: 'left', padding: '12px 14px', marginTop: 10, borderRadius: 12, border: '1px solid #e8e4dc', background: '#ffffff', font: 'inherit', cursor: 'pointer' }}
+              >
+                <span style={{ fontSize: 16, flexShrink: 0 }}>🏷</span>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: '#1b1a17' }}>Data halaqah</div>
+                  <div style={{ fontSize: 11, color: '#a8a39a', marginTop: 1 }}>
+                    {halaqah.nama} · {levelLabel}
                   </div>
                 </div>
                 <span style={{ fontSize: 15, color: '#d8d3c8' }}>›</span>
@@ -1173,44 +1297,29 @@ export function EvaluasiPengajarApp({ initial }: { initial: EvaluasiInitial }) {
               </div>
             </div>
 
-            {/* Cetak rapot — jalur langsung dari layar awal. Sebelumnya cetak hanya
-                bisa lewat kartu riwayat (sesi terkirim saja) atau setelah menelusuri
-                sesi → daftar → ringkasan, padahal dokumennya tak bergantung sesi. */}
+            {/* Rapot akhir — SATU pintu. Dulu dua kartu "Cetak rapot" yang hanya
+                membuka pratinjau tanpa QR, sementara "Terbitkan" tersembunyi di
+                ujung sesi → daftar → ringkasan → ketuk peserta. */}
             <div style={{ padding: '20px 16px 0' }}>
-              <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.04em', textTransform: 'uppercase', color: '#7a766f', marginBottom: 10 }}>Cetak rapot</div>
-              <div style={{ background: '#ffffff', border: '1px solid #e8e4dc', borderRadius: 12, overflow: 'hidden' }}>
-                {dokTersedia.map((d, i) => {
-                  const siap = pesertaUntukDok(d).length;
-                  return (
-                    <button
-                      key={dokKey(d)}
-                      onClick={() => setCetakMenu(d)}
-                      className="ev-press"
-                      style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: 10,
-                        width: '100%',
-                        textAlign: 'left',
-                        padding: '12px 14px',
-                        border: 'none',
-                        borderBottom: i < dokTersedia.length - 1 ? '1px solid #e8e4dc' : 'none',
-                        background: 'transparent',
-                        font: 'inherit',
-                        cursor: 'pointer',
-                      }}
-                    >
-                      <span style={{ fontSize: 16, flexShrink: 0 }}>{d === 'qn' ? '📖' : '📝'}</span>
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ fontSize: 13, fontWeight: 600, color: '#1b1a17' }}>{dokLabel(d)}</div>
-                        <div style={{ fontSize: 11, color: '#a8a39a', marginTop: 1 }}>
-                          {namaTrack(d)} · {siap > 0 ? `${siap} peserta siap dicetak` : 'belum ada nilai'}
-                        </div>
-                      </div>
-                      <span style={{ fontSize: 15, color: '#d8d3c8' }}>›</span>
-                    </button>
-                  );
-                })}
+              <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.04em', textTransform: 'uppercase', color: '#7a766f', marginBottom: 10 }}>Rapot akhir</div>
+              <button
+                onClick={() => nav('p-rapot')}
+                className="ev-press"
+                style={{ display: 'flex', alignItems: 'center', gap: 12, width: '100%', textAlign: 'left', padding: 16, borderRadius: 14, border: '1.5px solid oklch(0.85 0.06 150)', background: 'oklch(0.96 0.035 150)', font: 'inherit', cursor: 'pointer' }}
+              >
+                <div style={{ width: 44, height: 44, borderRadius: 12, background: '#ffffff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20, flexShrink: 0 }}>🎓</div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 15, fontWeight: 700, color: '#1b1a17' }}>Rapot Akhir QN &amp; PB</div>
+                  <div style={{ fontSize: 12, color: '#7a766f', marginTop: 2, lineHeight: 1.45 }}>
+                    {ringkasRapot.siap} siap terbit · {ringkasRapot.belum} belum lengkap ·{' '}
+                    {ringkasRapot.terbit} sudah terbit
+                  </div>
+                </div>
+                <span style={{ fontSize: 18, color: '#a8a39a' }}>→</span>
+              </button>
+              <div style={{ fontSize: 11, color: '#a8a39a', marginTop: 8, lineHeight: 1.45 }}>
+                Cetak PDF dan terbitkan lembar resmi ber-QR dari satu tempat. Ujian akhir sudah
+                termasuk di dalam rapot tiap track.
               </div>
             </div>
 
@@ -1258,7 +1367,7 @@ export function EvaluasiPengajarApp({ initial }: { initial: EvaluasiInitial }) {
                             🔓 Buka kunci
                           </button>
                           <button
-                            onClick={() => setCetakMenu(dokDariSesi(r.jenis, r.nomor))}
+                            onClick={() => bukaPusatRapot(r.jenis, r.nomor)}
                             style={{ height: 28, padding: '0 10px', borderRadius: 7, border: '1px solid #d8d3c8', background: '#ffffff', font: 'inherit', fontSize: 11, fontWeight: 600, color: '#44423d', cursor: 'pointer' }}
                           >
                             🖨 Cetak
@@ -1290,6 +1399,17 @@ export function EvaluasiPengajarApp({ initial }: { initial: EvaluasiInitial }) {
             halaqahId={halaqah.id}
             halaqahNama={halaqah.nama}
             peserta={peserta.map((p) => ({ id: p.id, nama: p.nama }))}
+            coba={coba}
+            back={() => nav('p-home')}
+          />
+        )}
+
+        {screen === 'p-halaqah' && (
+          <KelolaHalaqah
+            halaqahId={halaqah.id}
+            nama={halaqah.nama}
+            level={halaqah.level}
+            mustawa={halaqah.mustawa}
             coba={coba}
             back={() => nav('p-home')}
           />
@@ -1360,7 +1480,7 @@ export function EvaluasiPengajarApp({ initial }: { initial: EvaluasiInitial }) {
             onReset={resetSesi}
             resetBusy={resetBusy}
             resetError={resetError}
-            onPdf={() => setCetakMenu(dokDariSesi(jenis, activeSession))}
+            onPdf={() => bukaPusatRapot(jenis, activeSession)}
           />
         )}
 
@@ -1434,7 +1554,30 @@ export function EvaluasiPengajarApp({ initial }: { initial: EvaluasiInitial }) {
                 : 'Semua data tersimpan, siap dikirim.'
             }
             back={() => nav('p-daftar')}
-            onCetak={() => setCetakMenu(dokDariSesi(jenis, activeSession))}
+            onCetak={() => bukaPusatRapot(jenis, activeSession)}
+          />
+        )}
+
+        {screen === 'p-rapot' && (
+          <PusatRapot
+            halaqahNama={halaqah.nama}
+            track={rapotTrack}
+            onPilihTrack={(t) => {
+              setRapotTrack(t);
+              setTerbitStatus('idle');
+              setTerbitPesan(null);
+            }}
+            namaTrack={namaTrack}
+            ujianSaja={terpisah}
+            peserta={peserta.map((p) => ({ id: p.id, nama: p.nama }))}
+            build={buildRapotFor}
+            rapotTerbit={rapotTerbit}
+            coba={coba}
+            onCetak={(ids) => setPrintReq({ dok: rapotTrack, ids })}
+            onTerbitkan={(pid) => void terbitkanRapot(rapotTrack, pid)}
+            terbitBusy={terbitBusyId}
+            terbitError={terbitStatus === 'error' ? terbitPesan ?? 'Gagal menerbitkan — coba lagi.' : null}
+            back={() => nav('p-home')}
           />
         )}
 
@@ -1442,7 +1585,7 @@ export function EvaluasiPengajarApp({ initial }: { initial: EvaluasiInitial }) {
           <RapotTrack
             payload={rapotAktif}
             onBack={() => nav('p-ringkasan')}
-            onTerbitkan={() => terbitkanRapot(rapotTrack)}
+            onTerbitkan={() => void terbitkanRapot(rapotTrack, rId)}
             terbitStatus={terbitStatus}
             terbitToken={terbitToken}
             terbitPesan={terbitPesan}
@@ -1457,82 +1600,6 @@ export function EvaluasiPengajarApp({ initial }: { initial: EvaluasiInitial }) {
         )}
       </div>
 
-      {cetakMenu && (
-        <div
-          onClick={() => setCetakMenu(null)}
-          style={{ position: 'fixed', inset: 0, zIndex: 50, background: 'rgba(20,18,14,0.45)', display: 'flex', alignItems: 'flex-end', justifyContent: 'center' }}
-        >
-          <div
-            onClick={(e) => e.stopPropagation()}
-            style={{ width: '100%', maxWidth: 460, background: '#ffffff', borderRadius: '18px 18px 0 0', padding: '16px 16px 22px', maxHeight: '80vh', overflowY: 'auto' }}
-          >
-            <div style={{ width: 36, height: 4, borderRadius: 2, background: '#e0dcd2', margin: '0 auto 14px' }} />
-            <div style={{ fontSize: 14, fontWeight: 800, marginBottom: 2 }}>Cetak {dokLabel(cetakMenu)}</div>
-            <div style={{ fontSize: 11.5, color: '#a8a39a', marginBottom: 14 }}>
-              Pilih satu peserta, atau cetak semuanya sekaligus (1 peserta = 1 halaman).
-            </div>
-            {/* Ganti dokumen tanpa harus menutup menu — pengajar sering butuh QN lalu PB. */}
-            {dokTersedia.length > 1 && (
-              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 14 }}>
-                {dokTersedia.map((d) => {
-                  const aktif = dokKey(d) === dokKey(cetakMenu);
-                  return (
-                    <button
-                      key={dokKey(d)}
-                      onClick={() => setCetakMenu(d)}
-                      style={{
-                        height: 32,
-                        padding: '0 12px',
-                        borderRadius: 999,
-                        border: `1.5px solid ${aktif ? 'oklch(0.58 0.09 165)' : '#e8e4dc'}`,
-                        background: aktif ? 'oklch(0.96 0.035 165)' : '#ffffff',
-                        font: 'inherit',
-                        fontSize: 12,
-                        fontWeight: 700,
-                        color: aktif ? 'oklch(0.40 0.10 150)' : '#7a766f',
-                        cursor: 'pointer',
-                      }}
-                    >
-                      {dokLabel(d)}
-                    </button>
-                  );
-                })}
-              </div>
-            )}
-            {cetakPeserta.length === 0 ? (
-              <div style={{ fontSize: 12.5, color: '#a8a39a', padding: '8px 0 4px', lineHeight: 1.5 }}>
-                Belum ada peserta yang bisa dicetak untuk dokumen ini — nilainya belum ada.
-              </div>
-            ) : (
-              <>
-                {cetakPeserta.map((p) => (
-                  <button
-                    key={p.id}
-                    onClick={() => {
-                      setPrintReq({ dok: cetakMenu, ids: [p.id] });
-                      setCetakMenu(null);
-                    }}
-                    style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%', textAlign: 'left', padding: '11px 4px', border: 'none', borderBottom: '1px solid #f0ede6', background: 'transparent', font: 'inherit', fontSize: 13, fontWeight: 600, color: '#1b1a17', cursor: 'pointer' }}
-                  >
-                    <span style={{ width: 26, height: 26, borderRadius: '50%', background: '#efece5', color: '#44423d', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10.5, fontWeight: 700, flexShrink: 0 }}>{initials(p.nama)}</span>
-                    {p.nama}
-                  </button>
-                ))}
-                <button
-                  onClick={() => {
-                    setPrintReq({ dok: cetakMenu, ids: cetakPeserta.map((p) => p.id) });
-                    setCetakMenu(null);
-                  }}
-                  className="ev-dark"
-                  style={{ width: '100%', height: 46, marginTop: 14, borderRadius: 10, border: 'none', background: 'oklch(0.58 0.09 165)', font: 'inherit', fontSize: 13.5, fontWeight: 700, color: '#ffffff', cursor: 'pointer' }}
-                >
-                  🖨 Semua peserta ({cetakPeserta.length})
-                </button>
-              </>
-            )}
-          </div>
-        </div>
-      )}
     </div>
   );
 }
