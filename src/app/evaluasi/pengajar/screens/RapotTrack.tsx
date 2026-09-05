@@ -704,6 +704,9 @@ export default function RapotTrack({
                 padding: '10px 12px',
                 marginBottom: 18,
                 textWrap: 'pretty',
+                // Samakan dengan lembar A4-nya: baris dan jeda paragraf yang
+                // diketik penguji dipertahankan, tidak diruntuhkan jadi satu blok.
+                whiteSpace: 'pre-wrap',
               }}
             >
               {tr.catatanPenguji || '—'}

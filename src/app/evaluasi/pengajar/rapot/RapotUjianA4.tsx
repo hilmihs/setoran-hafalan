@@ -345,7 +345,11 @@ export default function RapotUjianA4({ payload, qr, logoSrc }: Props) {
 
         {/* Catatan penguji */}
         <div style={SECTION_LABEL}>{tunggal ? 'C. Catatan penguji' : 'D. Catatan penguji'}</div>
-        <div style={{ border: '1px solid #e8e4dc', borderRadius: 8, padding: '13px 16px', background: '#faf8f4', fontSize: 12.5, lineHeight: 1.65, color: '#44423d', textWrap: 'pretty' }}>
+        {/* whiteSpace pre-wrap: penguji mengetik catatannya berbaris-baris, dengan
+            baris kosong sebagai jeda paragraf dan spasi awal untuk kutipan hadits.
+            Tanpa ini HTML meruntuhkan semuanya jadi satu blok padat yang berat
+            dibaca — persis keluhan yang memunculkan perubahan ini. */}
+        <div style={{ border: '1px solid #e8e4dc', borderRadius: 8, padding: '13px 16px', background: '#faf8f4', fontSize: 12.5, lineHeight: 1.65, color: '#44423d', textWrap: 'pretty', whiteSpace: 'pre-wrap' }}>
           {uj.catatanPenguji.trim() || 'Tidak ada catatan penguji.'}
         </div>
 

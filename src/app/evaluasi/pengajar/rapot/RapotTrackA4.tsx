@@ -450,6 +450,10 @@ export default function RapotTrackA4({ payload, qr, logoSrc }: Props): ReactElem
         lineHeight: 1.6,
         color: '#44423d',
         textWrap: 'pretty',
+        // Penguji mengetik catatannya berbaris-baris, dengan baris kosong sebagai
+        // jeda paragraf dan spasi awal untuk kutipan hadits. Tanpa pre-wrap, HTML
+        // meruntuhkan semuanya jadi satu blok padat yang berat dibaca.
+        whiteSpace: 'pre-wrap',
       }}
     >
       {t.catatanPenguji.trim() || 'Tidak ada catatan penguji.'}
