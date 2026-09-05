@@ -252,10 +252,23 @@ filter).
 
 ## Urutan rilis
 
-1. **DDL 0073 di produksi lebih dulu**, per-statement lewat `/api/admin/db`.
-   Aditif seluruhnya, jadi aman dijalankan sebelum kode mendarat — dan urutan ini
-   menghilangkan jendela waktu di mana halaman mengkueri kolom yang belum ada.
-   Kolom yang menganggur beberapa menit tak mengganggu kode lama.
+1. **DDL 0073 di produksi lebih dulu**, per-statement lewat `/api/admin/db`,
+   dengan jeda ke langkah 2 dipersempit.
+
+   Urutan ini dipilih sesudah menimbang dua bahaya, dan keduanya nyata:
+
+   - **DDL dulu** — `family` menjadi NOT NULL tanpa default sementara `mapBatch`
+     lama masih mengirim `{id, nama, aktif}` saja. Program **baru** dari upstream
+     karena itu gagal disisipkan selama jeda. Kerusakannya terbatas: `apply.ts`
+     menangkap error, baris stage tetap belum diterapkan dan bisa diulang setelah
+     deploy, dan program lama tak tersentuh karena `ON CONFLICT DO UPDATE` hanya
+     menyentuh kolom yang dikirim. Gagal dengan aman, sembuh sendiri.
+   - **Deploy dulu** — halaman baru menanyakan `family` ke tabel yang belum
+     punya kolom itu, jadi dashboard 500 untuk **semua** koordinator sampai DDL
+     jalan. Terlihat, dan tak sembuh sendiri.
+
+   Yang kedua jelas lebih buruk, jadi DDL didahulukan. Peringatan ini juga
+   ditulis di kepala berkas migrasinya.
 2. Merge dan deploy kode ke produksi (push ke remote `maheer`, bukan `origin`).
 3. Buka `/evaluasi/koordinator/sync` → pull → setujui enam baris `batch.update`
    (`hits-regular`, `hits-regular-apr`, `hits-regular-jan`, `hits-safar`,

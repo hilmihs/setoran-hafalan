@@ -188,8 +188,9 @@ duplicate prefixes (two `0052_*` exist: `evaluasi_sesi_dihapus` + `evaluasi_sync
 Apply order among same-numbered files isn't guaranteed, so never rely on it — and
 `ls supabase/migrations/ | tail -1` before picking the next number — and check
 unmerged branches too. `0063`–`0068` are already taken on the
-`docs/ketersediaan-mengajar-hits` branch, so `main` skips straight to `0069`
-(next free: `0070`).
+`docs/ketersediaan-mengajar-hits` branch, so `main` skips straight to `0069`.
+That same branch also holds `0071`–`0072`, and `feat/dashboard-evaluasi-filter`
+holds `0073` — none of which are on `main` yet (next free: `0074`).
 
 **Gotcha — DDL applied straight to prod:** some columns exist in production with
 no migration file at all, because they were added through `/api/admin/db`. A
