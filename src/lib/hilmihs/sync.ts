@@ -9,7 +9,7 @@ import type {
 } from './types';
 
 const COMPARE: Record<MirrorEntity, string[]> = {
-  batch: ['nama', 'aktif'],
+  batch: ['nama', 'aktif', 'family', 'batch_label', 'batch_order'],
   pengajar: ['nama', 'gender', 'whatsapp'],
   halaqah: ['nama', 'gender', 'level', 'pengajar_id', 'batch_id'],
   peserta: ['nama', 'gender', 'halaqah_id', 'urutan'],
@@ -81,7 +81,9 @@ export async function runPull(): Promise<{ runId: string; total: number; counts:
 
   try {
     const snap = await fetchSnapshot();
-    const curBatch = await currentMirror<MirrorBatch & { aktif: boolean }>('eval_batch', 'id, nama, aktif');
+    const curBatch = await currentMirror<MirrorBatch & { aktif: boolean }>(
+      'eval_batch', 'id, nama, aktif, family, batch_label, batch_order'
+    );
     const curPeng = await currentMirror('eval_pengajar', 'id, nama, gender, whatsapp');
     const curHal = await currentMirror('eval_halaqah', 'id, nama, gender, level, pengajar_id, batch_id, ambang_ujian');
     const curPes = await currentMirror('eval_peserta', 'id, nama, gender, halaqah_id, urutan, aktif');

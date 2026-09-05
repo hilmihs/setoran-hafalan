@@ -50,7 +50,13 @@ export interface Envelope<T> {
 // ── Bentuk mirror-shape (hasil map, cocok kolom eval_*). Gender sudah enum. ──
 import type { Gender } from '@/types/db';
 
-export interface MirrorBatch { id: string; nama: string; aktif: boolean }
+export interface MirrorBatch {
+  id: string; nama: string; aktif: boolean;
+  /** Slug program induk. Program berangkatan tunggal → sama dengan `id`. */
+  family: string;
+  batch_label: string | null;
+  batch_order: number | null;
+}
 export interface MirrorPengajar { id: string; nama: string; gender: Gender; whatsapp: string | null }
 export interface MirrorHalaqah {
   id: string; nama: string; gender: Gender; level: string | null;

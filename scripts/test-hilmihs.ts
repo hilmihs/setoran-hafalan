@@ -21,10 +21,30 @@ eq(normalizeWaOrNull(null), null, 'wa null');
 eq(pengajarId('6281331732974', 'hits-regular', 'Fulan'), 'wa:6281331732974', 'pengajar id by wa');
 eq(pengajarId(null, 'hits-regular', 'Fulan'), 'nm:hits-regular:Fulan', 'pengajar id by nama');
 
+// Program berangkatan tunggal: batch null → family = slug-nya sendiri.
 eq(
-  mapBatch({ slug: 'hits-regular', name: 'HITS Reguler', dataSourceType: 'tilawah_api', syncPaused: false, batch: null }),
-  { id: 'hits-regular', nama: 'HITS Reguler', aktif: true },
-  'mapBatch'
+  mapBatch({ slug: 'dpq', name: 'DPQ', dataSourceType: 'tilawah_api', syncPaused: false, batch: null }),
+  { id: 'dpq', nama: 'DPQ', aktif: true, family: 'dpq', batch_label: null, batch_order: null },
+  'mapBatch tanpa batch'
+);
+// Program berangkatan banyak: family/label/order ikut dimirror.
+eq(
+  mapBatch({
+    slug: 'hits-regular-apr', name: 'HITS Reguler (Batch April 2026)',
+    dataSourceType: 'tilawah_api', syncPaused: false,
+    batch: { family: 'hits-regular', label: 'April 2026', order: 2 },
+  }),
+  {
+    id: 'hits-regular-apr', nama: 'HITS Reguler (Batch April 2026)', aktif: true,
+    family: 'hits-regular', batch_label: 'April 2026', batch_order: 2,
+  },
+  'mapBatch dengan batch'
+);
+// syncPaused → aktif false, tak terpengaruh perubahan ini.
+eq(
+  mapBatch({ slug: 'rbi', name: 'RBI', dataSourceType: 'tilawah_api', syncPaused: true, batch: null }).aktif,
+  false,
+  'mapBatch syncPaused'
 );
 eq(
   mapPengajar('hits-regular', { pengajar: 'Abdul Hakim', phone: '81331732974', genders: [1] }),

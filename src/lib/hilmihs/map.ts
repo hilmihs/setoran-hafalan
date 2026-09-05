@@ -26,7 +26,16 @@ export function pengajarId(waNormal: string | null, slug: string, nama: string):
 }
 
 export function mapBatch(p: SrcProgram): MirrorBatch {
-  return { id: p.slug, nama: p.name, aktif: !p.syncPaused };
+  return {
+    id: p.slug,
+    nama: p.name,
+    aktif: !p.syncPaused,
+    // Program berangkatan tunggal (batch null) jadi family beranggota satu, supaya
+    // sisi pembaca tak perlu cabang khusus.
+    family: p.batch?.family ?? p.slug,
+    batch_label: p.batch?.label ?? null,
+    batch_order: p.batch?.order ?? null,
+  };
 }
 
 export function mapPengajar(slug: string, r: SrcPengajar): MirrorPengajar {
