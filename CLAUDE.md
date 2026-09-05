@@ -16,7 +16,9 @@ match it when naming things and writing UI/comments.
 ```bash
 npm run dev          # Next dev server (localhost:3000)
 npm run build        # next build + postbuild (copies static/public into .next/standalone)
-npm run lint         # eslint (next lint)
+npm run lint         # BROKEN — no eslint config in the repo, so `next lint` drops
+                     # into an interactive setup wizard and hangs. Never put it in
+                     # a verification step; `npm run typecheck` is the real gate.
 npm run typecheck    # tsc --noEmit — run this after any TS change; there is no test runner
 npm run apply-migration   # apply supabase/migrations/*.sql to the DB in DATABASE_URL
 ```

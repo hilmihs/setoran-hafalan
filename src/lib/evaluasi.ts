@@ -307,10 +307,19 @@ export function buildTrackGeometry(history: (number | null)[]): TrackGeometry {
  * Nama program tanpa embel-embel angkatan, untuk label dropdown penyaring.
  * "HITS Reguler (Batch April 2026)" → "HITS Reguler".
  *
+ * INI HANYA MERANGKAI LABEL, BUKAN PENGELOMPOKAN. Yang mengelompokkan program
+ * adalah `eval_batch.family` — dimirror langsung dari `SrcProgram.batch.family`
+ * di sumber, jadi sumberlah yang memutuskan angkatan mana milik program mana.
+ * Fungsi ini cuma memberi nama pada kelompok yang sudah terbentuk itu. Jangan
+ * memakainya sebagai kunci pengelompokan: dua program berbeda yang kebetulan
+ * bernama sama akan melebur tanpa suara.
+ *
  * Polanya sengaja khusus "(Batch …)" di ujung, bukan sembarang kurung: nama
  * seperti "Tahsin Al-Fatihah Mustahik (LAZ)" dan "HKM — Presensi (Halaqah
  * Keluarga Muhajir)" harus lolos utuh, kalau tidak program yang berbeda bisa
  * bertabrakan jadi satu label.
+ *
+ * `/i` dipasang untuk jaga-jaga; seluruh data nyata memakai "Batch" berkapital.
  */
 export function namaProgram(namaBatch: string): string {
   return namaBatch.replace(/\s*\(Batch\s+[^)]*\)\s*$/i, '').trim();

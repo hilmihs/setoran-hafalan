@@ -45,8 +45,17 @@ async function fetchSnapshot(): Promise<{
   return { generatedAt: meta.generatedAt, batch, pengajar: [...pengajarMap.values()], halaqah, peserta };
 }
 
+/**
+ * Baca mirror sekarang. Error DIANGKAT, tidak ditelan: shim tak pernah reject,
+ * jadi kueri gagal (mis. kolom belum ada karena migrasi belum jalan) tadinya
+ * cuma menghasilkan data null → mirror terbaca kosong → diff menstage SELURUH
+ * baris sebagai 'create', sementara runPull tetap melapor status 'ok'.
+ * Koordinator lalu melihat layar penuh create palsu tanpa tanda ada yang salah.
+ * Dengan throw, runPull menangkapnya dan mencatat status 'error'.
+ */
 async function currentMirror<T>(table: string, cols: string): Promise<T[]> {
-  const { data } = await supabaseAdmin.from(table).select(cols);
+  const { data, error } = await supabaseAdmin.from(table).select(cols);
+  if (error) throw new Error(`baca mirror ${table} gagal: ${error.message}`);
   return (data ?? []) as T[];
 }
 
@@ -81,7 +90,7 @@ export async function runPull(): Promise<{ runId: string; total: number; counts:
 
   try {
     const snap = await fetchSnapshot();
-    const curBatch = await currentMirror<MirrorBatch & { aktif: boolean }>(
+    const curBatch = await currentMirror<MirrorBatch>(
       'eval_batch', 'id, nama, aktif, family, batch_label, batch_order'
     );
     const curPeng = await currentMirror('eval_pengajar', 'id, nama, gender, whatsapp');

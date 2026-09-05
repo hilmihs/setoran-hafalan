@@ -46,6 +46,59 @@ eq(
   false,
   'mapBatch syncPaused'
 );
+// family kosong dari sumber harus jatuh ke slug, bukan tersimpan sebagai "" —
+// kolomnya NOT NULL, jadi "" lolos dan semua program bermasalah melebur jadi
+// satu family kosong.
+eq(
+  mapBatch({
+    slug: 'aneh', name: 'Aneh', dataSourceType: 'tilawah_api', syncPaused: false,
+    batch: { family: '', label: 'X', order: 1 },
+  }).family,
+  'aneh',
+  'mapBatch family kosong jatuh ke slug'
+);
+// order 0 sah dan tak boleh berubah jadi null.
+eq(
+  mapBatch({
+    slug: 'nol', name: 'Nol', dataSourceType: 'tilawah_api', syncPaused: false,
+    batch: { family: 'nol', label: 'Angkatan 0', order: 0 },
+  }).batch_order,
+  0,
+  'mapBatch order 0 dipertahankan'
+);
+
+// COMPARE.batch dan kolom yang dibaca currentMirror harus sepadan. Kalau salah
+// satu kolom dihapus dari select-nya, mirror terbaca undefined, diff menstage
+// update yang sama di SETIAP pull, dan tak ada yang meledak — cuma antrean
+// approve yang tak pernah habis. Assertion ini yang menahannya.
+const COMPARE_BATCH = ['nama', 'aktif', 'family', 'batch_label', 'batch_order'];
+/** MirrorBatch itu interface, jadi tak punya index signature implisit yang
+ *  diminta `Row` di diff.ts. Salin ke bentuk lepas supaya bisa diumpankan. */
+const baris = (b: object) => ({ ...b }) as Record<string, unknown> & { id: string };
+
+const dpqFetched = baris(
+  mapBatch({ slug: 'dpq', name: 'DPQ', dataSourceType: 'tilawah_api', syncPaused: false, batch: null })
+);
+eq(
+  diffEntity('batch', [dpqFetched], [{ ...dpqFetched }], COMPARE_BATCH).length,
+  0,
+  'diff batch: mirror sepadan → tak ada update'
+);
+// Mirror yang belum punya kolom baru (kolom belum ada / select kurang) HARUS
+// terbaca sebagai perubahan, bukan diam-diam sama.
+eq(
+  diffEntity(
+    'batch',
+    [baris(mapBatch({
+      slug: 'hits-safar', name: 'HITS Safar', dataSourceType: 'tilawah_api', syncPaused: false,
+      batch: { family: 'hits-safar', label: 'Juli 2026', order: 2 },
+    }))],
+    [{ id: 'hits-safar', nama: 'HITS Safar', aktif: true }],
+    COMPARE_BATCH
+  ).map((d) => d.op),
+  ['update'],
+  'diff batch: mirror tanpa kolom baru → update'
+);
 eq(
   mapPengajar('hits-regular', { pengajar: 'Abdul Hakim', phone: '81331732974', genders: [1] }),
   { id: 'wa:6281331732974', nama: 'Abdul Hakim', gender: 'ikhwan', whatsapp: '6281331732974' },

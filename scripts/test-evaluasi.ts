@@ -278,6 +278,16 @@ eq(namaProgram('DPQ'), 'DPQ', 'nama tanpa kurung');
 eq(namaProgram('  HITS Safar  '), 'HITS Safar', 'spasi tepi dirapikan');
 // Suffix hanya dibuang di ujung, bukan di tengah.
 eq(namaProgram('Kelas (Batch A) Lanjutan'), 'Kelas (Batch A) Lanjutan', 'suffix di tengah dibiarkan');
+// Nama berapostrof harus lewat utuh (regex tak menyentuhnya).
+eq(namaProgram("HKM (Halaqah Al-Qur'an)"), "HKM (Halaqah Al-Qur'an)", 'nama berapostrof dibiarkan');
+// Dua anggota family hits-safar: yang polos dan yang bersuffix harus menghasilkan
+// label yang SAMA, karena sumber memang menaruh keduanya di family 'hits-safar'.
+// Kalau ini pecah, dropdown menampilkan HITS Safar dua kali.
+eq(
+  namaProgram('HITS Safar (Batch Januari 2026)'),
+  namaProgram('HITS Safar'),
+  'dua angkatan HITS Safar → satu label'
+);
 
 if (failed) { console.error(`\n${failed} FAILED`); process.exit(1); }
 console.log('\nAll evaluasi tests passed.');
