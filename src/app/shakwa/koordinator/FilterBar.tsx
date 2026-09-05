@@ -55,13 +55,6 @@ export function FilterBar({
       href: mergeQuery(current, { status: null }),
     });
   }
-  if (current.gender) {
-    chips.push({
-      key: 'gender',
-      text: `Gender: ${current.gender === 'ikhwan' ? 'Ikhwan' : 'Akhwat'}`,
-      href: mergeQuery(current, { gender: null }),
-    });
-  }
   if (current.dari || current.sampai) {
     chips.push({
       key: 'tanggal',
@@ -177,16 +170,8 @@ export function FilterBar({
             <option value="resolved">Selesai</option>
           </select>
         </div>
-        <div>
-          <label className="t-tiny" htmlFor="f-gender" style={{ display: 'block', color: 'var(--muted-2)' }}>
-            Gender
-          </label>
-          <select id="f-gender" name="gender" defaultValue={current.gender ?? ''} className="input" style={{ height: 32 }}>
-            <option value="">Semua</option>
-            <option value="ikhwan">Ikhwan</option>
-            <option value="akhwat">Akhwat</option>
-          </select>
-        </div>
+        {/* Dropdown gender dibuang: halaman kini terkunci ke gender koordinator,
+            jadi kendali ini hanya akan berbohong — dipilih, tak berpengaruh. */}
         <button type="submit" className="btn btn-sm btn-primary" style={{ height: 32 }}>
           Terapkan
         </button>
