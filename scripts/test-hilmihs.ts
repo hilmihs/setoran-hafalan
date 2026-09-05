@@ -174,5 +174,54 @@ eq(diffEntity('halaqah', [], [{ id: 'manual:x', aktif: true }], ['nama']).map((x
    ['deactivate'],
    'pengecualian manual tak bocor ke entitas lain');
 
+// ── kolom terkurasi lokal (0074) ──
+// Pengajar boleh membetulkan nama peserta/halaqah dan level halaqah. Kolom yang
+// disunting itu ditandai di `kurasi`, dan sync tak boleh lagi menganggapnya
+// beda — kalau ikut, tiap pull menstage usulan yang sama dan sekali di-approve
+// pembetulannya hilang.
+const fetchedPes = [{ id: 'hits-regular-jan:769', nama: 'Haqqi Ramadhan', halaqah_id: 'h1' }];
+eq(
+  diffEntity(
+    'peserta',
+    fetchedPes,
+    [{ id: 'hits-regular-jan:769', nama: 'Haqi', halaqah_id: 'h1', aktif: true, kurasi: ['nama'] }],
+    ['nama', 'halaqah_id']
+  ).length,
+  0,
+  'kolom nama terkurasi tak memicu update'
+);
+eq(
+  diffEntity(
+    'peserta',
+    fetchedPes,
+    [{ id: 'hits-regular-jan:769', nama: 'Haqi', halaqah_id: 'h1', aktif: true, kurasi: [] }],
+    ['nama', 'halaqah_id']
+  ).map((x) => x.op),
+  ['update'],
+  'tanpa tanda kurasi, nama beda tetap update'
+);
+// Kurasi hanya menutup kolom yang ditandai — perubahan sah dari hulu pada kolom
+// lain harus tetap lewat.
+eq(
+  diffEntity(
+    'peserta',
+    [{ id: 'p1', nama: 'Haqqi Ramadhan', halaqah_id: 'h2' }],
+    [{ id: 'p1', nama: 'Haqi', halaqah_id: 'h1', aktif: true, kurasi: ['nama'] }],
+    ['nama', 'halaqah_id']
+  ).map((x) => x.op),
+  ['update'],
+  'kolom lain tetap memicu update walau ada kurasi'
+);
+eq(
+  diffEntity(
+    'halaqah',
+    [{ id: 'h1', nama: 'HITS 49 IKHWAN 0747', level: 'HITS Dasar' }],
+    [{ id: 'h1', nama: 'HITS 49 Ikhwan 0747', level: 'HITS Lanjutan', kurasi: ['nama', 'level'] }],
+    ['nama', 'level']
+  ).length,
+  0,
+  'nama & level halaqah terkurasi tak memicu update'
+);
+
 if (failed) { console.error(`\n${failed} FAILED`); process.exit(1); }
 console.log('\nAll hilmihs tests passed.');

@@ -94,8 +94,10 @@ export async function runPull(): Promise<{ runId: string; total: number; counts:
       'eval_batch', 'id, nama, aktif, family, batch_label, batch_order'
     );
     const curPeng = await currentMirror('eval_pengajar', 'id, nama, gender, whatsapp');
-    const curHal = await currentMirror('eval_halaqah', 'id, nama, gender, level, pengajar_id, batch_id, ambang_ujian');
-    const curPes = await currentMirror('eval_peserta', 'id, nama, gender, halaqah_id, urutan, aktif');
+    // `kurasi` ikut dibaca: kolom yang sudah disunting pengajar dikecualikan
+    // dari pembandingan (lihat diff.ts + src/lib/evaluasi-kurasi.ts).
+    const curHal = await currentMirror('eval_halaqah', 'id, nama, gender, level, pengajar_id, batch_id, ambang_ujian, kurasi');
+    const curPes = await currentMirror('eval_peserta', 'id, nama, gender, halaqah_id, urutan, aktif, kurasi');
 
     let diffs: DiffRow[] = [
       ...diffEntity('batch', snap.batch as never, curBatch as never, COMPARE.batch),

@@ -8,14 +8,19 @@ import {
   isPesertaManual,
   URUTAN_MANUAL_DASAR,
 } from '@/lib/evaluasi-peserta';
+import { tandaiKurasi } from '@/lib/evaluasi-kurasi';
 
 export const runtime = 'nodejs';
 
 /**
- * Tambah peserta baru ke halaqah, atau betulkan nama peserta yang sebelumnya
- * ditambahkan sendiri. Hanya baris `manual:` yang boleh diganti namanya —
- * nama peserta hilmihs datang dari hulu dan akan dikembalikan sinkron
- * berikutnya, jadi mengizinkannya cuma menipu pengajar.
+ * Tambah peserta baru ke halaqah, atau betulkan namanya — termasuk peserta yang
+ * datang dari hilmihs.
+ *
+ * Nama peserta pusat dulu ditolak di sini karena sync berikutnya pasti
+ * mengembalikannya. Sekarang kolom `nama` baris itu ditandai terkurasi
+ * (migrasi 0074) sehingga sync tak lagi menyentuhnya — lihat
+ * src/lib/evaluasi-kurasi.ts. Data di hulu TIDAK ikut berubah; pembetulan di
+ * sini hanya berlaku untuk modul Evaluasi.
  */
 export async function POST(req: NextRequest) {
   try {
@@ -78,12 +83,6 @@ export async function POST(req: NextRequest) {
     }
 
     if (mengubah) {
-      if (!isPesertaManual(pesertaId)) {
-        return NextResponse.json(
-          { error: 'Peserta ini datang dari data pusat, namanya tak bisa diubah di sini.' },
-          { status: 403 }
-        );
-      }
       const milikHalaqah = daftar.some((p) => p.id === pesertaId);
       if (!milikHalaqah) {
         return NextResponse.json({ error: 'Peserta tidak ada di halaqah ini' }, { status: 404 });
@@ -94,6 +93,11 @@ export async function POST(req: NextRequest) {
         .eq('id', pesertaId);
       if (error) {
         return NextResponse.json({ error: error.message }, { status: 500 });
+      }
+      // Baris manual tak pernah ikut diff hilmihs, jadi penandanya cuma perlu
+      // untuk baris pusat. Ditandai setelah update berhasil.
+      if (!isPesertaManual(pesertaId)) {
+        await tandaiKurasi('eval_peserta', pesertaId, ['nama']);
       }
       return NextResponse.json({ ok: true, peserta_id: pesertaId, nama });
     }

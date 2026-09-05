@@ -719,6 +719,8 @@ export interface EvalHalaqah {
   pengajar_id: string | null;
   batch_id: string | null;
   ambang_ujian: number;
+  /** Kolom yang sudah disunting lokal — kebal sync hilmihs (0074). */
+  kurasi: string[];
   synced_at: string;
 }
 
@@ -730,6 +732,8 @@ export interface EvalPeserta {
   is_ketua: boolean;
   aktif: boolean;
   urutan: number;
+  /** Kolom yang sudah disunting lokal — kebal sync hilmihs (0074). */
+  kurasi: string[];
   synced_at: string;
 }
 

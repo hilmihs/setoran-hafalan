@@ -147,7 +147,8 @@ export function KelolaPeserta({ halaqahId, halaqahNama, peserta, coba, back }: P
           </button>
         </div>
         <div style={{ fontSize: 11, color: '#a8a39a', marginTop: 6 }}>
-          Peserta yang Anda tambahkan sendiri bisa diubah namanya atau dihapus. Peserta dari data pusat tidak.
+          Nama semua peserta bisa dibetulkan di sini. Pembetulan hanya berlaku untuk modul Evaluasi —
+          data di pusat tidak ikut berubah.
         </div>
       </div>
 
@@ -200,14 +201,21 @@ export function KelolaPeserta({ halaqahId, halaqahNama, peserta, coba, back }: P
                   ) : sedangHapus ? (
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                       <div style={{ flex: 1, minWidth: 0, fontSize: 12, color: 'oklch(0.46 0.14 25)' }}>
-                        Hapus <strong>{p.nama}</strong> beserta nilainya?
+                        {manual ? (
+                          <>Hapus <strong>{p.nama}</strong> beserta nilainya?</>
+                        ) : (
+                          <>
+                            Keluarkan <strong>{p.nama}</strong> dari halaqah ini? Nilainya tetap
+                            tersimpan, dan data di pusat tidak ikut berubah.
+                          </>
+                        )}
                       </div>
                       <button
                         onClick={() => hapus(p.id)}
                         disabled={adaProses}
                         style={{ flexShrink: 0, height: 34, padding: '0 12px', borderRadius: 8, border: 'none', background: 'oklch(0.55 0.16 25)', color: '#ffffff', font: 'inherit', fontSize: 12, fontWeight: 600, cursor: 'pointer', opacity: adaProses ? 0.5 : 1 }}
                       >
-                        {sibuk?.jenis === 'hapus' ? '…' : 'Hapus'}
+                        {sibuk?.jenis === 'hapus' ? '…' : manual ? 'Hapus' : 'Keluarkan'}
                       </button>
                       <button
                         onClick={() => setKonfirmasiHapus(null)}
@@ -224,7 +232,7 @@ export function KelolaPeserta({ halaqahId, halaqahNama, peserta, coba, back }: P
                           <div style={{ fontSize: 10, color: '#a8a39a', marginTop: 1 }}>ditambahkan sendiri</div>
                         )}
                       </div>
-                      {manual && !coba && (
+                      {!coba && (
                         <>
                           <button
                             onClick={() => { setUbahId(p.id); setUbahNama(p.nama); setKonfirmasiHapus(null); }}
@@ -236,7 +244,7 @@ export function KelolaPeserta({ halaqahId, halaqahNama, peserta, coba, back }: P
                             onClick={() => { setKonfirmasiHapus(p.id); setUbahId(null); }}
                             style={{ flexShrink: 0, height: 30, padding: '0 10px', borderRadius: 7, border: '1px solid oklch(0.85 0.08 25)', background: '#ffffff', font: 'inherit', fontSize: 11, fontWeight: 600, color: 'oklch(0.46 0.14 25)', cursor: 'pointer' }}
                           >
-                            Hapus
+                            {manual ? 'Hapus' : 'Keluarkan'}
                           </button>
                         </>
                       )}
