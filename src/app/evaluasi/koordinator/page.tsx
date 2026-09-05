@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { requireOneOfRoles } from '@/lib/session';
 import { AMBANG } from '@/lib/evaluasi';
 import { bacaFilter, muatDashboard } from '@/lib/evaluasi-dashboard';
+import { buildWaMeUrl, tplReminderPengajarIsiNilaiEvaluasi } from '@/lib/whatsapp';
 import { PrintButton } from '@/components/PrintButton';
 import { QueryNavSelect } from '@/components/QueryNavSelect';
 
@@ -288,9 +289,26 @@ export default async function KoordinatorEvaluasiPage({
                           </td>
                           <td style={{ color: 'var(--muted)' }}>{h.lahnTop}</td>
                           <td style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
-                            {showIngatkan && (
-                              <button
-                                type="button"
+                            {/* Dulu <button> tanpa handler di server component —
+                                terlihat bisa ditekan tapi tak melakukan apa pun.
+                                Kini tautan wa.me berisi pesan siap kirim; pengajar
+                                tanpa WA tercatat tak menampilkan tautan sama sekali,
+                                daripada menawarkan tautan yang buntu. */}
+                            {showIngatkan && h.pengajarWa && (
+                              <a
+                                href={buildWaMeUrl(
+                                  h.pengajarWa,
+                                  tplReminderPengajarIsiNilaiEvaluasi({
+                                    pengajarName: h.pengajar,
+                                    pengajarGender: h.gender,
+                                    namaHalaqah: h.nama,
+                                    periodeLabel: d.namaPeriode,
+                                    selesai: h.selesai,
+                                    total: h.total,
+                                  })
+                                )}
+                                target="_blank"
+                                rel="noopener noreferrer"
                                 className="no-print"
                                 style={{
                                   display: 'inline-flex', alignItems: 'center', gap: 6,
@@ -298,10 +316,11 @@ export default async function KoordinatorEvaluasiPage({
                                   fontSize: 12, fontWeight: 600, border: 'none',
                                   background: 'oklch(0.70 0.13 75)', color: '#fff',
                                   cursor: 'pointer', marginRight: 6,
+                                  textDecoration: 'none',
                                 }}
                               >
                                 Ingatkan
-                              </button>
+                              </a>
                             )}
                             {/* Halaman detail masih mengunci gender dan akan 404
                                 untuk halaqah gender lain. Rekap lintas-gender di

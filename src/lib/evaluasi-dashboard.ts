@@ -57,6 +57,8 @@ export interface BarisHalaqah {
   /** "Ikhwan · HITS Reguler Juni 2026 · M1" */
   sub: string;
   pengajar: string;
+  /** Untuk tautan "Ingatkan". null = pengajar tak punya WA tercatat. */
+  pengajarWa: string | null;
   total: number;
   selesai: number;
   rata: number | null;
@@ -292,10 +294,13 @@ export async function muatDashboard(f: FilterDashboard): Promise<HasilDashboard>
   );
   const { data: pengajarRaw } = await supabaseAdmin
     .from('eval_pengajar')
-    .select('id, nama')
+    .select('id, nama, whatsapp')
     .in('id', pengajarIds.length ? pengajarIds : NO_ID);
   const pengajarName = new Map(
     (pengajarRaw ?? []).map((p) => [p.id as string, p.nama as string])
+  );
+  const pengajarWa = new Map(
+    (pengajarRaw ?? []).map((p) => [p.id as string, (p.whatsapp as string | null) ?? null])
   );
 
   const { data: pesertaRaw } = await supabaseAdmin
@@ -412,6 +417,7 @@ export async function muatDashboard(f: FilterDashboard): Promise<HasilDashboard>
       gender: h.gender,
       sub: [genderLabel, asal, levelText].filter(Boolean).join(' · '),
       pengajar: (h.pengajar_id && pengajarName.get(h.pengajar_id)) || '—',
+      pengajarWa: (h.pengajar_id && pengajarWa.get(h.pengajar_id)) || null,
       total,
       selesai,
       rata: a && a.selesai > 0 ? Math.round(a.skorSum / a.selesai) : null,

@@ -1000,3 +1000,30 @@ export function tplReminderPengajarIsiData(args: {
     `Jazakumullahu khairan.`,
   ].join('\n');
 }
+
+/**
+ * Ingatkan pengajar melengkapi penilaian Evaluasi Halaqah. Dipakai tombol
+ * "Ingatkan" di dashboard koordinator evaluasi — tombol itu sebelumnya mati
+ * (tak ada handler), jadi koordinator harus mengetik pesannya sendiri.
+ */
+export function tplReminderPengajarIsiNilaiEvaluasi(args: {
+  pengajarName: string;
+  pengajarGender: Gender;
+  namaHalaqah: string;
+  periodeLabel: string;
+  selesai: number;
+  total: number;
+}): string {
+  const sapaan = salutation(args.pengajarGender);
+  const sisa = Math.max(0, args.total - args.selesai);
+  return [
+    `Assalamu'alaikum ${sapaan} ${args.pengajarName},`,
+    ``,
+    `Penilaian *${args.periodeLabel}* untuk halaqah *${args.namaHalaqah}* belum lengkap.`,
+    `Baru ${args.selesai} dari ${args.total} peserta yang dinilai — tersisa ${sisa}.`,
+    ``,
+    `Mohon dilengkapi, atau kabari kami bila ada kendala.`,
+    ``,
+    `Jazakumullahu khairan.`,
+  ].join('\n');
+}
