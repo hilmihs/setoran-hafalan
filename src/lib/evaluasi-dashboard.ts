@@ -1,0 +1,406 @@
+// Data untuk Dashboard Evaluasi koordinator: opsi penyaring, agregat per grup
+// (program × batch × gender), dan baris per-halaqah. Halaman hanya merender.
+//
+// Sesi yang dihitung tetap jenis 'qn' dengan nomor_sesi terbesar per halaqah —
+// "sesi berjalan", sama seperti sebelum penyaring ada.
+import { supabaseAdmin } from '@/lib/supabase-admin';
+import { ALL_LAHN, AMBANG, columnsToCounts, namaProgram } from '@/lib/evaluasi';
+import type { Gender } from '@/types/db';
+
+export type GenderFilter = Gender | 'semua';
+
+export interface FilterDashboard {
+  /** Slug family program. Kosong = semua program. */
+  program: string;
+  /** Slug batch. Kosong = semua batch. */
+  batch: string;
+  gender: GenderFilter;
+}
+
+/** Baris eval_batch sebatas yang dipakai penyaring. */
+export interface BarisBatch {
+  id: string;
+  nama: string;
+  family: string;
+  batch_label: string | null;
+  batch_order: number | null;
+}
+
+export interface OpsiPilih {
+  value: string;
+  label: string;
+}
+
+export interface GrupDashboard {
+  programId: string;
+  programNama: string;
+  batchId: string | null;
+  batchLabel: string | null;
+  batchOrder: number | null;
+  gender: Gender;
+  halaqah: number;
+  total: number;
+  selesai: number;
+  rata: number | null;
+  bermasalah: number;
+}
+
+export interface BarisHalaqah {
+  id: string;
+  nama: string;
+  /** "Ikhwan · HITS Reguler Juni 2026 · M1" */
+  sub: string;
+  pengajar: string;
+  total: number;
+  selesai: number;
+  rata: number | null;
+  bermasalah: number;
+  lahnTop: string;
+}
+
+export interface TotalDashboard {
+  halaqah: number;
+  peserta: number;
+  selesai: number;
+  rata: number | null;
+  bermasalah: number;
+}
+
+export interface HasilDashboard {
+  opsiProgram: OpsiPilih[];
+  /** Kosong bila tak ada program terpilih atau program itu berangkatan tunggal. */
+  opsiBatch: OpsiPilih[];
+  /** Nilai batch yang benar-benar dipakai — '' bila query-string sudah basi. */
+  batchTerpilih: string;
+  grup: GrupDashboard[];
+  halaqah: BarisHalaqah[];
+  total: TotalDashboard;
+  namaPeriode: string;
+  /** false = mirror memang kosong; true tapi halaqah kosong = penyaringnya. */
+  adaHalaqahSamaSekali: boolean;
+}
+
+// ── Fungsi murni (diuji di scripts/test-evaluasi-dashboard.ts) ──
+
+/** Urutan anggota family: batch_order menaik, null paling depan, lalu id. */
+function urutAnggota(a: BarisBatch, b: BarisBatch): number {
+  const oa = a.batch_order ?? -1;
+  const ob = b.batch_order ?? -1;
+  return oa !== ob ? oa - ob : a.id.localeCompare(b.id);
+}
+
+/**
+ * Satu opsi per family. Labelnya diambil dari anggota ber-batch_order terkecil
+ * supaya deterministik ketika antar-angkatan ejaannya berbeda ("HITS Safar" vs
+ * "HITS Safar (Batch Januari 2026)").
+ */
+export function susunOpsiProgram(batches: BarisBatch[]): OpsiPilih[] {
+  const perFamily = new Map<string, BarisBatch[]>();
+  for (const b of batches) {
+    const arr = perFamily.get(b.family);
+    if (arr) arr.push(b);
+    else perFamily.set(b.family, [b]);
+  }
+  return Array.from(perFamily.entries())
+    .map(([family, anggota]) => ({
+      value: family,
+      label: namaProgram([...anggota].sort(urutAnggota)[0].nama),
+    }))
+    .sort((a, b) => a.label.localeCompare(b.label, 'id'));
+}
+
+/** Batch milik satu program. Kosong bila program itu hanya punya satu angkatan. */
+export function susunOpsiBatch(batches: BarisBatch[], family: string): OpsiPilih[] {
+  if (!family) return [];
+  const anggota = batches.filter((b) => b.family === family);
+  if (anggota.length < 2) return [];
+  return [...anggota].sort(urutAnggota).map((b) => ({
+    value: b.id,
+    label: b.batch_label ?? namaProgram(b.nama),
+  }));
+}
+
+/**
+ * Batch yang benar-benar dipakai. Query-string yang tertinggal dari program
+ * sebelumnya dibuang, supaya hasilnya bukan halaman kosong tanpa sebab.
+ */
+export function batchTerpakai(batches: BarisBatch[], program: string, batch: string): string {
+  if (!batch) return '';
+  const cakupan = program ? batches.filter((b) => b.family === program) : batches;
+  return cakupan.some((b) => b.id === batch) ? batch : '';
+}
+
+/** batch_id yang lolos penyaring. null = tak ada pembatasan sama sekali. */
+export function idBatchLolos(batches: BarisBatch[], program: string, batch: string): string[] | null {
+  const dipakai = batchTerpakai(batches, program, batch);
+  if (dipakai) return [dipakai];
+  if (!program) return null;
+  return batches.filter((b) => b.family === program).map((b) => b.id);
+}
+
+/** Urut baris ringkasan: nama program → batch_order → ikhwan sebelum akhwat. */
+export function urutkanGrup(grup: GrupDashboard[]): GrupDashboard[] {
+  return [...grup].sort((a, b) => {
+    const p = a.programNama.localeCompare(b.programNama, 'id');
+    if (p !== 0) return p;
+    const oa = a.batchOrder ?? -1;
+    const ob = b.batchOrder ?? -1;
+    if (oa !== ob) return oa - ob;
+    if (a.gender !== b.gender) return a.gender === 'ikhwan' ? -1 : 1;
+    return 0;
+  });
+}
+
+/**
+ * Nama track untuk label periode. eval_config menyimpannya per gender, jadi saat
+ * kedua gender ditampilkan bersama nama itu hanya dipakai bila keduanya sepakat —
+ * kalau tidak, label netral, bukan nama salah satu gender yang menyesatkan.
+ */
+export function pilihNamaTrack(
+  configs: Array<{ gender: string; nama_qn: string }>,
+  gender: GenderFilter
+): string {
+  if (gender !== 'semua') {
+    return configs.find((c) => c.gender === gender)?.nama_qn ?? 'Evaluasi QN';
+  }
+  const nama = Array.from(new Set(configs.map((c) => c.nama_qn)));
+  if (nama.length === 1) return nama[0];
+  if (nama.length === 0) return 'Evaluasi QN';
+  return 'Evaluasi';
+}
+
+/** Baca penyaring dari query-string. Gender default = gender pemakai. */
+export function bacaFilter(
+  sp: { program?: string; batch?: string; gender?: string },
+  genderPemakai: Gender
+): FilterDashboard {
+  const g = sp.gender;
+  return {
+    program: sp.program ?? '',
+    batch: sp.batch ?? '',
+    gender: g === 'ikhwan' || g === 'akhwat' || g === 'semua' ? g : genderPemakai,
+  };
+}
+
+function labelBulan(): string {
+  return new Date().toLocaleDateString('id-ID', {
+    month: 'long',
+    year: 'numeric',
+    timeZone: 'Asia/Jakarta',
+  });
+}
+
+// ── Pemuat ──
+
+interface SesiRow { id: string; halaqah_id: string; nomor_sesi: number }
+interface NilaiRow extends Record<string, unknown> {
+  sesi_id: string;
+  peserta_id: string;
+  skor: number;
+  done: boolean;
+}
+interface Agg {
+  selesai: number;
+  skorSum: number;
+  bermasalah: number;
+  lahn: number[];
+}
+
+const NO_ID = ['00000000-0000-0000-0000-000000000000'];
+
+export async function muatDashboard(f: FilterDashboard): Promise<HasilDashboard> {
+  const { data: batchRaw } = await supabaseAdmin
+    .from('eval_batch')
+    .select('id, nama, family, batch_label, batch_order');
+  const batches = (batchRaw ?? []) as BarisBatch[];
+
+  const opsiProgram = susunOpsiProgram(batches);
+  const batchTerpilih = batchTerpakai(batches, f.program, f.batch);
+  const opsiBatch = susunOpsiBatch(batches, f.program);
+  const idsLolos = idBatchLolos(batches, f.program, f.batch);
+  const batchById = new Map(batches.map((b) => [b.id, b]));
+  const namaFamily = new Map(opsiProgram.map((o) => [o.value, o.label]));
+
+  let qHalaqah = supabaseAdmin
+    .from('eval_halaqah')
+    .select('id, nama, gender, mustawa, level, pengajar_id, batch_id')
+    .order('nama');
+  if (f.gender !== 'semua') qHalaqah = qHalaqah.eq('gender', f.gender);
+  if (idsLolos) qHalaqah = qHalaqah.in('batch_id', idsLolos.length ? idsLolos : NO_ID);
+  const { data: halaqahRaw } = await qHalaqah;
+  const halaqahList = (halaqahRaw ?? []) as Array<{
+    id: string; nama: string; gender: Gender; mustawa: number | null;
+    level: string | null; pengajar_id: string | null; batch_id: string | null;
+  }>;
+
+  // Membedakan "mirror memang kosong" dari "penyaringnya terlalu sempit".
+  let adaHalaqahSamaSekali = halaqahList.length > 0;
+  if (!adaHalaqahSamaSekali) {
+    const { data: adaRaw } = await supabaseAdmin.from('eval_halaqah').select('id').limit(1);
+    adaHalaqahSamaSekali = (adaRaw ?? []).length > 0;
+  }
+
+  const halaqahIds = halaqahList.map((h) => h.id);
+
+  const { data: configRaw } = await supabaseAdmin.from('eval_config').select('gender, nama_qn');
+  const namaTrack = pilihNamaTrack(
+    (configRaw ?? []) as Array<{ gender: string; nama_qn: string }>,
+    f.gender
+  );
+
+  const pengajarIds = Array.from(
+    new Set(halaqahList.map((h) => h.pengajar_id).filter((x): x is string => !!x))
+  );
+  const { data: pengajarRaw } = await supabaseAdmin
+    .from('eval_pengajar')
+    .select('id, nama')
+    .in('id', pengajarIds.length ? pengajarIds : NO_ID);
+  const pengajarName = new Map(
+    (pengajarRaw ?? []).map((p) => [p.id as string, p.nama as string])
+  );
+
+  const { data: pesertaRaw } = await supabaseAdmin
+    .from('eval_peserta')
+    .select('id, halaqah_id')
+    .in('halaqah_id', halaqahIds.length ? halaqahIds : NO_ID)
+    .eq('aktif', true);
+  const pesertaCount = new Map<string, number>();
+  for (const p of pesertaRaw ?? []) {
+    const hid = p.halaqah_id as string;
+    pesertaCount.set(hid, (pesertaCount.get(hid) ?? 0) + 1);
+  }
+
+  const { data: sesiRaw } = await supabaseAdmin
+    .from('evaluasi_sesi')
+    .select('id, halaqah_id, nomor_sesi')
+    .in('halaqah_id', halaqahIds.length ? halaqahIds : NO_ID)
+    .eq('jenis', 'qn');
+  const sesiRows = (sesiRaw ?? []) as SesiRow[];
+  const currentSesiByHalaqah = new Map<string, SesiRow>();
+  for (const s of sesiRows) {
+    const prev = currentSesiByHalaqah.get(s.halaqah_id);
+    if (!prev || s.nomor_sesi > prev.nomor_sesi) currentSesiByHalaqah.set(s.halaqah_id, s);
+  }
+  const currentSesiIds = Array.from(currentSesiByHalaqah.values()).map((s) => s.id);
+  const sesiToHalaqah = new Map(
+    Array.from(currentSesiByHalaqah.entries()).map(([hid, s]) => [s.id, hid])
+  );
+  const maxSesiNo = sesiRows.reduce((a, s) => Math.max(a, s.nomor_sesi), 0);
+
+  const { data: nilaiRaw } = await supabaseAdmin
+    .from('evaluasi_nilai')
+    .select(
+      'sesi_id, peserta_id, skor, done, ' +
+        'jk_huruf, jk_harakat, jk_mad, jk_tasydid, kh_izhar, kh_idgham_bighunnah, kh_idgham_bilaghunnah, kh_idgham_mimi, kh_iqlab, kh_ikhfa_hakiki, kh_ikhfa_syafawi'
+    )
+    .in('sesi_id', currentSesiIds.length ? currentSesiIds : NO_ID);
+  const nilaiRows = (nilaiRaw ?? []) as NilaiRow[];
+
+  const aggByHalaqah = new Map<string, Agg>();
+  for (const n of nilaiRows) {
+    if (!n.done) continue;
+    const hid = sesiToHalaqah.get(n.sesi_id);
+    if (!hid) continue;
+    let a = aggByHalaqah.get(hid);
+    if (!a) {
+      a = { selesai: 0, skorSum: 0, bermasalah: 0, lahn: new Array(ALL_LAHN.length).fill(0) };
+      aggByHalaqah.set(hid, a);
+    }
+    const agg = a;
+    const skor = Number(n.skor) || 0;
+    agg.selesai += 1;
+    agg.skorSum += skor;
+    if (skor < AMBANG) agg.bermasalah += 1;
+    const counts = columnsToCounts(n);
+    ALL_LAHN.forEach((d, i) => {
+      agg.lahn[i] += counts[d.key] || 0;
+    });
+  }
+
+  const topLahnLabel = (lahn: number[]): string => {
+    let best = -1;
+    let bestVal = 0;
+    lahn.forEach((v, i) => {
+      if (v > bestVal) { bestVal = v; best = i; }
+    });
+    return best >= 0 && bestVal > 0 ? ALL_LAHN[best].label : '—';
+  };
+
+  const grupMap = new Map<string, GrupDashboard>();
+  const halaqah: BarisHalaqah[] = halaqahList.map((h) => {
+    const total = pesertaCount.get(h.id) ?? 0;
+    const a = aggByHalaqah.get(h.id);
+    const selesai = a?.selesai ?? 0;
+    const bermasalah = a?.bermasalah ?? 0;
+    const b = h.batch_id ? batchById.get(h.batch_id) ?? null : null;
+    const programId = b?.family ?? '';
+    const programNama = (programId && namaFamily.get(programId)) || 'Tanpa program';
+    const genderLabel = h.gender === 'ikhwan' ? 'Ikhwan' : 'Akhwat';
+    const levelText = h.level ?? (h.mustawa != null ? `Mustawa ${h.mustawa}` : null);
+    const asal = b?.batch_label ? `${programNama} ${b.batch_label}` : programNama;
+
+    const kunci = `${h.batch_id ?? ''}|${h.gender}`;
+    let g = grupMap.get(kunci);
+    if (!g) {
+      g = {
+        programId, programNama,
+        batchId: h.batch_id, batchLabel: b?.batch_label ?? null,
+        batchOrder: b?.batch_order ?? null,
+        gender: h.gender,
+        halaqah: 0, total: 0, selesai: 0, rata: null, bermasalah: 0,
+      };
+      grupMap.set(kunci, g);
+    }
+    g.halaqah += 1;
+    g.total += total;
+    g.selesai += selesai;
+    g.bermasalah += bermasalah;
+    // rata dihitung ulang setelah semua halaqah terkumpul (lihat di bawah)
+    g.rata = (g.rata ?? 0) + (a?.skorSum ?? 0);
+
+    return {
+      id: h.id,
+      nama: h.nama,
+      sub: [genderLabel, asal, levelText].filter(Boolean).join(' · '),
+      pengajar: (h.pengajar_id && pengajarName.get(h.pengajar_id)) || '—',
+      total,
+      selesai,
+      rata: a && a.selesai > 0 ? Math.round(a.skorSum / a.selesai) : null,
+      bermasalah,
+      lahnTop: a ? topLahnLabel(a.lahn) : '—',
+    };
+  });
+
+  // g.rata sementara menampung jumlah skor; ubah jadi rata-rata sebenarnya.
+  for (const g of grupMap.values()) {
+    g.rata = g.selesai > 0 ? Math.round((g.rata ?? 0) / g.selesai) : null;
+  }
+
+  const totalPeserta = halaqah.reduce((a, r) => a + r.total, 0);
+  const totalSelesai = halaqah.reduce((a, r) => a + r.selesai, 0);
+  const totalBermasalah = halaqah.reduce((a, r) => a + r.bermasalah, 0);
+  const skorDone = nilaiRows.filter((n) => n.done).map((n) => Number(n.skor) || 0);
+  const rataAll = skorDone.length
+    ? Math.round(skorDone.reduce((a, b2) => a + b2, 0) / skorDone.length)
+    : null;
+
+  return {
+    opsiProgram,
+    opsiBatch,
+    batchTerpilih,
+    grup: urutkanGrup(Array.from(grupMap.values())),
+    halaqah,
+    total: {
+      halaqah: halaqahList.length,
+      peserta: totalPeserta,
+      selesai: totalSelesai,
+      rata: rataAll,
+      bermasalah: totalBermasalah,
+    },
+    namaPeriode:
+      maxSesiNo > 0
+        ? `${namaTrack} Sesi ${maxSesiNo} · ${labelBulan()}`
+        : `${namaTrack} · ${labelBulan()}`,
+    adaHalaqahSamaSekali,
+  };
+}
