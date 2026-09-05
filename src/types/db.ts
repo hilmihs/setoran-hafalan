@@ -693,6 +693,12 @@ export interface EvalBatch {
   /** Kolom kurasi (0058), tidak ikut ditimpa sinkron hilmihs.
    *  true = nilai akhir murni skor ujian + rapot Ujian QN/PB terpisah. */
   rapot_ujian_terpisah: boolean;
+  /** Slug program induk (0073). Program berangkatan tunggal → sama dengan `id`. */
+  family: string;
+  /** Label angkatan, mis. "April 2026". null untuk program berangkatan tunggal. */
+  batch_label: string | null;
+  /** Urutan angkatan dalam family, menaik. null untuk program berangkatan tunggal. */
+  batch_order: number | null;
   synced_at: string;
 }
 
