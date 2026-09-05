@@ -11,6 +11,7 @@ import {
 } from '@/lib/hits-koordinator-rekap';
 import { parseBatchId, parseKelasMode } from '@/lib/hits-halaqah-scope';
 import { HUTANG_RUMUS } from '@/lib/hits-ranking';
+import { TOLERANSI_KMT } from '@/lib/hits-pelanggaran-kategori';
 import { weekStartMonday } from '@/lib/week';
 import type { Gender } from '@/types/db';
 import { PrintButton } from '@/components/PrintButton';
@@ -71,6 +72,16 @@ export default async function CetakHitsKoordinatorPage({
   const r = await getHitsKoordinatorRekap({ mode, month, week, gender, batchId, kelas, filter });
   // Judul menyebut filter aktif — kertas hasil cetak gampang disangka daftar lengkap.
   const labelFilter = filterLabel(filter);
+  // Cakupan halaqah SELALU dieja, termasuk saat tak ada yang dipilih. `scopeLabel`
+  // sengaja null di layar (artinya "tak usah tampilkan chip"), tapi di kertas yang
+  // beredar lepas dari layarnya diamnya menyesatkan: pembaca tak bisa membedakan
+  // "semua kelas" dari "sudah disaring".
+  const cakupan = [
+    r.batchName ?? 'Semua batch',
+    kelas === 'offline' ? 'kelas offline saja'
+      : kelas === 'online' ? 'kelas online saja'
+      : 'kelas online + offline',
+  ].join(' · ');
 
   const kembali =
     `/hits/koordinator?mode=${mode}` +
@@ -104,9 +115,8 @@ export default async function CetakHitsKoordinatorPage({
       <h1 className="t-h2" style={{ marginBottom: 2 }}>Ranking Disiplin Pengajar</h1>
       <p className="t-small" style={{ color: 'var(--muted-2)', marginBottom: 14 }}>
         {mode === 'minggu' ? 'Mingguan' : 'Bulanan'} · {r.periodeLabel} · {r.genderLabel} ·{' '}
-        {r.scopeLabel ? `${r.scopeLabel} · ` : ''}
-        {r.ranked.length} pengajar berperingkat
-        {r.noData.length > 0 && `, ${r.noData.length} tanpa data`}
+        {cakupan} · {r.ranked.length} pengajar berperingkat
+        {r.noData.length > 0 && `, ${r.noData.length} tanpa sesi yang bisa dinilai`}
         {labelFilter && (
           <>
             {' '}· <strong>disaring: {labelFilter}</strong> (dari {r.counts.total} pengajar)
@@ -121,13 +131,13 @@ export default async function CetakHitsKoordinatorPage({
             <th>#</th>
             <th style={{ textAlign: 'left' }}>Pengajar</th>
             <th>Halaqah</th>
-            <th title="Persen pertemuan tepat jam — tanpa KMT (>5 menit) / KBLA">%On-Time</th>
+            <th title={`Persen pertemuan tepat jam — tanpa KMT (>${TOLERANSI_KMT} menit) / KBLA`}>%On-Time</th>
             <th title="Persen pertemuan sesuai jadwal — tanpa JKG / BADAL">%Stabil</th>
-            <th title="Kelas Mulai Terlambat">KMT</th>
-            <th title="Kelas Berakhir Lebih Awal">KBLA</th>
-            <th title="Jadwal Kelas Ganti">JKG</th>
-            <th title="Tidak memberikan latihan">TL</th>
-            <th title={HUTANG_RUMUS}>Hutang (mnt)</th>
+            <th title={`${JENIS_LABEL.KMT} — jumlah insiden`}>KMT</th>
+            <th title={`${JENIS_LABEL.KBLA} — jumlah insiden`}>KBLA</th>
+            <th title={`${JENIS_LABEL.JKG} — jumlah insiden`}>JKG</th>
+            <th title={`${JENIS_LABEL.TIDAK_LATIHAN} — jumlah insiden`}>TL</th>
+            <th title={`Kumulatif, bukan periode ini. ${HUTANG_RUMUS}`}>Hutang (mnt)<br />kumulatif</th>
           </tr>
         </thead>
         <tbody>
@@ -165,16 +175,36 @@ export default async function CetakHitsKoordinatorPage({
               <td>{p.pengajarNama}</td>
               <td style={{ textAlign: 'center' }}>{p.halaqahCount}</td>
               <td colSpan={7} className="t-tiny" style={{ color: 'var(--muted-2)' }}>
-                Belum ada data pertemuan pada periode ini
+                Tak ada pertemuan yang bisa dinilai — ketua kelas belum mengisi, atau
+                halaqahnya belum berjalan pada periode ini
               </td>
             </tr>
           ))}
         </tbody>
       </table>
-      {/* Kertas tak punya tooltip — rumus hutang dicetak sebagai catatan kaki. */}
-      <p className="t-tiny" style={{ color: 'var(--muted-2)', marginTop: 6 }}>
-        <strong>Hutang (mnt)</strong> = {HUTANG_RUMUS}
-      </p>
+      {/* Kertas tak punya tooltip — keterangan kolom dicetak sebagai catatan kaki. */}
+      <div className="t-tiny" style={{ color: 'var(--muted-2)', marginTop: 6, lineHeight: 1.5 }}>
+        <p style={{ margin: 0 }}>
+          <strong>%On-Time</strong> = pertemuan tanpa KMT (&gt;{TOLERANSI_KMT} menit) / KBLA,
+          dibagi pertemuan non-libur yang TIDAK dipindah hari maupun dibadalkan ·{' '}
+          <strong>%Stabil</strong> = pertemuan yang tidak dipindah/dibadalkan, dibagi semua
+          pertemuan non-libur.
+        </p>
+        <p style={{ margin: 0 }}>
+          <strong>KMT / KBLA / JKG / TL</strong> = jumlah insiden (satu pertemuan bisa lebih dari
+          satu insiden), bukan jumlah pertemuan.
+        </p>
+        <p style={{ margin: 0 }}>
+          <strong>Hutang (mnt)</strong> = KUMULATIF, bukan periode ini. {HUTANG_RUMUS}
+        </p>
+        {/* Pengecualian yang tak punya baris penanda di tabel — tanpa disebut di
+            sini, pengajar yang absen mudah disangka tak punya pelanggaran. */}
+        <p style={{ margin: 0 }}>
+          <strong>Cakupan</strong> = {cakupan}. Halaqah yang tidak aktif dan yang belum punya
+          pengajar tidak ikut dihitung. Online/offline ditentukan dari kata &quot;Offline&quot; di
+          kolom jadwal sheet HITS; halaqah yang kolom jadwalnya kosong dianggap online.
+        </p>
+      </div>
 
       {/* ── Rincian insiden ── */}
       <div className="blok" style={{ marginTop: 20 }}>

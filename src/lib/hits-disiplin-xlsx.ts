@@ -110,8 +110,18 @@ export async function buildHitsDisiplinWorkbook(rekap: HitsKoordinatorRekap) {
   wb.created = new Date();
 
   // Cakupan halaqah (batch / online-offline) ikut disebut — tanpa itu file yang
-  // sudah disaring gampang disangka daftar lengkap.
-  const sub = `${rekap.mode === 'minggu' ? 'Mingguan' : 'Bulanan'} · ${rekap.periodeLabel} · ${rekap.genderLabel}${rekap.scopeLabel ? ` · ${rekap.scopeLabel}` : ''} · ${rekap.ranked.length} pengajar berperingkat`;
+  // sudah disaring gampang disangka daftar lengkap. `scopeLabel` sengaja null
+  // saat tak ada yang dipilih (di layar artinya "tak usah tampilkan chip"), tapi
+  // di berkas yang beredar lepas dari layarnya diamnya itu justru menyesatkan:
+  // pembaca tak bisa membedakan "semua kelas" dari "sudah disaring". Jadi di
+  // sini cakupan SELALU dieja.
+  const cakupan = [
+    rekap.batchName ?? 'Semua batch',
+    rekap.kelas === 'offline' ? 'kelas offline saja'
+      : rekap.kelas === 'online' ? 'kelas online saja'
+      : 'kelas online + offline',
+  ].join(' · ');
+  const sub = `${rekap.mode === 'minggu' ? 'Mingguan' : 'Bulanan'} · ${rekap.periodeLabel} · ${rekap.genderLabel} · ${cakupan} · ${rekap.ranked.length} pengajar berperingkat`;
 
   // ── Sheet 1: Ranking ──────────────────────────────────────────────
   {
@@ -120,7 +130,10 @@ export async function buildHitsDisiplinWorkbook(rekap: HitsKoordinatorRekap) {
     });
     // %On-Time & %Stabil dipisah (rapat Agustus 2026) — dulu satu kolom %KBBS
     // yang meleburkan telat, durasi, pindah hari, dan badal jadi satu angka.
-    const KOLOM = ['#', 'Pengajar', 'Gender', 'Halaqah', '%On-Time', 'On-time', 'Dinilai on-time', '%Stabil', 'Non-libur', 'KMT', 'KBLA', 'JKG', 'TL', 'Hutang (menit)'];
+    // Nama kolom mengeja pembilang & penyebutnya. Sebelumnya kolom 6 dan 7
+    // bernama "On-time" dan "Dinilai on-time" — dua nama nyaris kembar, dan
+    // pembaca tak punya cara menebak yang mana dibagi yang mana.
+    const KOLOM = ['#', 'Pengajar', 'Gender', 'Halaqah', '%On-Time', 'Tepat jam', 'Dari pertemuan dinilai', '%Stabil', 'Dari pertemuan non-libur', 'KMT', 'KBLA', 'JKG', 'TL', 'Hutang (menit) kumulatif'];
     judul(
       ws,
       'Ranking Disiplin Pengajar',
@@ -128,9 +141,22 @@ export async function buildHitsDisiplinWorkbook(rekap: HitsKoordinatorRekap) {
       KOLOM.length
     );
     headerRow(ws, 4, KOLOM);
-    // Rumus hutang menempel di header kolomnya sendiri — pembaca file tak punya
-    // tooltip seperti di layar, jadi tanpa ini angkanya tak bisa ditelusuri.
-    ws.getCell(4, 14).note = HUTANG_RUMUS;
+    // Keterangan menempel di header kolomnya sendiri — pembaca file tak punya
+    // tooltip seperti di layar, jadi tanpa ini singkatan & rumusnya tak bisa
+    // ditelusuri tanpa lompat ke sheet "Cara Baca".
+    const CATATAN_KOLOM: Array<[number, string]> = [
+      [5, '%On-Time = "Tepat jam" ÷ "Dari pertemuan dinilai". Pertemuan yang dipindah hari (JKG) atau dibadalkan tidak ikut dibagi — jam pengajar aslinya tak bisa dinilai di situ.'],
+      [6, `Pembilang %On-Time: pertemuan tanpa KMT (>${TOLERANSI_KMT} menit) dan tanpa KBLA.`],
+      [7, 'Penyebut %On-Time: pertemuan non-libur, dikurangi yang dipindah hari (JKG) atau dibadalkan (BADAL).'],
+      [8, '%Stabil = pertemuan yang TIDAK dipindah hari & TIDAK dibadalkan ÷ "Dari pertemuan non-libur".'],
+      [9, 'Penyebut %Stabil: semua pertemuan yang dinilai dan kondisinya bukan LIBUR.'],
+      [10, `${JENIS_LABEL.KMT}. Angka = jumlah insiden, bukan jumlah pertemuan.`],
+      [11, `${JENIS_LABEL.KBLA}. Angka = jumlah insiden, bukan jumlah pertemuan.`],
+      [12, `${JENIS_LABEL.JKG}. Angka = jumlah insiden, bukan jumlah pertemuan.`],
+      [13, `${JENIS_LABEL.TIDAK_LATIHAN}. Angka = jumlah insiden, bukan jumlah pertemuan.`],
+      [14, `KUMULATIF sejak ${HUTANG_ANCHOR}, BUKAN periode laporan ini. ${HUTANG_RUMUS}`],
+    ];
+    for (const [kol, teks] of CATATAN_KOLOM) ws.getCell(4, kol).note = teks;
 
     let baris = 5;
     rekap.ranked.forEach((r, idx) => {
@@ -175,7 +201,11 @@ export async function buildHitsDisiplinWorkbook(rekap: HitsKoordinatorRekap) {
       baris++;
       ws.mergeCells(baris, 1, baris, KOLOM.length);
       const c = ws.getCell(baris, 1);
-      c.value = `Belum ada data pertemuan pada periode ini (${rekap.noData.length} pengajar)`;
+      // "Belum ada data" tak memberi tahu pembaca apa yang harus dilakukan, dan
+      // gampang dibaca sebagai tuduhan pada pengajar. Dua sebabnya dieja.
+      c.value =
+        `Tak ada pertemuan yang bisa dinilai pada periode ini — ${rekap.noData.length} pengajar. ` +
+        `Sebabnya salah satu dari: ketua kelas belum mengisi keterangan harian, atau halaqahnya memang belum berjalan pada periode ini.`;
       c.font = { bold: true, size: 11, color: { argb: C.warn } };
       baris++;
       rekap.noData.forEach((r, idx) => {
@@ -187,8 +217,8 @@ export async function buildHitsDisiplinWorkbook(rekap: HitsKoordinatorRekap) {
     }
 
     ws.columns.forEach((col, i) => {
-      // i=6 = "Dinilai on-time", judulnya panjang → beri ruang lebih.
-      col.width = i === 1 ? 30 : i === 0 ? 5 : i === 6 ? 16 : 12;
+      // i=6 & i=8 = kolom penyebut, judulnya panjang → beri ruang lebih.
+      col.width = i === 1 ? 30 : i === 0 ? 5 : i === 6 || i === 8 ? 18 : i === 13 ? 16 : 12;
       col.alignment = { vertical: 'middle', horizontal: i === 1 ? 'left' : 'center' };
     });
   }
@@ -370,9 +400,14 @@ export async function buildHitsDisiplinWorkbook(rekap: HitsKoordinatorRekap) {
 
     const ISI: Array<[string, string]> = [
       ['Cakupan periode', `Semua kolom di sheet Ranking di-scope ${rekap.periodeLabel} (${rekap.start} s.d. sebelum ${rekap.end}) KECUALI Hutang (menit).`],
-      ['%On-Time', 'Persen pertemuan tepat jam — tanpa KMT (>5 menit) / KBLA. Pertemuan yang dipindah hari (JKG) atau dibadalkan TIDAK masuk penyebut.'],
-      ['%Stabil', 'Persen pertemuan yang berjalan sesuai jadwal — tanpa JKG (pindah hari) / BADAL (dialihkan ke pengganti), atas semua pertemuan non-libur.'],
-      ['KMT / KBLA / JKG / TL', 'Jumlah INSIDEN pada periode ini (satu pertemuan bisa >1 insiden). Sumber: input ketua kelas di /hits/ketua → tabel hits_pelanggaran.'],
+      ['Cakupan halaqah', `Laporan ini: ${cakupan}. Halaqah yang TIDAK ikut dihitung: yang berstatus tidak aktif, dan yang belum punya pengajar. Keduanya hilang tanpa baris penanda, jadi pengajar bisa absen dari laporan bukan karena ia tak punya pelanggaran.`],
+      ['Kelas online / offline', 'Tidak ada kolom online/offline di sistem. Penentunya kata "Offline" di kolom jadwal pada sheet HITS (mis. "Offline PEJATEN Senin & Rabu ..."). Halaqah yang kolom jadwalnya KOSONG atau hanya berisi nama hari dianggap ONLINE — jadi laporan "kelas offline" bisa melewatkan kelas yang sebenarnya tatap muka tapi jadwalnya belum ditulis lengkap di sheet.'],
+      ['Sesi dinilai', 'Baris keterangan harian yang tanggalnya SUDAH lewat, dan bukan baris pra-generate yang belum pernah diisi ketua kelas. Baris pra-generate sengaja tak dihitung agar nilai bawaannya tak tampil sebagai pelanggaran TL padahal kelasnya belum berlangsung.'],
+      ['%On-Time', `Persen pertemuan tepat jam — tanpa KMT (>${TOLERANSI_KMT} menit) / KBLA. Pertemuan yang dipindah hari (JKG) atau dibadalkan TIDAK masuk penyebut. Pembilang & penyebutnya tercetak sebagai kolom "Tepat jam" dan "Dari pertemuan dinilai".`],
+      ['%Stabil', 'Persen pertemuan yang berjalan sesuai jadwal — tanpa JKG (pindah hari) / BADAL (dialihkan ke pengganti), atas semua pertemuan non-libur. Penyebutnya tercetak sebagai kolom "Dari pertemuan non-libur".'],
+      ['Non-libur', 'Sesi dinilai yang kondisinya bukan LIBUR.'],
+      ['KMT / KBLA / JKG / TL', `Jumlah INSIDEN pada periode ini (satu pertemuan bisa >1 insiden, jadi angka ini bisa lebih besar dari jumlah pertemuan). Kepanjangannya: KMT = ${JENIS_LABEL.KMT}; KBLA = ${JENIS_LABEL.KBLA}; JKG = ${JENIS_LABEL.JKG}; TL = ${JENIS_LABEL.TIDAK_LATIHAN}. Sumber: input ketua kelas di /hits/ketua → tabel hits_pelanggaran.`],
+      ['Baris tanpa peringkat', 'Blok di bawah tabel: pengajar yang halaqahnya ikut cakupan tapi tak punya satu pun sesi dinilai pada periode ini. Bukan berarti ia tanpa pelanggaran — datanya memang belum ada.'],
       ['Hutang (menit)', HUTANG_RUMUS],
       ['— debit KMT', `max(0, menit terlambat − ${TOLERANSI_KMT}). Toleransi ${TOLERANSI_KMT} menit tidak berhutang.`],
       ['— debit KBLA', 'Menit penuh kelas berakhir lebih awal, tanpa toleransi.'],
@@ -380,7 +415,7 @@ export async function buildHitsDisiplinWorkbook(rekap: HitsKoordinatorRekap) {
       ['— debit BADAL & TL', 'Nol. Keduanya menurunkan %Stabil / dihitung sebagai insiden, tapi tidak menambah hutang menit.'],
       ['— pembayaran', 'Diinput ketua kelas bersama keterangan pertemuan, di-cap ke saldo (tak bisa lebih bayar), dialokasikan FIFO ke pertemuan terlama.'],
       ['— anchor', `Hanya pertemuan pada/sesudah ${HUTANG_ANCHOR} yang berhutang. Pelanggaran sebelum tanggal itu tidak dihitung.`],
-      ['— cakupan halaqah', 'Dijumlah dari semua halaqah aktif pengajar ybs (lintas batch), bukan hanya halaqah yang punya insiden pada periode ini.'],
+      ['— cakupan halaqah', `Dijumlah dari halaqah pengajar ybs yang masuk cakupan laporan ini (${cakupan}) — bukan hanya halaqah yang punya insiden pada periode ini. Kalau laporan disaring per batch atau per jenis kelas, saldo di sini ikut tersaring dan bisa lebih kecil dari hutang orang itu seutuhnya.`],
       ['Rincian Hutang (sheet)', 'Baris pembentuk saldo di atas: tanggal, halaqah, jenis, debit, dibayar, sisa. Jumlah kolom Sisa per pengajar = angka Hutang (menit) di sheet Ranking.'],
       ['Cakupan Observasi (sheet)', 'Berapa pertemuan periode ini yang sudah diisi ketua kelas. Pelanggaran hanya terhitung dari pertemuan yang sudah diobservasi dan tanggalnya sudah lewat.'],
     ];
