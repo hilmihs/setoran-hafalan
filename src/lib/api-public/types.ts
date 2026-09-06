@@ -1,5 +1,8 @@
 // types.ts — tipe bersama jalur API publik.
-export type ScopeName = 'maahir' | 'hits' | 'penilaian' | 'ref' | 'shakwa';
+// `penilaian` = penilaian GURU (matrix skill). `evaluasi` = Evaluasi Halaqah:
+// master mirror `eval_*` + rapot peserta. Sengaja dipisah agar key dashboard
+// guru tak otomatis ikut membaca nilai peserta.
+export type ScopeName = 'maahir' | 'hits' | 'penilaian' | 'evaluasi' | 'ref' | 'shakwa';
 
 export type FilterKind =
   | 'eq' | 'bool' | 'date_from' | 'date_to' | 'since' | 'is_null'

@@ -61,7 +61,8 @@ const laporan = await ambil('rekap/laporan-maahir', { bulan: '2026-08' });
 
 ### Scope key
 
-Tiap key punya satu atau lebih **scope**: `maahir`, `hits`, `penilaian`, `shakwa`. Sebuah route
+Tiap key punya satu atau lebih **scope**: `maahir`, `hits`, `penilaian`, `evaluasi`,
+`shakwa`. Sebuah route
 hanya bisa diakses kalau key Anda memiliki scope route tersebut (lihat kolom Scope di
 tabel §3). Route rekap mewarisi scope domainnya — tidak ada scope `rekap` terpisah.
 
@@ -145,7 +146,7 @@ jeda (lihat §8).
 
 ## 3. Daftar route
 
-Total **42 route**: 36 entitas mentah + 6 route rekap.
+Total **50 route**: 43 entitas mentah + 7 route rekap.
 
 Parameter yang berlaku di **semua** entitas mentah: `page`, `limit`, `urut`
 (`asc`/`desc` pada kolom urutan default). Filter lain hanya yang terdaftar di kolom
@@ -153,7 +154,7 @@ Parameter yang berlaku di **semua** entitas mentah: `page`, `limit`, `urut`
 diam-diam), supaya salah tulis seperti `gender=iwkhan` tidak terbaca sebagai "tanpa
 filter".
 
-### 3.1 Entitas mentah — scope `maahir` (13)
+### 3.1 Entitas mentah — scope `maahir` (14)
 
 | Path `/api/v1/…` | Filter |
 |---|---|
@@ -164,6 +165,7 @@ filter".
 | `libur` | `program_kelas_id`, `tanggal_dari`, `tanggal_sampai` |
 | `pemutihan` | `anggota_id`, `month`, `aktif` |
 | `laporan-note` | `month` |
+| `setoran-target` | `program_kelas_id`, `anggota_id` |
 | `peserta` | `gender`, `active`, `kelas_id` |
 | `kelas` | `gender` |
 | `setoran` | `peserta_id`, `status`, `week_start`, `tanggal_dari`, `tanggal_sampai` |
@@ -180,6 +182,7 @@ Kolom yang keluar per entitas:
 - **`libur`**: `id`, `program_kelas_id`, `tanggal_mulai`, `tanggal_selesai`, `keterangan`, `created_at`
 - **`pemutihan`**: `id`, `anggota_id`, `month`, `tanggal`, `alasan`, `dibuat_oleh`, `dibatalkan_pada`, `created_at`
 - **`laporan-note`**: `id`, `month`, `teks`, `urutan`, `created_at`, `updated_at`
+- **`setoran-target`**: `id`, `program_kelas_id`, `anggota_id`, `halaman_per_bulan`, `berlaku_mulai`, `catatan`, `dibuat_oleh`, `created_at` — `anggota_id` kosong = target default seluruh kelas; baris lama tidak dihapus saat target berubah, jadi **ambil yang `berlaku_mulai` terbesar dan ≤ tanggal yang dihitung**
 - **`peserta`**: `id`, `name`, `gender`, `kelas_id`, `active`, `created_at`
 - **`kelas`**: `id`, `name`, `gender`, `musyrif_id`, `created_at`
 - **`setoran`**: `id`, `peserta_id`, `week_start`, `status`, `submitted_at`, `checked_at`, `checked_by_musyrif_id`, `created_at`, `updated_at`
@@ -246,7 +249,70 @@ Kolom yang keluar per entitas:
 - **`matrix-rekap`**: `id`, `pengajar_id`, `year_month`, `skor_bacaan`, `skor_hafalan`, `skor_tajwid`, `skor_kehadiran_maahir`, `skor_kehadiran_tibyan`, `rata_rata_hard_skill`, `skor_metode_pengajaran`, `skor_kepatuhan_silabus`, `skor_manajemen_halaqah`, `skor_evaluasi_penguasaan`, `rata_rata_pedagogis`, `skor_kedisiplinan_waktu`, `skor_komitmen_jadwal`, `skor_tanggung_jawab`, `skor_kepatuhan_sop`, `rata_rata_soft_skill`, `rata_rata_keseluruhan`, `ranking`, `total_teguran_bulan`, `total_teguran_kumulatif`, `updated_at`
 - **`indikator-standar`**: `kode`, `kategori`, `nama`, `standar`
 
-### 3.4 Referensi orang (4 — dibaca oleh key mana pun yang sah)
+### 3.4 Entitas mentah — scope `evaluasi` (5)
+
+Modul **Evaluasi Halaqah**: master data + **rapot resmi** peserta. Scope-nya sengaja
+dipisah dari `penilaian` — `penilaian` menilai *guru*, `evaluasi` menilai *peserta*.
+Key lama yang cuma punya `penilaian` **tidak** otomatis bisa membaca route ini.
+
+| Path `/api/v1/…` | Filter |
+|---|---|
+| `evaluasi/batch` | `aktif`, `family` |
+| `evaluasi/pengajar` | `gender` |
+| `evaluasi/halaqah` | `gender`, `pengajar_id`, `batch_id`, `level` |
+| `evaluasi/peserta` | `halaqah_id`, `gender`, `aktif`, `is_ketua` |
+| `evaluasi/rapot` | `peserta_id`, `halaqah_id`, `jenis_rapot`, `status`, `lulus`, `tanggal_dari`, `tanggal_sampai`, `sejak` |
+
+Kolom yang keluar per entitas:
+
+- **`evaluasi/batch`**: `id`, `nama`, `aktif`, `family`, `batch_label`, `batch_order`, `rapot_ujian_terpisah`, `synced_at`
+- **`evaluasi/pengajar`**: `id`, `nama`, `gender`, `synced_at`
+- **`evaluasi/halaqah`**: `id`, `nama`, `gender`, `mustawa`, `level`, `pengajar_id`, `batch_id`, `ambang_ujian`, `synced_at`
+- **`evaluasi/peserta`**: `id`, `nama`, `gender`, `halaqah_id`, `is_ketua`, `aktif`, `urutan`, `synced_at`
+- **`evaluasi/rapot`**: `id`, `halaqah_id`, `peserta_id`, `jenis_rapot`, `nilai_akhir`, `berkala_avg`, `ujian_skor`, `ujian_pb_skor`, `lulus`, `ambang`, `diterbitkan_oleh`, `diterbitkan_at`, `status`, `superseded_by`, `dicabut_at`
+
+Yang **tidak** keluar dari `evaluasi/rapot`:
+
+- **`token`** — itu kunci URL verifikasi publik `/evaluasi/rapot/cek/<token>`; siapa pun
+  yang memegangnya bisa membuka rapot orang lain. Setara kredensial (§6).
+- **`payload`** — snapshot penuh rapot, memuat **catatan bebas** dari pengajar per sesi.
+  Kalau butuh rinciannya, minta lewat jalur lain, jangan lewat API publik.
+
+Yang gampang salah dihitung:
+
+- **`batch` di sini bukan angkatan HITS.** `eval_batch` = satu *program*; angkatan
+  ditandai `family` + `batch_label`/`batch_order`. Program berangkatan tunggal punya
+  `family === id` dan `batch_label: null`.
+- **`jenis_rapot` WAJIB difilter sebelum menjumlahkan apa pun.** Rapot adalah snapshot
+  beku yang tidak pernah dihitung ulang, jadi baris era lama dan era baru hidup
+  berdampingan dengan arti kolom yang berbeda:
+  - `berkala`/`ujian` (legacy) → `berkala_avg` = rata **gabungan** QN+PB.
+  - `qn`/`pb` (era track) → `berkala_avg` = rata sesi track **itu saja**.
+  - `ujian_qn`/`ujian_pb` → `berkala_avg` selalu `null`.
+  - `ujian_pb_skor` legacy; era track memakai `ujian_skor`. Baris `qn`: `ujian_pb_skor`
+    selalu `null`.
+- **Ambil hanya `status=aktif`** untuk rapot yang berlaku. `digantikan` = sudah diganti
+  terbitan baru (`superseded_by` menunjuk penggantinya), `dicabut` = ditarik.
+- **`ambang` dibekukan saat terbit** — jangan bandingkan `nilai_akhir` dengan angka 70
+  yang di-hardcode; pakai `ambang` di baris itu.
+- **`eval_*` adalah tabel mirror** dari hilmihs.web.id, ditimpa tiap sinkron. `id`-nya
+  stabil, tapi kolom lain bisa berubah kapan saja — pakai `synced_at` untuk tahu
+  kapan baris terakhir disegarkan.
+
+### 3.5 Entitas mentah — scope `shakwa` (1)
+
+| Path `/api/v1/…` | Filter |
+|---|---|
+| `shakwa` | `pelapor_type`, `pengajar_id`, `gender`, `kategori`, `status`, `tanggal_dari`, `tanggal_sampai`, `sejak` |
+
+- **`shakwa`**: `id`, `nomor_tiket`, `pelapor_type`, `pengajar_id`, `nama`, `gender`, `kategori`, `halaqoh`, `isi`, `saran_kritik`, `status`, `catatan_reviewer`, `reviewed_by_role`, `reviewed_at`, `created_at`
+
+> Entitas ini **membuka teks aduan, nama pelapor, dan catatan reviewer** — PII + isi
+> sensitif. Karena itu scope-nya berdiri sendiri: key yang tidak diberi scope `shakwa`
+> secara eksplisit tidak bisa membacanya. `lampiran` tidak pernah diekspos.
+> Batas hari `tanggal_dari`/`tanggal_sampai`/`sejak` ditafsir **WIB**, bukan UTC.
+
+### 3.6 Referensi orang (4 — dibaca oleh key mana pun yang sah)
 
 | Path `/api/v1/…` | Filter | Kolom keluar |
 |---|---|---|
@@ -255,7 +321,7 @@ Kolom yang keluar per entitas:
 | `syaikh` | `gender`, `active` | `id`, `name`, `gender`, `active` |
 | `koordinator-ketua-kelas` | `gender`, `active` | `id`, `name`, `gender`, `active` |
 
-### 3.5 Route rekap (7)
+### 3.7 Route rekap (7)
 
 Route rekap **tidak dipaginasi** (memotong laporan membuat total & rata-rata salah).
 Setiap route mewarisi scope domainnya.
@@ -325,8 +391,14 @@ Tidak semua tabel bisa ditarik bertahap. Pola:
   `kehadiran`, `penilaian-peserta`, `penilaian-masyaikh`, `penilaian-pedagogis`,
   `matrix-rekap`. Simpan `updated_at` tertinggi yang pernah Anda terima, lalu di sync
   berikutnya kirim `sejak=<nilai itu>`.
+- **`evaluasi/rapot` dan `shakwa`** juga punya `sejak`, tapi berbasis waktu **terbit /
+  masuk** (`diterbitkan_at`, `created_at`), bukan `updated_at`, dan batas harinya WIB.
+  Konsekuensinya: perubahan status pada baris lama (rapot `dicabut`/`digantikan`, aduan
+  yang berpindah ke `resolved`) **tidak** ikut terbawa `sejak`. Untuk menangkapnya,
+  tarik ulang periodik dengan `status=` yang Anda pantau.
 - **Tabel tanpa keduanya** hanya bisa ditarik **penuh** setiap kali (mis. `peserta`,
-  `kelas`, `pengajar`, `hits/halaqah`, referensi orang).
+  `kelas`, `pengajar`, `hits/halaqah`, `evaluasi/peserta`, `evaluasi/halaqah`,
+  referensi orang).
 
 ### Pola sinkronisasi harian yang disarankan
 
@@ -348,11 +420,13 @@ Jangan menunggu kolom-kolom ini — API menolaknya secara **struktural** (aplika
 start bila ada entitas menyebutnya), bukan sekadar konvensi:
 
 - **Hash password** (`password_hash`) di semua tabel orang.
-- **Nomor WhatsApp** (`whatsapp_number`, `ketua_wa`, `wakil_wa`) — nomor pribadi
-  sekaligus identitas login sistem ini.
+- **Nomor WhatsApp** (`whatsapp_number`, `whatsapp`, `ketua_wa`, `wakil_wa`,
+  `pengajar_wa`, `pelapor_wa`) — nomor pribadi sekaligus identitas login sistem ini.
 - **Token login tanpa password** (`magic_token`).
 - **Password polos hasil reset** (`new_password_plaintext`).
-- **Token persetujuan** (`token`) di semua tabel request/pengajuan.
+- **Token persetujuan / verifikasi** (`token`, `akses_token`) di semua tabel
+  request/pengajuan — termasuk `evaluasi_rapot.token`, kunci URL verifikasi rapot
+  publik.
 - **Komentar bebas penilai tentang orang**: `ket_bacaan`, `ket_hafalan`,
   `catatan_umum`, `masukan`.
 - **`audio_url`** — file audio dilayani lewat URL bertanda-tangan berbatas waktu;
@@ -542,7 +616,7 @@ dari sistem sumber user.
 
 - Base URL `https://maahir.muhajirproject.org/api/v1`, header `Authorization: Bearer
   k_live_xxxxx`, **server-to-server**, hanya `GET`.
-- 36 entitas mentah (paginasi `page`/`limit`, maks 500) + 6 rekap (tanpa paginasi).
+- 43 entitas mentah (paginasi `page`/`limit`, maks 500) + 7 rekap (tanpa paginasi).
 - Filter tak dikenal → `400`. Scope salah → `403`. Saklar/maintenance → `404`/`503`.
 - Kolom sensitif WA/hash/token/audio **tidak pernah** keluar; `catatan`/`keterangan`
   keluar tapi **wajib** dijaga (§7).

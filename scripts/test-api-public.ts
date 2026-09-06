@@ -215,7 +215,7 @@ function testParse() {
 function testMaahirRegistry() {
   console.log('maahir registry:');
   const maahir = Object.values(ENTITIES).filter(e => e.scope === 'maahir');
-  check('13 maahir entities', maahir.length === 13);
+  check('14 maahir entities', maahir.length === 14);
   check('peserta drops whatsapp_number', !getEntity('peserta')!.columns.includes('whatsapp_number'));
   check('peserta drops password_hash', !getEntity('peserta')!.columns.includes('password_hash'));
   check('kehadiran KEEPS catatan', getEntity('kehadiran')!.columns.includes('catatan'));
@@ -245,8 +245,8 @@ function testPenilaianRefRegistry() {
   console.log('penilaian + ref registry:');
   check('5 penilaian entities', Object.values(ENTITIES).filter(e => e.scope === 'penilaian').length === 5);
   check('4 ref entities', Object.values(ENTITIES).filter(e => e.scope === 'ref').length === 4);
-  check('total 36 entities', Object.keys(ENTITIES).length === 36);
-  check('13 maahir still', Object.values(ENTITIES).filter(e => e.scope === 'maahir').length === 13);
+  check('total 43 entities', Object.keys(ENTITIES).length === 43);
+  check('14 maahir still', Object.values(ENTITIES).filter(e => e.scope === 'maahir').length === 14);
   check('14 hits still', Object.values(ENTITIES).filter(e => e.scope === 'hits').length === 14);
   for (const r of ['musyrif', 'koordinator', 'syaikh', 'koordinator-ketua-kelas']) {
     const e = getEntity(r);
@@ -262,6 +262,39 @@ function testScope() {
   check('maahir key → maahir entity ok', scopeAllows(['maahir'], 'maahir'));
   check('maahir key → hits entity 403', !scopeAllows(['maahir'], 'hits'));
   check('multi scope', scopeAllows(['maahir', 'hits'], 'hits'));
+  // `evaluasi` (nilai peserta) sengaja TIDAK diwarisi dari `penilaian` (nilai guru).
+  check('penilaian key → evaluasi entity 403', !scopeAllows(['penilaian'], 'evaluasi'));
+  check('evaluasi key → penilaian entity 403', !scopeAllows(['evaluasi'], 'penilaian'));
+}
+
+function testEvaluasiRegistry() {
+  console.log('evaluasi registry:');
+  const evaluasi = Object.values(ENTITIES).filter(e => e.scope === 'evaluasi');
+  check('5 evaluasi entities', evaluasi.length === 5);
+  check('semua entitas evaluasi ber-scope evaluasi', evaluasi.every(e => e.scope === 'evaluasi'));
+
+  const rapot = getEntity('evaluasi/rapot')!;
+  // Token verifikasi publik = kredensial: pemegangnya bisa membuka rapot orang lain.
+  check('rapot drops token', !rapot.columns.includes('token'));
+  // payload = snapshot penuh, memuat catatan bebas pengajar per sesi.
+  check('rapot drops payload', !rapot.columns.includes('payload'));
+  check('rapot keeps nilai_akhir + ambang', rapot.columns.includes('nilai_akhir') && rapot.columns.includes('ambang'));
+  // Semantik berbeda per era → konsumen wajib bisa memfilter jenis_rapot & status.
+  check('rapot filter jenis_rapot ada', rapot.filters.some(f => f.param === 'jenis_rapot'));
+  check('rapot filter status ada', rapot.filters.some(f => f.param === 'status'));
+  // Batas hari WIB, sama seperti shakwa — kolomnya timestamptz.
+  check('rapot sejak = ts_since', rapot.filters.some(f => f.param === 'sejak' && f.kind === 'ts_since'));
+
+  // WA pengajar = identitas login; kolomnya bernama `whatsapp` di eval_pengajar.
+  check('eval pengajar drops whatsapp', !getEntity('evaluasi/pengajar')!.columns.includes('whatsapp'));
+  check('forbidden includes whatsapp', FORBIDDEN_COLUMNS.includes('whatsapp'));
+  // `kurasi` = penanda kolom kebal-sync, urusan internal.
+  check('eval peserta drops kurasi', !getEntity('evaluasi/peserta')!.columns.includes('kurasi'));
+  check('eval halaqah drops kurasi', !getEntity('evaluasi/halaqah')!.columns.includes('kurasi'));
+
+  // Nilai per sesi (evaluasi_nilai) TIDAK dibuka — kolom `catatan`-nya teks bebas.
+  check('evaluasi/nilai NOT exposed', getEntity('evaluasi/nilai') === null);
+  check('evaluasi/sesi NOT exposed', getEntity('evaluasi/sesi') === null);
 }
 
 async function main() {
@@ -270,6 +303,7 @@ async function main() {
   testMaahirRegistry();
   testHitsRegistry();
   testPenilaianRefRegistry();
+  testEvaluasiRegistry();
   testSanitize();
   testRekapSanitizeShape();
   testKeyGen();
