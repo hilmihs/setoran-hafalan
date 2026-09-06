@@ -2,8 +2,8 @@
 // yang sah, dan urutan grup. Jalankan: npm run test-evaluasi-dashboard
 import {
   susunOpsiProgram, susunOpsiBatch, batchTerpakai, idBatchLolos,
-  urutkanGrup, pilihNamaTrack, bacaFilter,
-  type BarisBatch, type GrupDashboard,
+  urutkanGrup, pilihNamaTrack, bacaFilter, sesiUntukCakupan, labelCakupan,
+  type BarisBatch, type GrupDashboard, type SesiRow,
 } from '@/lib/evaluasi-dashboard';
 
 let failed = 0;
@@ -137,7 +137,7 @@ eq(pilihNamaTrack([], 'ikhwan'), 'Evaluasi QN', 'tanpa config gender → default
 // Tanpa parameter gender, yang berlaku adalah gender pemakai sendiri. Ini yang
 // menjaga halaman berperilaku persis seperti sebelum penyaring ada; lintas
 // gender harus jadi pilihan yang diketik, bukan bawaan.
-eq(bacaFilter({}, 'ikhwan'), { program: '', batch: '', gender: 'ikhwan' }, 'tanpa param → gender pemakai');
+eq(bacaFilter({}, 'ikhwan'), { program: '', batch: '', gender: 'ikhwan', cakupan: 'semua' }, 'tanpa param → gender pemakai');
 eq(bacaFilter({}, 'akhwat').gender, 'akhwat', 'tanpa param → gender pemakai (akhwat)');
 eq(bacaFilter({ gender: 'semua' }, 'ikhwan').gender, 'semua', 'semua harus eksplisit');
 eq(bacaFilter({ gender: 'akhwat' }, 'ikhwan').gender, 'akhwat', 'gender lain dipilih terang-terangan');
@@ -146,9 +146,56 @@ eq(bacaFilter({ gender: 'xyz' }, 'ikhwan').gender, 'ikhwan', 'gender ngawur jatu
 eq(bacaFilter({ gender: '' }, 'akhwat').gender, 'akhwat', 'gender kosong jatuh ke gender pemakai');
 eq(
   bacaFilter({ program: 'hits-regular', batch: 'hits-regular-apr' }, 'ikhwan'),
-  { program: 'hits-regular', batch: 'hits-regular-apr', gender: 'ikhwan' },
+  { program: 'hits-regular', batch: 'hits-regular-apr', gender: 'ikhwan', cakupan: 'semua' },
   'program dan batch diteruskan apa adanya'
 );
+
+// ── cakupan ──
+eq(bacaFilter({ cakupan: 'ujian-pb' }, 'ikhwan').cakupan, 'ujian-pb', 'cakupan dibaca dari URL');
+// Salah ketik tak boleh menyaring habis — itu terbaca sebagai "belum ada nilai".
+eq(bacaFilter({ cakupan: 'ngawur' }, 'ikhwan').cakupan, 'semua', 'cakupan ngawur jatuh ke default');
+eq(bacaFilter({ cakupan: '' }, 'ikhwan').cakupan, 'semua', 'cakupan kosong jatuh ke default');
+
+// ── sesiUntukCakupan ──
+// h1 tertinggal di sesi 2; h2 sudah sesi 4. Sesi ujian PB h2 sudah dihapus.
+const SESI: SesiRow[] = [
+  { id: 'a', halaqah_id: 'h1', jenis: 'qn', nomor_sesi: 1, dihapus: false },
+  { id: 'b', halaqah_id: 'h1', jenis: 'qn', nomor_sesi: 2, dihapus: false },
+  { id: 'c', halaqah_id: 'h2', jenis: 'qn', nomor_sesi: 4, dihapus: false },
+  { id: 'd', halaqah_id: 'h2', jenis: 'pb', nomor_sesi: 1, dihapus: false },
+  { id: 'e', halaqah_id: 'h2', jenis: 'ujian', nomor_sesi: 1, dihapus: false },
+  { id: 'f', halaqah_id: 'h2', jenis: 'ujian', nomor_sesi: 2, dihapus: true },
+];
+const ids = (c: Parameters<typeof sesiUntukCakupan>[1]) =>
+  sesiUntukCakupan(SESI, c).map((s) => s.id).sort();
+
+eq(ids('semua'), ['a', 'b', 'c', 'd', 'e'], 'semua: semua sesi hidup');
+// Sesi ujian PB h2 di-soft-delete → tak boleh muncul di cakupan mana pun.
+eq(ids('ujian'), ['e'], 'ujian: sesi dihapus tak ikut');
+eq(ids('ujian-pb'), [], 'ujian-pb: hanya sesi dihapus → kosong');
+eq(ids('ujian-qn'), ['e'], 'ujian-qn: nomor_sesi 1');
+eq(ids('qn'), ['a', 'b', 'c'], 'qn: semua sesi qn');
+eq(ids('pb'), ['d'], 'pb: semua sesi pb');
+eq(ids('evaluasi'), ['a', 'b', 'c', 'd'], 'evaluasi: qn + pb, tanpa ujian');
+// Terbesar PER HALAQAH — h1 tetap terwakili sesi 2 walau h2 sudah sesi 4.
+eq(ids('qn-berjalan'), ['b', 'c'], 'qn-berjalan: terbesar per halaqah');
+
+// ── labelCakupan ──
+eq(labelCakupan('qn-berjalan', 'Evaluasi QN', 'Evaluasi PB', 4), 'Evaluasi QN Sesi 4', 'label sesi berjalan menyebut nomor');
+eq(labelCakupan('qn-berjalan', 'Evaluasi QN', 'Evaluasi PB', 0), 'Evaluasi QN', 'tanpa sesi → tanpa nomor');
+// Cakupan lintas-sesi TIDAK boleh menyebut satu nomor sesi.
+eq(labelCakupan('qn', 'Evaluasi QN', 'Evaluasi PB', 4), 'Evaluasi QN — semua sesi', 'qn tak menyebut nomor');
+eq(labelCakupan('semua', 'Evaluasi QN', 'Evaluasi PB', 4), 'Keseluruhan', 'semua → Keseluruhan');
+eq(labelCakupan('ujian-pb', 'Evaluasi QN', 'Evaluasi PB', 4), 'Ujian PB', 'ujian-pb');
+
+// ── pilihNamaTrack kolom nama_pb ──
+const CFG_PB = [
+  { gender: 'ikhwan', nama_qn: 'Evaluasi QN', nama_pb: 'Evaluasi PB' },
+  { gender: 'akhwat', nama_qn: 'Evaluasi Qiroah', nama_pb: 'Evaluasi Perbaikan' },
+];
+eq(pilihNamaTrack(CFG_PB, 'akhwat', 'nama_pb'), 'Evaluasi Perbaikan', 'nama_pb per gender');
+// Config lama belum punya nama_pb → jangan tampilkan undefined ke layar.
+eq(pilihNamaTrack([{ gender: 'ikhwan', nama_qn: 'X' }], 'ikhwan', 'nama_pb'), 'Evaluasi PB', 'nama_pb kosong → default');
 
 if (failed) { console.error(`\n${failed} gagal`); process.exit(1); }
 console.log('\nsemua lulus');

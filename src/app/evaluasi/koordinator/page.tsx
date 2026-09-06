@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import { requireOneOfRoles } from '@/lib/session';
 import { AMBANG } from '@/lib/evaluasi';
-import { bacaFilter, muatDashboard } from '@/lib/evaluasi-dashboard';
+import { bacaFilter, muatDashboard, CAKUPAN_DEFAULT } from '@/lib/evaluasi-dashboard';
 import { buildWaMeUrl, tplReminderPengajarIsiNilaiEvaluasi } from '@/lib/whatsapp';
 import { PrintButton } from '@/components/PrintButton';
 import { QueryNavSelect } from '@/components/QueryNavSelect';
@@ -21,7 +21,12 @@ export default async function KoordinatorEvaluasiPage({
   const filter = bacaFilter(searchParams, session.gender);
   const d = await muatDashboard(filter);
 
-  const adaFilter = !!(d.programTerpilih || d.batchTerpilih || filter.gender !== session.gender);
+  const adaFilter = !!(
+    d.programTerpilih ||
+    d.batchTerpilih ||
+    filter.gender !== session.gender ||
+    d.cakupanTerpilih !== CAKUPAN_DEFAULT
+  );
   const tampilkanKolomGender = filter.gender === 'semua';
   const tampilkanRingkasan = d.grup.length > 1;
 
@@ -92,6 +97,14 @@ export default async function KoordinatorEvaluasiPage({
             ]}
             ariaLabel="Pilih gender"
           />
+          {/* Seperti gender: kosong bukan berarti "semua", jadi tiap cakupan
+              ditulis eksplisit dan tak ada opsi kosong. */}
+          <QueryNavSelect
+            param="cakupan"
+            value={d.cakupanTerpilih}
+            options={d.opsiCakupan}
+            ariaLabel="Pilih cakupan penilaian"
+          />
           {adaFilter && (
             <Link href="/evaluasi/koordinator" className="t-small" style={{ marginLeft: 4 }}>
               Reset
@@ -129,7 +142,13 @@ export default async function KoordinatorEvaluasiPage({
                   {d.total.selesai}
                   <span style={{ fontSize: 15, color: 'var(--muted-2)' }}>/{d.total.peserta}</span>
                 </div>
-                <div className="t-small" style={{ marginTop: 4 }}>Peserta sudah dinilai</div>
+                <div
+                  className="t-small"
+                  style={{ marginTop: 4 }}
+                  title="Peserta yang punya minimal satu nilai selesai dalam cakupan ini. Satu peserta dihitung sekali, walau dinilai di banyak sesi."
+                >
+                  Peserta sudah dinilai
+                </div>
               </div>
               <div className="card-flat" style={{ padding: '14px 16px' }}>
                 <div
@@ -151,7 +170,13 @@ export default async function KoordinatorEvaluasiPage({
                 >
                   {d.total.bermasalah}
                 </div>
-                <div className="t-small" style={{ marginTop: 4 }}>Peserta perlu perhatian</div>
+                <div
+                  className="t-small"
+                  style={{ marginTop: 4 }}
+                  title="Peserta yang RATA-RATA skornya dalam cakupan ini di bawah 70 — bukan yang sekadar pernah jeblok di satu sesi."
+                >
+                  Peserta perlu perhatian
+                </div>
               </div>
             </div>
 
