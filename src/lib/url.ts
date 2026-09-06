@@ -21,3 +21,26 @@ export function absUrl(path: string): string {
   const p = path.startsWith('/') ? path : `/${path}`;
   return `${appOrigin()}${p}`;
 }
+
+/**
+ * Origin yang AMAN dipakai di header `Location` sebuah redirect.
+ *
+ * Latar: app berjalan di belakang reverse proxy (systemd `next-maahir.service`,
+ * standalone). Bila proxy tidak meneruskan Host, `req.url`/`req.nextUrl` berisi
+ * alamat BIND server — pernah terjadi `http://0.0.0.0:3009/hits/ketua`, dan
+ * ketua kelas yang mengeklik magic link dari WhatsApp mendarat di alamat yang
+ * mustahil dibuka dari HP.
+ *
+ * Urutan: x-forwarded-host → Host → NEXT_PUBLIC_APP_URL (appOrigin).
+ * `localhost`/`127.0.0.1` SENGAJA tetap diterima — itu sah saat `npm run dev`;
+ * yang dibuang hanya `0.0.0.0`, yang tak pernah bisa dibuka browser mana pun.
+ */
+export function publicOrigin(headers: Headers): string {
+  const host = headers.get('x-forwarded-host') ?? headers.get('host');
+  if (host && !/^0\.0\.0\.0(:|$)/.test(host)) {
+    const lokal = /^(localhost|127\.0\.0\.1)(:|$)/i.test(host);
+    const proto = headers.get('x-forwarded-proto') ?? (lokal ? 'http' : 'https');
+    return `${proto}://${host}`;
+  }
+  return appOrigin();
+}

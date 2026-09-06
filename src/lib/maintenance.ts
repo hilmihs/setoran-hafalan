@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { apiEnv } from '@/lib/api-public/env';
+import { publicOrigin } from '@/lib/url';
 
 // ── Mode maintenance situs ──────────────────────────────────────────────────
 // Situs dikunci penuh mulai 13 Juli 2026 (WIB) karena migrasi database keluar
@@ -54,8 +55,11 @@ function bypassGrant(req: NextRequest): NextResponse | null {
   if (!token) return null;
   const q = req.nextUrl.searchParams.get(BYPASS_PARAM);
   if (q && q === token) {
-    // Set cookie lalu redirect ke path yg sama tanpa query param.
-    const url = req.nextUrl.clone();
+    // Set cookie lalu redirect ke path yg sama tanpa query param. Basis URL dari
+    // header proxy — nextUrl bisa berisi alamat bind server (0.0.0.0:xxxx), yang
+    // akan mendaratkan admin di alamat tak terbuka.
+    const url = new URL(req.nextUrl.pathname, publicOrigin(req.headers));
+    url.search = req.nextUrl.search;
     url.searchParams.delete(BYPASS_PARAM);
     const res = NextResponse.redirect(url);
     res.cookies.set(BYPASS_COOKIE, token, {

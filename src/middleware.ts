@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { maintenanceGate } from '@/lib/maintenance';
+import { publicOrigin } from '@/lib/url';
 
 // Prefix halaman terproteksi (butuh login). Bila belum login (cookie sesi
 // tak ada) → arahkan ke home dengan ?next= supaya setelah login balik ke sini.
@@ -41,18 +42,12 @@ export function middleware(req: NextRequest) {
   if (!isProtected) return withPath();
   if (req.cookies.has(SESSION_COOKIE)) return withPath();
 
-  const url = req.nextUrl.clone();
-  url.pathname = '/';
-  url.search = '';
-  url.searchParams.set('next', pathname + (search || ''));
   // Di belakang reverse proxy, nextUrl bisa berisi host internal (0.0.0.0:xxxx).
-  // Pakai host/proto yang diteruskan proxy agar redirect tetap ke domain publik.
-  const fwdHost = req.headers.get('x-forwarded-host') ?? req.headers.get('host');
-  if (fwdHost) {
-    url.host = fwdHost;
-    url.protocol = (req.headers.get('x-forwarded-proto') ?? 'https') + ':';
-    url.port = '';
-  }
+  // publicOrigin() memilih host yang benar-benar bisa dibuka browser. Versi lama
+  // di sini mengosongkan url.port setelah menyalin host, sehingga di `npm run dev`
+  // redirect mendarat di localhost tanpa port.
+  const url = new URL('/', publicOrigin(req.headers));
+  url.searchParams.set('next', pathname + (search || ''));
   return NextResponse.redirect(url);
 }
 

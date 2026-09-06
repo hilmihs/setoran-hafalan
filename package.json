@@ -13,6 +13,7 @@
     "test-tabayyun": "tsx --env-file=.env.local scripts/test-tabayyun.ts",
     "test-kajian": "tsx --env-file=.env.local scripts/test-kajian.ts",
     "test-ranking": "tsx --env-file=.env.local scripts/test-ranking.ts",
+    "test-url": "tsx --env-file=.env.local scripts/test-url.ts",
     "rekap-hits-offline": "tsx --env-file=.env.local scripts/rekap-hits-offline.ts",
     "test-shakwa": "tsx --env-file=.env.local scripts/test-shakwa.ts",
     "test-evaluasi": "tsx scripts/test-evaluasi.ts",
