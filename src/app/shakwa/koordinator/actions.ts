@@ -57,3 +57,70 @@ export async function ubahStatusShakwa(
   revalidatePath('/shakwa/koordinator');
   return { ok: true };
 }
+
+/**
+ * Betulkan tanggal "Jadwal Kelas Pengganti" satu rincian izin.
+ *
+ * Hanya `jadwal_ganti` yang boleh disunting. `tanggal`/`jenis`/`menit` dipakai
+ * `cariIzinCocok`, perhitungan hutang, dan rekap — mengubahnya setelah izin
+ * menempel ke tabayyun membuat catatan lama tak lagi cocok dengan sumbernya.
+ * `jadwal_ganti` tidak ikut mencocokkan apa pun, jadi aman dibetulkan kapan saja,
+ * termasuk sesudah `dipakai_tabayyun_id` terisi.
+ */
+export async function ubahJadwalGantiIzin(
+  _prev: UbahShakwaResult | undefined,
+  fd: FormData
+): Promise<UbahShakwaResult> {
+  const session = await requireOneOfRoles(['koordinator', 'koordinator_ketua_kelas']);
+
+  const id = String(fd.get('izin_id') ?? '');
+  const isian = String(fd.get('jadwal_ganti') ?? '').trim();
+  if (!id) return { error: 'Rincian izin tidak ditemukan.' };
+  // Kosong = izin tanpa kelas pengganti. Dibolehkan: pengajar bisa saja terlanjur
+  // mengisi tanggal pada izin yang ternyata tak berkelas pengganti.
+  const tanggal = isian === '' ? null : isian;
+  if (tanggal && !/^\d{4}-\d{2}-\d{2}$/.test(tanggal))
+    return { error: 'Tanggal harus berformat YYYY-MM-DD.' };
+
+  // Gender ada di tiket induk, bukan di baris izin, dan shim tak bisa memfilter
+  // kolom embed — jadi diperiksa dua langkah. Sama seperti ubahStatusShakwa, ini
+  // SYARAT tulis: action menerima id apa pun dari form, dan tanpa cek ini rincian
+  // izin gender lain bisa disunting siapa pun yang tahu id-nya.
+  const { data: izin } = await supabaseAdmin
+    .from('shakwa_izin')
+    .select('id, shakwa_id, jadwal_ganti')
+    .eq('id', id)
+    .maybeSingle();
+  if (!izin) return { error: 'Rincian izin tidak ditemukan.' };
+
+  const { data: tiket } = await supabaseAdmin
+    .from('shakwa')
+    .select('id, nomor_tiket')
+    .eq('id', izin.shakwa_id)
+    .eq('gender', session.gender)
+    .maybeSingle();
+  // Tiket gender lain dijawab sama dengan tiket yang tak ada — balasan galat
+  // jangan jadi alat menebak isi tabel.
+  if (!tiket) return { error: 'Rincian izin tidak ditemukan.' };
+
+  if (izin.jadwal_ganti === tanggal) return { ok: true };
+
+  const { error } = await supabaseAdmin
+    .from('shakwa_izin')
+    .update({ jadwal_ganti: tanggal })
+    .eq('id', id);
+  if (error) return { error: `Gagal menyimpan: ${error.message}` };
+
+  await logAudit({
+    actor: session,
+    action: 'shakwa.izin.jadwal_ganti',
+    targetTable: 'shakwa_izin',
+    targetId: id,
+    // Nilai lama ikut dicatat — ini satu-satunya jejak tanggal sebelumnya,
+    // karena barisnya ditimpa di tempat.
+    detail: { dari: izin.jadwal_ganti, ke: tanggal, nomor_tiket: tiket.nomor_tiket },
+  });
+
+  revalidatePath('/shakwa/koordinator');
+  return { ok: true };
+}

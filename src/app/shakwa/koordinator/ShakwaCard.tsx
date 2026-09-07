@@ -2,6 +2,7 @@ import { STATUS_LABEL, type ShakwaStatus } from '@/lib/shakwa';
 import type { ShakwaItem } from '@/lib/shakwa-rekap';
 import { waktuRelatif } from './ui-helpers';
 import { ShakwaTindakForm } from './ShakwaTindakForm';
+import { IzinJadwalGantiForm } from './IzinJadwalGantiForm';
 
 const STATUS_WARNA: Record<ShakwaStatus, { bg: string; bd: string; ink: string }> = {
   submitted: { bg: 'var(--merah-tint)', bd: 'var(--merah-line)', ink: 'var(--merah-ink)' },
@@ -99,12 +100,24 @@ export function ShakwaCard({
             Rincian izin
           </div>
           {item.izin.map((z, idx) => (
-            <div key={idx} className="t-tiny" style={{ color: 'var(--muted-2)' }}>
-              {z.tanggal} · {z.jenisLabel}
-              {z.menit != null ? ` · ${z.menit} menit` : ''}
-              {z.jadwalGanti ? ` · diganti ${z.jadwalGanti}` : ''}
-              {z.halaqahName ? ` · ${z.halaqahName}` : ' · semua halaqah'}
-              {z.sudahTerpakai ? ' · sudah menempel ke tabayyun' : ''}
+            <div key={z.id || idx} style={{ marginBottom: 4 }}>
+              <div className="t-tiny" style={{ color: 'var(--muted-2)' }}>
+                {z.tanggal} · {z.jenisLabel}
+                {z.menit != null ? ` · ${z.menit} menit` : ''}
+                {z.jadwalGanti ? ` · diganti ${z.jadwalGanti}` : ''}
+                {z.halaqahName ? ` · ${z.halaqahName}` : ' · semua halaqah'}
+                {z.sudahTerpakai ? ' · sudah menempel ke tabayyun' : ''}
+              </div>
+              {/* Kotak sunting hanya untuk izin yang memang berkelas pengganti
+                  (JKG), plus baris lama yang terlanjur punya tanggal walau
+                  jenisnya bukan JKG — supaya salah isi itu bisa dibersihkan. */}
+              {(z.jenis === 'JKG' || z.jadwalGanti) && (
+                <IzinJadwalGantiForm
+                  izinId={z.id}
+                  jadwalGanti={z.jadwalGanti}
+                  sudahTerpakai={z.sudahTerpakai}
+                />
+              )}
             </div>
           ))}
         </div>

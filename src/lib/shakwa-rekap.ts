@@ -16,6 +16,8 @@ import { todayJakartaISO } from './hits-observasi';
 import type { Gender } from '@/types/db';
 
 export type ShakwaIzinItem = {
+  /** Dipakai koordinator untuk membetulkan `jadwalGanti`. */
+  id: string;
   tanggal: string;
   jenis: ShakwaIzinJenis;
   jenisLabel: string;
@@ -141,7 +143,7 @@ export async function getShakwaRekap(f: ShakwaFilter = {}): Promise<ShakwaRekap>
     shakwaIds.length
       ? supabaseAdmin
           .from('shakwa_izin')
-          .select('shakwa_id, tanggal, jenis, menit, jadwal_ganti, dipakai_tabayyun_id, halaqah:halaqah_id(name)')
+          .select('id, shakwa_id, tanggal, jenis, menit, jadwal_ganti, dipakai_tabayyun_id, halaqah:halaqah_id(name)')
           .in('shakwa_id', shakwaIds)
       : Promise.resolve({ data: [] as unknown[] }),
   ]);
@@ -152,6 +154,7 @@ export async function getShakwaRekap(f: ShakwaFilter = {}): Promise<ShakwaRekap>
 
   const izinByShakwa = new Map<string, ShakwaIzinItem[]>();
   for (const raw of (izinRows.data ?? []) as Array<{
+    id: string;
     shakwa_id: string;
     tanggal: string;
     jenis: ShakwaIzinJenis;
@@ -162,6 +165,7 @@ export async function getShakwaRekap(f: ShakwaFilter = {}): Promise<ShakwaRekap>
   }>) {
     const arr = izinByShakwa.get(raw.shakwa_id) ?? [];
     arr.push({
+      id: raw.id,
       tanggal: raw.tanggal,
       jenis: raw.jenis,
       jenisLabel: IZIN_JENIS_LABEL[raw.jenis] ?? raw.jenis,
