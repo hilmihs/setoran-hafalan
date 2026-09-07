@@ -12,6 +12,8 @@ import { PanelKerja, type BarisAntrean, type KartuUsulan } from './PanelKerja';
 import { PanelPendaftar } from './PanelPendaftar';
 import { PanelPengingat } from './PanelPengingat';
 import { PanelGrupPool, type BarisGrup } from './PanelGrupPool';
+import { PanelDitahan } from './PanelDitahan';
+import { ringkasDitahan } from '@/lib/ketersediaan-ditahan';
 import type { Gender, KsPendaftarSumber, KsSlot } from '@/types/db';
 
 export const dynamic = 'force-dynamic';
@@ -50,6 +52,7 @@ export default async function KetersediaanKoordinatorPage() {
 
   const pengajarRingkas = await muatPengajar(periode.id);
   const grupPool = await muatGrupPool(periode.id);
+  const ditahan = await ringkasDitahan(periode.id);
 
   return (
     <Bingkai>
@@ -86,6 +89,8 @@ export default async function KetersediaanKoordinatorPage() {
         usulan={usulan}
         preset={preset.map((p) => ({ id: p.id, nama: p.nama, gender: p.gender, tipe: p.tipe }))}
       />
+
+      <PanelDitahan periodeId={periode.id} ringkas={ditahan} />
 
       <PanelPengingat periodeId={periode.id} />
 

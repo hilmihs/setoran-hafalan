@@ -4,6 +4,7 @@ import { useState } from 'react';
 import type { KsPeriode } from '@/types/db';
 import {
   buatPeriode,
+  rekamRiwayatPeriode,
   nyalakanKirimNyata,
   tetapkanTujuanTilawah,
   ubahAturanPeriode,
@@ -145,6 +146,19 @@ function AturanPeriode({ periode }: { periode: KsPeriode }) {
       >
         {pending ? 'Menyimpan…' : 'Simpan aturan'}
       </button>
+      <button
+        className="btn btn-sm btn-ghost"
+        style={{ marginTop: 8, marginLeft: 8 }}
+        disabled={pending}
+        onClick={() => jalan(() => rekamRiwayatPeriode({ periodeId: periode.id }))}
+      >
+        Rekam riwayat periode
+      </button>
+      <p className="t-small" style={{ color: 'var(--muted-2)', marginTop: 6 }}>
+        Menyimpan berapa halaqah terbentuk dan batal per slot pada periode ini. Angka inilah
+        yang dilihat pengajar sebagai &quot;peluang slot terbentuk&quot;. Dijalankan otomatis
+        setelah periode berakhir; tombol ini untuk merekam lebih awal.
+      </p>
     </Bagian>
   );
 }

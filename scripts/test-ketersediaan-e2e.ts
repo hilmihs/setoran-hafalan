@@ -15,6 +15,7 @@ import { ringkasSlot } from '@/lib/ketersediaan-permintaan';
 import { bacaCsv, saring, tebakPemetaan } from '@/lib/ketersediaan-pendaftar';
 import { bangunWorkbook } from '@/lib/ketersediaan-export';
 import { geserYangKedaluwarsa, terbitkanToken } from '@/lib/ketersediaan-konfirmasi';
+import { catatRiwayatPeriode, ringkasDitahan } from '@/lib/ketersediaan-ditahan';
 import type { KsPeriode, KsSlot } from '@/types/db';
 
 const url = process.env.DATABASE_URL ?? '';
@@ -55,6 +56,10 @@ let kelompokDibuat: string | null = null;
  * tanpa memverifikasi sama saja tidak membersihkan.
  */
 async function bersihkan() {
+  // ks_slot_riwayat sengaja TIDAK berakar pada periode_id — ia bertahan setelah
+  // periodenya dibuang, karena itulah gunanya sebagai riwayat lintas periode.
+  // Maka data ujinya dihapus terpisah, berdasarkan label periode.
+  await supabaseAdmin.from('ks_slot_riwayat').delete().eq('periode_label', `${TANDA} September 2026`);
   if (periodeId) await supabaseAdmin.from('ks_periode').delete().eq('id', periodeId);
   for (const id of pengajarDibuat) await supabaseAdmin.from('pengajar').delete().eq('id', id);
   if (kelompokDibuat) await supabaseAdmin.from('kelompok_pengajar').delete().eq('id', kelompokDibuat);
@@ -351,6 +356,50 @@ async function main() {
     .select('id')
     .eq('usulan_id', penerus!.id);
   eq((pesertaPindah ?? []).length, 12, 'peserta ikut pindah utuh, tidak kembali ke antrean');
+
+  // ── Pendaftar ditahan ────────────────────────────────────────────────────
+  console.log('\n# ringkasan pendaftar ditahan');
+  const rd = await ringkasDitahan(p.id);
+  eq(rd.total, 5, '5 baris tertahan terbaca dari basis data');
+  ok(rd.perAlasan.length >= 3, `alasan dikelompokkan (${rd.perAlasan.length} macam)`);
+  ok(
+    rd.perAlasan.every((a) => a.jumlah > 0),
+    'tiap alasan membawa jumlah'
+  );
+  ok(
+    rd.slotAsing.some((s) => s.nilai.includes('Rabu Malam')),
+    'nilai slot asing dilaporkan utuh agar bisa ditindaklanjuti'
+  );
+  ok(rd.baris.length === 5, 'barisnya ikut terbawa untuk ditampilkan');
+
+  // ── Riwayat slot ─────────────────────────────────────────────────────────
+  console.log('\n# pencatatan riwayat slot');
+  const riwayat1 = await catatRiwayatPeriode(p.id);
+  ok(riwayat1.slot > 0, `${riwayat1.slot} slot tercatat ke riwayat`);
+
+  const { data: barisRiwayat } = await supabaseAdmin
+    .from('ks_slot_riwayat')
+    .select('slot_label, halaqah_terbentuk, halaqah_batal, pendaftar, sumber')
+    .eq('periode_label', p.nama);
+  const rw = (barisRiwayat ?? []) as {
+    slot_label: string;
+    halaqah_terbentuk: number;
+    halaqah_batal: number;
+    pendaftar: number;
+    sumber: string;
+  }[];
+  eq(rw.length, riwayat1.slot, 'jumlah baris riwayat sama dengan yang dilaporkan');
+  ok(rw.every((r) => r.sumber === 'sistem'), 'seluruhnya bertanda sumber sistem');
+  ok(rw.some((r) => r.pendaftar > 0), 'jumlah pendaftar ikut tercatat');
+
+  // Dijalankan ulang tidak boleh menggandakan.
+  const riwayat2 = await catatRiwayatPeriode(p.id);
+  eq(riwayat2.slot, riwayat1.slot, 'pencatatan ulang menghasilkan jumlah yang sama');
+  const { data: barisRiwayat2 } = await supabaseAdmin
+    .from('ks_slot_riwayat')
+    .select('id')
+    .eq('periode_label', p.nama);
+  eq((barisRiwayat2 ?? []).length, rw.length, 'pencatatan ulang tidak menggandakan baris');
 
   // ── Ekspor xlsx ──────────────────────────────────────────────────────────
   console.log('\n# ekspor xlsx');

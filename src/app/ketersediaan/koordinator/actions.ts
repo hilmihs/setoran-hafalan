@@ -15,6 +15,7 @@ import {
 import { catatKs } from '@/lib/ketersediaan-log';
 import { getPeriode, getPeriodeAktif, listSlot, siapkanSlot, SLOT_BAWAAN } from '@/lib/ketersediaan-periode';
 import { ringkasSlot } from '@/lib/ketersediaan-permintaan';
+import { catatRiwayatPeriode } from '@/lib/ketersediaan-ditahan';
 import { susunLabel, uraikanSlot } from '@/lib/ketersediaan-slot';
 import { tarikSumber, tebakPemetaan } from '@/lib/ketersediaan-pendaftar';
 import { jalankanAlokasi } from '@/lib/ketersediaan-jalankan';
@@ -941,4 +942,115 @@ export async function ubahStatusGrupPool(input: {
   });
   segarkan();
   return { ok: true, pesan: 'Status tautan diperbarui.' };
+}
+
+// ── Pendaftar ditahan ──────────────────────────────────────────────────────
+
+/**
+ * Nyatakan satu baris tertahan layak diproses.
+ *
+ * Hanya boleh untuk baris yang slotnya sudah dikenali — tanpa slot, mesin
+ * alokasi tidak punya tempat menaruhnya dan barisnya akan menggantung sebagai
+ * "sah" yang tak pernah terpakai, yang justru lebih membingungkan daripada
+ * tertahan.
+ *
+ * Alasan penahanannya TIDAK dihapus: ia menjadi catatan kenapa baris ini pernah
+ * dipertanyakan, dan tarikan berikutnya tidak akan menurunkannya lagi karena
+ * status 'valid' hanya ditimpa untuk baris yang belum pernah diputuskan.
+ */
+export async function loloskanPendaftar(input: {
+  periodeId: string;
+  pendaftarId: string;
+}): Promise<Hasil> {
+  const a = await aktor();
+  const { data: p } = await supabaseAdmin
+    .from('ks_pendaftar')
+    .select('id, nama, status, slot_id, alasan_ditahan')
+    .eq('id', input.pendaftarId)
+    .maybeSingle();
+  if (!p) return { ok: false, error: 'Pendaftar tidak ditemukan.' };
+  if (p.status !== 'ditahan') return { ok: false, error: `Baris ini berstatus "${p.status}".` };
+  if (!p.slot_id) {
+    return {
+      ok: false,
+      error: 'Slotnya belum dikenali master. Tambahkan slotnya dulu, lalu tarik ulang pendaftar.',
+    };
+  }
+
+  await supabaseAdmin
+    .from('ks_pendaftar')
+    .update({ status: 'valid', updated_at: new Date().toISOString() })
+    .eq('id', input.pendaftarId);
+
+  await catatKs({
+    periode_id: input.periodeId,
+    entitas: 'ks_pendaftar',
+    entitas_id: input.pendaftarId,
+    aksi: 'loloskan_pendaftar',
+    sebelum: { status: 'ditahan', alasan: p.alasan_ditahan },
+    sesudah: { status: 'valid' },
+    aktor_wa: a.wa,
+    aktor_nama: a.nama,
+  });
+  segarkan();
+  return { ok: true, pesan: `${p.nama || 'Baris'} diloloskan dan ikut antrean.` };
+}
+
+export async function batalkanPendaftar(input: {
+  periodeId: string;
+  pendaftarId: string;
+}): Promise<Hasil> {
+  const a = await aktor();
+  const { data: p } = await supabaseAdmin
+    .from('ks_pendaftar')
+    .select('id, nama, status, alasan_ditahan')
+    .eq('id', input.pendaftarId)
+    .maybeSingle();
+  if (!p) return { ok: false, error: 'Pendaftar tidak ditemukan.' };
+  if (p.status === 'dialokasikan') {
+    return { ok: false, error: 'Baris ini sudah masuk usulan halaqah — batalkan dari papan usulan.' };
+  }
+
+  await supabaseAdmin
+    .from('ks_pendaftar')
+    .update({ status: 'batal', updated_at: new Date().toISOString() })
+    .eq('id', input.pendaftarId);
+
+  await catatKs({
+    periode_id: input.periodeId,
+    entitas: 'ks_pendaftar',
+    entitas_id: input.pendaftarId,
+    aksi: 'batalkan_pendaftar',
+    sebelum: { status: p.status, alasan: p.alasan_ditahan },
+    sesudah: { status: 'batal' },
+    aktor_wa: a.wa,
+    aktor_nama: a.nama,
+  });
+  segarkan();
+  return { ok: true, pesan: `${p.nama || 'Baris'} dibatalkan.` };
+}
+
+/**
+ * Rekam statistik periode ke riwayat slot.
+ *
+ * Angka "peluang slot terbentuk" yang dilihat pengajar dihitung dari sini. Tanpa
+ * pemanggilan ini tabelnya tidak akan pernah terisi oleh sistem sendiri, dan
+ * janji itu tidak pernah ditepati walau sistemnya berjalan bertahun.
+ */
+export async function rekamRiwayatPeriode(input: { periodeId: string }): Promise<Hasil> {
+  const a = await aktor();
+  const h = await catatRiwayatPeriode(input.periodeId);
+  await catatKs({
+    periode_id: input.periodeId,
+    entitas: 'ks_slot_riwayat',
+    aksi: 'rekam_riwayat_periode',
+    sesudah: h,
+    aktor_wa: a.wa,
+    aktor_nama: a.nama,
+  });
+  segarkan();
+  return {
+    ok: true,
+    pesan: `${h.slot} slot tercatat — ${h.terbentuk} halaqah terbentuk, ${h.batal} batal.`,
+  };
 }

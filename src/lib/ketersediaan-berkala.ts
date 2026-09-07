@@ -5,6 +5,7 @@ import { getPeriodeAktif, listSlot } from '@/lib/ketersediaan-periode';
 import { tarikSumber } from '@/lib/ketersediaan-pendaftar';
 import { geserYangKedaluwarsa } from '@/lib/ketersediaan-konfirmasi';
 import { catatKs } from '@/lib/ketersediaan-log';
+import { catatRiwayatPeriode } from '@/lib/ketersediaan-ditahan';
 
 /**
  * Pekerjaan berkala yang membuat model bergulir benar-benar bergulir.
@@ -26,6 +27,8 @@ export interface HasilBerkala {
   ditandaiBasi: number;
   dinonaktifkan: number;
   perluDiingatkan: number;
+  /** Slot yang statistiknya direkam ke riwayat; 0 bila periode belum berakhir. */
+  riwayatDirekam: number;
 }
 
 export async function jalankanBerkala(sekarang = new Date()): Promise<HasilBerkala> {
@@ -37,6 +40,7 @@ export async function jalankanBerkala(sekarang = new Date()): Promise<HasilBerka
     ditandaiBasi: 0,
     dinonaktifkan: 0,
     perluDiingatkan: 0,
+    riwayatDirekam: 0,
   };
 
   const periode = await getPeriodeAktif();
@@ -79,6 +83,16 @@ export async function jalankanBerkala(sekarang = new Date()): Promise<HasilBerka
   hasil.dinonaktifkan = segar.dinonaktifkan;
   hasil.perluDiingatkan = segar.perluDiingatkan;
 
+  // Rekam riwayat begitu periodenya lewat. Dijalankan berulang tanpa masalah —
+  // barisnya di-upsert per (periode, slot) — dan tanpa ini tabel riwayat tidak
+  // akan pernah terisi oleh sistem sendiri, sehingga "peluang slot terbentuk"
+  // yang dijanjikan ke pengajar tidak pernah punya angka.
+  const hariIni = sekarang.toLocaleDateString('sv-SE', { timeZone: 'Asia/Jakarta' });
+  if (periode.selesai < hariIni) {
+    const r = await catatRiwayatPeriode(periode.id);
+    hasil.riwayatDirekam = r.slot;
+  }
+
   await catatKs({
     periode_id: periode.id,
     entitas: 'ks_periode',
@@ -89,6 +103,7 @@ export async function jalankanBerkala(sekarang = new Date()): Promise<HasilBerka
       digeser: hasil.digeser,
       basi: hasil.ditandaiBasi,
       nonaktif: hasil.dinonaktifkan,
+      riwayat: hasil.riwayatDirekam,
     },
   });
 
