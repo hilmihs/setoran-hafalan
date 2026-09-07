@@ -725,9 +725,11 @@ export default function RapotTrackA4({ payload, qr, logoSrc }: Props): ReactElem
               </div>
             </div>
             <div style={{ fontSize: 9.5, color: MUTED, marginBottom: 14 }}>
+              {/* Keterangan "batch ini tidak menjalankan sesi evaluasi berkala" dibuang:
+                  itu urusan tata kelola angkatan, bukan keterangan yang perlu dibaca
+                  wali santri di lembar rapotnya. */}
               Skor = 100 − (Lahn Jaliy × 6) − (Lahn Khafiy × 2), dengan nilai minimum {NILAI_MINIMUM}. Nilai
-              akhir 100% dari {ujianLabel} — batch ini tidak menjalankan sesi evaluasi berkala. Ambang lulus{' '}
-              {payload.ambang}.
+              akhir 100% dari {ujianLabel}. Ambang lulus {payload.ambang}.
             </div>
 
             <div style={SECTION_LABEL}>B. Catatan penguji</div>

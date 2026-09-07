@@ -227,7 +227,12 @@ export function EvaluasiPengajarApp({ initial }: { initial: EvaluasiInitial }) {
   // saling mematikan tombol, konfirmasi dua ketukan seperti tombol Reset.
   const [bukaKonfirmasi, setBukaKonfirmasi] = useState<string | null>(null);
   const [bukaBusy, setBukaBusy] = useState<string | null>(null);
-  const [bukaError, setBukaError] = useState<string | null>(null);
+  // Reset dari kartu riwayat (mengosongkan nilai, termasuk Ujian QN/PB).
+  const [resetKonfirmasi, setResetKonfirmasi] = useState<string | null>(null);
+  const [resetBusyId, setResetBusyId] = useState<string | null>(null);
+  // Satu tempat pesan untuk kedua aksi riwayat — keduanya ditolak alasan yang
+  // sama (rapot masih aktif), jadi memisahkannya cuma menggandakan kotak galat.
+  const [riwayatError, setRiwayatError] = useState<string | null>(null);
   // Cetak rapot: Pusat Rapot (layar 'p-rapot') → render lembar A4 → print.
   const [printReq, setPrintReq] = useState<{ dok: DokCetak; ids: string[] } | null>(null);
   // Rapot resmi yang sedang berlaku. Dimuat dari server (page.tsx) DAN diperbarui
@@ -553,23 +558,53 @@ export function EvaluasiPengajarApp({ initial }: { initial: EvaluasiInitial }) {
     }
   }, []);
 
+  /**
+   * Bersihkan jejak satu sesi di sisi klien: nilai, simpanan tertunda, dan
+   * penanda "sudah terkirim". Dipakai setelah server menghapus nilainya.
+   */
+  const bersihkanSesiLokal = (j: Jenis, nomor: number) => {
+    batalkanSimpanTertunda(j, nomor);
+    setWork((prev) => {
+      const next = { ...prev };
+      for (const p of peserta) delete next[workKey(p.id, j, nomor)];
+      return next;
+    });
+    setSentSesi((prev) => {
+      const next = { ...prev };
+      delete next[`${j}|${nomor}`];
+      return next;
+    });
+  };
+
+  /** Kirim permintaan reset. `null` = berhasil, selain itu pesan galat siap tampil. */
+  const kirimReset = async (sesiId: string): Promise<string | null> => {
+    try {
+      const res = await fetch('/api/evaluasi/nilai/reset', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sesi_id: sesiId }),
+      });
+      if (!res.ok) {
+        const json = (await res.json().catch(() => null)) as { error?: string } | null;
+        return json?.error || 'Gagal mereset sesi. Coba lagi.';
+      }
+      return null;
+    } catch {
+      return 'Gagal mereset sesi — periksa koneksi lalu coba lagi.';
+    }
+  };
+
   // Reset semua nilai sesi (jenis+sesi) aktif — kembali persis seperti belum
   // dinilai: skor hilang, semua peserta tercentang hadir lagi, progres 0.
-  // Server dulu baru lokal: kalau server menolak (mis. sesi sudah terkirim),
+  // Server dulu baru lokal: kalau server menolak (mis. rapot masih aktif),
   // tampilan tak boleh terlanjur kosong — nilai akan muncul lagi saat muat
   // ulang dan pengajar mengira resetnya berhasil. Mode Coba → lokal saja.
   const resetSesi = async () => {
     if (resetBusy) return;
     setResetError(null);
 
-    // Lokal: bersihkan work sesi ini + status simpan + posisi peserta.
     const bersihkanLokal = () => {
-      batalkanSimpanTertunda(jenis, activeSession);
-      setWork((prev) => {
-        const next = { ...prev };
-        for (const p of peserta) delete next[workKey(p.id, jenis, activeSession)];
-        return next;
-      });
+      bersihkanSesiLokal(jenis, activeSession);
       setStatuses({});
       setActiveIdx(0);
       setKirimStatus('idle');
@@ -591,29 +626,41 @@ export function EvaluasiPengajarApp({ initial }: { initial: EvaluasiInitial }) {
     // Batalkan simpanan tertunda SEBELUM permintaan berangkat, supaya tak ada
     // upsert yang menyusul di belakang DELETE dan menghidupkan baris lagi.
     batalkanSimpanTertunda(jenis, activeSession);
-    try {
-      const res = await fetch('/api/evaluasi/nilai/reset', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ sesi_id: sesiId }),
-      });
-      if (!res.ok) {
-        const json = (await res.json().catch(() => null)) as { error?: string } | null;
-        setResetError(json?.error || 'Gagal mereset sesi. Coba lagi.');
-        return;
-      }
-      bersihkanLokal();
-      // Sesi yang nilainya dihapus kembali menjadi draft di sisi pengajar.
-      setSentSesi((prev) => {
-        const next = { ...prev };
-        delete next[`${jenis}|${activeSession}`];
-        return next;
-      });
-    } catch {
-      setResetError('Gagal mereset sesi — periksa koneksi lalu coba lagi.');
-    } finally {
-      setResetBusy(false);
+    const galat = await kirimReset(sesiId);
+    if (galat) setResetError(galat);
+    else bersihkanLokal();
+    setResetBusy(false);
+  };
+
+  /**
+   * Reset dari kartu riwayat — sesi mana pun yang sudah terkirim, termasuk
+   * Ujian QN dan Ujian PB.
+   *
+   * Sebelumnya mengosongkan ujian akhir menuntut perjalanan buta: Ujian Akhir →
+   * pilih sesi ujiannya → layar daftar → Reset, sementara baris riwayatnya
+   * sendiri hanya menawarkan "Buka kunci". Server membuka kuncinya sendiri
+   * (lihat /api/evaluasi/nilai/reset), jadi satu ketukan di sini cukup.
+   */
+  const resetSesiRiwayat = async (sesiId: string, j: Jenis, nomor: number) => {
+    if (resetBusyId) return;
+    setRiwayatError(null);
+
+    if (cobaRef.current) {
+      bersihkanSesiLokal(j, nomor);
+      setResetKonfirmasi(null);
+      return;
     }
+
+    setResetBusyId(sesiId);
+    batalkanSimpanTertunda(j, nomor);
+    const galat = await kirimReset(sesiId);
+    if (galat) {
+      setRiwayatError(galat);
+    } else {
+      bersihkanSesiLokal(j, nomor);
+      setResetKonfirmasi(null);
+    }
+    setResetBusyId(null);
   };
 
   // Buka kunci sesi terkirim dari kartu riwayat: status server kembali 'draft'
@@ -621,7 +668,7 @@ export function EvaluasiPengajarApp({ initial }: { initial: EvaluasiInitial }) {
   // "kosongkan dari nol" tetap lewat tombol Reset di layar daftar.
   const bukaKunciSesi = async (sesiId: string, jenis: Jenis, nomor: number) => {
     if (bukaBusy) return;
-    setBukaError(null);
+    setRiwayatError(null);
 
     const lepasKunciLokal = () => {
       setSentSesi((prev) => {
@@ -648,12 +695,12 @@ export function EvaluasiPengajarApp({ initial }: { initial: EvaluasiInitial }) {
         const json = (await res.json().catch(() => null)) as { error?: string } | null;
         // Penolakan karena rapot masih aktif datang lewat sini — pesannya
         // menyebut nama peserta, jadi tampilkan apa adanya.
-        setBukaError(json?.error || 'Gagal membuka kunci sesi. Coba lagi.');
+        setRiwayatError(json?.error || 'Gagal membuka kunci sesi. Coba lagi.');
         return;
       }
       lepasKunciLokal();
     } catch {
-      setBukaError('Gagal membuka kunci sesi — periksa koneksi lalu coba lagi.');
+      setRiwayatError('Gagal membuka kunci sesi — periksa koneksi lalu coba lagi.');
     } finally {
       setBukaBusy(null);
     }
@@ -662,7 +709,7 @@ export function EvaluasiPengajarApp({ initial }: { initial: EvaluasiInitial }) {
   const nav = (s: Screen) => {
     flushSaves();
     setResetError(null);
-    setBukaError(null);
+    setRiwayatError(null);
     setBukaKonfirmasi(null);
     // Galat penerbitan tak boleh ikut pindah layar: pesannya menyebut peserta
     // dan sesi tertentu, dan menempel di layar berikutnya cuma membingungkan.
@@ -1351,7 +1398,31 @@ export function EvaluasiPengajarApp({ initial }: { initial: EvaluasiInitial }) {
                           </button>
                           <button
                             disabled={bukaBusy === r.key}
-                            onClick={() => { setBukaKonfirmasi(null); setBukaError(null); }}
+                            onClick={() => { setBukaKonfirmasi(null); setRiwayatError(null); }}
+                            style={{ height: 28, padding: '0 10px', borderRadius: 7, border: '1px solid #e8e4dc', background: '#fff', font: 'inherit', fontSize: 11, fontWeight: 600, color: '#44423d', cursor: 'pointer' }}
+                          >
+                            Batal
+                          </button>
+                        </>
+                      ) : resetKonfirmasi === r.key ? (
+                        <>
+                          {/* Mengosongkan tak bisa dibatalkan — sebut akibatnya, jangan
+                              cuma "Ya". */}
+                          <span style={{ fontSize: 10.5, color: 'oklch(0.46 0.14 25)', lineHeight: 1.3, textAlign: 'right' }}>
+                            Kosongkan
+                            <br />
+                            semua nilai?
+                          </span>
+                          <button
+                            disabled={resetBusyId === r.key}
+                            onClick={() => resetSesiRiwayat(r.key, r.jenis, r.nomor)}
+                            style={{ height: 28, padding: '0 10px', borderRadius: 7, border: 'none', background: 'oklch(0.55 0.16 25)', font: 'inherit', fontSize: 11, fontWeight: 700, color: '#fff', cursor: resetBusyId === r.key ? 'default' : 'pointer', opacity: resetBusyId === r.key ? 0.6 : 1, whiteSpace: 'nowrap' }}
+                          >
+                            {resetBusyId === r.key ? 'Mereset…' : 'Ya, reset'}
+                          </button>
+                          <button
+                            disabled={resetBusyId === r.key}
+                            onClick={() => { setResetKonfirmasi(null); setRiwayatError(null); }}
                             style={{ height: 28, padding: '0 10px', borderRadius: 7, border: '1px solid #e8e4dc', background: '#fff', font: 'inherit', fontSize: 11, fontWeight: 600, color: '#44423d', cursor: 'pointer' }}
                           >
                             Batal
@@ -1361,10 +1432,20 @@ export function EvaluasiPengajarApp({ initial }: { initial: EvaluasiInitial }) {
                         <>
                           <button
                             title="Kembalikan sesi ini jadi draft supaya nilainya bisa diperbaiki"
-                            onClick={() => { setBukaKonfirmasi(r.key); setBukaError(null); }}
+                            onClick={() => { setBukaKonfirmasi(r.key); setResetKonfirmasi(null); setRiwayatError(null); }}
                             style={{ height: 28, padding: '0 10px', borderRadius: 7, border: '1px solid oklch(0.85 0.08 25)', background: '#ffffff', font: 'inherit', fontSize: 11, fontWeight: 600, color: 'oklch(0.46 0.14 25)', cursor: 'pointer', whiteSpace: 'nowrap' }}
                           >
-                            🔓 Buka kunci
+                            🔓 Buka
+                          </button>
+                          {/* Reset di sini, bukan cuma di layar daftar: mengosongkan
+                              Ujian QN/PB dulu menuntut menelusuri Ujian Akhir → pilih
+                              sesi → daftar, padahal baris sesinya ada di depan mata. */}
+                          <button
+                            title="Kosongkan seluruh nilai sesi ini — sesi terkirim ikut dibuka"
+                            onClick={() => { setResetKonfirmasi(r.key); setBukaKonfirmasi(null); setRiwayatError(null); }}
+                            style={{ height: 28, padding: '0 10px', borderRadius: 7, border: '1px solid oklch(0.85 0.08 25)', background: '#ffffff', font: 'inherit', fontSize: 11, fontWeight: 600, color: 'oklch(0.46 0.14 25)', cursor: 'pointer', whiteSpace: 'nowrap' }}
+                          >
+                            ♻ Reset
                           </button>
                           <button
                             onClick={() => bukaPusatRapot(r.jenis, r.nomor)}
@@ -1378,15 +1459,15 @@ export function EvaluasiPengajarApp({ initial }: { initial: EvaluasiInitial }) {
                   ))}
                 </div>
               )}
-              {bukaError ? (
+              {riwayatError ? (
                 <div style={{ marginTop: 8, fontSize: 11, color: 'oklch(0.46 0.14 25)', background: 'oklch(0.97 0.02 25)', border: '1px solid oklch(0.85 0.08 25)', borderRadius: 8, padding: '8px 10px', lineHeight: 1.4 }}>
-                  {bukaError}
+                  {riwayatError}
                 </div>
               ) : (
                 <div style={{ marginTop: 8, fontSize: 11, color: '#a8a39a', lineHeight: 1.4 }}>
-                  Sesi terkirim terkunci. Buka kuncinya untuk memperbaiki nilai — nilai lama tetap ada,
-                  dan tombol Reset di layar daftar bisa mengosongkannya. Rapot yang sudah terbit harus
-                  dicabut lebih dulu.
+                  <b>Buka</b> mengembalikan sesi jadi draft — nilai lama tetap ada, tinggal disunting.
+                  <b> Reset</b> mengosongkan seluruh nilainya dari nol, termasuk Ujian QN &amp; Ujian PB.
+                  Rapot yang sudah terbit harus dicabut lebih dulu.
                 </div>
               )}
             </div>
