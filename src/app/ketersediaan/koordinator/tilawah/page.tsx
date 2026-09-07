@@ -1,5 +1,7 @@
 import Link from 'next/link';
+import { notFound } from 'next/navigation';
 import { requireOneOfRoles } from '@/lib/session';
+import { bolehLihatFiturTersembunyi } from '@/lib/admin-guard';
 import { supabaseAdmin } from '@/lib/supabase-admin';
 import { LogoutButton } from '@/components/LogoutButton';
 import { getPeriodeAktif } from '@/lib/ketersediaan-periode';
@@ -10,6 +12,8 @@ export const dynamic = 'force-dynamic';
 
 export default async function PemetaanTilawahPage() {
   await requireOneOfRoles(['koordinator']);
+  if (!(await bolehLihatFiturTersembunyi())) notFound();
+
   const periode = await getPeriodeAktif();
 
   return (

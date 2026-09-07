@@ -1,5 +1,6 @@
 import { getAllAccesses } from '@/lib/session';
 import { featureLinksFor } from '@/lib/feature-links';
+import { bolehLihatFiturTersembunyi } from '@/lib/admin-guard';
 
 /**
  * Nav bar lintas-fitur: tampilkan link ke semua fitur yang session ini punya akses.
@@ -7,7 +8,7 @@ import { featureLinksFor } from '@/lib/feature-links';
  */
 export async function FeatureNav({ current }: { current: string }) {
   const accesses = await getAllAccesses();
-  const links = featureLinksFor(accesses);
+  const links = featureLinksFor(accesses, { superadmin: await bolehLihatFiturTersembunyi() });
 
   if (links.length <= 1) return null;
 

@@ -58,6 +58,27 @@ export async function isSuperadmin(): Promise<boolean> {
 }
 
 /**
+ * Superadmin, ATAU sesi yang sedang di-impersonate OLEH superadmin.
+ *
+ * HANYA untuk menyembunyikan/menampilkan menu dan halaman — jangan dipakai
+ * menjaga mutasi. `isSuperadmin()` sengaja tidak dilonggarkan: ia menjaga
+ * wewenang nyata (mis. terapkan sync hilmihs), dan sesi impersonate tidak boleh
+ * mewarisi wewenang itu.
+ *
+ * Bedanya di sini: saat superadmin memakai "login sebagai" untuk menguji halaman
+ * pengajar, sesi aktifnya adalah milik target sehingga `isSuperadmin()` bernilai
+ * false. Padahal yang mengemudikan tetap superadmin — snapshot-nya tersimpan di
+ * `impersonator.adminWa`. Tanpa pemeriksaan ini, fitur yang disembunyikan tidak
+ * akan pernah bisa diuji lewat jalur yang memang disediakan untuk itu.
+ */
+export async function bolehLihatFiturTersembunyi(): Promise<boolean> {
+  if (await isSuperadmin()) return true;
+  const s = await getSession();
+  const wa = s.impersonator?.adminWa;
+  return Boolean(wa && SUPERADMIN_WAS.includes(wa));
+}
+
+/**
  * RoleAccess milik admin (dari ADMIN_WA) untuk atribusi audit yang benar —
  * dipakai saat mutasi admin / impersonate agar audit teratribusi ke admin asli,
  * bukan ke target yang sedang di-impersonate. Tidak melakukan guard sendiri;

@@ -1,4 +1,6 @@
+import { notFound } from 'next/navigation';
 import { requirePengajar } from '@/lib/session';
+import { bolehLihatFiturTersembunyi } from '@/lib/admin-guard';
 import { supabaseAdmin } from '@/lib/supabase-admin';
 import { LogoutButton } from '@/components/LogoutButton';
 import { FeatureNav } from '@/components/FeatureNav';
@@ -15,6 +17,12 @@ export const dynamic = 'force-dynamic';
 
 export default async function KetersediaanPengajarPage() {
   const sesi = await requirePengajar();
+  // Fitur masih disembunyikan: sudah ter-deploy tetapi belum diumumkan ke
+  // pengajar. Menyembunyikan dari menu saja tidak cukup — URL-nya tetap bisa
+  // diketik. 404, bukan redirect, supaya halamannya tidak terasa "ada tapi
+  // dilarang" bagi yang belum berkepentingan.
+  if (!(await bolehLihatFiturTersembunyi())) notFound();
+
   const sekarang = new Date();
   const periode = await getPeriodeAktif();
 

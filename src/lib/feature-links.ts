@@ -6,6 +6,13 @@ export interface FeatureLink {
   navLabel: string;
   description: string;
   match: (a: RoleAccess) => boolean;
+  /**
+   * Sembunyikan dari semua orang kecuali superadmin (termasuk saat superadmin
+   * memakai "login sebagai"). Dipakai untuk fitur yang sudah ter-deploy tetapi
+   * belum diumumkan — halamannya sendiri juga menjaga diri, ini hanya menutup
+   * pintunya dari menu.
+   */
+  superadminOnly?: boolean;
 }
 
 /**
@@ -144,6 +151,7 @@ export const FEATURE_LINKS: FeatureLink[] = [
     navLabel: 'Ketersediaan',
     description: 'Nyatakan slot waktu yang Anda sanggupi — lihat jadwal Anda & peminat tiap slot',
     match: (a) => a.role === 'pengajar',
+    superadminOnly: true,
   },
   {
     href: '/ketersediaan/koordinator',
@@ -151,6 +159,7 @@ export const FEATURE_LINKS: FeatureLink[] = [
     navLabel: 'Kelola Ketersediaan',
     description: 'Periode & master slot, verifikasi isian, pasokan vs permintaan per slot',
     match: (a) => a.role === 'koordinator',
+    superadminOnly: true,
   },
   {
     href: '/evaluasi/pengajar',
@@ -196,6 +205,12 @@ export const FEATURE_LINKS: FeatureLink[] = [
   },
 ];
 
-export function featureLinksFor(accesses: RoleAccess[]): FeatureLink[] {
-  return FEATURE_LINKS.filter((f) => accesses.some((a) => f.match(a)));
+export function featureLinksFor(
+  accesses: RoleAccess[],
+  opts: { superadmin?: boolean } = {}
+): FeatureLink[] {
+  return FEATURE_LINKS.filter((f) => {
+    if (f.superadminOnly && !opts.superadmin) return false;
+    return accesses.some((a) => f.match(a));
+  });
 }

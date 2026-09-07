@@ -5,6 +5,7 @@ import { currentCycleStart, formatCycleRange } from '@/lib/week';
 import { formatCycleRangeShort } from '@/lib/week';
 import { ROLE_LANDING } from '@/lib/roles';
 import { featureLinksFor } from '@/lib/feature-links';
+import { bolehLihatFiturTersembunyi } from '@/lib/admin-guard';
 import { isSuperadmin } from '@/lib/admin-guard';
 import { getSessionWa, findKetuaProgramKelas, findSelfAttendanceMembership } from '@/lib/program-kelas';
 import { getUnfilledMaahirDays, getUnfilledDaysForAnggota } from '@/lib/maahir-presensi';
@@ -36,7 +37,9 @@ export default async function HomePage({ searchParams }: { searchParams: { next?
       ? (await getUnfilledDaysForAnggota(selfMembership.kelas, selfMembership.anggotaId)).length
       : 0;
 
-    const available = featureLinksFor(accesses);
+    const available = featureLinksFor(accesses, {
+      superadmin: await bolehLihatFiturTersembunyi(),
+    });
     const superadmin = await isSuperadmin();
 
     // Ketua Maahir / peserta mandiri tak punya entri di FEATURE_LINKS; tambah kartu sintetis.

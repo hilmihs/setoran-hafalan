@@ -1,8 +1,9 @@
+import { notFound } from 'next/navigation';
 import { requireOneOfRoles } from '@/lib/session';
 import { supabaseAdmin } from '@/lib/supabase-admin';
 import { LogoutButton } from '@/components/LogoutButton';
 import { FeatureNav } from '@/components/FeatureNav';
-import { isSuperadmin } from '@/lib/admin-guard';
+import { bolehLihatFiturTersembunyi, isSuperadmin } from '@/lib/admin-guard';
 import { getPeriodeAktif, listPeriode, listSlot } from '@/lib/ketersediaan-periode';
 import { ringkasSlot, type RingkasSlot } from '@/lib/ketersediaan-permintaan';
 import { listPreset } from '@/lib/ketersediaan-prioritas';
@@ -20,6 +21,9 @@ export const dynamic = 'force-dynamic';
 
 export default async function KetersediaanKoordinatorPage() {
   await requireOneOfRoles(['koordinator']);
+  // Lihat catatan di halaman pengajar: fitur masih disembunyikan.
+  if (!(await bolehLihatFiturTersembunyi())) notFound();
+
   const superadmin = await isSuperadmin();
   const sekarang = new Date();
 
