@@ -1,5 +1,6 @@
 import { supabaseAdmin } from '@/lib/supabase-admin';
 import { loadHalaqahPertemuan } from '@/lib/hits-ketua';
+import { normalizeWhatsApp } from '@/lib/whatsapp';
 import type { HitsLevel } from '@/types/db';
 
 export type KoreksiJenis = 'set_mulai' | 'tambah' | 'hapus' | 'ubah_tanggal';
@@ -12,14 +13,83 @@ export type KoreksiItemInput = {
   catatan?: string | null;
 };
 
-/** Koordinator KK aktif yang cocok gender halaqah (fallback gender lain). */
+export type KoreksiApprover = { name: string; wa: string };
+
+/**
+ * Penerima pengajuan koreksi pertemuan, per gender halaqah. Ditulis eksplisit —
+ * dulu "koordinator ketua kelas aktif PERTAMA yang cocok gender", dan urutan
+ * baris tak dijamin, sehingga pengajuan bisa nyasar ke koordinator lain.
+ * Konstanta supaya pergantian pemegangnya terekam di git; ENV disediakan untuk
+ * ganti cepat tanpa deploy. Pola sama dengan TUJUAN_WA di shakwa.ts.
+ *
+ * Sisi ikhwan dipegang berdua dan digilir per pengajuan (lihat `urutanKoreksi`).
+ * Nama TANPA titel — template WA sudah menambah "Ustadz/Ustadzah" sendiri.
+ * Pemegang wajib punya baris aktif di `koordinator_ketua_kelas`: halaman putusan
+ * dijaga requireKoordinatorKetuaKelas().
+ */
+export const KOREKSI_APPROVER: Record<'ikhwan' | 'akhwat', KoreksiApprover[]> = {
+  ikhwan: [
+    {
+      name: process.env.KOREKSI_NAMA_APPROVER_IKHWAN || 'Adam Malik',
+      wa: process.env.KOREKSI_WA_APPROVER_IKHWAN || '081280630437',
+    },
+    {
+      name: process.env.KOREKSI_NAMA_APPROVER_IKHWAN_2 || 'Muhammad Bintang Khairel',
+      wa: process.env.KOREKSI_WA_APPROVER_IKHWAN_2 || '081275958605',
+    },
+  ],
+  akhwat: [
+    {
+      name: process.env.KOREKSI_NAMA_APPROVER_AKHWAT || 'Talida Jihan Nabila',
+      wa: process.env.KOREKSI_WA_APPROVER_AKHWAT || '081994771197',
+    },
+  ],
+};
+
+/**
+ * Nomor giliran untuk gender yang pemegangnya lebih dari satu: jumlah pengajuan
+ * koreksi gender itu yang sudah tersimpan. Dihitung SEBELUM baris baru disimpan,
+ * jadi pengajuan pertama → indeks 0. Gender berpemegang tunggal tak perlu query.
+ */
+export async function urutanKoreksi(gender: 'ikhwan' | 'akhwat'): Promise<number> {
+  if (KOREKSI_APPROVER[gender].length < 2) return 0;
+  // Gender ada di halaqah, bukan di baris koreksi — shim tak bisa memfilter
+  // kolom embed, jadi disaring di sini. Tabelnya kecil (satu baris per pengajuan).
+  const { data, error } = await supabaseAdmin
+    .from('hits_pertemuan_koreksi')
+    .select('id, halaqah:halaqah_id(gender)');
+  if (error) {
+    // Gagal hitung bukan alasan menggagalkan pengajuan — jatuh ke pemegang pertama.
+    console.error('koreksi: gagal hitung giliran approver', error);
+    return 0;
+  }
+  return (data ?? []).filter((r) => (r.halaqah as unknown as { gender: string | null } | null)?.gender === gender).length;
+}
+
+/**
+ * Penerima pengajuan sesuai gender halaqah. `urutan` memutar giliran saat
+ * slotnya dipegang beberapa orang. Pemegang yang barisnya sudah tak aktif
+ * dilewati — kalau semuanya tak aktif, jatuh ke koordinator KK aktif mana pun
+ * (perilaku lama) supaya pengajuan tetap bisa diputuskan.
+ */
 export async function determineKoreksiApprover(
-  gender: 'ikhwan' | 'akhwat'
-): Promise<{ name: string; wa: string } | null> {
+  gender: 'ikhwan' | 'akhwat',
+  urutan = 0
+): Promise<KoreksiApprover | null> {
   const { data } = await supabaseAdmin
     .from('koordinator_ketua_kelas')
     .select('name, gender, whatsapp_number')
     .eq('active', true);
+  const aktif = new Set(
+    (data ?? []).filter((k) => k.whatsapp_number).map((k) => normalizeWhatsApp(k.whatsapp_number))
+  );
+
+  const slot = KOREKSI_APPROVER[gender].filter((a) => aktif.has(normalizeWhatsApp(a.wa)));
+  if (slot.length > 0) {
+    const idx = ((urutan % slot.length) + slot.length) % slot.length;
+    return slot[idx];
+  }
+
   const pick =
     (data ?? []).find((k) => k.gender === gender && k.whatsapp_number) ??
     (data ?? []).find((k) => k.whatsapp_number);

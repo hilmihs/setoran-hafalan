@@ -3,21 +3,28 @@ import { supabaseAdmin } from '@/lib/supabase-admin';
 import { getSession } from '@/lib/session';
 import { evalPengajarIdFor } from '@/lib/evaluasi-pengajar';
 import { isPesertaManual } from '@/lib/evaluasi-peserta';
+import { tandaiKurasi } from '@/lib/evaluasi-kurasi';
 
 export const runtime = 'nodejs';
 
 /**
- * Hapus peserta yang sebelumnya ditambahkan pengajar sendiri.
+ * Keluarkan peserta dari halaqah. Dua perlakuan, sengaja berbeda:
  *
- * Hanya baris `manual:` — peserta hilmihs dikelola di hulu, dan menghapusnya di
- * sini cuma akan dikembalikan sinkron berikutnya.
+ * - Baris `manual:` → HAPUS sungguhan. Biasanya dihapus karena salah tambah,
+ *   dan menyisakan baris mati membuat daftar koordinator berisi nama-nama yang
+ *   tak pernah ada. `evaluasi_nilai` ikut terhapus lewat ON DELETE CASCADE.
+ * - Baris hilmihs → `aktif=false` (soft delete) + kolom `aktif` ditandai
+ *   terkurasi (migrasi 0074). Hapus sungguhan akan dibuat ulang oleh pull
+ *   berikutnya sebagai 'create', dan tanpa penanda kurasi upsert apply
+ *   menghidupkannya lagi (mapPeserta selalu mengirim aktif=true). Nilai yang
+ *   sudah masuk sengaja dibiarkan utuh — peserta bisa dimunculkan lagi dari
+ *   sisi data pusat tanpa kehilangan riwayat.
  *
- * Hapus sungguhan, bukan `aktif=false`: baris manual biasanya dihapus karena
- * salah tambah, dan menyisakan baris mati membuat daftar koordinator berisi
- * nama-nama yang tak pernah ada. `evaluasi_nilai` ikut terhapus lewat
- * ON DELETE CASCADE. `evaluasi_rapot` memakai ON DELETE RESTRICT, jadi peserta
- * yang rapotnya sudah terbit terlindung di tingkat basis data — dicek lebih
- * dulu di sini supaya pesannya bisa dimengerti, bukan galat FK mentah.
+ * `evaluasi_rapot` memakai ON DELETE RESTRICT, jadi peserta yang rapotnya sudah
+ * terbit terlindung di tingkat basis data — dicek lebih dulu di sini supaya
+ * pesannya bisa dimengerti, bukan galat FK mentah. Cek yang sama berlaku untuk
+ * peserta pusat: dokumen ber-QR yang sudah beredar tak boleh merujuk peserta
+ * yang hilang dari daftar.
  */
 export async function POST(req: NextRequest) {
   try {
@@ -39,12 +46,7 @@ export async function POST(req: NextRequest) {
     if (typeof pesertaId !== 'string' || !pesertaId) {
       return NextResponse.json({ error: 'peserta_id wajib diisi' }, { status: 400 });
     }
-    if (!isPesertaManual(pesertaId)) {
-      return NextResponse.json(
-        { error: 'Peserta ini datang dari data pusat, tak bisa dihapus di sini.' },
-        { status: 403 }
-      );
-    }
+    const manual = isPesertaManual(pesertaId);
 
     const { data: halaqah } = await supabaseAdmin
       .from('eval_halaqah')
@@ -81,11 +83,23 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const { error } = await supabaseAdmin.from('eval_peserta').delete().eq('id', pesertaId);
+    if (manual) {
+      const { error } = await supabaseAdmin.from('eval_peserta').delete().eq('id', pesertaId);
+      if (error) {
+        return NextResponse.json({ error: error.message }, { status: 500 });
+      }
+      return NextResponse.json({ ok: true, mode: 'hapus' });
+    }
+
+    const { error } = await supabaseAdmin
+      .from('eval_peserta')
+      .update({ aktif: false })
+      .eq('id', pesertaId);
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
-    return NextResponse.json({ ok: true });
+    await tandaiKurasi('eval_peserta', pesertaId, ['aktif']);
+    return NextResponse.json({ ok: true, mode: 'nonaktif' });
   } catch (e: unknown) {
     return NextResponse.json(
       { error: e instanceof Error ? e.message : 'Internal error' },

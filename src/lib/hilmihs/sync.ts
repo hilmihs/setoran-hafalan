@@ -9,7 +9,7 @@ import type {
 } from './types';
 
 const COMPARE: Record<MirrorEntity, string[]> = {
-  batch: ['nama', 'aktif'],
+  batch: ['nama', 'aktif', 'family', 'batch_label', 'batch_order'],
   pengajar: ['nama', 'gender', 'whatsapp'],
   halaqah: ['nama', 'gender', 'level', 'pengajar_id', 'batch_id'],
   peserta: ['nama', 'gender', 'halaqah_id', 'urutan'],
@@ -45,8 +45,17 @@ async function fetchSnapshot(): Promise<{
   return { generatedAt: meta.generatedAt, batch, pengajar: [...pengajarMap.values()], halaqah, peserta };
 }
 
+/**
+ * Baca mirror sekarang. Error DIANGKAT, tidak ditelan: shim tak pernah reject,
+ * jadi kueri gagal (mis. kolom belum ada karena migrasi belum jalan) tadinya
+ * cuma menghasilkan data null → mirror terbaca kosong → diff menstage SELURUH
+ * baris sebagai 'create', sementara runPull tetap melapor status 'ok'.
+ * Koordinator lalu melihat layar penuh create palsu tanpa tanda ada yang salah.
+ * Dengan throw, runPull menangkapnya dan mencatat status 'error'.
+ */
 async function currentMirror<T>(table: string, cols: string): Promise<T[]> {
-  const { data } = await supabaseAdmin.from(table).select(cols);
+  const { data, error } = await supabaseAdmin.from(table).select(cols);
+  if (error) throw new Error(`baca mirror ${table} gagal: ${error.message}`);
   return (data ?? []) as T[];
 }
 
@@ -81,10 +90,14 @@ export async function runPull(): Promise<{ runId: string; total: number; counts:
 
   try {
     const snap = await fetchSnapshot();
-    const curBatch = await currentMirror<MirrorBatch & { aktif: boolean }>('eval_batch', 'id, nama, aktif');
+    const curBatch = await currentMirror<MirrorBatch>(
+      'eval_batch', 'id, nama, aktif, family, batch_label, batch_order'
+    );
     const curPeng = await currentMirror('eval_pengajar', 'id, nama, gender, whatsapp');
-    const curHal = await currentMirror('eval_halaqah', 'id, nama, gender, level, pengajar_id, batch_id, ambang_ujian');
-    const curPes = await currentMirror('eval_peserta', 'id, nama, gender, halaqah_id, urutan, aktif');
+    // `kurasi` ikut dibaca: kolom yang sudah disunting pengajar dikecualikan
+    // dari pembandingan (lihat diff.ts + src/lib/evaluasi-kurasi.ts).
+    const curHal = await currentMirror('eval_halaqah', 'id, nama, gender, level, pengajar_id, batch_id, ambang_ujian, kurasi');
+    const curPes = await currentMirror('eval_peserta', 'id, nama, gender, halaqah_id, urutan, aktif, kurasi');
 
     let diffs: DiffRow[] = [
       ...diffEntity('batch', snap.batch as never, curBatch as never, COMPARE.batch),

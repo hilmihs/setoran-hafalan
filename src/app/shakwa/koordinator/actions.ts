@@ -24,7 +24,12 @@ export async function ubahStatusShakwa(
   if (!id) return { error: 'Aduan tidak ditemukan.' };
   if (!STATUS.has(status)) return { error: 'Status tidak dikenal.' };
 
-  const { error } = await supabaseAdmin
+  // Gender ikut jadi syarat UPDATE, bukan cuma penyaring tampilan. Daftar di
+  // halaman memang sudah dikunci ke gender koordinator, tapi action ini menerima
+  // id apa pun dari form — tanpa syarat ini, tiket gender lain masih bisa
+  // ditindak oleh siapa saja yang tahu id-nya. RLS tak menolong: aplikasi
+  // menyambung sebagai superuser pg, jadi kendalinya harus di sini.
+  const { data: terubah, error } = await supabaseAdmin
     .from('shakwa')
     .update({
       status,
@@ -33,8 +38,13 @@ export async function ubahStatusShakwa(
       reviewed_by_role: session.role,
       reviewed_at: new Date().toISOString(),
     })
-    .eq('id', id);
+    .eq('id', id)
+    .eq('gender', session.gender)
+    .select('id');
   if (error) return { error: `Gagal menyimpan: ${error.message}` };
+  // Nol baris = id tak ada, atau ada tapi milik gender lain. Keduanya dijawab
+  // sama supaya balasan galat tak jadi alat menebak keberadaan tiket.
+  if (!terubah || terubah.length === 0) return { error: 'Aduan tidak ditemukan.' };
 
   await logAudit({
     actor: session,

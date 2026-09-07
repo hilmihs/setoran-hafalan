@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase-admin';
 import { getSession } from '@/lib/session';
+import { publicOrigin } from '@/lib/url';
 
 function escapeHtml(s: string): string {
   return s.replace(/[&<>"']/g, (c) =>
@@ -74,7 +75,7 @@ export async function GET(req: NextRequest) {
     (a) => a.role === 'ketua_kelas' && a.ketua_kelas_id === ketua.id,
   );
   if (alreadyThisKetua) {
-    return NextResponse.redirect(new URL('/hits/ketua', req.url));
+    return NextResponse.redirect(new URL('/hits/ketua', publicOrigin(req.headers)));
   }
 
   // Login sebagai identitas LAIN & belum konfirmasi → jangan sapu sesi diam-diam.
@@ -106,5 +107,8 @@ export async function GET(req: NextRequest) {
     .eq('id', ketua.id);
 
   // Semua ketua kelas kini diarahkan ke dashboard HITS (observasi lama di-retire).
-  return NextResponse.redirect(new URL('/hits/ketua', req.url));
+  // Basis URL diambil dari header proxy, BUKAN req.url: di balik reverse proxy
+  // req.url bisa berisi alamat bind server (0.0.0.0:3009), dan link WhatsApp
+  // yang diklik dari HP berujung di alamat yang tak bisa dibuka.
+  return NextResponse.redirect(new URL('/hits/ketua', publicOrigin(req.headers)));
 }

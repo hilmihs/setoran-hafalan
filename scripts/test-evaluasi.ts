@@ -4,9 +4,15 @@ import {
   JALIY, KHAFIY, ALL_LAHN, LAHN_BY_KEY, emptyCounts,
   scoreOf, tierOf, AMBANG, columnFor,
   buildTrackGeometry, nilaiAkhirOf, nilaiAkhirTrackOf, lantaiNilai, lantaiNilaiOpt, jenisRapotDariSesi,
+  namaProgram,
   type LahnCounts,
 } from '@/lib/evaluasi';
-import { buildTrackRapotPayload, type RapotIdentitas, type SesiNilaiInput } from '@/lib/rapot';
+import {
+  alasanBelumTerbit,
+  buildTrackRapotPayload,
+  type RapotIdentitas,
+  type SesiNilaiInput,
+} from '@/lib/rapot';
 import { isPesertaManual, buatIdPesertaManual, bersihkanNamaPeserta } from '@/lib/evaluasi-peserta';
 
 let failed = 0;
@@ -180,6 +186,38 @@ eq(nilaiAkhirTrackOf('pb', [80, 81], 78).berkalaAvg, 81, 'bulat: rata 80.5 → 8
   eq(rapotPb.rincianUjian.map((r) => r.key), ['izhar'], 'isolasi pb: rincian dari Ujian PB saja');
   eq(rapotQn.rincianUjian.map((r) => r.key), ['huruf'], 'isolasi qn: rincian dari Ujian QN saja');
 
+  // ── Syarat terbit (dipakai bersama layar pengajar & guard server) ──
+  // Fixture di atas lengkap, jadi dua-duanya boleh terbit.
+  eq(alasanBelumTerbit(rapotQn), [], 'syarat terbit: QN lengkap → boleh');
+  eq(alasanBelumTerbit(rapotPb), [], 'syarat terbit: PB lengkap → boleh');
+
+  // Tanpa sesi ujian track itu, rapotnya tak punya komponen 70% sama sekali.
+  const tanpaUjianPb = buildTrackRapotPayload({
+    track: 'pb',
+    ...args,
+    sesi: fixture.filter((s) => !(s.jenis === 'ujian' && s.nomor_sesi === 2)),
+  }).trackRapot;
+  eq(alasanBelumTerbit(tanpaUjianPb), ['Belum ada Ujian PB'], 'syarat terbit: tanpa Ujian PB');
+
+  // Berkala kurang dari 4 → ditolak; angkanya disebut supaya pengajar tahu
+  // berapa lagi yang kurang.
+  const berkalaKurang = buildTrackRapotPayload({
+    track: 'pb',
+    ...args,
+    sesi: fixture.filter((s) => !(s.jenis === 'pb' && s.nomor_sesi >= 3)),
+  }).trackRapot;
+  eq(alasanBelumTerbit(berkalaKurang), ['Sesi PB baru 2 dari 4'], 'syarat terbit: berkala kurang');
+
+  // Batch ujianSaja tak menjalankan sesi berkala sama sekali — kelengkapannya
+  // tak boleh jadi syarat di sana.
+  const ujianSajaPb = buildTrackRapotPayload({
+    track: 'pb',
+    ...args,
+    sesi: fixture.filter((s) => s.jenis === 'ujian'),
+    ujianSaja: true,
+  }).trackRapot;
+  eq(alasanBelumTerbit(ujianSajaPb), [], 'syarat terbit: ujianSaja tak menuntut sesi berkala');
+
   // Payload track: diskriminan + ambang nilai akhir fix 70 untuk kedua track.
   const payloadPb = buildTrackRapotPayload({ track: 'pb', ...args });
   eq(payloadPb.v, 1, 'payload track: penanda versi 1');
@@ -265,6 +303,28 @@ eq(nilaiAkhirTrackOf('pb', [80, 81], 78).berkalaAvg, 81, 'bulat: rata 80.5 → 8
   eq(nilaiAkhirOf([70], 70).lulus, true, 'legacy nilaiAkhirOf: tepat 70 → lulus');
   eq(nilaiAkhirOf([69], 69).lulus, false, 'legacy nilaiAkhirOf: 69 → tidak lulus');
 }
+
+// ── nama program untuk dropdown penyaring ──
+eq(namaProgram('HITS Reguler (Batch April 2026)'), 'HITS Reguler', 'buang suffix batch');
+eq(namaProgram('HITS Reguler (Batch Juni 2026)'), 'HITS Reguler', 'suffix batch bulan lain');
+// Kurung yang bukan angkatan harus lolos utuh — kalau tidak, dua program berbeda
+// bisa bertabrakan jadi satu label.
+eq(namaProgram('Tahsin Al-Fatihah Mustahik (LAZ)'), 'Tahsin Al-Fatihah Mustahik (LAZ)', 'kurung non-batch dibiarkan');
+eq(namaProgram('HKM — Presensi (Halaqah Keluarga Muhajir)'), 'HKM — Presensi (Halaqah Keluarga Muhajir)', 'kurung penjelas dibiarkan');
+eq(namaProgram('DPQ'), 'DPQ', 'nama tanpa kurung');
+eq(namaProgram('  HITS Safar  '), 'HITS Safar', 'spasi tepi dirapikan');
+// Suffix hanya dibuang di ujung, bukan di tengah.
+eq(namaProgram('Kelas (Batch A) Lanjutan'), 'Kelas (Batch A) Lanjutan', 'suffix di tengah dibiarkan');
+// Nama berapostrof harus lewat utuh (regex tak menyentuhnya).
+eq(namaProgram("HKM (Halaqah Al-Qur'an)"), "HKM (Halaqah Al-Qur'an)", 'nama berapostrof dibiarkan');
+// Dua anggota family hits-safar: yang polos dan yang bersuffix harus menghasilkan
+// label yang SAMA, karena sumber memang menaruh keduanya di family 'hits-safar'.
+// Kalau ini pecah, dropdown menampilkan HITS Safar dua kali.
+eq(
+  namaProgram('HITS Safar (Batch Januari 2026)'),
+  namaProgram('HITS Safar'),
+  'dua angkatan HITS Safar → satu label'
+);
 
 if (failed) { console.error(`\n${failed} FAILED`); process.exit(1); }
 console.log('\nAll evaluasi tests passed.');

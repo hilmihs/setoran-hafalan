@@ -15,12 +15,16 @@ import {
   parseRekapFilter,
   filterQuery,
   filterAktif,
+  scopeQuery,
+  daftarBatch,
   type HitsMode,
   type RekapFilter,
 } from '@/lib/hits-koordinator-rekap';
+import { parseBatchId, parseKelasMode } from '@/lib/hits-halaqah-scope';
 import { getHitsPengajuan } from '@/lib/hits-pengajuan';
 import type { CakupanPengajar, PertemuanObservasi } from '@/lib/hits-observasi-cakupan';
 import { GenderNavSelect } from '@/components/GenderNavSelect';
+import { QueryNavSelect } from '@/components/QueryNavSelect';
 import { MonthNavSelect } from '@/components/MonthNavSelect';
 import { WeekNavSelect } from '@/components/WeekNavSelect';
 import { NoteQuickAdd } from '@/components/NoteQuickAdd';
@@ -387,7 +391,7 @@ export default async function HitsKoordinatorPage({
 }: {
   searchParams: {
     mode?: string; month?: string; week?: string; gender?: string; sort?: string; dir?: string;
-    masalah?: string; obs?: string;
+    masalah?: string; obs?: string; batch?: string; kelas?: string;
   };
 }) {
   try {
@@ -418,10 +422,16 @@ export default async function HitsKoordinatorPage({
       : undefined;
 
   const filter = parseRekapFilter({ masalah: searchParams.masalah, obs: searchParams.obs });
+  // Cakupan halaqah: batch mana & kelas online/offline. Beda dari `filter` —
+  // ini menentukan halaqah mana yang ikut dihitung, bukan sekadar menyaring
+  // baris hasil, jadi %On-Time & cakupan observasi ikut menyesuaikan.
+  const batchId = parseBatchId(searchParams.batch);
+  const kelas = parseKelasMode(searchParams.kelas);
+  const batchOptions = await daftarBatch();
 
   // Satu loader dipakai bersama halaman ini, export XLSX, dan halaman cetak —
   // supaya angka di layar dan di file tak mungkin berbeda.
-  const rekap = await getHitsKoordinatorRekap({ mode, month, week, gender: genderFilter, filter });
+  const rekap = await getHitsKoordinatorRekap({ mode, month, week, gender: genderFilter, batchId, kelas, filter });
   const counts = rekap.counts;
   const periodeLabel = rekap.periodeLabel;
   const insidenByPengajar = rekap.insidenByPengajar;
@@ -457,16 +467,19 @@ export default async function HitsKoordinatorPage({
   }
   // Base query utk link sortir (pertahankan periode + gender + filter). Tombol
   // Unduh XLSX & Cetak memakai base yang sama, jadi filter aktif ikut terbawa.
+  const scope = scopeQuery({ batchId, kelas });
   const sortBase =
     `?mode=${mode}` +
     (mode === 'minggu' ? `&week=${week}` : `&month=${month}`) +
     (genderFilter ? `&gender=${genderFilter}` : '') +
+    scope +
     filterQuery(filter);
   /** Base tanpa filter — dipakai chip untuk menyusun kombinasi filter baru. */
   const periodeBase =
     `?mode=${mode}` +
     (mode === 'minggu' ? `&week=${week}` : `&month=${month}`) +
-    (genderFilter ? `&gender=${genderFilter}` : '');
+    (genderFilter ? `&gender=${genderFilter}` : '') +
+    scope;
   const chipHref = (next: RekapFilter) => `${periodeBase}${filterQuery(next)}`;
   const sortHref = (key: SortKey) => {
     const nextDir = sortKey === key && dir === 'desc' ? 'asc' : 'desc';
@@ -477,7 +490,7 @@ export default async function HitsKoordinatorPage({
   const genderLabel =
     genderFilter === 'ikhwan' ? 'Ikhwan' : genderFilter === 'akhwat' ? 'Akhwat' : 'Ikhwan & Akhwat';
   const weekOpts = recentMondays(12).map((mon) => ({ value: mon, label: formatWeekRangeShort(mon) }));
-  const g = genderFilter ? `&gender=${genderFilter}` : '';
+  const g = (genderFilter ? `&gender=${genderFilter}` : '') + scope;
   const pctColor = (p: number) =>
     p >= 90 ? 'var(--hijau-ink)' : p >= 75 ? 'var(--kuning-ink)' : 'var(--merah-ink)';
   // null = tak bisa dinilai (mis. semua pertemuannya dipindah/dibadalkan, jadi
@@ -634,7 +647,8 @@ export default async function HitsKoordinatorPage({
                 <p className="t-small" style={{ color: 'var(--ink-2)', maxWidth: 560 }}>
                   Urut <strong>%On-Time</strong> (kelas tepat jam: tanpa KMT/KBLA) · pemecah seri{' '}
                   <strong>%Stabil</strong> (kelas tak dipindah/dibadalkan), lalu{' '}
-                  <strong>hutang menit</strong> (saldo tertunggak). Lintas-batch, per pengajar.
+                  <strong>hutang menit</strong> (saldo tertunggak).{' '}
+                  {rekap.batchName ? `Batch ${rekap.batchName}` : 'Lintas-batch'}, per pengajar.
                 </p>
                 <p className="t-tiny" style={{ color: 'var(--muted-2)', marginTop: 6, maxWidth: 620 }}>
                   Kolom <strong>Hutang (mnt)</strong> = {HUTANG_RUMUS} Buka baris “Asal hutang menit”
@@ -642,6 +656,7 @@ export default async function HitsKoordinatorPage({
                 </p>
                 <p className="t-tiny" style={{ color: 'var(--muted)', marginTop: 8 }}>
                   {mode === 'minggu' ? 'Mingguan' : 'Bulanan'} · {periodeLabel} · {genderLabel} ·{' '}
+                  {rekap.scopeLabel ? `${rekap.scopeLabel} · ` : ''}
                   {filterAktif(filter)
                     ? `${ranked.length + noData.length} dari ${counts.total} pengajar (difilter)`
                     : `${ranked.length} pengajar`}
@@ -670,6 +685,23 @@ export default async function HitsKoordinatorPage({
                   <MonthNavSelect options={monthOptionsSince(ANCHOR_MONTH)} value={month} />
                 )}
                 <GenderNavSelect value={genderFilter ?? ''} />
+                <QueryNavSelect
+                  param="batch"
+                  value={batchId ?? ''}
+                  options={batchOptions.map((b) => ({ value: b.id, label: b.name }))}
+                  ariaLabel="Pilih batch"
+                  allLabel="Semua batch"
+                />
+                <QueryNavSelect
+                  param="kelas"
+                  value={kelas ?? ''}
+                  options={[
+                    { value: 'online', label: 'Kelas online' },
+                    { value: 'offline', label: 'Kelas offline' },
+                  ]}
+                  ariaLabel="Pilih kelas online/offline"
+                  allLabel="Online & offline"
+                />
               </div>
             </div>
 

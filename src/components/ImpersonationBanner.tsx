@@ -6,6 +6,7 @@ export async function ImpersonationBanner() {
   if (!imp) return null;
   return (
     <div
+      className="no-print"
       style={{
         position: 'fixed', bottom: 0, left: 0, right: 0, zIndex: 9999,
         background: '#7a2e2e', color: '#fff', padding: '8px 14px',

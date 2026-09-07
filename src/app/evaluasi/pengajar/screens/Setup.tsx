@@ -77,7 +77,8 @@ export function Setup(props: SetupProps) {
           )}
           {props.isUjian && (
             <div style={{ fontSize: 11, color: '#a8a39a', marginTop: 10 }}>
-              Halaqah yang cukup satu ujian akhir bisa menghapus sesi yang tak dipakai. Minimal satu sesi harus tetap ada.
+              Ujian QN dan Ujian PB dua-duanya wajib — masing-masing menyumbang nilai akhir Rapot
+              Akhir track-nya, jadi tak bisa dihapus.
             </div>
           )}
         </div>

@@ -21,10 +21,83 @@ eq(normalizeWaOrNull(null), null, 'wa null');
 eq(pengajarId('6281331732974', 'hits-regular', 'Fulan'), 'wa:6281331732974', 'pengajar id by wa');
 eq(pengajarId(null, 'hits-regular', 'Fulan'), 'nm:hits-regular:Fulan', 'pengajar id by nama');
 
+// Program berangkatan tunggal: batch null → family = slug-nya sendiri.
 eq(
-  mapBatch({ slug: 'hits-regular', name: 'HITS Reguler', dataSourceType: 'tilawah_api', syncPaused: false, batch: null }),
-  { id: 'hits-regular', nama: 'HITS Reguler', aktif: true },
-  'mapBatch'
+  mapBatch({ slug: 'dpq', name: 'DPQ', dataSourceType: 'tilawah_api', syncPaused: false, batch: null }),
+  { id: 'dpq', nama: 'DPQ', aktif: true, family: 'dpq', batch_label: null, batch_order: null },
+  'mapBatch tanpa batch'
+);
+// Program berangkatan banyak: family/label/order ikut dimirror.
+eq(
+  mapBatch({
+    slug: 'hits-regular-apr', name: 'HITS Reguler (Batch April 2026)',
+    dataSourceType: 'tilawah_api', syncPaused: false,
+    batch: { family: 'hits-regular', label: 'April 2026', order: 2 },
+  }),
+  {
+    id: 'hits-regular-apr', nama: 'HITS Reguler (Batch April 2026)', aktif: true,
+    family: 'hits-regular', batch_label: 'April 2026', batch_order: 2,
+  },
+  'mapBatch dengan batch'
+);
+// syncPaused → aktif false, tak terpengaruh perubahan ini.
+eq(
+  mapBatch({ slug: 'rbi', name: 'RBI', dataSourceType: 'tilawah_api', syncPaused: true, batch: null }).aktif,
+  false,
+  'mapBatch syncPaused'
+);
+// family kosong dari sumber harus jatuh ke slug, bukan tersimpan sebagai "" —
+// kolomnya NOT NULL, jadi "" lolos dan semua program bermasalah melebur jadi
+// satu family kosong.
+eq(
+  mapBatch({
+    slug: 'aneh', name: 'Aneh', dataSourceType: 'tilawah_api', syncPaused: false,
+    batch: { family: '', label: 'X', order: 1 },
+  }).family,
+  'aneh',
+  'mapBatch family kosong jatuh ke slug'
+);
+// order 0 sah dan tak boleh berubah jadi null.
+eq(
+  mapBatch({
+    slug: 'nol', name: 'Nol', dataSourceType: 'tilawah_api', syncPaused: false,
+    batch: { family: 'nol', label: 'Angkatan 0', order: 0 },
+  }).batch_order,
+  0,
+  'mapBatch order 0 dipertahankan'
+);
+
+// COMPARE.batch dan kolom yang dibaca currentMirror harus sepadan. Kalau salah
+// satu kolom dihapus dari select-nya, mirror terbaca undefined, diff menstage
+// update yang sama di SETIAP pull, dan tak ada yang meledak — cuma antrean
+// approve yang tak pernah habis. Assertion ini yang menahannya.
+const COMPARE_BATCH = ['nama', 'aktif', 'family', 'batch_label', 'batch_order'];
+/** MirrorBatch itu interface, jadi tak punya index signature implisit yang
+ *  diminta `Row` di diff.ts. Salin ke bentuk lepas supaya bisa diumpankan. */
+const baris = (b: object) => ({ ...b }) as Record<string, unknown> & { id: string };
+
+const dpqFetched = baris(
+  mapBatch({ slug: 'dpq', name: 'DPQ', dataSourceType: 'tilawah_api', syncPaused: false, batch: null })
+);
+eq(
+  diffEntity('batch', [dpqFetched], [{ ...dpqFetched }], COMPARE_BATCH).length,
+  0,
+  'diff batch: mirror sepadan → tak ada update'
+);
+// Mirror yang belum punya kolom baru (kolom belum ada / select kurang) HARUS
+// terbaca sebagai perubahan, bukan diam-diam sama.
+eq(
+  diffEntity(
+    'batch',
+    [baris(mapBatch({
+      slug: 'hits-safar', name: 'HITS Safar', dataSourceType: 'tilawah_api', syncPaused: false,
+      batch: { family: 'hits-safar', label: 'Juli 2026', order: 2 },
+    }))],
+    [{ id: 'hits-safar', nama: 'HITS Safar', aktif: true }],
+    COMPARE_BATCH
+  ).map((d) => d.op),
+  ['update'],
+  'diff batch: mirror tanpa kolom baru → update'
 );
 eq(
   mapPengajar('hits-regular', { pengajar: 'Abdul Hakim', phone: '81331732974', genders: [1] }),
@@ -100,6 +173,55 @@ eq(dPes.some((x) => x.entity_id.startsWith('manual:')), false, 'peserta manual t
 eq(diffEntity('halaqah', [], [{ id: 'manual:x', aktif: true }], ['nama']).map((x) => x.op),
    ['deactivate'],
    'pengecualian manual tak bocor ke entitas lain');
+
+// ── kolom terkurasi lokal (0074) ──
+// Pengajar boleh membetulkan nama peserta/halaqah dan level halaqah. Kolom yang
+// disunting itu ditandai di `kurasi`, dan sync tak boleh lagi menganggapnya
+// beda — kalau ikut, tiap pull menstage usulan yang sama dan sekali di-approve
+// pembetulannya hilang.
+const fetchedPes = [{ id: 'hits-regular-jan:769', nama: 'Haqqi Ramadhan', halaqah_id: 'h1' }];
+eq(
+  diffEntity(
+    'peserta',
+    fetchedPes,
+    [{ id: 'hits-regular-jan:769', nama: 'Haqi', halaqah_id: 'h1', aktif: true, kurasi: ['nama'] }],
+    ['nama', 'halaqah_id']
+  ).length,
+  0,
+  'kolom nama terkurasi tak memicu update'
+);
+eq(
+  diffEntity(
+    'peserta',
+    fetchedPes,
+    [{ id: 'hits-regular-jan:769', nama: 'Haqi', halaqah_id: 'h1', aktif: true, kurasi: [] }],
+    ['nama', 'halaqah_id']
+  ).map((x) => x.op),
+  ['update'],
+  'tanpa tanda kurasi, nama beda tetap update'
+);
+// Kurasi hanya menutup kolom yang ditandai — perubahan sah dari hulu pada kolom
+// lain harus tetap lewat.
+eq(
+  diffEntity(
+    'peserta',
+    [{ id: 'p1', nama: 'Haqqi Ramadhan', halaqah_id: 'h2' }],
+    [{ id: 'p1', nama: 'Haqi', halaqah_id: 'h1', aktif: true, kurasi: ['nama'] }],
+    ['nama', 'halaqah_id']
+  ).map((x) => x.op),
+  ['update'],
+  'kolom lain tetap memicu update walau ada kurasi'
+);
+eq(
+  diffEntity(
+    'halaqah',
+    [{ id: 'h1', nama: 'HITS 49 IKHWAN 0747', level: 'HITS Dasar' }],
+    [{ id: 'h1', nama: 'HITS 49 Ikhwan 0747', level: 'HITS Lanjutan', kurasi: ['nama', 'level'] }],
+    ['nama', 'level']
+  ).length,
+  0,
+  'nama & level halaqah terkurasi tak memicu update'
+);
 
 if (failed) { console.error(`\n${failed} FAILED`); process.exit(1); }
 console.log('\nAll hilmihs tests passed.');

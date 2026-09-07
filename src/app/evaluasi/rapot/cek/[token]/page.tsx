@@ -1,11 +1,25 @@
 // Halaman verifikasi keaslian rapot — PUBLIK (tanpa auth).
 // Diakses via QR pada rapot cetak: /evaluasi/rapot/cek/<token>.
 // Server component: baca row dari evaluasi_rapot lalu render ringkas dari payload.
+import type { Metadata } from 'next';
 import { supabaseAdmin } from '@/lib/supabase-admin';
 import type { RapotPayload, RapotPayloadLegacy, RapotPayloadTrack } from '@/lib/rapot';
 import { tierOf } from '@/lib/evaluasi';
 
 export const dynamic = 'force-dynamic';
+
+/**
+ * Judulnya SENGAJA tidak menyebut nama santri maupun nilainya. Halaman ini punya
+ * pintu publik (carve-out di `src/middleware.ts`) dan tautannya beredar lewat
+ * WhatsApp — judul dokumen itulah yang jadi kartu pratinjau di daftar obrolan.
+ * `noindex` karena tautan yang bocor ke permukaan yang bisa dirayapi akan
+ * menjadikan hasil ujian seorang anak sebagai halaman terindeks.
+ */
+export const metadata: Metadata = {
+  title: 'Cek Keaslian Rapot — MuhajirProject #Tilawah',
+  description: 'Verifikasi keaslian rapot evaluasi yang diterbitkan MuhajirProject #Tilawah.',
+  robots: { index: false, follow: false },
+};
 
 const HIJAU = 'oklch(0.58 0.09 165)';
 const HIJAU_TUA = 'oklch(0.40 0.10 150)';

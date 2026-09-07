@@ -22,21 +22,6 @@ export function isPesertaManual(id: string): boolean {
 /** Baris manual diletakkan di bawah semua baris remote pada daftar peserta. */
 export const URUTAN_MANUAL_DASAR = 10_000;
 
-/** Bentuk minimal baris peserta yang cukup untuk menentukan nama tampilannya. */
-export interface PesertaTampil {
-  nama: string;
-  nama_override?: string | null;
-}
-
-/**
- * Nama yang dipakai di layar dan di rapot. `nama` ikut dibandingkan sinkron
- * (`COMPARE.peserta`), jadi pembetulan ejaan oleh pengajar disimpan terpisah di
- * `nama_override` supaya tidak ditarik balik pull berikutnya (migrasi 0068).
- */
-export function namaPesertaTampil(p: PesertaTampil): string {
-  return p.nama_override?.trim() || p.nama;
-}
-
 const MIN_NAMA = 2;
 const MAX_NAMA = 80;
 

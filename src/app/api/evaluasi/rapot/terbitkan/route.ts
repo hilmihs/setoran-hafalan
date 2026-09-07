@@ -4,20 +4,13 @@ import { supabaseAdmin } from '@/lib/supabase-admin';
 import { getPool } from '@/lib/pg-core';
 import { getSession } from '@/lib/session';
 import { evalPengajarIdFor } from '@/lib/evaluasi-pengajar';
+import { columnsToCounts, type Jenis, type Track } from '@/lib/evaluasi';
 import {
-  columnsToCounts,
-  UJIAN_SESI_BY_TRACK,
-  SESI_BERKALA_PER_TRACK,
-  type Jenis,
-  type Track,
-} from '@/lib/evaluasi';
-import {
+  alasanBelumTerbit,
   buildTrackRapotPayload,
   type RapotIdentitas,
   type SesiNilaiInput,
 } from '@/lib/rapot';
-import { namaHalaqahTampil, levelHalaqahTampil, type HalaqahTampil } from '@/lib/evaluasi-halaqah';
-import { namaPesertaTampil, type PesertaTampil } from '@/lib/evaluasi-peserta';
 
 /**
  * Sejak rotasi 0062 penerbitan HANYA melayani rapot per-track. Nama field di body
@@ -71,7 +64,7 @@ export async function POST(req: NextRequest) {
     // --- Halaqah + verifikasi kepemilikan pengajar ---
     const { data: halaqah } = await supabaseAdmin
       .from('eval_halaqah')
-      .select('id, pengajar_id, nama, nama_override, gender, mustawa, level, level_override, batch_id, ambang_ujian')
+      .select('id, pengajar_id, nama, gender, mustawa, level, batch_id, ambang_ujian')
       .eq('id', halaqah_id)
       .maybeSingle();
     if (!halaqah) {
@@ -85,7 +78,7 @@ export async function POST(req: NextRequest) {
     // --- Peserta ---
     const { data: peserta } = await supabaseAdmin
       .from('eval_peserta')
-      .select('id, nama, nama_override, halaqah_id')
+      .select('id, nama, halaqah_id')
       .eq('id', peserta_id)
       .maybeSingle();
     if (!peserta) {
@@ -160,52 +153,11 @@ export async function POST(req: NextRequest) {
       };
     });
 
-    // --- Guard kelengkapan sebelum terbit (server-side, jangan andalkan client) ---
-    // Ujian track ini wajib ada: tanpa ujian, nilai akhir tak punya komponen 70%
-    // (atau, untuk batch ujianSaja, tak punya nilai sama sekali).
-    const adaUjian = sesi.some(
-      (x) =>
-        x.jenis === 'ujian' &&
-        x.nomor_sesi === UJIAN_SESI_BY_TRACK[track] &&
-        x.done &&
-        x.hadir !== false
-    );
-    if (!adaUjian) {
-      return NextResponse.json(
-        {
-          error: `Ujian ${trackLabel} belum dinilai — Rapot ${trackLabel} belum bisa diterbitkan`,
-        },
-        { status: 400 }
-      );
-    }
-
-    if (!ujianSaja) {
-      // Rapot track memuat SELURUH sesi berkala track itu, jadi keempatnya wajib
-      // sudah dinilai — bukan sekadar "ada satu" seperti era sebelum 0062.
-      const nomorBerkala = new Set(
-        sesi
-          .filter((x) => x.jenis === track && x.done && x.hadir !== false)
-          .map((x) => x.nomor_sesi)
-      );
-      if (nomorBerkala.size < SESI_BERKALA_PER_TRACK) {
-        return NextResponse.json(
-          {
-            error: `Sesi evaluasi ${trackLabel} baru ${nomorBerkala.size} dari ${SESI_BERKALA_PER_TRACK} — rapot belum bisa diterbitkan`,
-          },
-          { status: 400 }
-        );
-      }
-    }
-    // ujianSaja: komponen berkala tidak dipakai sama sekali, jadi kelengkapannya
-    // sengaja tidak jadi syarat terbit.
-
     // --- Identitas & meta terbit ---
-    // Identitas dibekukan ke baris rapot, jadi yang dipakai adalah nama TAMPIL
-    // (koreksi pengajar bila ada) — bukan nilai mentah hulu yang mungkin keliru.
     const identitas: RapotIdentitas = {
-      peserta: namaPesertaTampil(peserta as PesertaTampil),
-      halaqah: namaHalaqahTampil(halaqah as HalaqahTampil),
-      level: levelHalaqahTampil(halaqah as HalaqahTampil),
+      peserta: peserta.nama as string,
+      halaqah: halaqah.nama as string,
+      level: (halaqah.level as string | null) ?? null,
       mustawa: (halaqah.mustawa as number | null) ?? null,
       gender: halaqah.gender as string,
       batch: batchNama,
@@ -224,6 +176,19 @@ export async function POST(req: NextRequest) {
       ambangUjianSesi: halaqah.ambang_ujian as number,
       ujianSaja,
     });
+
+    // --- Guard kelengkapan (server-side, jangan andalkan client) ---
+    // Dihitung SETELAH payload dibangun, dari fungsi yang sama dengan yang
+    // mengunci tombol di layar pengajar (`alasanBelumTerbit`). Membangun payload
+    // tak punya efek samping, jadi urutan ini aman — dan mahar itu menutup
+    // kemungkinan aturan klien & server berbeda diam-diam.
+    const alasan = alasanBelumTerbit(payload.trackRapot);
+    if (alasan.length > 0) {
+      return NextResponse.json(
+        { error: `${alasan.join(' · ')} — Rapot ${trackLabel} belum bisa diterbitkan` },
+        { status: 400 }
+      );
+    }
 
     // --- Kolom ringkas untuk query cepat ---
     const t = payload.trackRapot;

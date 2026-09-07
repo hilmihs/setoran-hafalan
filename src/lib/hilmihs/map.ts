@@ -26,7 +26,21 @@ export function pengajarId(waNormal: string | null, slug: string, nama: string):
 }
 
 export function mapBatch(p: SrcProgram): MirrorBatch {
-  return { id: p.slug, nama: p.name, aktif: !p.syncPaused };
+  return {
+    id: p.slug,
+    nama: p.name,
+    aktif: !p.syncPaused,
+    // Program berangkatan tunggal (batch null) jadi family beranggota satu, supaya
+    // sisi pembaca tak perlu cabang khusus.
+    //
+    // `||` di sini, bukan `??`: family kosong ("") lolos dari `??` dan, karena
+    // kolomnya NOT NULL, tersimpan apa adanya — semua program bermasalah lalu
+    // melebur jadi satu family kosong dan salah dikelompokkan di dashboard.
+    family: p.batch?.family || p.slug,
+    batch_label: p.batch?.label ?? null,
+    // `??` di sini WAJIB, bukan `||`: order 0 itu sah, dan `||` mengubahnya null.
+    batch_order: p.batch?.order ?? null,
+  };
 }
 
 export function mapPengajar(slug: string, r: SrcPengajar): MirrorPengajar {

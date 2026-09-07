@@ -1,209 +1,52 @@
 import Link from 'next/link';
 import { requireOneOfRoles } from '@/lib/session';
-import { supabaseAdmin } from '@/lib/supabase-admin';
-import { ALL_LAHN, AMBANG, columnsToCounts } from '@/lib/evaluasi';
-import { namaHalaqahTampil, levelHalaqahTampil, type HalaqahTampil } from '@/lib/evaluasi-halaqah';
+import { AMBANG } from '@/lib/evaluasi';
+import { bacaFilter, muatDashboard, CAKUPAN_DEFAULT } from '@/lib/evaluasi-dashboard';
+import { buildWaMeUrl, tplReminderPengajarIsiNilaiEvaluasi } from '@/lib/whatsapp';
 import { PrintButton } from '@/components/PrintButton';
+import { QueryNavSelect } from '@/components/QueryNavSelect';
 
 export const dynamic = 'force-dynamic';
 
-interface SesiRow {
-  id: string;
-  halaqah_id: string;
-  nomor_sesi: number;
-}
-interface NilaiRow extends Record<string, unknown> {
-  sesi_id: string;
-  peserta_id: string;
-  skor: number;
-  done: boolean;
-}
-
-function monthLabel(): string {
-  return new Date().toLocaleDateString('id-ID', {
-    month: 'long',
-    year: 'numeric',
-    timeZone: 'Asia/Jakarta',
-  });
-}
-
-export default async function KoordinatorEvaluasiPage() {
+export default async function KoordinatorEvaluasiPage({
+  searchParams,
+}: {
+  searchParams: { program?: string; batch?: string; gender?: string };
+}) {
   // Rekap dibuka juga untuk koordinator ketua kelas — mereka memantau halaqah
   // yang sama; pengaturan tetap milik koordinator.
   const session = await requireOneOfRoles(['koordinator', 'koordinator_ketua_kelas']);
-  const gender = session.gender;
   const bolehPengaturan = session.role === 'koordinator';
 
-  // Halaqah binaan (per gender).
-  const { data: halaqahRaw } = await supabaseAdmin
-    .from('eval_halaqah')
-    .select('id, nama, nama_override, gender, mustawa, level, level_override, pengajar_id')
-    .eq('gender', gender)
-    .order('nama');
-  const halaqahList = halaqahRaw ?? [];
+  const filter = bacaFilter(searchParams, session.gender);
+  const d = await muatDashboard(filter);
 
-  // Config gender (untuk nama track & label periode).
-  const { data: configRow } = await supabaseAdmin
-    .from('eval_config')
-    .select('nama_qn')
-    .eq('gender', gender)
-    .maybeSingle();
-  const namaQn = (configRow?.nama_qn as string) ?? 'Evaluasi QN';
-
-  const noId = ['00000000-0000-0000-0000-000000000000'];
-  const halaqahIds = halaqahList.map((h) => h.id as string);
-
-  // Nama pengajar.
-  const pengajarIds = Array.from(
-    new Set(halaqahList.map((h) => h.pengajar_id as string | null).filter((x): x is string => !!x))
+  const adaFilter = !!(
+    d.programTerpilih ||
+    d.batchTerpilih ||
+    filter.gender !== session.gender ||
+    d.cakupanTerpilih !== CAKUPAN_DEFAULT
   );
-  const { data: pengajarRaw } = await supabaseAdmin
-    .from('eval_pengajar')
-    .select('id, nama')
-    .in('id', pengajarIds.length ? pengajarIds : noId);
-  const pengajarName = new Map((pengajarRaw ?? []).map((p) => [p.id as string, p.nama as string]));
-
-  // Peserta aktif per halaqah.
-  const { data: pesertaRaw } = await supabaseAdmin
-    .from('eval_peserta')
-    .select('id, halaqah_id')
-    .in('halaqah_id', halaqahIds.length ? halaqahIds : noId)
-    .eq('aktif', true);
-  const pesertaCount = new Map<string, number>();
-  for (const p of pesertaRaw ?? []) {
-    const hid = p.halaqah_id as string;
-    pesertaCount.set(hid, (pesertaCount.get(hid) ?? 0) + 1);
-  }
-
-  // Sesi QN — pilih per halaqah nomor_sesi terbesar (sesi berjalan).
-  const { data: sesiRaw } = await supabaseAdmin
-    .from('evaluasi_sesi')
-    .select('id, halaqah_id, nomor_sesi')
-    .in('halaqah_id', halaqahIds.length ? halaqahIds : noId)
-    .eq('jenis', 'qn');
-  const sesiRows = (sesiRaw ?? []) as SesiRow[];
-  const currentSesiByHalaqah = new Map<string, SesiRow>();
-  for (const s of sesiRows) {
-    const prev = currentSesiByHalaqah.get(s.halaqah_id);
-    if (!prev || s.nomor_sesi > prev.nomor_sesi) currentSesiByHalaqah.set(s.halaqah_id, s);
-  }
-  const currentSesiIds = Array.from(currentSesiByHalaqah.values()).map((s) => s.id);
-  const sesiToHalaqah = new Map(
-    Array.from(currentSesiByHalaqah.entries()).map(([hid, s]) => [s.id, hid])
-  );
-  const maxSesiNo = sesiRows.reduce((a, s) => Math.max(a, s.nomor_sesi), 0);
-
-  // Nilai untuk sesi berjalan.
-  const { data: nilaiRaw } = await supabaseAdmin
-    .from('evaluasi_nilai')
-    .select(
-      'sesi_id, peserta_id, skor, done, ' +
-        'jk_huruf, jk_harakat, jk_mad, jk_tasydid, kh_izhar, kh_idgham_bighunnah, kh_idgham_bilaghunnah, kh_idgham_mimi, kh_iqlab, kh_ikhfa_hakiki, kh_ikhfa_syafawi'
-    )
-    .in('sesi_id', currentSesiIds.length ? currentSesiIds : noId);
-  const nilaiRows = (nilaiRaw ?? []) as NilaiRow[];
-
-  // Agregasi per halaqah (hanya baris done).
-  interface Agg {
-    selesai: number;
-    skorSum: number;
-    bermasalah: number;
-    lahn: number[]; // sum per ALL_LAHN index
-  }
-  const aggByHalaqah = new Map<string, Agg>();
-  const ensureAgg = (hid: string): Agg => {
-    let a = aggByHalaqah.get(hid);
-    if (!a) {
-      a = { selesai: 0, skorSum: 0, bermasalah: 0, lahn: new Array(ALL_LAHN.length).fill(0) };
-      aggByHalaqah.set(hid, a);
-    }
-    return a;
-  };
-  for (const n of nilaiRows) {
-    if (!n.done) continue;
-    const hid = sesiToHalaqah.get(n.sesi_id);
-    if (!hid) continue;
-    const a = ensureAgg(hid);
-    a.selesai += 1;
-    a.skorSum += Number(n.skor) || 0;
-    if ((Number(n.skor) || 0) < AMBANG) a.bermasalah += 1;
-    const counts = columnsToCounts(n);
-    ALL_LAHN.forEach((d, i) => {
-      a.lahn[i] += counts[d.key] || 0;
-    });
-  }
-
-  const topLahnLabel = (lahn: number[]): string => {
-    let best = -1;
-    let bestVal = 0;
-    lahn.forEach((v, i) => {
-      if (v > bestVal) {
-        bestVal = v;
-        best = i;
-      }
-    });
-    return best >= 0 && bestVal > 0 ? ALL_LAHN[best].label : '—';
-  };
-
-  const rows = halaqahList.map((h) => {
-    const hid = h.id as string;
-    const total = pesertaCount.get(hid) ?? 0;
-    const a = aggByHalaqah.get(hid);
-    const selesai = a?.selesai ?? 0;
-    const rata = a && a.selesai > 0 ? Math.round(a.skorSum / a.selesai) : null;
-    const bermasalah = a?.bermasalah ?? 0;
-    const lahnTop = a ? topLahnLabel(a.lahn) : '—';
-    const level = levelHalaqahTampil(h as HalaqahTampil);
-    const mustawa = h.mustawa as number | null;
-    const genderLabel = gender === 'ikhwan' ? 'Ikhwan' : 'Akhwat';
-    const levelText = level ?? (mustawa != null ? `Mustawa ${mustawa}` : null);
-    const sub = levelText ? `${genderLabel} · ${levelText}` : genderLabel;
-    return {
-      id: hid,
-      nama: namaHalaqahTampil(h as HalaqahTampil),
-      sub,
-      pengajar: (h.pengajar_id && pengajarName.get(h.pengajar_id as string)) || '—',
-      total,
-      selesai,
-      rata,
-      bermasalah,
-      lahnTop,
-    };
-  });
-
-  // Kartu statistik.
-  const totalPeserta = rows.reduce((a, r) => a + r.total, 0);
-  const totalSelesai = rows.reduce((a, r) => a + r.selesai, 0);
-  const totalBermasalah = rows.reduce((a, r) => a + r.bermasalah, 0);
-  const allDoneSkor = nilaiRows.filter((n) => n.done).map((n) => Number(n.skor) || 0);
-  const rataAll = allDoneSkor.length
-    ? Math.round(allDoneSkor.reduce((a, b) => a + b, 0) / allDoneSkor.length)
-    : null;
-
-  const periode =
-    maxSesiNo > 0
-      ? `${namaQn} Sesi ${maxSesiNo} · ${monthLabel()}`
-      : `${namaQn} · ${monthLabel()}`;
+  const tampilkanKolomGender = filter.gender === 'semua';
+  const tampilkanRingkasan = d.grup.length > 1;
 
   return (
     <main style={{ minHeight: '100vh' }}>
       <div className="eval-print-wrap" style={{ maxWidth: 1180, margin: '0 auto', padding: '20px 20px 40px' }}>
         {/* Header */}
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 12,
-            marginBottom: 18,
-            flexWrap: 'wrap',
-          }}
-        >
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 14, flexWrap: 'wrap' }}>
           <div>
             <div className="t-h1" style={{ fontSize: 20 }}>
               Dashboard Koordinator
             </div>
+            {/* Cakupan penyaring ikut di subjudul, bukan cuma di bar penyaring:
+                bar-nya no-print, jadi tanpa ini PDF hasil cetak tak menerangkan
+                data siapa yang sedang dilihat. */}
             <div className="t-small" style={{ marginTop: 2 }}>
-              {session.name} · {halaqahList.length} halaqah binaan · {periode}
+              {session.name} · {d.total.halaqah} halaqah binaan · {d.namaPeriode}
+            </div>
+            <div className="t-small" style={{ marginTop: 2 }}>
+              {d.ringkasFilter}
             </div>
           </div>
           <div className="no-print" style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
@@ -220,72 +63,182 @@ export default async function KoordinatorEvaluasiPage() {
           </div>
         </div>
 
-        {halaqahList.length === 0 ? (
+        {/* Bar penyaring */}
+        <div
+          className="no-print"
+          style={{ display: 'flex', gap: 8, marginBottom: 18, flexWrap: 'wrap', alignItems: 'center' }}
+        >
+          <QueryNavSelect
+            param="program"
+            value={d.programTerpilih}
+            options={d.opsiProgram}
+            ariaLabel="Pilih program"
+            allLabel="Semua program"
+          />
+          {d.opsiBatch.length > 0 && (
+            <QueryNavSelect
+              param="batch"
+              value={d.batchTerpilih}
+              options={d.opsiBatch}
+              ariaLabel="Pilih batch"
+              allLabel="Semua batch"
+            />
+          )}
+          {/* Nilai kosong berarti "gender saya", bukan "semua" — karena itu
+              "semua" harus jadi opsi eksplisit, dan GenderNavSelect (yang
+              memaknai kosong sebagai semua) tak dipakai di sini. */}
+          <QueryNavSelect
+            param="gender"
+            value={filter.gender}
+            options={[
+              { value: 'ikhwan', label: 'Ikhwan' },
+              { value: 'akhwat', label: 'Akhwat' },
+              { value: 'semua', label: 'Ikhwan & Akhwat' },
+            ]}
+            ariaLabel="Pilih gender"
+          />
+          {/* Seperti gender: kosong bukan berarti "semua", jadi tiap cakupan
+              ditulis eksplisit dan tak ada opsi kosong. */}
+          <QueryNavSelect
+            param="cakupan"
+            value={d.cakupanTerpilih}
+            options={d.opsiCakupan}
+            ariaLabel="Pilih cakupan penilaian"
+          />
+          {adaFilter && (
+            <Link href="/evaluasi/koordinator" className="t-small" style={{ marginLeft: 4 }}>
+              Reset
+            </Link>
+          )}
+        </div>
+
+        {d.halaqah.length === 0 ? (
           <div className="card-flat" style={{ padding: 32, textAlign: 'center' }}>
             <div style={{ fontSize: 40, marginBottom: 10 }}>📖</div>
-            <div style={{ fontSize: 16, fontWeight: 700, marginBottom: 4 }}>Belum ada halaqah binaan</div>
+            <div style={{ fontSize: 16, fontWeight: 700, marginBottom: 4 }}>
+              {d.adaHalaqahSamaSekali ? 'Tak ada halaqah yang cocok' : 'Belum ada halaqah binaan'}
+            </div>
             <p className="t-small" style={{ margin: 0 }}>
-              Belum ada halaqah {gender === 'ikhwan' ? 'ikhwan' : 'akhwat'} yang tersinkron ke sistem
-              evaluasi.
+              {d.adaHalaqahSamaSekali ? (
+                <>
+                  Tak ada halaqah yang cocok dengan penyaring ini.{' '}
+                  <Link href="/evaluasi/koordinator">Reset penyaring</Link>.
+                </>
+              ) : (
+                'Belum ada halaqah yang tersinkron ke sistem evaluasi.'
+              )}
             </p>
           </div>
         ) : (
           <>
             {/* Kartu statistik */}
-            <div
-              style={{
-                display: 'grid',
-                gridTemplateColumns: 'repeat(4, 1fr)',
-                gap: 12,
-                marginBottom: 20,
-              }}
-            >
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12, marginBottom: 20 }}>
               <div className="card-flat" style={{ padding: '14px 16px' }}>
-                <div style={{ fontSize: 26, fontWeight: 700, lineHeight: 1 }}>{halaqahList.length}</div>
-                <div className="t-small" style={{ marginTop: 4 }}>
-                  Halaqah binaan
-                </div>
+                <div style={{ fontSize: 26, fontWeight: 700, lineHeight: 1 }}>{d.total.halaqah}</div>
+                <div className="t-small" style={{ marginTop: 4 }}>Halaqah binaan</div>
               </div>
               <div className="card-flat" style={{ padding: '14px 16px' }}>
                 <div style={{ fontSize: 26, fontWeight: 700, lineHeight: 1 }}>
-                  {totalSelesai}
-                  <span style={{ fontSize: 15, color: 'var(--muted-2)' }}>/{totalPeserta}</span>
+                  {d.total.selesai}
+                  <span style={{ fontSize: 15, color: 'var(--muted-2)' }}>/{d.total.peserta}</span>
                 </div>
-                <div className="t-small" style={{ marginTop: 4 }}>
+                <div
+                  className="t-small"
+                  style={{ marginTop: 4 }}
+                  title="Peserta yang punya minimal satu nilai selesai dalam cakupan ini. Satu peserta dihitung sekali, walau dinilai di banyak sesi."
+                >
                   Peserta sudah dinilai
                 </div>
               </div>
               <div className="card-flat" style={{ padding: '14px 16px' }}>
                 <div
                   style={{
-                    fontSize: 26,
-                    fontWeight: 700,
-                    lineHeight: 1,
-                    color: rataAll == null ? 'var(--muted-2)' : 'oklch(0.40 0.10 150)',
+                    fontSize: 26, fontWeight: 700, lineHeight: 1,
+                    color: d.total.rata == null ? 'var(--muted-2)' : 'oklch(0.40 0.10 150)',
                   }}
                 >
-                  {rataAll == null ? '—' : rataAll}
+                  {d.total.rata == null ? '—' : d.total.rata}
                 </div>
-                <div className="t-small" style={{ marginTop: 4 }}>
-                  Rata-rata skor
-                </div>
+                <div className="t-small" style={{ marginTop: 4 }}>Rata-rata skor</div>
               </div>
               <div className="card-flat" style={{ padding: '14px 16px' }}>
                 <div
                   style={{
-                    fontSize: 26,
-                    fontWeight: 700,
-                    lineHeight: 1,
-                    color: totalBermasalah > 0 ? 'oklch(0.46 0.14 25)' : 'var(--ink)',
+                    fontSize: 26, fontWeight: 700, lineHeight: 1,
+                    color: d.total.bermasalah > 0 ? 'oklch(0.46 0.14 25)' : 'var(--ink)',
                   }}
                 >
-                  {totalBermasalah}
+                  {d.total.bermasalah}
                 </div>
-                <div className="t-small" style={{ marginTop: 4 }}>
+                <div
+                  className="t-small"
+                  style={{ marginTop: 4 }}
+                  title="Peserta yang RATA-RATA skornya dalam cakupan ini di bawah 70 — bukan yang sekadar pernah jeblok di satu sesi."
+                >
                   Peserta perlu perhatian
                 </div>
               </div>
             </div>
+
+            {/* Ringkasan per program × batch × gender. Disembunyikan bila cuma
+                satu grup — tak menambah apa pun di atas keempat kartu. */}
+            {tampilkanRingkasan && (
+              <div className="card-flat" style={{ padding: 0, overflow: 'hidden', marginBottom: 20 }}>
+                <div className="table-scroll">
+                  <table className="k-table" style={{ width: '100%' }}>
+                    <thead>
+                      <tr>
+                        <th>Program</th>
+                        <th>Batch</th>
+                        {tampilkanKolomGender && <th>Gender</th>}
+                        <th style={{ textAlign: 'center' }}>Halaqah</th>
+                        <th style={{ textAlign: 'center' }}>Kelengkapan</th>
+                        <th style={{ textAlign: 'center' }}>Rata-rata</th>
+                        <th style={{ textAlign: 'center' }}>Bermasalah</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {d.grup.map((g) => (
+                        <tr key={`${g.batchId ?? ''}|${g.gender}`}>
+                          <td className="nm">{g.programNama}</td>
+                          <td style={{ color: 'var(--ink-2)' }}>{g.batchLabel ?? '—'}</td>
+                          {tampilkanKolomGender && (
+                            <td style={{ color: 'var(--ink-2)' }}>
+                              {g.gender === 'ikhwan' ? 'Ikhwan' : 'Akhwat'}
+                            </td>
+                          )}
+                          <td style={{ textAlign: 'center' }}>{g.halaqah}</td>
+                          <td style={{ textAlign: 'center', whiteSpace: 'nowrap' }}>
+                            {g.selesai}/{g.total}
+                          </td>
+                          <td
+                            style={{
+                              textAlign: 'center', fontWeight: 700,
+                              color:
+                                g.rata == null
+                                  ? 'var(--muted-2)'
+                                  : g.rata >= AMBANG
+                                    ? 'oklch(0.40 0.10 150)'
+                                    : 'oklch(0.46 0.14 25)',
+                            }}
+                          >
+                            {g.rata == null ? '—' : g.rata}
+                          </td>
+                          <td
+                            style={{
+                              textAlign: 'center',
+                              color: g.bermasalah > 0 ? 'oklch(0.46 0.14 25)' : 'var(--line-2)',
+                            }}
+                          >
+                            {g.bermasalah > 0 ? g.bermasalah : '—'}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
 
             {/* Tabel halaqah */}
             <div className="card-flat" style={{ padding: 0, overflow: 'hidden' }}>
@@ -303,7 +256,7 @@ export default async function KoordinatorEvaluasiPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {rows.map((h) => {
+                    {d.halaqah.map((h) => {
                       const progPct = h.total > 0 ? Math.round((h.selesai / h.total) * 100) : 0;
                       const progColor =
                         h.selesai === h.total && h.total > 0
@@ -329,21 +282,13 @@ export default async function KoordinatorEvaluasiPage() {
                             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                               <div
                                 style={{
-                                  width: 64,
-                                  height: 6,
-                                  borderRadius: 3,
-                                  background: 'var(--line)',
-                                  overflow: 'hidden',
+                                  width: 64, height: 6, borderRadius: 3,
+                                  background: 'var(--line)', overflow: 'hidden',
                                 }}
                               >
-                                <div
-                                  style={{ height: '100%', background: progColor, width: `${progPct}%` }}
-                                />
+                                <div style={{ height: '100%', background: progColor, width: `${progPct}%` }} />
                               </div>
-                              <span
-                                className="t-small"
-                                style={{ whiteSpace: 'nowrap' }}
-                              >
+                              <span className="t-small" style={{ whiteSpace: 'nowrap' }}>
                                 {h.selesai}/{h.total}
                               </span>
                             </div>
@@ -355,16 +300,10 @@ export default async function KoordinatorEvaluasiPage() {
                             {h.bermasalah > 0 ? (
                               <span
                                 style={{
-                                  display: 'inline-flex',
-                                  alignItems: 'center',
-                                  justifyContent: 'center',
-                                  minWidth: 22,
-                                  height: 22,
-                                  borderRadius: 999,
-                                  background: 'oklch(0.96 0.03 25)',
-                                  color: 'oklch(0.46 0.14 25)',
-                                  fontSize: 12,
-                                  fontWeight: 700,
+                                  display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                                  minWidth: 22, height: 22, borderRadius: 999,
+                                  background: 'oklch(0.96 0.03 25)', color: 'oklch(0.46 0.14 25)',
+                                  fontSize: 12, fontWeight: 700,
                                 }}
                               >
                                 {h.bermasalah}
@@ -375,41 +314,54 @@ export default async function KoordinatorEvaluasiPage() {
                           </td>
                           <td style={{ color: 'var(--muted)' }}>{h.lahnTop}</td>
                           <td style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
-                            {showIngatkan && (
-                              <button
-                                type="button"
+                            {/* Dulu <button> tanpa handler di server component —
+                                terlihat bisa ditekan tapi tak melakukan apa pun.
+                                Kini tautan wa.me berisi pesan siap kirim; pengajar
+                                tanpa WA tercatat tak menampilkan tautan sama sekali,
+                                daripada menawarkan tautan yang buntu. */}
+                            {showIngatkan && h.pengajarWa && (
+                              <a
+                                href={buildWaMeUrl(
+                                  h.pengajarWa,
+                                  tplReminderPengajarIsiNilaiEvaluasi({
+                                    pengajarName: h.pengajar,
+                                    pengajarGender: h.gender,
+                                    namaHalaqah: h.nama,
+                                    periodeLabel: d.namaPeriode,
+                                    selesai: h.selesai,
+                                    total: h.total,
+                                  })
+                                )}
+                                target="_blank"
+                                rel="noopener noreferrer"
                                 className="no-print"
                                 style={{
-                                  display: 'inline-flex',
-                                  alignItems: 'center',
-                                  gap: 6,
-                                  height: 30,
-                                  padding: '0 10px',
-                                  borderRadius: 6,
-                                  fontSize: 12,
-                                  fontWeight: 600,
-                                  border: 'none',
-                                  background: 'oklch(0.70 0.13 75)',
-                                  color: '#fff',
-                                  cursor: 'pointer',
-                                  marginRight: 6,
+                                  display: 'inline-flex', alignItems: 'center', gap: 6,
+                                  height: 30, padding: '0 10px', borderRadius: 6,
+                                  fontSize: 12, fontWeight: 600, border: 'none',
+                                  background: 'oklch(0.70 0.13 75)', color: '#fff',
+                                  cursor: 'pointer', marginRight: 6,
+                                  textDecoration: 'none',
                                 }}
                               >
                                 Ingatkan
-                              </button>
+                              </a>
                             )}
-                            <Link
-                              href={`/evaluasi/koordinator/${h.id}`}
-                              className="btn btn-ghost btn-sm"
-                              style={{
-                                height: 30,
-                                padding: '0 10px',
-                                fontSize: 12,
-                                textDecoration: 'none',
-                              }}
-                            >
-                              Detail
-                            </Link>
+                            {/* Halaman detail masih mengunci gender dan akan 404
+                                untuk halaqah gender lain. Rekap lintas-gender di
+                                sini memang disengaja, tapi menawarkan tautan yang
+                                pasti mental lebih buruk daripada tak menawarkan. */}
+                            {h.gender !== session.gender ? (
+                              <span className="t-small" style={{ color: 'var(--line-2)' }}>—</span>
+                            ) : (
+                              <Link
+                                href={`/evaluasi/koordinator/${h.id}`}
+                                className="btn btn-ghost btn-sm"
+                                style={{ height: 30, padding: '0 10px', fontSize: 12, textDecoration: 'none' }}
+                              >
+                                Detail
+                              </Link>
+                            )}
                           </td>
                         </tr>
                       );

@@ -6,21 +6,21 @@ import {
   bersihkanNamaPeserta,
   buatIdPesertaManual,
   isPesertaManual,
-  namaPesertaTampil,
   URUTAN_MANUAL_DASAR,
 } from '@/lib/evaluasi-peserta';
+import { tandaiKurasi } from '@/lib/evaluasi-kurasi';
 
 export const runtime = 'nodejs';
 
 /**
- * Tambah peserta baru ke halaqah, atau betulkan nama peserta yang sudah ada.
+ * Tambah peserta baru ke halaqah, atau betulkan namanya — termasuk peserta yang
+ * datang dari hilmihs.
  *
- * Dua jalur simpan, karena asal barisnya beda:
- * - baris `manual:` ditulis langsung ke `nama` — tak ada hulu yang memilikinya;
- * - baris hilmihs ditulis ke `nama_override`, sebab `nama` ikut dibandingkan
- *   sinkron dan suntingan langsung akan ditarik balik pull berikutnya
- *   (migrasi 0068). Nama yang sama persis dengan hulu disimpan sebagai NULL
- *   supaya pembetulan ejaan di hulu tetap mengalir.
+ * Nama peserta pusat dulu ditolak di sini karena sync berikutnya pasti
+ * mengembalikannya. Sekarang kolom `nama` baris itu ditandai terkurasi
+ * (migrasi 0074) sehingga sync tak lagi menyentuhnya — lihat
+ * src/lib/evaluasi-kurasi.ts. Data di hulu TIDAK ikut berubah; pembetulan di
+ * sini hanya berlaku untuk modul Evaluasi.
  */
 export async function POST(req: NextRequest) {
   try {
@@ -60,7 +60,7 @@ export async function POST(req: NextRequest) {
     // Daftar sekarang dipakai dua kali: cek nama kembar dan hitung urutan.
     const { data: sudahAda } = await supabaseAdmin
       .from('eval_peserta')
-      .select('id, nama, nama_override, urutan')
+      .select('id, nama, urutan')
       .eq('halaqah_id', halaqahId)
       .eq('aktif', true);
     const daftar = sudahAda ?? [];
@@ -69,12 +69,10 @@ export async function POST(req: NextRequest) {
     const mengubah = typeof pesertaId === 'string' && pesertaId !== '';
 
     // Nama kembar hampir selalu berarti pengajar menambah orang yang sama dua
-    // kali (mis. sudah ada dari hilmihs dengan ejaan sedikit beda). Dibandingkan
-    // terhadap nama TAMPIL, karena itulah yang dilihat pengajar di daftar.
+    // kali (mis. sudah ada dari hilmihs dengan ejaan sedikit beda).
     const bentrok = daftar.find(
       (p) =>
-        namaPesertaTampil(p as { nama: string; nama_override?: string | null }).toLowerCase() ===
-          nama.toLowerCase() &&
+        String(p.nama).toLowerCase() === nama.toLowerCase() &&
         (!mengubah || p.id !== pesertaId)
     );
     if (bentrok) {
@@ -85,19 +83,21 @@ export async function POST(req: NextRequest) {
     }
 
     if (mengubah) {
-      const baris = daftar.find((p) => p.id === pesertaId);
-      if (!baris) {
+      const milikHalaqah = daftar.some((p) => p.id === pesertaId);
+      if (!milikHalaqah) {
         return NextResponse.json({ error: 'Peserta tidak ada di halaqah ini' }, { status: 404 });
       }
-      const patch = isPesertaManual(pesertaId)
-        ? { nama }
-        : { nama_override: nama === String(baris.nama) ? null : nama };
       const { error } = await supabaseAdmin
         .from('eval_peserta')
-        .update(patch)
+        .update({ nama })
         .eq('id', pesertaId);
       if (error) {
         return NextResponse.json({ error: error.message }, { status: 500 });
+      }
+      // Baris manual tak pernah ikut diff hilmihs, jadi penandanya cuma perlu
+      // untuk baris pusat. Ditandai setelah update berhasil.
+      if (!isPesertaManual(pesertaId)) {
+        await tandaiKurasi('eval_peserta', pesertaId, ['nama']);
       }
       return NextResponse.json({ ok: true, peserta_id: pesertaId, nama });
     }

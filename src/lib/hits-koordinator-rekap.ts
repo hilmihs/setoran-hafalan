@@ -13,6 +13,8 @@ import {
   type HutangRincianPengajar,
 } from '@/lib/hits-ranking';
 import { getCakupanObservasi, type CakupanPengajar } from '@/lib/hits-observasi-cakupan';
+import { supabaseAdmin } from '@/lib/supabase-admin';
+import { KELAS_LABEL, type HalaqahScope, type KelasMode } from '@/lib/hits-halaqah-scope';
 import { weekBounds, formatWeekRangeShort } from '@/lib/week';
 import type { Gender } from '@/types/db';
 
@@ -43,6 +45,12 @@ export type HitsKoordinatorRekap = {
   periodeLabel: string;
   genderLabel: string;
   gender?: Gender;
+  batchId?: string;
+  /** Nama batch terpilih — null bila lintas-batch. */
+  batchName: string | null;
+  kelas?: KelasMode;
+  /** "HITS Online April 2026 · Kelas offline" — null bila tak ada yang dipilih. */
+  scopeLabel: string | null;
   /** Pengajar yang punya %KBBS (rank terisi), urut ranking — SUDAH tersaring. */
   ranked: DisiplinRankRow[];
   /** Pengajar tanpa data pertemuan pada periode ini — SUDAH tersaring. */
@@ -100,6 +108,35 @@ export function filterLabel(f: RekapFilter): string | null {
   return bagian.length ? bagian.join(' · ') : null;
 }
 
+/**
+ * Potongan query-string cakupan halaqah (batch + online/offline) — '' bila
+ * keduanya kosong. Dipisah dari `filterQuery` karena cakupan menentukan
+ * halaqah MANA yang dihitung, sedangkan filter hanya menyaring baris hasil.
+ */
+export function scopeQuery(s: HalaqahScope): string {
+  return (s.batchId ? `&batch=${s.batchId}` : '') + (s.kelas ? `&kelas=${s.kelas}` : '');
+}
+
+export function scopeLabel(s: { batchName?: string | null; kelas?: KelasMode }): string | null {
+  const bagian = [s.batchName, s.kelas ? KELAS_LABEL[s.kelas] : null].filter(Boolean);
+  return bagian.length ? bagian.join(' · ') : null;
+}
+
+/** Batch untuk dropdown — terbaru dulu, yang aktif saja. */
+export async function daftarBatch(): Promise<Array<{ id: string; name: string }>> {
+  const { data } = await supabaseAdmin
+    .from('hits_batch')
+    .select('id, name, start_date')
+    .eq('active', true)
+    .order('start_date', { ascending: false });
+  return (data ?? []).map((b) => ({ id: b.id as string, name: b.name as string }));
+}
+
+async function namaBatch(id: string): Promise<string | null> {
+  const { data } = await supabaseAdmin.from('hits_batch').select('name').eq('id', id).maybeSingle();
+  return (data?.name as string | undefined) ?? null;
+}
+
 /** Rentang [start, end) untuk mode bulan: kalender penuh, bukan window 28–27. */
 export function rentangBulan(month: string): { start: string; end: string } {
   const [y, m] = month.split('-').map(Number);
@@ -113,18 +150,19 @@ export async function getHitsKoordinatorRekap(opts: {
   mode: HitsMode;
   month: string; // 'YYYY-MM' (dipakai bila mode=bulan)
   week: string; // 'YYYY-MM-DD' Senin (dipakai bila mode=minggu)
-  gender?: Gender;
   /** Tanpa ini = tanpa penyaringan (semua pengajar). */
   filter?: RekapFilter;
-}): Promise<HitsKoordinatorRekap> {
-  const { mode, month, week, gender } = opts;
+} & HalaqahScope): Promise<HitsKoordinatorRekap> {
+  const { mode, month, week, gender, batchId, kelas } = opts;
   const { start, end } =
     mode === 'minggu' ? weekBounds(week) : rentangBulan(month);
   const periodeLabel = mode === 'minggu' ? formatWeekRangeShort(week) : month;
 
-  const { rows, hutangByPengajar } = await getDisiplinRanking({ start, end, gender });
-  const insidenByPengajar = await getInsidenDetailByPengajar({ start, end, gender });
-  const cakupanByPengajar = await getCakupanObservasi({ start, end, gender });
+  const scope: HalaqahScope = { gender, batchId, kelas };
+  const { rows, hutangByPengajar } = await getDisiplinRanking({ start, end, ...scope });
+  const insidenByPengajar = await getInsidenDetailByPengajar({ start, end, ...scope });
+  const cakupanByPengajar = await getCakupanObservasi({ start, end, ...scope });
+  const batchName = batchId ? await namaBatch(batchId) : null;
 
   const filter = opts.filter ?? FILTER_NETRAL;
 
@@ -155,6 +193,10 @@ export async function getHitsKoordinatorRekap(opts: {
     periodeLabel,
     genderLabel: gender === 'ikhwan' ? 'Ikhwan' : gender === 'akhwat' ? 'Akhwat' : 'Ikhwan & Akhwat',
     gender,
+    batchId,
+    batchName,
+    kelas,
+    scopeLabel: scopeLabel({ batchName, kelas }),
     ranked: rows.filter((r) => r.rank !== null && lolos(r)),
     noData: rows.filter((r) => r.rank === null && lolos(r)),
     insidenByPengajar,

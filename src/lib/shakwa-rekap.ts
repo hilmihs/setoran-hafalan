@@ -248,10 +248,16 @@ export async function getShakwaRekap(f: ShakwaFilter = {}): Promise<ShakwaRekap>
 }
 
 /** Jumlah aduan berstatus 'submitted' sepanjang waktu (lepas dari filter tanggal). */
-export async function countShakwaBelumDitangani(): Promise<number> {
+/**
+ * Jumlah aduan yang belum ditangani. `gender` WAJIB: tanpanya lonceng di
+ * dashboard menghitung kedua gender, jadi koordinator ikhwan melihat angka yang
+ * memuat antrean akhwat — dan mengejar tiket yang bukan bagiannya.
+ */
+export async function countShakwaBelumDitangani(gender: Gender): Promise<number> {
   const { count } = await supabaseAdmin
     .from('shakwa')
     .select('id', { count: 'exact', head: true })
-    .eq('status', 'submitted');
+    .eq('status', 'submitted')
+    .eq('gender', gender);
   return count ?? 0;
 }

@@ -17,6 +17,7 @@ import {
   NILAI_MINIMUM,
   AMBANG_UJIAN_DEFAULT,
   UJIAN_SESI_BY_TRACK,
+  SESI_BERKALA_PER_TRACK,
   type Jenis,
   type LahnCounts,
   type Track,
@@ -139,6 +140,34 @@ export interface RapotTrackAkhir {
   peran: 'penentu' | 'prasyarat'; // pb menentukan kelulusan, qn prasyarat
 }
 
+/**
+ * Kenapa rapot track ini belum boleh diterbitkan — kosong berarti boleh.
+ *
+ * SATU sumber untuk klien dan server. Dulu aturannya ditulis dua kali: sekali di
+ * `screens/RapotTrack.tsx` (untuk mengunci tombol) dan sekali di
+ * `/api/evaluasi/rapot/terbitkan` (untuk menolak). Keduanya sudah pernah
+ * berbeda, dan bedanya muncul sebagai tombol yang menyala lalu gagal 400 —
+ * pengajar tak punya cara menebak mana yang benar.
+ *
+ * Dibangun dari payload yang sudah jadi, bukan dari baris sesi mentah, supaya
+ * pemanggilnya tak perlu tahu nomor sesi ujian tiap track.
+ */
+export function alasanBelumTerbit(tr: RapotTrackAkhir): string[] {
+  const short = tr.track === 'qn' ? 'QN' : 'PB';
+  const alasan: string[] = [];
+  if (tr.ujian == null) alasan.push(`Belum ada Ujian ${short}`);
+  if (!tr.ujianSaja) {
+    // Rapot track memuat SELURUH sesi berkala track itu, jadi keempatnya wajib
+    // sudah dinilai — bukan sekadar "ada satu" seperti era sebelum 0062.
+    const terisi = tr.berkala.history.filter((v) => v != null).length;
+    if (terisi < SESI_BERKALA_PER_TRACK) {
+      alasan.push(`Sesi ${short} baru ${terisi} dari ${SESI_BERKALA_PER_TRACK}`);
+    }
+  }
+  if (alasan.length === 0 && tr.nilaiAkhir == null) alasan.push('Nilai akhir belum lengkap');
+  return alasan;
+}
+
 /** ERA LAMA — bentuk payload yang sudah tersimpan. JANGAN diubah selamanya. */
 export interface RapotPayloadLegacy {
   v?: undefined;
@@ -226,9 +255,13 @@ function ujianSnap(sesi: SesiNilaiInput[], nomor: number, label: string, ambang:
   const r = sesi.find((s) => s.jenis === 'ujian' && s.nomor_sesi === nomor && s.done && s.hadir !== false);
   if (!r) return null;
   const sc = scoreOf(r.counts);
-  // Lantai `NILAI_MINIMUM` (55): skor ujian yang dicetak tak pernah di bawah itu.
-  // Badge lulus memakai skor yang sama dengan yang dicetak supaya angka dan
-  // statusnya tak saling membantah di lembar yang sama.
+  // Lantai `NILAI_MINIMUM` (55): skor ujian yang DICETAK tak pernah di bawah itu.
+  //
+  // Badge lulus tetap dihitung dari skor MENTAH. Lantai adalah aturan pencetakan,
+  // bukan aturan penilaian — ia tidak boleh meluluskan siapa pun. `ambang` di sini
+  // adalah `eval_halaqah.ambang_ujian`, smallint bebas isi yang default lamanya 65
+  // dan masih 65 di skrip seed; halaqah mana pun berambang ≤55 akan mencap skor
+  // mentah 10 sebagai "Lulus" kalau badge-nya ikut dilantai.
   const skor = lantaiNilai(sc.skor);
   return {
     sesi: nomor,
@@ -239,7 +272,7 @@ function ujianSnap(sesi: SesiNilaiInput[], nomor: number, label: string, ambang:
     counts: r.counts,
     tgl: r.tgl,
     catatan: r.catatan.trim(),
-    lulus: skor >= ambang,
+    lulus: sc.skor >= ambang,
   };
 }
 

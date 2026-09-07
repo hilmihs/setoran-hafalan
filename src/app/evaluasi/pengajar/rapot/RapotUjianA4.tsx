@@ -274,25 +274,24 @@ export default function RapotUjianA4({ payload, qr, logoSrc }: Props) {
               Cetakan pratinjau — rapot belum diterbitkan, jadi belum ada QR verifikasi.
             </div>
           )}
-          <div style={{ display: 'flex', gap: 28, textAlign: 'center' }}>
-            <div>
-              <div style={{ fontSize: 11, color: '#7a766f', marginBottom: 2 }}>{fmtTgl(payload.tanggal)}</div>
-              <div style={{ fontSize: 11, color: '#7a766f' }}>Penguji</div>
-              <div style={{ height: 34 }}></div>
-              <div style={{ fontSize: 12, fontWeight: 700, borderTop: '1px solid #1b1a17', paddingTop: 4, minWidth: 150 }}>{payload.penerbit}</div>
-            </div>
-            <div>
-              <div style={{ fontSize: 11, color: '#7a766f', marginBottom: 2 }}>&nbsp;</div>
-              <div style={{ fontSize: 11, color: '#7a766f' }}>Koordinator</div>
-              <div style={{ height: 34 }}></div>
-              <div style={{ fontSize: 12, fontWeight: 700, borderTop: '1px solid #1b1a17', paddingTop: 4, minWidth: 150 }}>&nbsp;</div>
-            </div>
+          {/* Kolom tanda tangan koordinator dihapus — tak pernah diisi. */}
+          <div style={{ textAlign: 'center' }}>
+            <div style={{ fontSize: 11, color: '#7a766f', marginBottom: 2 }}>{fmtTgl(payload.tanggal)}</div>
+            <div style={{ fontSize: 11, color: '#7a766f' }}>Penguji</div>
+            <div style={{ height: 34 }}></div>
+            <div style={{ fontSize: 12, fontWeight: 700, borderTop: '1px solid #1b1a17', paddingTop: 4, minWidth: 150 }}>{payload.penerbit}</div>
           </div>
         </div>
       </div>
 
       {/* ============ HALAMAN 2 ============ */}
-      <div className="a4-sheet" style={{ ...PAGE, pageBreakBefore: 'always', breakBefore: 'page' }}>
+      {/* `a4-sheet-akhir`: lembar penutup boleh tumbuh melewati 296mm. Catatan
+          penguji di sini teks bebas — kalau ia kepanjangan, biarkan dokumen
+          bertambah halaman, jangan sampai QR dan tanda tangannya yang hilang. */}
+      <div
+        className="a4-sheet a4-sheet-akhir"
+        style={{ ...PAGE, pageBreakBefore: 'always', breakBefore: 'page' }}
+      >
         <RapotKop identitas={identitas} logoSrc={logoSrc} sub={lampiran} pageLabel="Halaman 2 dari 2" />
 
         {/* Rincian kesalahan — gabungan: dua kolom (QN & PB); per-ujian: satu kolom. */}
@@ -346,7 +345,11 @@ export default function RapotUjianA4({ payload, qr, logoSrc }: Props) {
 
         {/* Catatan penguji */}
         <div style={SECTION_LABEL}>{tunggal ? 'C. Catatan penguji' : 'D. Catatan penguji'}</div>
-        <div style={{ border: '1px solid #e8e4dc', borderRadius: 8, padding: '13px 16px', background: '#faf8f4', fontSize: 12.5, lineHeight: 1.65, color: '#44423d', textWrap: 'pretty' }}>
+        {/* whiteSpace pre-wrap: penguji mengetik catatannya berbaris-baris, dengan
+            baris kosong sebagai jeda paragraf dan spasi awal untuk kutipan hadits.
+            Tanpa ini HTML meruntuhkan semuanya jadi satu blok padat yang berat
+            dibaca — persis keluhan yang memunculkan perubahan ini. */}
+        <div style={{ border: '1px solid #e8e4dc', borderRadius: 8, padding: '13px 16px', background: '#faf8f4', fontSize: 12.5, lineHeight: 1.65, color: '#44423d', textWrap: 'pretty', whiteSpace: 'pre-wrap' }}>
           {uj.catatanPenguji.trim() || 'Tidak ada catatan penguji.'}
         </div>
 

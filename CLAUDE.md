@@ -16,7 +16,9 @@ match it when naming things and writing UI/comments.
 ```bash
 npm run dev          # Next dev server (localhost:3000)
 npm run build        # next build + postbuild (copies static/public into .next/standalone)
-npm run lint         # eslint (next lint)
+npm run lint         # BROKEN — no eslint config in the repo, so `next lint` drops
+                     # into an interactive setup wizard and hangs. Never put it in
+                     # a verification step; `npm run typecheck` is the real gate.
 npm run typecheck    # tsc --noEmit — run this after any TS change; there is no test runner
 npm run apply-migration   # apply supabase/migrations/*.sql to the DB in DATABASE_URL
 ```
@@ -229,9 +231,11 @@ duplicate prefixes (two `0052_*` exist: `evaluasi_sesi_dihapus` + `evaluasi_sync
 Apply order among same-numbered files isn't guaranteed, so never rely on it — and
 `ls supabase/migrations/ | tail -1` before picking the next number — and check
 unmerged branches too. It has already bitten twice on this branch: `0069` and
-`0070` were both taken by `main` while Ketersediaan was in flight. Ketersediaan
-owns `0063`–`0067`, `0071`, `0072`; `0068` evaluasi overrides; `0069`
-`program_kelas_anggota`; `0070` setoran target (next free: `0073`).
+`0070` were both taken by `main` while Ketersediaan was in flight. Ketersediaan owns `0063`–`0067`, `0071`, `0072`; `0069` `program_kelas_anggota`;
+`0070` setoran target; `0073`–`0074` evaluasi (next free: `0075`).
+
+unmerged branches too. Ketersediaan (`docs/ketersediaan-mengajar-hits`) holds
+`0063`–`0067`, `0071`, `0072` — applied to prod but not yet on `main`.
 
 **Gotcha — DDL applied straight to prod:** some columns exist in production with
 no migration file at all, because they were added through `/api/admin/db`. A

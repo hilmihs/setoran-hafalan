@@ -6,6 +6,7 @@ import {
   filterAktif,
   type HitsMode,
 } from '@/lib/hits-koordinator-rekap';
+import { parseBatchId, parseKelasMode } from '@/lib/hits-halaqah-scope';
 import { buildHitsDisiplinWorkbook } from '@/lib/hits-disiplin-xlsx';
 import { weekStartMonday } from '@/lib/week';
 import type { Gender } from '@/types/db';
@@ -52,8 +53,10 @@ export async function GET(req: NextRequest) {
   // Filter mengikuti chip yang aktif di halaman — tombol unduh meneruskan
   // querystring apa adanya, jadi isi file = apa yang koordinator lihat.
   const filter = parseRekapFilter({ masalah: q.get('masalah'), obs: q.get('obs') });
+  const batchId = parseBatchId(q.get('batch'));
+  const kelas = parseKelasMode(q.get('kelas'));
 
-  const rekap = await getHitsKoordinatorRekap({ mode, month, week, gender, filter });
+  const rekap = await getHitsKoordinatorRekap({ mode, month, week, gender, batchId, kelas, filter });
   const buffer = await buildHitsDisiplinWorkbook(rekap);
 
   const periode = mode === 'minggu' ? week : month;
@@ -62,7 +65,7 @@ export async function GET(req: NextRequest) {
         .filter(Boolean)
         .join('-')}`
     : '';
-  const namaFile = `ranking-disiplin-${periode}${gender ? `-${gender}` : ''}${sufiksFilter}.xlsx`;
+  const namaFile = `ranking-disiplin-${periode}${gender ? `-${gender}` : ''}${kelas ? `-${kelas}` : ''}${sufiksFilter}.xlsx`;
 
   return new NextResponse(buffer, {
     status: 200,

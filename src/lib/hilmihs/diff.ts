@@ -13,7 +13,16 @@ export interface DiffRow {
   flags: string[];
 }
 
-type Row = { id: string; aktif?: boolean } & Record<string, unknown>;
+type Row = { id: string; aktif?: boolean; kurasi?: string[] } & Record<string, unknown>;
+
+/**
+ * Kolom yang sudah disunting lokal pada baris ini (migrasi 0074). Dibaca dari
+ * barisnya sendiri, bukan lewat src/lib/evaluasi-kurasi.ts, supaya file ini
+ * tetap murni — helper di sana menyentuh DB.
+ */
+function kolomTerkurasi(row: Row): string[] {
+  return Array.isArray(row.kurasi) ? row.kurasi.map((x) => String(x)) : [];
+}
 
 /**
  * @param compareCols kolom yang memicu 'update' bila berbeda.
@@ -35,7 +44,13 @@ export function diffEntity(
       out.push({ entity, op: 'create', entity_id: f.id, before: null, after: f, flags: [] });
       continue;
     }
-    const changed = compareCols.some((k) => normalize(c[k]) !== normalize(f[k]));
+    // Kolom terkurasi lokal (nama/level halaqah, nama peserta, dst.) tak boleh
+    // memicu update: pengajar sudah membetulkannya di sini dan hulu belum tentu
+    // menyusul. Tanpa ini tiap pull menstage ulang usulan yang sama.
+    const terkurasi = kolomTerkurasi(c);
+    const changed = compareCols.some(
+      (k) => !terkurasi.includes(k) && normalize(c[k]) !== normalize(f[k])
+    );
     if (changed) {
       out.push({ entity, op: 'update', entity_id: f.id, before: c, after: f, flags: [] });
     }

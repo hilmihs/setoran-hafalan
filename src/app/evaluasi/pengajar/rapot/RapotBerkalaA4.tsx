@@ -21,15 +21,21 @@ const BORDER_STRONG = '#d8d3c8';
 const CARD_BG = '#faf8f4';
 const HEAD_BG = '#efece5';
 
-const ID_MONTHS = [
-  'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
-  'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember',
-];
-
+// Tanggal terbit SELALU dibaca sebagai waktu Jakarta. `payload.tanggal` adalah
+// ISO UTC, dan `getDate()` memakai zona waktu mesin yang merender — VPS produksi
+// berjalan UTC, jadi rapot yang terbit sebelum pukul 07.00 WIB mencetak tanggal
+// KEMARIN, sementara halaman verifikasinya sendiri (yang memang memaksa
+// Asia/Jakarta) menampilkan tanggal hari ini. Dokumen jadi membantah QR-nya.
 function fmtTanggal(iso: string): string {
+  if (!iso) return '—';
   const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return iso;
-  return `${d.getDate()} ${ID_MONTHS[d.getMonth()]} ${d.getFullYear()}`;
+  if (Number.isNaN(d.getTime())) return '—';
+  return d.toLocaleDateString('id-ID', {
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+    timeZone: 'Asia/Jakarta',
+  });
 }
 
 function num(v: number | null): string {
@@ -284,40 +290,23 @@ export default function RapotBerkalaA4({ payload, qr, logoSrc }: Props): ReactEl
             Cetakan pratinjau — rapot belum diterbitkan, jadi belum ada QR verifikasi.
           </div>
         )}
-        <div style={{ display: 'flex', gap: 28, textAlign: 'center' }}>
-          <div>
-            <div style={{ fontSize: 11, color: MUTED, marginBottom: 2 }}>
-              {fmtTanggal(payload.tanggal)}
-            </div>
-            <div style={{ fontSize: 11, color: MUTED }}>Pengajar Halaqah</div>
-            <div style={{ height: 34 }} />
-            <div
-              style={{
-                fontSize: 12,
-                fontWeight: 700,
-                borderTop: `1px solid ${INK}`,
-                paddingTop: 4,
-                minWidth: 150,
-              }}
-            >
-              {payload.penerbit}
-            </div>
+        {/* Kolom tanda tangan koordinator dihapus — tak pernah diisi. */}
+        <div style={{ textAlign: 'center' }}>
+          <div style={{ fontSize: 11, color: MUTED, marginBottom: 2 }}>
+            {fmtTanggal(payload.tanggal)}
           </div>
-          <div>
-            <div style={{ fontSize: 11, color: MUTED, marginBottom: 2 }}>&nbsp;</div>
-            <div style={{ fontSize: 11, color: MUTED }}>Koordinator</div>
-            <div style={{ height: 34 }} />
-            <div
-              style={{
-                fontSize: 12,
-                fontWeight: 700,
-                borderTop: `1px solid ${INK}`,
-                paddingTop: 4,
-                minWidth: 150,
-              }}
-            >
-              &nbsp;
-            </div>
+          <div style={{ fontSize: 11, color: MUTED }}>Pengajar Halaqah</div>
+          <div style={{ height: 34 }} />
+          <div
+            style={{
+              fontSize: 12,
+              fontWeight: 700,
+              borderTop: `1px solid ${INK}`,
+              paddingTop: 4,
+              minWidth: 150,
+            }}
+          >
+            {payload.penerbit}
           </div>
         </div>
       </div>

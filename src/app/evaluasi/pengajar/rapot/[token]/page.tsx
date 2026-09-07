@@ -1,5 +1,6 @@
-import { headers } from 'next/headers';
+import type { Metadata } from 'next';
 import { supabaseAdmin } from '@/lib/supabase-admin';
+import { absUrl } from '@/lib/url';
 import { getSession } from '@/lib/session';
 import { evalPengajarIdFor } from '@/lib/evaluasi-pengajar';
 import { qrSvgDataUri } from '@/lib/qr';
@@ -15,6 +16,36 @@ import AutoPrint from '../AutoPrint';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
+
+/**
+ * Judul dokumen = nama berkas PDF-nya. Chrome dan Edge memakai `document.title`
+ * sebagai nama bawaan saat "Simpan sebagai PDF", jadi tanpa ini setiap rapot
+ * semua santri tersimpan sebagai "Muhajir Project Tilawah.pdf" dan saling
+ * bertumpuk di folder Unduhan pengajar.
+ */
+export async function generateMetadata({
+  params,
+}: {
+  params: { token: string };
+}): Promise<Metadata> {
+  const { data: row } = await supabaseAdmin
+    .from('evaluasi_rapot')
+    .select('payload, jenis_rapot')
+    .eq('token', params.token)
+    .maybeSingle();
+
+  const payload = row?.payload as RapotPayload | undefined;
+  const nama = payload?.identitas?.peserta?.trim();
+  if (!nama) return { title: 'Rapot Evaluasi', robots: { index: false, follow: false } };
+
+  const jenis = String(row?.jenis_rapot ?? '');
+  const label = jenis === 'qn' ? 'QN' : jenis === 'pb' ? 'PB' : 'Evaluasi';
+  const batch = payload?.identitas?.batch?.trim();
+  return {
+    title: [`Rapot ${label}`, nama, batch].filter(Boolean).join(' - '),
+    robots: { index: false, follow: false },
+  };
+}
 
 function Kartu({ judul, teks }: { judul: string; teks: string }) {
   return (
@@ -119,18 +150,13 @@ export default async function RapotPengajarPage({
 
   const payload = row.payload as RapotPayload;
 
-  // URL verifikasi absolut + QR. Pakai NEXT_PUBLIC_APP_URL sbg basis kanonik agar
-  // QR selalu menunjuk domain publik walau dicetak dari host lain (LAN/preview).
-  const base = (process.env.NEXT_PUBLIC_APP_URL || '').replace(/\/$/, '');
-  let verifyUrl: string;
-  if (base) {
-    verifyUrl = `${base}/evaluasi/rapot/cek/${token}`;
-  } else {
-    const h = await headers();
-    const host = h.get('host');
-    const proto = host?.includes('localhost') ? 'http' : 'https';
-    verifyUrl = `${proto}://${host}/evaluasi/rapot/cek/${token}`;
-  }
+  // URL verifikasi absolut + QR. Wajib lewat absUrl(): QR ini tercetak di kertas
+  // dan tidak bisa ditarik kembali, jadi ia tidak boleh pernah memuat host
+  // internal. Header `Host` di balik reverse proxy VPS bisa berisi 0.0.0.0:3000
+  // (lihat catatan yang sama di src/middleware.ts), dan NEXT_PUBLIC_APP_URL bisa
+  // saja kosong di prod — variabel rahasia Azure tidak otomatis masuk printenv.
+  // absUrl() menutup dua-duanya dengan fallback ke domain produksi.
+  const verifyUrl = absUrl(`/evaluasi/rapot/cek/${token}`);
   const qr = await qrSvgDataUri(verifyUrl);
 
   return (
@@ -157,7 +183,16 @@ export default async function RapotPengajarPage({
             : 'RAPOT DIGANTIKAN — ADA VERSI TERBARU'}
         </div>
       )}
-      <RapotDokumen payload={payload} qr={qr} />
+      {/*
+        Bungkus `.a4-stack` wajib: rapot track terdiri dari dua `.a4-sheet`, dan
+        aturan cetak mematikan pemisah halaman lewat `.a4-sheet:last-child`.
+        Tanpa pembungkus ini, `:last-child` di dalam `.a4-print-wrap` adalah
+        tombol Cetak/Cabut — jadi lembar terakhir tetap memaksa page-break dan
+        setiap cetakan berakhir dengan satu halaman kosong.
+      */}
+      <div className="a4-stack">
+        <RapotDokumen payload={payload} qr={qr} />
+      </div>
       <PrintButton />
       <CabutButton token={token} status={(row.status as string | undefined) ?? 'aktif'} />
     </div>

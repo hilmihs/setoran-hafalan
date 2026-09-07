@@ -23,9 +23,11 @@ const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 export default async function ShakwaKoordinatorPage({
   searchParams,
 }: {
-  searchParams: { tanggal?: string; dari?: string; sampai?: string; kategori?: string; status?: string; gender?: string; page?: string };
+  // `gender` sengaja tak ada di sini: nilainya datang dari sesi, dan
+  // mencantumkannya menyiratkan URL masih bisa mengubahnya.
+  searchParams: { tanggal?: string; dari?: string; sampai?: string; kategori?: string; status?: string; page?: string };
 }) {
-  await requireOneOfRoles(['koordinator', 'koordinator_ketua_kelas']);
+  const session = await requireOneOfRoles(['koordinator', 'koordinator_ketua_kelas']);
 
   const hariIni = todayJakartaISO();
   const tanggal = DATE_RE.test(searchParams.tanggal ?? '') ? (searchParams.tanggal as string) : hariIni;
@@ -37,10 +39,14 @@ export default async function ShakwaKoordinatorPage({
   const status = ['submitted', 'in_review', 'resolved', 'closed'].includes(searchParams.status ?? '')
     ? (searchParams.status as ShakwaStatus)
     : undefined;
-  const gender =
-    searchParams.gender === 'ikhwan' || searchParams.gender === 'akhwat'
-      ? (searchParams.gender as Gender)
-      : undefined;
+  // Gender DIKUNCI ke gender koordinator, bukan diambil dari query-string.
+  //
+  // Sebelumnya nilainya hanya dibaca dari `?gender=` dan defaultnya undefined —
+  // artinya "semua gender". Setiap koordinator shakwa karena itu melihat dan bisa
+  // menindak aduan kedua gender; SKW-20260904-003 (pelapor ikhwan) berakhir
+  // ditangani koordinator akhwat, padahal koordinator ikhwannya ada. Isi shakwa
+  // memuat aduan pribadi, jadi kebocoran ini bukan sekadar salah antre.
+  const gender: Gender = session.gender;
   const pageNum = Math.max(1, Number.parseInt(searchParams.page ?? '1', 10) || 1);
 
   const rentangPenuh = dari && sampai;
@@ -54,7 +60,7 @@ export default async function ShakwaKoordinatorPage({
       gender,
       page: pageNum,
     }),
-    countShakwaBelumDitangani(),
+    countShakwaBelumDitangani(gender),
   ]);
 
   // Query saat ini (nilai tervalidasi) — untuk tautan filter/paginasi komponen.
@@ -64,7 +70,8 @@ export default async function ShakwaKoordinatorPage({
     sampai,
     kategori,
     status,
-    gender,
+    // gender sengaja TIDAK diteruskan ke tautan filter: nilainya kini datang dari
+    // sesi, jadi menuliskannya di URL cuma menyiratkan ia bisa diubah dari sana.
     page: pageNum > 1 ? String(pageNum) : undefined,
   };
 

@@ -5,8 +5,6 @@ import { supabaseAdmin } from '@/lib/supabase-admin';
 import { ALL_LAHN, AMBANG, columnsToCounts, initials, tierOf, nilaiAkhirTrackOf, UJIAN_QN_SESI, UJIAN_PB_SESI } from '@/lib/evaluasi';
 import { PrintButton } from '@/components/PrintButton';
 import RekapNilaiAkhir from './RekapNilaiAkhir';
-import { namaHalaqahTampil, levelHalaqahTampil, type HalaqahTampil } from '@/lib/evaluasi-halaqah';
-import { namaPesertaTampil, type PesertaTampil } from '@/lib/evaluasi-peserta';
 
 export const dynamic = 'force-dynamic';
 
@@ -32,7 +30,7 @@ export default async function KoordinatorHalaqahPage({
 
   const { data: halaqah } = await supabaseAdmin
     .from('eval_halaqah')
-    .select('id, nama, nama_override, gender, mustawa, level, level_override, pengajar_id, batch_id')
+    .select('id, nama, gender, mustawa, level, pengajar_id, batch_id')
     .eq('id', params.halaqahId)
     .maybeSingle();
 
@@ -66,7 +64,7 @@ export default async function KoordinatorHalaqahPage({
   // Peserta aktif.
   const { data: pesertaRaw } = await supabaseAdmin
     .from('eval_peserta')
-    .select('id, nama, nama_override, urutan')
+    .select('id, nama, urutan')
     .eq('halaqah_id', halaqah.id as string)
     .eq('aktif', true)
     .order('urutan', { ascending: true });
@@ -103,8 +101,8 @@ export default async function KoordinatorHalaqahPage({
     const tier = skor != null ? tierOf(skor) : null;
     return {
       id: p.id as string,
-      nama: namaPesertaTampil(p as PesertaTampil),
-      initial: initials(namaPesertaTampil(p as PesertaTampil)),
+      nama: p.nama as string,
+      initial: initials(p.nama as string),
       skor,
       skorColor: tier ? tier.color : 'var(--muted-2)',
       tierLabel: tier ? tier.label : 'Belum dinilai',
@@ -145,7 +143,7 @@ export default async function KoordinatorHalaqahPage({
     // `terpisah` (batch rapot_ujian_terpisah) berlaku untuk KEDUA track.
     const qn = nilaiAkhirTrackOf('qn', berkalaQn, ujianQn, { ujianSaja: terpisah });
     const pb = nilaiAkhirTrackOf('pb', berkalaPb, ujianPb, { ujianSaja: terpisah });
-    return { nama: namaPesertaTampil(p as PesertaTampil), qn, pb };
+    return { nama: p.nama as string, qn, pb };
   });
 
   // Distribusi jenis kesalahan (baris done).
@@ -177,7 +175,7 @@ export default async function KoordinatorHalaqahPage({
   const topLahn = sorted.length > 0 ? sorted[0].label : '—';
   const catatanMasalah = `${bermasalah} peserta di bawah ambang standar (${AMBANG}). Kesalahan terbanyak: ${topLahn}. Pertimbangkan sesi remedial.`;
 
-  const level = levelHalaqahTampil(halaqah as HalaqahTampil);
+  const level = (halaqah.level as string | null) ?? null;
   const mustawa = halaqah.mustawa as number | null;
   const genderLabel = gender === 'ikhwan' ? 'Ikhwan' : 'Akhwat';
   const levelText = level ?? (mustawa != null ? `Mustawa ${mustawa}` : null);
@@ -206,7 +204,7 @@ export default async function KoordinatorHalaqahPage({
         >
           <div>
             <div style={{ fontSize: 20, fontWeight: 700 }}>
-              {namaHalaqahTampil(halaqah as HalaqahTampil)}{' '}
+              {halaqah.nama as string}{' '}
               <span style={{ fontSize: 14, fontWeight: 500, color: 'var(--muted)' }}>· {sub}</span>
             </div>
             <div className="t-small" style={{ marginTop: 2 }}>
@@ -219,7 +217,7 @@ export default async function KoordinatorHalaqahPage({
         </div>
 
         <div style={{ marginBottom: 18 }}>
-          <RekapNilaiAkhir halaqahNama={namaHalaqahTampil(halaqah as HalaqahTampil)} rows={rekapRows} terpisah={terpisah} />
+          <RekapNilaiAkhir halaqahNama={halaqah.nama as string} rows={rekapRows} terpisah={terpisah} />
         </div>
 
         <div

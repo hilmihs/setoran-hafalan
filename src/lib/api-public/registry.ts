@@ -3,7 +3,9 @@ import type { EntityDef } from './types';
 
 export const FORBIDDEN_COLUMNS: string[] = [
   'password_hash',
-  'whatsapp_number', 'ketua_wa', 'wakil_wa', 'pengajar_wa', 'pelapor_wa',
+  // `whatsapp` = nama kolom di `eval_pengajar` (mirror hilmihs) — nomor WA di
+  // app ini adalah identitas login, jadi setara kredensial.
+  'whatsapp_number', 'whatsapp', 'ketua_wa', 'wakil_wa', 'pengajar_wa', 'pelapor_wa',
   'magic_token',
   'new_password_plaintext',
   // 'akses_token' = token /tabayyun/<token> dan /ketersediaan/konfirmasi/<token>:
@@ -364,6 +366,77 @@ export const ENTITIES: Record<string, EntityDef> = {
     columns: ['kode', 'kategori', 'nama', 'standar'],
     filters: [{ param: 'kategori', column: 'kategori', kind: 'eq' }],
     order: { column: 'kode', dir: 'asc' },
+  },
+  // ── Evaluasi Halaqah (scope `evaluasi`) ──
+  // `eval_*` adalah tabel mirror dari hilmihs.web.id, ditimpa tiap sinkron —
+  // konsumen harus memperlakukan `id`-nya sebagai kunci stabil, bukan barisnya.
+  'evaluasi/batch': {
+    route: 'evaluasi/batch', table: 'eval_batch', scope: 'evaluasi',
+    // `family` = slug program induk; satu family bisa punya banyak angkatan
+    // (`batch_label`/`batch_order`). Program berangkatan tunggal: family === id.
+    columns: ['id', 'nama', 'aktif', 'family', 'batch_label', 'batch_order', 'rapot_ujian_terpisah', 'synced_at'],
+    filters: [
+      { param: 'aktif', column: 'aktif', kind: 'bool' },
+      { param: 'family', column: 'family', kind: 'eq' },
+    ],
+    order: { column: 'nama', dir: 'asc' },
+  },
+  'evaluasi/pengajar': {
+    // `whatsapp` TIDAK diekspos (ada di FORBIDDEN_COLUMNS) — itu identitas login.
+    route: 'evaluasi/pengajar', table: 'eval_pengajar', scope: 'evaluasi',
+    columns: ['id', 'nama', 'gender', 'synced_at'],
+    filters: [{ param: 'gender', column: 'gender', kind: 'eq' }],
+    order: { column: 'nama', dir: 'asc' },
+  },
+  'evaluasi/halaqah': {
+    route: 'evaluasi/halaqah', table: 'eval_halaqah', scope: 'evaluasi',
+    columns: ['id', 'nama', 'gender', 'mustawa', 'level', 'pengajar_id', 'batch_id', 'ambang_ujian', 'synced_at'],
+    filters: [
+      { param: 'gender', column: 'gender', kind: 'eq' },
+      { param: 'pengajar_id', column: 'pengajar_id', kind: 'eq' },
+      { param: 'batch_id', column: 'batch_id', kind: 'eq' },
+      { param: 'level', column: 'level', kind: 'eq' },
+    ],
+    order: { column: 'nama', dir: 'asc' },
+  },
+  'evaluasi/peserta': {
+    route: 'evaluasi/peserta', table: 'eval_peserta', scope: 'evaluasi',
+    columns: ['id', 'nama', 'gender', 'halaqah_id', 'is_ketua', 'aktif', 'urutan', 'synced_at'],
+    filters: [
+      { param: 'halaqah_id', column: 'halaqah_id', kind: 'eq' },
+      { param: 'gender', column: 'gender', kind: 'eq' },
+      { param: 'aktif', column: 'aktif', kind: 'bool' },
+      { param: 'is_ketua', column: 'is_ketua', kind: 'bool' },
+    ],
+    order: { column: 'urutan', dir: 'asc' },
+  },
+  // Rapot resmi (snapshot beku ber-QR). Yang keluar hanya ANGKA + lifecycle:
+  //  - `token` tak pernah keluar (di FORBIDDEN_COLUMNS) — pemegangnya bisa
+  //    membuka halaman verifikasi publik /evaluasi/rapot/cek/<token>.
+  //  - `payload` tak diekspos — snapshot penuh itu memuat catatan bebas pengajar.
+  // PERINGATAN KONSUMEN: `berkala_avg`/`ujian_pb_skor` punya SEMANTIK BERBEDA per
+  // `jenis_rapot` (era legacy vs era track), jadi WAJIB filter `jenis_rapot`
+  // sebelum menjumlahkan apa pun. Lihat EvaluasiRapot di src/types/db.ts.
+  'evaluasi/rapot': {
+    route: 'evaluasi/rapot', table: 'evaluasi_rapot', scope: 'evaluasi',
+    columns: [
+      'id', 'halaqah_id', 'peserta_id', 'jenis_rapot', 'nilai_akhir', 'berkala_avg',
+      'ujian_skor', 'ujian_pb_skor', 'lulus', 'ambang', 'diterbitkan_oleh',
+      'diterbitkan_at', 'status', 'superseded_by', 'dicabut_at',
+    ],
+    filters: [
+      { param: 'peserta_id', column: 'peserta_id', kind: 'eq' },
+      { param: 'halaqah_id', column: 'halaqah_id', kind: 'eq' },
+      { param: 'jenis_rapot', column: 'jenis_rapot', kind: 'eq' },
+      { param: 'status', column: 'status', kind: 'eq' },
+      { param: 'lulus', column: 'lulus', kind: 'bool' },
+      // `diterbitkan_at` timestamptz — batas hari ditafsir WIB agar sama dengan
+      // dashboard koordinator.
+      { param: 'tanggal_dari', column: 'diterbitkan_at', kind: 'ts_from' },
+      { param: 'tanggal_sampai', column: 'diterbitkan_at', kind: 'ts_to' },
+      { param: 'sejak', column: 'diterbitkan_at', kind: 'ts_since' },
+    ],
+    order: { column: 'diterbitkan_at', dir: 'desc' },
   },
   musyrif: {
     route: 'musyrif', table: 'musyrif', scope: 'ref', refShared: true,
