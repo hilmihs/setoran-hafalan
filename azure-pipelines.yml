@@ -15,6 +15,7 @@ pool:
   vmImage: ubuntu-latest
 
 steps:
+  - checkout: none
   - task: Bash@3
     displayName: "🔧 Generate exportable ENV from Variable Group"
     # Secret variable Azure TIDAK muncul di `printenv` kecuali dipetakan eksplisit
