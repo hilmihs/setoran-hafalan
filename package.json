@@ -18,6 +18,7 @@
     "test-shakwa": "tsx --env-file=.env.local scripts/test-shakwa.ts",
     "test-evaluasi": "tsx scripts/test-evaluasi.ts",
     "test-evaluasi-dashboard": "tsx scripts/test-evaluasi-dashboard.ts",
+    "test-evaluasi-rekap-peserta": "tsx scripts/test-evaluasi-rekap-peserta.ts",
     "test-hilmihs": "tsx --env-file=.env.local scripts/test-hilmihs.ts",
     "apply-migration": "tsx --env-file=.env.local scripts/apply-migration.ts",
     "seed-evaluasi": "tsx --env-file=.env.local scripts/seed-evaluasi.ts",

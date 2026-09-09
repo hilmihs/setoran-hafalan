@@ -50,6 +50,23 @@ export default async function KoordinatorEvaluasiPage({
             </div>
           </div>
           <div className="no-print" style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
+            {/* Penyaring dibawa serta: berpindah ke peringkat peserta tak boleh
+                diam-diam melebarkan cakupan yang sedang dilihat. Cakupan sesi
+                tidak ikut — halaman itu memakai nilai akhir rapot. */}
+            <Link
+              href={{
+                pathname: '/evaluasi/koordinator/peserta',
+                query: {
+                  ...(d.programTerpilih ? { program: d.programTerpilih } : {}),
+                  ...(d.batchTerpilih ? { batch: d.batchTerpilih } : {}),
+                  gender: filter.gender,
+                },
+              }}
+              className="btn btn-ghost btn-sm"
+              style={{ height: 40, padding: '0 14px', textDecoration: 'none' }}
+            >
+              ☰ Peringkat peserta
+            </Link>
             {bolehPengaturan && (
               <Link
                 href="/evaluasi/koordinator/pengaturan"
