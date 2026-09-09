@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from 'react';
 import { tetapkanKeputusan, batalkanKeputusan } from './actions';
+import { NAMA_KELAS } from '@/lib/evaluasi-keputusan';
 import type { Keputusan } from '@/lib/evaluasi-keputusan';
 
 const HIJAU_TXT = 'oklch(0.40 0.10 150)';
@@ -11,7 +12,7 @@ const AMBER_BORDER = 'oklch(0.86 0.08 85)';
 const MERAH_TXT = 'oklch(0.46 0.14 25)';
 
 /**
- * Dua tombol pilihan track pengulangan + pembatalan.
+ * Dua tombol pilihan KELAS pengulangan + pembatalan.
  *
  * Sengaja bukan `<select>`: pilihannya cuma dua dan keduanya harus terbaca
  * sekaligus, karena koordinator menyapu banyak baris berturut-turut dan
@@ -23,15 +24,11 @@ const MERAH_TXT = 'oklch(0.46 0.14 25)';
 export function KeputusanKontrol({
   pesertaId,
   nilai,
-  namaQn,
-  namaPb,
   bolehUbah,
 }: {
   pesertaId: string;
   /** Keputusan tersimpan; null = belum diputuskan. */
   nilai: Keputusan | null;
-  namaQn: string;
-  namaPb: string;
   /** false = hanya tampilan (koordinator ketua kelas, atau peserta gender lain). */
   bolehUbah: boolean;
 }) {
@@ -40,7 +37,7 @@ export function KeputusanKontrol({
 
   if (!bolehUbah) {
     return nilai ? (
-      <Lencana nilai={nilai} namaQn={namaQn} namaPb={namaPb} />
+      <Lencana nilai={nilai} />
     ) : (
       <span className="t-small" style={{ color: 'var(--line-2)' }}>—</span>
     );
@@ -89,8 +86,8 @@ export function KeputusanKontrol({
   return (
     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 3 }}>
       <div style={{ display: 'flex', gap: 4, justifyContent: 'flex-end' }}>
-        {tombol('qn', 'QN', `Mengulang ${namaQn}`)}
-        {tombol('pb', 'PB', `Mengulang ${namaPb}`)}
+        {tombol('qn', 'QN', `Mengulang di ${NAMA_KELAS.qn}`)}
+        {tombol('pb', 'PB', `Mengulang di ${NAMA_KELAS.pb}`)}
         {nilai && (
           <button
             type="button"
@@ -122,10 +119,10 @@ export function KeputusanKontrol({
 }
 
 /** Tampilan baca-saja untuk yang tak boleh mengubah. */
-function Lencana({ nilai, namaQn, namaPb }: { nilai: Keputusan; namaQn: string; namaPb: string }) {
+function Lencana({ nilai }: { nilai: Keputusan }) {
   return (
     <span
-      title={`Mengulang ${nilai === 'qn' ? namaQn : namaPb}`}
+      title={`Mengulang di ${NAMA_KELAS[nilai]}`}
       style={{
         display: 'inline-block',
         padding: '3px 9px',

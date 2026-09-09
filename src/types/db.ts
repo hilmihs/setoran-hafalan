@@ -835,12 +835,13 @@ export interface EvaluasiRapot {
 }
 
 /**
- * Keputusan koordinator atas peserta yang tidak lulus (0075): diulang di track
+ * Keputusan koordinator atas peserta yang tidak lulus (0075): mengulang di KELAS
  * mana. Tidak mengubah status rapot — rapot menampilkannya sebagai keterangan
  * tambahan, dan hanya bila barisnya ada.
  */
 export interface EvalKeputusanMengulang {
   peserta_id: string;
+  /** Kelas pengulangan: 'qn' = Kelas QN, 'pb' = Kelas PB. */
   keputusan: 'qn' | 'pb';
   /** koordinator.id; null bila koordinatornya sudah dihapus. */
   ditetapkan_oleh: string | null;

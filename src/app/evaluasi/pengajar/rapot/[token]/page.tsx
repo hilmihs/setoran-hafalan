@@ -4,7 +4,7 @@ import { absUrl } from '@/lib/url';
 import { getSession } from '@/lib/session';
 import { evalPengajarIdFor } from '@/lib/evaluasi-pengajar';
 import { qrSvgDataUri } from '@/lib/qr';
-import { keteranganKeputusanRapot } from '@/lib/evaluasi-keputusan';
+import { keteranganKeputusanRapot } from '@/lib/evaluasi-keputusan-db';
 import type { RapotPayload } from '@/lib/rapot';
 import { isRapotTrack } from '@/lib/rapot';
 import RapotBerkalaA4 from '../RapotBerkalaA4';
@@ -157,7 +157,7 @@ export default async function RapotPengajarPage({
   // Verifikasi kepemilikan halaqah.
   const { data: halaqah } = await supabaseAdmin
     .from('eval_halaqah')
-    .select('id, pengajar_id, gender')
+    .select('id, pengajar_id')
     .eq('id', row.halaqah_id)
     .maybeSingle();
   const evalPengajarId = await evalPengajarIdFor(pengajar.pengajar_id);
@@ -180,8 +180,7 @@ export default async function RapotPengajarPage({
   // ditetapkan setelah rapot terbit. Angka rapot tetap beku.
   const keteranganKeputusan = await keteranganKeputusanRapot(
     row.peserta_id as string,
-    String(row.jenis_rapot ?? ''),
-    String(halaqah.gender ?? '')
+    String(row.jenis_rapot ?? '')
   );
 
   return (

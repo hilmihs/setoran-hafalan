@@ -32,8 +32,6 @@ export default async function KoordinatorPesertaPage({
   // ikut melihat halaman ini tapi hanya membaca.
   const bolehMemutuskan = session.role === 'koordinator';
 
-  /** Tautan judul kolom: klik kolom yang sama membalik arah, kolom lain mulai
-   *  dari arah wajarnya — nilai dari terendah, teks dari A. */
   /** Penyaring yang harus ikut terbawa oleh setiap tautan di halaman ini. */
   function paramDasar(): URLSearchParams {
     const p = new URLSearchParams();
@@ -43,6 +41,8 @@ export default async function KoordinatorPesertaPage({
     return p;
   }
 
+  /** Tautan judul kolom: klik kolom yang sama membalik arah, kolom lain mulai
+   *  dari arah wajarnya — nilai dari terendah, teks dari A. */
   function hrefUrut(kolom: Urut): string {
     const p = paramDasar();
     if (f.hanyaMengulang) p.set('mengulang', '1');
@@ -276,8 +276,11 @@ export default async function KoordinatorPesertaPage({
                       <th>Pengajar</th>
                       <JudulUrut kolom="qn" rata="tengah">{d.namaTrackQn}</JudulUrut>
                       <JudulUrut kolom="pb" rata="tengah">{d.namaTrackPb}</JudulUrut>
-                      <th style={{ textAlign: 'right' }} title="Track tempat peserta yang tidak lulus diulang.">
-                        Mengulang di
+                      <th
+                        style={{ textAlign: 'right' }}
+                        title="Kelas tempat peserta yang tidak lulus ditempatkan ulang — Kelas QN atau Kelas PB."
+                      >
+                        Ulang di kelas
                       </th>
                       <th style={{ textAlign: 'right' }}>Aksi</th>
                     </tr>
@@ -330,8 +333,6 @@ export default async function KoordinatorPesertaPage({
                               <KeputusanKontrol
                                 pesertaId={r.id}
                                 nilai={r.keputusan}
-                                namaQn={d.namaTrackQn}
-                                namaPb={d.namaTrackPb}
                                 bolehUbah={bolehMemutuskan && r.gender === session.gender}
                               />
                             ) : (

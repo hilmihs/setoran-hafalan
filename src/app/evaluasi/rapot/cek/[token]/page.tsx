@@ -5,7 +5,7 @@ import type { Metadata } from 'next';
 import { supabaseAdmin } from '@/lib/supabase-admin';
 import type { RapotPayload, RapotPayloadLegacy, RapotPayloadTrack } from '@/lib/rapot';
 import { tierOf } from '@/lib/evaluasi';
-import { keteranganKeputusanRapot } from '@/lib/evaluasi-keputusan';
+import { keteranganKeputusanRapot } from '@/lib/evaluasi-keputusan-db';
 
 export const dynamic = 'force-dynamic';
 
@@ -280,8 +280,7 @@ export default async function CekRapotPage({
   // ke rapot PB dan mengembalikan null bila tak ada keputusan.
   const keteranganKeputusan = await keteranganKeputusanRapot(
     String(row.peserta_id ?? ''),
-    String(row.jenis_rapot ?? ''),
-    typeof identitas.gender === 'string' ? identitas.gender : ''
+    String(row.jenis_rapot ?? '')
   );
 
   const barisMeta = [identitas.halaqah, identitas.level, identitas.batch]

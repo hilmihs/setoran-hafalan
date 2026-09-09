@@ -20,7 +20,8 @@ import {
   pilihNamaTrack,
 } from '@/lib/evaluasi-dashboard';
 import type { BarisBatch, GenderFilter, OpsiPilih } from '@/lib/evaluasi-dashboard';
-import { bolehDiputuskan, muatKeputusan } from '@/lib/evaluasi-keputusan';
+import { bolehDiputuskan } from '@/lib/evaluasi-keputusan';
+import { muatKeputusan } from '@/lib/evaluasi-keputusan-db';
 import type { Keputusan } from '@/lib/evaluasi-keputusan';
 import type { Gender } from '@/types/db';
 
@@ -59,7 +60,7 @@ export interface BarisPeserta {
    * bawah ambang. QN rendah TIDAK membuatnya true: QN prasyarat, bukan penentu.
    */
   bisaDiputuskan: boolean;
-  /** Track tempat koordinator memutuskan peserta mengulang; null = belum. */
+  /** Kelas tempat koordinator memutuskan peserta mengulang; null = belum. */
   keputusan: Keputusan | null;
 }
 
@@ -78,7 +79,7 @@ export interface TotalPeserta {
    * memutuskan pengulangan orang.
    */
   mengulang: number;
-  /** Dari `mengulang`, yang belum diberi keputusan track pengulangan. */
+  /** Dari `mengulang`, yang belum diberi keputusan kelas pengulangan. */
   belumDiputuskan: number;
 }
 
