@@ -355,7 +355,7 @@ export default async function KoordinatorEvaluasiPage({
                               <span className="t-small" style={{ color: 'var(--line-2)' }}>—</span>
                             ) : (
                               <Link
-                                href={`/evaluasi/koordinator/${h.id}`}
+                                href={`/evaluasi/koordinator/${encodeURIComponent(h.id)}`}
                                 className="btn btn-ghost btn-sm"
                                 style={{ height: 30, padding: '0 10px', fontSize: 12, textDecoration: 'none' }}
                               >

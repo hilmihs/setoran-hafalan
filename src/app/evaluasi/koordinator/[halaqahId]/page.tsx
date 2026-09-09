@@ -28,10 +28,15 @@ export default async function KoordinatorHalaqahPage({
   const session = await requireOneOfRoles(['koordinator', 'koordinator_ketua_kelas']);
   const gender = session.gender;
 
+  // id eval_halaqah selalu memuat ':' ("dpq:180"), dan App Router menyerahkan
+  // segmen rute dalam bentuk ter-encode ("dpq%3A180") tanpa pernah men-decode-nya.
+  // Tanpa decode di sini, setiap tombol Detail berujung 404.
+  const halaqahId = decodeURIComponent(params.halaqahId);
+
   const { data: halaqah } = await supabaseAdmin
     .from('eval_halaqah')
     .select('id, nama, gender, mustawa, level, pengajar_id, batch_id')
-    .eq('id', params.halaqahId)
+    .eq('id', halaqahId)
     .maybeSingle();
 
   if (!halaqah || halaqah.gender !== gender) notFound();
