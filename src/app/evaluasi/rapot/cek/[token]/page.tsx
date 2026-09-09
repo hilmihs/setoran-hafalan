@@ -5,6 +5,7 @@ import type { Metadata } from 'next';
 import { supabaseAdmin } from '@/lib/supabase-admin';
 import type { RapotPayload, RapotPayloadLegacy, RapotPayloadTrack } from '@/lib/rapot';
 import { tierOf } from '@/lib/evaluasi';
+import { keteranganKeputusanRapot } from '@/lib/evaluasi-keputusan';
 
 export const dynamic = 'force-dynamic';
 
@@ -25,6 +26,10 @@ const HIJAU = 'oklch(0.58 0.09 165)';
 const HIJAU_TUA = 'oklch(0.40 0.10 150)';
 const MERAH = 'oklch(0.55 0.16 25)';
 const MERAH_TUA = 'oklch(0.46 0.14 25)';
+// Amber = keputusan tindak lanjut. Sengaja bukan merah: ia bukan vonis kedua.
+const AMBER_TUA = 'oklch(0.48 0.11 80)';
+const AMBER_MUDA = 'oklch(0.96 0.05 85)';
+const AMBER_GARIS = 'oklch(0.86 0.08 85)';
 const BG = '#f4f2ed';
 const KARTU = '#fff';
 const BORDER = '#e8e4dc';
@@ -268,6 +273,17 @@ export default async function CekRapotPage({
   }
 
   const identitas = payload.identitas;
+
+  // Keputusan koordinator (0075). Dibaca hidup: keputusan hampir selalu
+  // ditetapkan setelah rapot terbit, jadi payload beku takkan pernah memuatnya.
+  // Halaman ini publik — `keteranganKeputusanRapot` sendiri sudah membatasi diri
+  // ke rapot PB dan mengembalikan null bila tak ada keputusan.
+  const keteranganKeputusan = await keteranganKeputusanRapot(
+    String(row.peserta_id ?? ''),
+    String(row.jenis_rapot ?? ''),
+    typeof identitas.gender === 'string' ? identitas.gender : ''
+  );
+
   const barisMeta = [identitas.halaqah, identitas.level, identitas.batch]
     // typeof, bukan sekadar truthy: payload tak tervalidasi, jangan sampai .trim() throw.
     .filter((v): v is string => typeof v === 'string' && v.trim().length > 0)
@@ -392,6 +408,29 @@ export default async function CekRapotPage({
 
           {vm.peranTeks && (
             <div style={{ fontSize: 11.5, color: MUTED, marginTop: 6 }}>{vm.peranTeks}</div>
+          )}
+
+          {/* Keputusan koordinator (0075) — dibaca hidup, bukan dari payload.
+              Tanpa keputusan tak ada apa pun di sini, termasuk tanpa label
+              kosong yang akan terbaca sebagai "sudah ditinjau, tak ada tindak
+              lanjut". Angka di atas tetap beku. */}
+          {keteranganKeputusan && (
+            <div
+              style={{
+                marginTop: 12,
+                display: 'inline-block',
+                fontSize: 12,
+                fontWeight: 700,
+                color: AMBER_TUA,
+                background: AMBER_MUDA,
+                border: `1px solid ${AMBER_GARIS}`,
+                borderRadius: 10,
+                padding: '7px 12px',
+                textAlign: 'left',
+              }}
+            >
+              {keteranganKeputusan}
+            </div>
           )}
         </div>
 

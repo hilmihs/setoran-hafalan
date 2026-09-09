@@ -6,6 +6,7 @@ import {
 import type { Urut } from '@/lib/evaluasi-rekap-peserta';
 import { PrintButton } from '@/components/PrintButton';
 import { QueryNavSelect } from '@/components/QueryNavSelect';
+import { KeputusanKontrol, KeputusanKosong } from './KeputusanKontrol';
 
 export const dynamic = 'force-dynamic';
 
@@ -17,6 +18,7 @@ export default async function KoordinatorPesertaPage({
 }: {
   searchParams: {
     program?: string; batch?: string; gender?: string; urut?: string; arah?: string;
+    mengulang?: string;
   };
 }) {
   // Sama seperti dashboard: koordinator ketua kelas ikut memantau halaqah yang
@@ -26,16 +28,35 @@ export default async function KoordinatorPesertaPage({
   const d = await muatRekapPeserta(f);
 
   const tampilkanGender = f.gender === 'semua';
+  // Keputusan pengulangan wewenang koordinator penuh; koordinator ketua kelas
+  // ikut melihat halaman ini tapi hanya membaca.
+  const bolehMemutuskan = session.role === 'koordinator';
 
   /** Tautan judul kolom: klik kolom yang sama membalik arah, kolom lain mulai
    *  dari arah wajarnya — nilai dari terendah, teks dari A. */
-  function hrefUrut(kolom: Urut): string {
+  /** Penyaring yang harus ikut terbawa oleh setiap tautan di halaman ini. */
+  function paramDasar(): URLSearchParams {
     const p = new URLSearchParams();
     if (f.program) p.set('program', f.program);
     if (d.batchTerpilih) p.set('batch', d.batchTerpilih);
     p.set('gender', f.gender);
+    return p;
+  }
+
+  function hrefUrut(kolom: Urut): string {
+    const p = paramDasar();
+    if (f.hanyaMengulang) p.set('mengulang', '1');
     p.set('urut', kolom);
     p.set('arah', f.urut === kolom && f.arah === 'naik' ? 'turun' : 'naik');
+    return `?${p.toString()}`;
+  }
+
+  /** Tautan saklar "hanya yang mengulang" — urutan yang sedang dipakai ikut. */
+  function hrefMengulang(): string {
+    const p = paramDasar();
+    if (!f.hanyaMengulang) p.set('mengulang', '1');
+    p.set('urut', f.urut);
+    p.set('arah', f.arah);
     return `?${p.toString()}`;
   }
 
@@ -68,7 +89,8 @@ export default async function KoordinatorPesertaPage({
     d.batchTerpilih ||
     f.gender !== session.gender ||
     f.urut !== 'qn' ||
-    f.arah !== 'naik'
+    f.arah !== 'naik' ||
+    f.hanyaMengulang
   );
 
   return (
@@ -134,6 +156,24 @@ export default async function KoordinatorPesertaPage({
             ]}
             ariaLabel="Pilih gender"
           />
+          {/* Tanpa saklar ini fitur keputusan praktis tak terpakai: yang perlu
+              diputuskan cuma puluhan orang di antara ratusan baris. */}
+          <Link
+            href={hrefMengulang()}
+            className="btn btn-ghost btn-sm"
+            style={{
+              height: 34,
+              padding: '0 12px',
+              fontSize: 12,
+              textDecoration: 'none',
+              borderColor: f.hanyaMengulang ? 'oklch(0.86 0.08 85)' : undefined,
+              background: f.hanyaMengulang ? 'oklch(0.96 0.05 85)' : undefined,
+              color: f.hanyaMengulang ? 'oklch(0.48 0.11 80)' : undefined,
+              fontWeight: f.hanyaMengulang ? 700 : undefined,
+            }}
+          >
+            {f.hanyaMengulang ? '✓ ' : ''}Hanya yang mengulang
+          </Link>
           {adaFilter && (
             <Link href="/evaluasi/koordinator/peserta" className="t-small" style={{ marginLeft: 4 }}>
               Reset
@@ -209,9 +249,17 @@ export default async function KoordinatorPesertaPage({
                 <div
                   className="t-small"
                   style={{ marginTop: 4 }}
-                  title={`Peserta dengan nilai akhir sah di bawah ${AMBANG_LULUS_AKHIR} pada salah satu track.`}
+                  title={`Peserta dengan nilai akhir Rapot PB sah dan di bawah ${AMBANG_LULUS_AKHIR}. Rapot QN adalah prasyarat — nilainya tidak menggugurkan kelulusan, jadi tidak ikut dihitung di sini.`}
                 >
                   Mengulang
+                  {d.total.belumDiputuskan > 0 && (
+                    <>
+                      {' · '}
+                      <span style={{ color: 'oklch(0.48 0.11 80)', fontWeight: 700 }}>
+                        {d.total.belumDiputuskan} belum diputuskan
+                      </span>
+                    </>
+                  )}
                 </div>
               </div>
             </div>
@@ -228,6 +276,9 @@ export default async function KoordinatorPesertaPage({
                       <th>Pengajar</th>
                       <JudulUrut kolom="qn" rata="tengah">{d.namaTrackQn}</JudulUrut>
                       <JudulUrut kolom="pb" rata="tengah">{d.namaTrackPb}</JudulUrut>
+                      <th style={{ textAlign: 'right' }} title="Track tempat peserta yang tidak lulus diulang.">
+                        Mengulang di
+                      </th>
                       <th style={{ textAlign: 'right' }}>Aksi</th>
                     </tr>
                   </thead>
@@ -273,6 +324,19 @@ export default async function KoordinatorPesertaPage({
                             }}
                           >
                             {r.pb.nilai == null ? '—' : r.pb.nilai}
+                          </td>
+                          <td style={{ textAlign: 'right' }}>
+                            {r.bisaDiputuskan || r.keputusan ? (
+                              <KeputusanKontrol
+                                pesertaId={r.id}
+                                nilai={r.keputusan}
+                                namaQn={d.namaTrackQn}
+                                namaPb={d.namaTrackPb}
+                                bolehUbah={bolehMemutuskan && r.gender === session.gender}
+                              />
+                            ) : (
+                              <KeputusanKosong lulus={r.pb.lulus === true} />
+                            )}
                           </td>
                           <td style={{ textAlign: 'right' }}>
                             {/* Gender halaqah selalu = gender pemakai kecuali

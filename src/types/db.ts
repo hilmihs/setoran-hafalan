@@ -834,6 +834,19 @@ export interface EvaluasiRapot {
   dicabut_oleh: string | null;
 }
 
+/**
+ * Keputusan koordinator atas peserta yang tidak lulus (0075): diulang di track
+ * mana. Tidak mengubah status rapot — rapot menampilkannya sebagai keterangan
+ * tambahan, dan hanya bila barisnya ada.
+ */
+export interface EvalKeputusanMengulang {
+  peserta_id: string;
+  keputusan: 'qn' | 'pb';
+  /** koordinator.id; null bila koordinatornya sudah dihapus. */
+  ditetapkan_oleh: string | null;
+  ditetapkan_at: string;
+}
+
 export interface EvalSyncRun {
   id: string;
   started_at: string;

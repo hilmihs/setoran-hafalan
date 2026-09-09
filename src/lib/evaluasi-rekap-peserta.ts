@@ -20,6 +20,8 @@ import {
   pilihNamaTrack,
 } from '@/lib/evaluasi-dashboard';
 import type { BarisBatch, GenderFilter, OpsiPilih } from '@/lib/evaluasi-dashboard';
+import { bolehDiputuskan, muatKeputusan } from '@/lib/evaluasi-keputusan';
+import type { Keputusan } from '@/lib/evaluasi-keputusan';
 import type { Gender } from '@/types/db';
 
 /** Kolom yang bisa dijadikan kunci urut. */
@@ -37,6 +39,8 @@ export interface FilterPeserta {
   gender: GenderFilter;
   urut: Urut;
   arah: Arah;
+  /** Sisakan hanya peserta yang tidak lulus PB — yang perlu diputuskan. */
+  hanyaMengulang: boolean;
 }
 
 export interface BarisPeserta {
@@ -50,6 +54,13 @@ export interface BarisPeserta {
   pengajar: string;
   qn: NilaiAkhirTrack;
   pb: NilaiAkhirTrack;
+  /**
+   * Peserta ini boleh diberi keputusan mengulang — nilai akhir PB sah dan di
+   * bawah ambang. QN rendah TIDAK membuatnya true: QN prasyarat, bukan penentu.
+   */
+  bisaDiputuskan: boolean;
+  /** Track tempat koordinator memutuskan peserta mengulang; null = belum. */
+  keputusan: Keputusan | null;
 }
 
 export interface TotalPeserta {
@@ -58,8 +69,17 @@ export interface TotalPeserta {
   bernilai: number;
   rataQn: number | null;
   rataPb: number | null;
-  /** Nilai akhir sah tapi di bawah AMBANG_LULUS_AKHIR, di salah satu track. */
+  /**
+   * Peserta yang nilai akhir PB-nya sah dan di bawah AMBANG_LULUS_AKHIR.
+   *
+   * HANYA PB. Rapot QN adalah prasyarat yang nilainya tidak menggugurkan
+   * kelulusan level — ikut menghitungnya di sini akan menyebut "mengulang"
+   * peserta yang secara resmi lulus, dan angka itu dipakai koordinator untuk
+   * memutuskan pengulangan orang.
+   */
   mengulang: number;
+  /** Dari `mengulang`, yang belum diberi keputusan track pengulangan. */
+  belumDiputuskan: number;
 }
 
 export interface HasilRekapPeserta {
@@ -83,6 +103,7 @@ export function bacaFilterPeserta(
   sp: {
     program?: string | string[]; batch?: string | string[];
     gender?: string | string[]; urut?: string | string[]; arah?: string | string[];
+    mengulang?: string | string[];
   },
   genderPemakai: Gender
 ): FilterPeserta {
@@ -97,6 +118,7 @@ export function bacaFilterPeserta(
     gender: g === 'ikhwan' || g === 'akhwat' || g === 'semua' ? g : genderPemakai,
     urut: (URUT as readonly string[]).includes(u) ? (u as Urut) : URUT_DEFAULT,
     arah: (ARAH as readonly string[]).includes(a) ? (a as Arah) : ARAH_DEFAULT,
+    hanyaMengulang: satu(sp.mengulang) === '1',
   };
 }
 
@@ -253,6 +275,8 @@ export async function muatRekapPeserta(f: FilterPeserta): Promise<HasilRekapPese
     else if (m.jenis === 'ujian' && m.nomor_sesi === UJIAN_PB_SESI) k.ujianPb = skor;
   }
 
+  const keputusanByPeserta = await muatKeputusan(pesertaList.map((p) => p.id));
+
   const halaqahById = new Map(halaqahList.map((h) => [h.id, h]));
   const KOSONG: KomponenPeserta = { berkalaQn: [], berkalaPb: [], ujianQn: null, ujianPb: null };
 
@@ -270,6 +294,9 @@ export async function muatRekapPeserta(f: FilterPeserta): Promise<HasilRekapPese
     const levelText = h.level ?? (h.mustawa != null ? `Mustawa ${h.mustawa}` : null);
     const asal = b ? (b.batch_label ? `${programNama} ${b.batch_label}` : programNama) : null;
 
+    const qn = nilaiAkhirTrackOf('qn', k.berkalaQn, k.ujianQn, { ujianSaja: terpisah });
+    const pb = nilaiAkhirTrackOf('pb', k.berkalaPb, k.ujianPb, { ujianSaja: terpisah });
+
     rowsMentah.push({
       id: p.id,
       nama: p.nama,
@@ -278,8 +305,13 @@ export async function muatRekapPeserta(f: FilterPeserta): Promise<HasilRekapPese
       sub: [genderLabel, asal, levelText].filter(Boolean).join(' · '),
       gender: h.gender,
       pengajar: (h.pengajar_id && pengajarName.get(h.pengajar_id)) || '—',
-      qn: nilaiAkhirTrackOf('qn', k.berkalaQn, k.ujianQn, { ujianSaja: terpisah }),
-      pb: nilaiAkhirTrackOf('pb', k.berkalaPb, k.ujianPb, { ujianSaja: terpisah }),
+      qn,
+      pb,
+      bisaDiputuskan: bolehDiputuskan({ nilaiPb: pb.nilai }),
+      // Keputusan basi ikut ditampilkan bila nilainya sempat berubah jadi lulus:
+      // menyembunyikannya diam-diam membuat baris di DB tak bisa dilihat siapa
+      // pun, padahal koordinator perlu tahu ada yang harus dibatalkan.
+      keputusan: keputusanByPeserta.get(p.id) ?? null,
     });
   }
 
@@ -287,6 +319,7 @@ export async function muatRekapPeserta(f: FilterPeserta): Promise<HasilRekapPese
 
   let bernilai = 0;
   let mengulang = 0;
+  let belumDiputuskan = 0;
   let qnSum = 0;
   let qnN = 0;
   let pbSum = 0;
@@ -295,13 +328,24 @@ export async function muatRekapPeserta(f: FilterPeserta): Promise<HasilRekapPese
     const adaQn = r.qn.nilai != null;
     const adaPb = r.pb.nilai != null;
     if (adaQn || adaPb) bernilai += 1;
-    if ((adaQn && !r.qn.lulus) || (adaPb && !r.pb.lulus)) mengulang += 1;
+    // Sengaja `bisaDiputuskan`, bukan pemeriksaan sendiri: satu definisi
+    // "tidak lulus" untuk kartu, daftar, dan server action.
+    if (r.bisaDiputuskan) {
+      mengulang += 1;
+      if (r.keputusan == null) belumDiputuskan += 1;
+    }
     if (adaQn) { qnSum += r.qn.nilai as number; qnN += 1; }
     if (adaPb) { pbSum += r.pb.nilai as number; pbN += 1; }
   }
 
+  // Kartu ringkasan dihitung dari SELURUH baris yang lolos penyaring utama,
+  // bukan dari yang tersisa setelah "hanya yang mengulang". Kalau ikut menyusut,
+  // menyalakan saringan itu membuat "Mengulang 40 dari 950" berubah jadi
+  // "Mengulang 40 dari 40" — angka yang benar tapi tak lagi menjawab apa pun.
+  const rowsTampil = f.hanyaMengulang ? rows.filter((r) => r.bisaDiputuskan) : rows;
+
   return {
-    rows,
+    rows: rowsTampil,
     opsiProgram,
     opsiBatch,
     programTerpilih,
@@ -313,6 +357,7 @@ export async function muatRekapPeserta(f: FilterPeserta): Promise<HasilRekapPese
       rataQn: qnN > 0 ? Math.round(qnSum / qnN) : null,
       rataPb: pbN > 0 ? Math.round(pbSum / pbN) : null,
       mengulang,
+      belumDiputuskan,
     },
     namaTrackQn,
     namaTrackPb,

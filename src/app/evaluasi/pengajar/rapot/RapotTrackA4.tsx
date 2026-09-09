@@ -55,6 +55,18 @@ interface Props {
   /** QR verifikasi. Kosong = rapot belum diterbitkan (pratinjau/cetak dari aplikasi). */
   qr?: string;
   logoSrc: string;
+  /**
+   * Keterangan keputusan koordinator, mis. "Mengulang di Evaluasi QN" (0075).
+   *
+   * Dibaca HIDUP oleh pemanggil, bukan dari `payload`: keputusan hampir selalu
+   * ditetapkan setelah rapot terbit, jadi snapshot payload takkan pernah
+   * memuatnya. Angka rapot tetap beku — ini keterangan tambahan yang muncul
+   * hanya bila keputusannya ada, dan tidak menyentuh vonis LULUS/MENGULANG.
+   *
+   * Kosong/null = tidak ada keputusan → lembar rapot tidak menampilkan apa pun
+   * soal ini, bukan baris kosong atau "—".
+   */
+  keteranganKeputusan?: string | null;
 }
 
 const GREEN_DARK = 'oklch(0.40 0.10 150)';
@@ -359,7 +371,12 @@ function KakiHalaman({
   );
 }
 
-export default function RapotTrackA4({ payload, qr, logoSrc }: Props): ReactElement {
+export default function RapotTrackA4({
+  payload,
+  qr,
+  logoSrc,
+  keteranganKeputusan,
+}: Props): ReactElement {
   const { identitas, trackRapot: t } = payload;
 
   const trackUp = t.track.toUpperCase(); // 'QN' | 'PB'
@@ -567,6 +584,26 @@ export default function RapotTrackA4({ payload, qr, logoSrc }: Props): ReactElem
             <div style={{ fontSize: 11.5, color: statusColor, opacity: 0.85, marginTop: 6, textWrap: 'pretty' }}>
               {statusKet}
             </div>
+            {/* Keputusan koordinator. Tanpa keputusan, tak ada apa pun di sini —
+                termasuk tanpa label kosong: rapot yang mencantumkan "Keputusan: —"
+                akan terbaca sebagai "sudah ditinjau dan tak ada tindak lanjut". */}
+            {keteranganKeputusan && (
+              <div
+                style={{
+                  marginTop: 8,
+                  padding: '6px 10px',
+                  borderRadius: 8,
+                  background: '#ffffff',
+                  border: `1px solid ${statusColor}`,
+                  fontSize: 11.5,
+                  fontWeight: 700,
+                  color: statusColor,
+                  alignSelf: 'flex-start',
+                }}
+              >
+                {keteranganKeputusan}
+              </div>
+            )}
           </div>
           <div
             style={{

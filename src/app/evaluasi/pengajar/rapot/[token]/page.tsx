@@ -4,6 +4,7 @@ import { absUrl } from '@/lib/url';
 import { getSession } from '@/lib/session';
 import { evalPengajarIdFor } from '@/lib/evaluasi-pengajar';
 import { qrSvgDataUri } from '@/lib/qr';
+import { keteranganKeputusanRapot } from '@/lib/evaluasi-keputusan';
 import type { RapotPayload } from '@/lib/rapot';
 import { isRapotTrack } from '@/lib/rapot';
 import RapotBerkalaA4 from '../RapotBerkalaA4';
@@ -83,7 +84,16 @@ function Kartu({ judul, teks }: { judul: string; teks: string }) {
  * rusak / setengah migrasi bisa sampai ke sini tanpa `jenis_rapot`. Tanpa penjaga
  * pertama, `isRapotTrack` langsung mendereferensikan `undefined` dan halaman 500.
  */
-function RapotDokumen({ payload, qr }: { payload: RapotPayload; qr: string }) {
+function RapotDokumen({
+  payload,
+  qr,
+  keteranganKeputusan,
+}: {
+  payload: RapotPayload;
+  qr: string;
+  /** Keterangan keputusan mengulang (0075); null = tak ada, jangan cetak apa pun. */
+  keteranganKeputusan: string | null;
+}) {
   const takDikenali = (
     <Kartu
       judul="Format rapot tidak dikenali"
@@ -95,7 +105,14 @@ function RapotDokumen({ payload, qr }: { payload: RapotPayload; qr: string }) {
   if (typeof jenis !== 'string') return takDikenali;
 
   if (isRapotTrack(payload)) {
-    return <RapotTrackA4 payload={payload} qr={qr} logoSrc="/logo-mpt.png" />;
+    return (
+      <RapotTrackA4
+        payload={payload}
+        qr={qr}
+        logoSrc="/logo-mpt.png"
+        keteranganKeputusan={keteranganKeputusan}
+      />
+    );
   }
   if (payload.jenis_rapot === 'berkala') {
     return <RapotBerkalaA4 payload={payload} qr={qr} logoSrc="/logo-mpt.png" />;
@@ -129,7 +146,7 @@ export default async function RapotPengajarPage({
 
   const { data: row } = await supabaseAdmin
     .from('evaluasi_rapot')
-    .select('token, halaqah_id, payload, status')
+    .select('token, halaqah_id, peserta_id, jenis_rapot, payload, status')
     .eq('token', token)
     .maybeSingle();
 
@@ -140,7 +157,7 @@ export default async function RapotPengajarPage({
   // Verifikasi kepemilikan halaqah.
   const { data: halaqah } = await supabaseAdmin
     .from('eval_halaqah')
-    .select('id, pengajar_id')
+    .select('id, pengajar_id, gender')
     .eq('id', row.halaqah_id)
     .maybeSingle();
   const evalPengajarId = await evalPengajarIdFor(pengajar.pengajar_id);
@@ -158,6 +175,14 @@ export default async function RapotPengajarPage({
   // absUrl() menutup dua-duanya dengan fallback ke domain produksi.
   const verifyUrl = absUrl(`/evaluasi/rapot/cek/${token}`);
   const qr = await qrSvgDataUri(verifyUrl);
+
+  // Dibaca hidup, bukan dari payload: keputusan koordinator hampir selalu
+  // ditetapkan setelah rapot terbit. Angka rapot tetap beku.
+  const keteranganKeputusan = await keteranganKeputusanRapot(
+    row.peserta_id as string,
+    String(row.jenis_rapot ?? ''),
+    String(halaqah.gender ?? '')
+  );
 
   return (
     <div className="a4-print-wrap">
@@ -191,7 +216,7 @@ export default async function RapotPengajarPage({
         setiap cetakan berakhir dengan satu halaman kosong.
       */}
       <div className="a4-stack">
-        <RapotDokumen payload={payload} qr={qr} />
+        <RapotDokumen payload={payload} qr={qr} keteranganKeputusan={keteranganKeputusan} />
       </div>
       <PrintButton />
       <CabutButton token={token} status={(row.status as string | undefined) ?? 'aktif'} />
