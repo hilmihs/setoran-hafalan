@@ -29,7 +29,7 @@ export function KeputusanKontrol({
   pesertaId: string;
   /** Keputusan tersimpan; null = belum diputuskan. */
   nilai: Keputusan | null;
-  /** false = hanya tampilan (koordinator ketua kelas, atau peserta gender lain). */
+  /** false = hanya tampilan (koordinator ketua kelas). */
   bolehUbah: boolean;
 }) {
   const [pending, start] = useTransition();

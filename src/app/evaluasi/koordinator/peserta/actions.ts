@@ -18,17 +18,23 @@ const RUTE = '/evaluasi/koordinator/peserta';
  * `koordinator_ketua_kelas` ikut MELIHAT halaman ini (ia memantau halaqah yang
  * sama), tapi keputusan pengulangan bukan wewenangnya — dan barisnya pun tak ada
  * di tabel `koordinator`, sehingga `ditetapkan_oleh` tak bisa diisi jujur.
+ *
+ * TIDAK mengunci gender, dan itu disengaja — beda dari shakwa, rekap halaqah,
+ * dan halaman detail yang semuanya mengunci. Penempatan ulang angkatan
+ * berikutnya diputuskan koordinator sebagai satu majelis, bukan per gender,
+ * jadi mengunci di sini hanya memaksa satu daftar dikerjakan dua akun. Yang
+ * menetapkan tetap tercatat di `ditetapkan_oleh`.
  */
-async function guard(): Promise<{ koordinatorId: string; gender: string }> {
+async function guard(): Promise<{ koordinatorId: string }> {
   const s = await requireOneOfRoles(['koordinator']);
-  return { koordinatorId: s.koordinator_id, gender: s.gender };
+  return { koordinatorId: s.koordinator_id };
 }
 
 /**
- * Halaqah peserta + nilai akhir PB-nya, dihitung dari sumber yang sama dengan
- * halaman rekap. Mengembalikan null bila pesertanya tak ada.
+ * Nilai akhir PB peserta, dihitung dari sumber yang sama dengan halaman rekap.
+ * Mengembalikan null bila pesertanya tak ada.
  */
-async function kelayakan(pesertaId: string): Promise<{ gender: string; nilaiPb: number | null } | null> {
+async function kelayakan(pesertaId: string): Promise<{ nilaiPb: number | null } | null> {
   const { data: peserta } = await supabaseAdmin
     .from('eval_peserta')
     .select('id, halaqah_id')
@@ -38,7 +44,7 @@ async function kelayakan(pesertaId: string): Promise<{ gender: string; nilaiPb: 
 
   const { data: halaqah } = await supabaseAdmin
     .from('eval_halaqah')
-    .select('id, gender, batch_id')
+    .select('id, batch_id')
     .eq('id', peserta.halaqah_id as string)
     .maybeSingle();
   if (!halaqah) return null;
@@ -82,18 +88,15 @@ async function kelayakan(pesertaId: string): Promise<{ gender: string; nilaiPb: 
   }
 
   const pb = nilaiAkhirTrackOf('pb', berkalaPb, ujianPb, { ujianSaja: terpisah });
-  return { gender: halaqah.gender as string, nilaiPb: pb.nilai };
+  return { nilaiPb: pb.nilai };
 }
 
 export async function tetapkanKeputusan(pesertaId: string, keputusan: string) {
-  const { koordinatorId, gender } = await guard();
+  const { koordinatorId } = await guard();
   if (!isKeputusan(keputusan)) throw new Error('Keputusan tidak dikenali.');
 
   const k = await kelayakan(pesertaId);
   if (!k) throw new Error('Peserta tidak ditemukan.');
-  // Halaman boleh MENAMPILKAN lintas-gender, tapi keputusan atas santri gender
-  // lain bukan wewenang koordinator ini.
-  if (k.gender !== gender) throw new Error('Peserta bukan binaan Anda.');
   if (!bolehDiputuskan({ nilaiPb: k.nilaiPb })) {
     throw new Error('Peserta ini tidak sedang dinyatakan mengulang.');
   }
@@ -114,11 +117,10 @@ export async function tetapkanKeputusan(pesertaId: string, keputusan: string) {
 }
 
 export async function batalkanKeputusan(pesertaId: string) {
-  const { gender } = await guard();
+  await guard();
 
   const k = await kelayakan(pesertaId);
   if (!k) throw new Error('Peserta tidak ditemukan.');
-  if (k.gender !== gender) throw new Error('Peserta bukan binaan Anda.');
   // Sengaja TANPA penjaga `bolehDiputuskan`: keputusan yang jadi basi karena
   // nilainya berubah menjadi lulus justru yang paling perlu bisa dibatalkan.
 

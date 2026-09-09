@@ -30,6 +30,12 @@ export default async function KoordinatorPesertaPage({
   const tampilkanGender = f.gender === 'semua';
   // Keputusan pengulangan wewenang koordinator penuh; koordinator ketua kelas
   // ikut melihat halaman ini tapi hanya membaca.
+  //
+  // TIDAK dibatasi gender — koordinator mana pun boleh memutuskan santri mana
+  // pun. Penempatan angkatan berikutnya diputuskan sebagai satu majelis, jadi
+  // mengunci per gender hanya memaksa satu daftar dikerjakan dua akun. Kolom
+  // "Aksi" di sebelahnya TETAP terkunci gender: tautannya menuju halaman detail
+  // halaqah, yang memang 404 untuk gender lain.
   const bolehMemutuskan = session.role === 'koordinator';
 
   /** Penyaring yang harus ikut terbawa oleh setiap tautan di halaman ini. */
@@ -333,7 +339,7 @@ export default async function KoordinatorPesertaPage({
                               <KeputusanKontrol
                                 pesertaId={r.id}
                                 nilai={r.keputusan}
-                                bolehUbah={bolehMemutuskan && r.gender === session.gender}
+                                bolehUbah={bolehMemutuskan}
                               />
                             ) : (
                               <KeputusanKosong lulus={r.pb.lulus === true} />
