@@ -415,7 +415,7 @@ export default function RapotTrackA4({
       : CARD_BG;
   const statusKet =
     vonis.nada === 'lulus'
-      ? `Memenuhi ambang kelulusan nilai akhir (${payload.ambang}). ${peranTeks}`
+      ? `Memenuhi ambang nilai akhir (${payload.ambang}). ${peranTeks}`
       : vonis.nada === 'mengulang'
         ? `Belum memenuhi ambang kelulusan nilai akhir (${payload.ambang}). ${peranTeks}`
         : vonis.nada === 'bawah_standar'
