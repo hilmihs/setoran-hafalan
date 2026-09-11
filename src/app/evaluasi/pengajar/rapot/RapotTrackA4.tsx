@@ -1,7 +1,7 @@
 import type { ReactElement } from 'react';
 import type { RapotPayloadTrack, RapotTrackSnap, RapotLahnRow } from '@/lib/rapot';
 import { NILAI_MINIMUM } from '@/lib/rapot';
-import { vonisTrack } from '@/lib/evaluasi';
+import { tierOf, vonisTrack } from '@/lib/evaluasi';
 import RapotKop from './RapotKop';
 
 // Rapot Evaluasi per-track (0062) — cetak A4 potret, presentasional murni:
@@ -419,8 +419,13 @@ export default function RapotTrackA4({
       : vonis.nada === 'mengulang'
         ? `Belum memenuhi ambang kelulusan nilai akhir (${payload.ambang}). ${peranTeks}`
         : vonis.nada === 'bawah_standar'
-          ? `Nilai akhir di bawah ambang standar (${payload.ambang}). Bukan mengulang — Rapot QN adalah prasyarat; peserta tetap lanjut ke Rapot PB, yang menentukan kelulusan level.`
+          ? `Nilai akhir di bawah ambang standar (${payload.ambang}). Tetap melanjutkan ke level Perbaikan Bacaan (PB).`
           : `Nilai akhir belum dapat ditetapkan karena komponen penilaian belum lengkap. ${peranTeks}`;
+
+  // Predikat diturunkan dari nilai akhir yang beku, bukan dari string
+  // `t.predikat` di snapshot: rapot yang sudah terbit menyimpan label lama
+  // ("Cukup — di bawah standar") dan harus ikut berubah tanpa terbit ulang.
+  const predikat = t.nilaiAkhir == null ? t.predikat : tierOf(t.nilaiAkhir).label;
 
   const halaqahVal = [identitas.halaqah, identitas.gender].filter(Boolean).join(' · ');
   const levelVal = identitas.level ?? (identitas.mustawa != null ? String(identitas.mustawa) : '—');
@@ -665,8 +670,7 @@ export default function RapotTrackA4({
                   {t.nilaiAkhir}
                 </div>
                 <div style={{ fontSize: 11, color: FAINT, fontWeight: 600 }}>dari 100</div>
-                {/* JANGAN `whiteSpace: nowrap`: predikat 50–69 berbunyi
-                    "Cukup — di bawah standar", 261px di kolom 200px — ia
+                {/* JANGAN `whiteSpace: nowrap`: predikat panjang pernah
                     terpotong di tengah kata oleh `overflow: hidden` pita. */}
                 <div
                   style={{
@@ -686,7 +690,7 @@ export default function RapotTrackA4({
                     textTransform: 'uppercase',
                   }}
                 >
-                  Predikat {t.predikat}
+                  Predikat {predikat}
                 </div>
               </>
             )}

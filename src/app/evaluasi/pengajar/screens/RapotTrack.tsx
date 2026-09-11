@@ -529,7 +529,7 @@ export default function RapotTrack({
             {showNilai && (
               <div style={{ fontSize: 12, color: stColor, opacity: 0.85, marginTop: 4 }}>
                 Nilai akhir {tr.nilaiAkhir} · ambang lulus {ambang}
-                {vonis.nada === 'bawah_standar' && ' · bukan mengulang, tetap lanjut ke PB'}
+                {vonis.nada === 'bawah_standar' && ' · tetap melanjutkan ke level Perbaikan Bacaan (PB)'}
               </div>
             )}
           </div>
@@ -628,7 +628,7 @@ export default function RapotTrack({
                 }}
               >
                 <span style={{ fontSize: 13, fontWeight: 800, color: predikatColor, letterSpacing: '0.04em' }}>
-                  PREDIKAT: {tr.predikat.toUpperCase()}
+                  PREDIKAT: {(tr.nilaiAkhir != null ? tierOf(tr.nilaiAkhir).label : tr.predikat).toUpperCase()}
                 </span>
               </div>
             )}

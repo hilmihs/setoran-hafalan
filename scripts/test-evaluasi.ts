@@ -35,7 +35,7 @@ eq(scoreOf({ ...emptyCounts(), huruf: 17 }).skor, 0, 'floor at zero');
 
 eq(tierOf(95).label, 'Mumtaz', 'tier mumtaz');
 eq(tierOf(70).label, 'Standar', 'tier standar boundary');
-eq(tierOf(69).label, 'Cukup — di bawah standar', 'tier cukup');
+eq(tierOf(69).label, 'Di bawah standar', 'tier di bawah standar');
 eq(tierOf(10).label, 'Perlu pengulangan', 'tier ulang');
 eq(AMBANG, 70, 'ambang const');
 

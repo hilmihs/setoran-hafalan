@@ -60,7 +60,9 @@ export interface Tier { label: string; color: string; }
 export function tierOf(skor: number): Tier {
   if (skor >= 90) return { label: 'Mumtaz', color: 'oklch(0.40 0.10 150)' };
   if (skor >= 70) return { label: 'Standar', color: 'oklch(0.40 0.10 150)' };
-  if (skor >= 50) return { label: 'Cukup — di bawah standar', color: 'oklch(0.48 0.10 75)' };
+  // Dulu "Cukup — di bawah standar": kata "Cukup" bertabrakan dengan vonis
+  // DI BAWAH STANDAR di pita rapot QN, jadi diringkas.
+  if (skor >= 50) return { label: 'Di bawah standar', color: 'oklch(0.48 0.10 75)' };
   return { label: 'Perlu pengulangan', color: 'oklch(0.46 0.14 25)' };
 }
 

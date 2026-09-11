@@ -165,7 +165,7 @@ function vmLegacy(payload: RapotPayloadLegacy): Vm {
     : payload.berkala?.rataGabungan ?? null;
 
   // Warna angka besar ikut status. Ujian: lulus hijau / mengulang merah / null netral.
-  // Berkala: ikut tier predikat (jangan paksa hijau utk "Cukup"/"Perlu pengulangan").
+  // Berkala: ikut tier predikat (jangan paksa hijau utk "Di bawah standar"/"Perlu pengulangan").
   const angkaColor = isUjian
     ? lulus === true ? HIJAU : lulus === false ? MERAH : MUTED
     : angka != null ? tierOf(angka).color : MUTED;
