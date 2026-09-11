@@ -126,8 +126,9 @@ export default function SosialisasiPenilaianPage() {
             Nilai Akhir PB = (rata-rata sesi PB × 30%) + (Ujian PB × 70%)
           </div>
           <div style={{ fontSize: 13, color: '#44423d', lineHeight: 1.55 }}>
-            Ambang <b>70 per rapot</b>. Nilai akhir sebuah rapot ≥ 70 → <b>LULUS</b>; di bawah 70 → <b>MENGULANG</b>,
-            dinilai terpisah untuk QN dan PB.
+            Ambang <b>70 per rapot</b>, dinilai terpisah untuk QN dan PB. Rapot PB menentukan kelulusan level:
+            nilai akhir ≥ 70 → <b>LULUS</b>; di bawah 70 → <b>MENGULANG</b>. Rapot QN adalah prasyarat: di bawah 70
+            dinyatakan <b>DI BAWAH STANDAR</b>, bukan mengulang — peserta tetap lanjut ke PB.
           </div>
           <div style={{ fontSize: 12, color: '#44423d', marginTop: 10, background: '#fff', border: '1px solid #d8d3c8', borderRadius: 8, padding: '8px 12px' }}>
             Contoh (Rapot PB): rata-rata sesi PB 79, Ujian PB 78 → (79 × 0,3) + (78 × 0,7) = 78,3 → <b>78</b> · LULUS.

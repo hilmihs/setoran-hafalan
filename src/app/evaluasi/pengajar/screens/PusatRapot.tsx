@@ -16,7 +16,7 @@
 
 import { useState } from 'react';
 import { alasanBelumTerbit, type RapotPayloadTrack } from '@/lib/rapot';
-import { TRACKS, type Track } from '@/lib/evaluasi';
+import { TRACKS, vonisTrack, type Track } from '@/lib/evaluasi';
 import { absUrl } from '@/lib/url';
 import type { RapotTerbit } from '../EvaluasiPengajarApp';
 
@@ -53,6 +53,8 @@ const BANNER_BORDER = 'oklch(0.85 0.06 150)';
 const MERAH = 'oklch(0.46 0.14 25)';
 const MERAH_BG = 'oklch(0.96 0.03 25)';
 const MERAH_BORDER = 'oklch(0.85 0.08 25)';
+// Amber = QN di bawah standar: peringatan prasyarat, bukan vonis mengulang.
+const AMBER = 'oklch(0.48 0.11 80)';
 
 const KAP: React.CSSProperties = {
   fontSize: 11,
@@ -190,8 +192,9 @@ export function PusatRapot(props: Props) {
               const t = b.terbit;
               const sibuk = props.terbitBusy === b.peserta.id;
               const nilai = b.tr.nilaiAkhir;
-              const lulus = b.tr.lulus;
-              const warna = lulus === true ? HIJAU : lulus === false ? MERAH : '#a8a39a';
+              const vonis = vonisTrack(b.tr.peran, b.tr.lulus);
+              const warna =
+                vonis.nada === 'lulus' ? HIJAU : vonis.nada === 'mengulang' ? MERAH : vonis.nada === 'bawah_standar' ? AMBER : '#a8a39a';
               const konfirmasi = konfirmasiUlang === b.peserta.id;
               return (
                 <div
@@ -210,7 +213,7 @@ export function PusatRapot(props: Props) {
                       </div>
                       <div style={{ fontSize: 11, color: b.siap ? '#7a766f' : MERAH, marginTop: 2, lineHeight: 1.4 }}>
                         {b.siap
-                          ? `${lulus === false ? 'MENGULANG' : 'LULUS'} · nilai akhir ${nilai}`
+                          ? `${vonis.teks} · nilai akhir ${nilai}`
                           : b.alasan.join(' · ')}
                         {t && ` · terbit ${fmtTgl(t.diterbitkan_at)}`}
                       </div>

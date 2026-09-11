@@ -4,7 +4,7 @@ import {
   JALIY, KHAFIY, ALL_LAHN, LAHN_BY_KEY, emptyCounts,
   scoreOf, tierOf, AMBANG, columnFor,
   buildTrackGeometry, nilaiAkhirOf, nilaiAkhirTrackOf, lantaiNilai, lantaiNilaiOpt, jenisRapotDariSesi,
-  namaProgram,
+  namaProgram, peranTrack, vonisTrack,
   type LahnCounts,
 } from '@/lib/evaluasi';
 import {
@@ -325,6 +325,19 @@ eq(
   namaProgram('HITS Safar'),
   'dua angkatan HITS Safar → satu label'
 );
+
+// Vonis pita status rapot per track. Kelulusan level ditentukan Rapot PB;
+// Rapot QN prasyarat yang nilainya tidak menggugurkan — peserta ber-QN < 70
+// tetap lanjut ke Kelas PB. Pernah salah: Rapot QN mencetak "MENGULANG" dan
+// dibaca peserta sebagai tidak naik level.
+eq(vonisTrack('penentu', true), { nada: 'lulus', teks: 'LULUS' }, 'vonis PB lulus');
+eq(vonisTrack('penentu', false), { nada: 'mengulang', teks: 'MENGULANG' }, 'vonis PB gagal = MENGULANG');
+eq(vonisTrack('prasyarat', true), { nada: 'lulus', teks: 'LULUS' }, 'vonis QN lulus');
+eq(vonisTrack('prasyarat', false), { nada: 'bawah_standar', teks: 'DI BAWAH STANDAR' }, 'vonis QN gagal = DI BAWAH STANDAR, bukan MENGULANG');
+eq(vonisTrack('prasyarat', null), { nada: 'kosong', teks: 'BELUM LENGKAP' }, 'vonis tanpa nilai → teks kosong bawaan');
+eq(vonisTrack('penentu', null, 'Belum ada nilai').teks, 'Belum ada nilai', 'vonis tanpa nilai → teks kosong pemanggil');
+eq(vonisTrack(peranTrack('qn'), false).nada, 'bawah_standar', 'peranTrack(qn) → prasyarat → bawah standar');
+eq(vonisTrack(peranTrack('pb'), false).nada, 'mengulang', 'peranTrack(pb) → penentu → mengulang');
 
 if (failed) { console.error(`\n${failed} FAILED`); process.exit(1); }
 console.log('\nAll evaluasi tests passed.');

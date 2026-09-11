@@ -1,6 +1,7 @@
 import type { ReactElement } from 'react';
 import type { RapotPayloadTrack, RapotTrackSnap, RapotLahnRow } from '@/lib/rapot';
 import { NILAI_MINIMUM } from '@/lib/rapot';
+import { vonisTrack } from '@/lib/evaluasi';
 import RapotKop from './RapotKop';
 
 // Rapot Evaluasi per-track (0062) — cetak A4 potret, presentasional murni:
@@ -71,6 +72,9 @@ interface Props {
 
 const GREEN_DARK = 'oklch(0.40 0.10 150)';
 const RED = 'oklch(0.46 0.14 25)';
+// Amber = QN di bawah standar: peringatan prasyarat, bukan vonis mengulang.
+const AMBER = 'oklch(0.48 0.11 80)';
+const AMBER_BG = 'oklch(0.96 0.05 85)';
 const MUTED = '#7a766f';
 const INK = '#1b1a17';
 const FAINT = '#a8a39a';
@@ -394,17 +398,29 @@ export default function RapotTrackA4({
   // jenis rapotnya tidak menyebut "Evaluasi" sama sekali.
   const judul = t.ujianSaja ? `RAPOT ${ujianLabel.toUpperCase()}` : `RAPOT ${t.label.toUpperCase()}`;
 
-  const lulus = t.lulus;
-  const statusColor = lulus === true ? GREEN_DARK : lulus === false ? RED : MUTED;
-  const statusText = lulus === true ? 'LULUS' : lulus === false ? 'MENGULANG' : 'BELUM LENGKAP';
+  // Vonis ikut PERAN track, bukan cuma `lulus`: QN di bawah ambang = DI BAWAH
+  // STANDAR (amber), bukan MENGULANG — peserta tetap lanjut ke PB. Definisinya
+  // tunggal di `vonisTrack`; jangan tulis ulang ternary lulus/mengulang di sini.
+  const vonis = vonisTrack(t.peran, t.lulus);
+  const statusColor =
+    vonis.nada === 'lulus' ? GREEN_DARK
+      : vonis.nada === 'mengulang' ? RED
+      : vonis.nada === 'bawah_standar' ? AMBER
+      : MUTED;
+  const statusText = vonis.teks;
   const statusBg =
-    lulus === true ? 'oklch(0.96 0.035 150)' : lulus === false ? 'oklch(0.96 0.03 25)' : CARD_BG;
+    vonis.nada === 'lulus' ? 'oklch(0.96 0.035 150)'
+      : vonis.nada === 'mengulang' ? 'oklch(0.96 0.03 25)'
+      : vonis.nada === 'bawah_standar' ? AMBER_BG
+      : CARD_BG;
   const statusKet =
-    lulus === true
+    vonis.nada === 'lulus'
       ? `Memenuhi ambang kelulusan nilai akhir (${payload.ambang}). ${peranTeks}`
-      : lulus === false
+      : vonis.nada === 'mengulang'
         ? `Belum memenuhi ambang kelulusan nilai akhir (${payload.ambang}). ${peranTeks}`
-        : `Nilai akhir belum dapat ditetapkan karena komponen penilaian belum lengkap. ${peranTeks}`;
+        : vonis.nada === 'bawah_standar'
+          ? `Nilai akhir di bawah ambang standar (${payload.ambang}). Bukan mengulang — Rapot QN adalah prasyarat; peserta tetap lanjut ke Rapot PB, yang menentukan kelulusan level.`
+          : `Nilai akhir belum dapat ditetapkan karena komponen penilaian belum lengkap. ${peranTeks}`;
 
   const halaqahVal = [identitas.halaqah, identitas.gender].filter(Boolean).join(' · ');
   const levelVal = identitas.level ?? (identitas.mustawa != null ? String(identitas.mustawa) : '—');

@@ -143,6 +143,42 @@ export function peranTrack(track: Track): 'penentu' | 'prasyarat' {
   return track === 'pb' ? 'penentu' : 'prasyarat';
 }
 
+/** Nada vonis pita status rapot track — pemetaan warnanya urusan komponen. */
+export type NadaVonis = 'lulus' | 'mengulang' | 'bawah_standar' | 'kosong';
+
+export interface VonisTrack {
+  nada: NadaVonis;
+  /** Teks huruf besar untuk pita status: LULUS / MENGULANG / DI BAWAH STANDAR / teksKosong. */
+  teks: string;
+}
+
+/**
+ * Vonis yang dicetak di pita status rapot track — SATU definisi untuk lembar
+ * A4, layar pengajar, Pusat Rapot, dan halaman cek QR.
+ *
+ * Kelulusan level ditentukan Rapot PB (peran `penentu`): di bawah ambang =
+ * MENGULANG. Rapot QN (peran `prasyarat`) nilainya TIDAK menggugurkan —
+ * peserta ber-QN di bawah ambang tetap lanjut ke Kelas PB — jadi vonisnya
+ * DI BAWAH STANDAR, bukan MENGULANG. Pernah salah: Rapot QN mencetak
+ * "MENGULANG" dan dibaca peserta sebagai tidak naik level.
+ *
+ * `lulus` null = nilai akhir belum ada; teksnya diserahkan ke pemanggil karena
+ * tiap layar punya kalimat "belum"-nya sendiri.
+ */
+export function vonisTrack(
+  peran: 'penentu' | 'prasyarat',
+  lulus: boolean | null,
+  teksKosong = 'BELUM LENGKAP',
+): VonisTrack {
+  if (lulus === true) return { nada: 'lulus', teks: 'LULUS' };
+  if (lulus === false) {
+    return peran === 'prasyarat'
+      ? { nada: 'bawah_standar', teks: 'DI BAWAH STANDAR' }
+      : { nada: 'mengulang', teks: 'MENGULANG' };
+  }
+  return { nada: 'kosong', teks: teksKosong };
+}
+
 export interface NilaiAkhir {
   nilai: number | null;      // null bila Ujian PB belum ada
   berkalaAvg: number | null; // null bila belum ada sesi berkala yang dinilai

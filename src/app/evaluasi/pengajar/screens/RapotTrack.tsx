@@ -12,6 +12,7 @@ import {
   tierOf,
   SESI_BERKALA_PER_TRACK,
   TRACKS,
+  vonisTrack,
   type Track,
 } from '@/lib/evaluasi';
 import { absUrl } from '@/lib/url';
@@ -42,6 +43,10 @@ const BANNER_BORDER = 'oklch(0.85 0.06 150)';
 const MERAH = 'oklch(0.46 0.14 25)';
 const MERAH_BG = 'oklch(0.96 0.03 25)';
 const MERAH_BORDER = 'oklch(0.85 0.08 25)';
+// Amber = QN di bawah standar: peringatan prasyarat, bukan vonis mengulang.
+const AMBER = 'oklch(0.48 0.11 80)';
+const AMBER_BG = 'oklch(0.96 0.05 85)';
+const AMBER_BORDER = 'oklch(0.86 0.08 85)';
 const JALIY_COLOR = 'oklch(0.46 0.14 25)';
 const KHAFIY_COLOR = 'oklch(0.48 0.10 75)';
 
@@ -51,13 +56,17 @@ function shortOf(t: Track): string {
   return t === 'qn' ? 'QN' : 'PB';
 }
 
-function SnapCard({ snap }: { snap: RapotUjianSnap }) {
-  const gagal = snap.lulus === false;
+function SnapCard({ snap, peran }: { snap: RapotUjianSnap; peran: RapotPayloadTrack['trackRapot']['peran'] }) {
+  // Badge ujian ikut peran track: Ujian QN gagal = "di bawah standar", bukan mengulang.
+  const vonis = vonisTrack(peran, snap.lulus);
+  const gagal = vonis.nada === 'mengulang';
+  const standar = vonis.nada === 'bawah_standar';
+  const warna = gagal ? MERAH : standar ? AMBER : HIJAU;
   return (
     <div
       style={{
-        background: gagal ? MERAH_BG : BANNER_BG,
-        border: `1px solid ${gagal ? MERAH_BORDER : BANNER_BORDER}`,
+        background: gagal ? MERAH_BG : standar ? AMBER_BG : BANNER_BG,
+        border: `1px solid ${gagal ? MERAH_BORDER : standar ? AMBER_BORDER : BANNER_BORDER}`,
         borderRadius: 12,
         padding: '11px 12px',
         display: 'flex',
@@ -67,7 +76,7 @@ function SnapCard({ snap }: { snap: RapotUjianSnap }) {
     >
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ fontSize: 12.5, fontWeight: 700, color: '#1b1a17' }}>
-          {snap.label} — {gagal ? 'MENGULANG' : 'LULUS'}
+          {snap.label} — {vonis.teks}
         </div>
         <div style={{ fontSize: 11, color: '#7a766f', marginTop: 1 }}>
           {snap.jaliy} jaliy · {snap.khafiy} khafiy
@@ -77,7 +86,7 @@ function SnapCard({ snap }: { snap: RapotUjianSnap }) {
         style={{
           fontSize: 18,
           fontWeight: 800,
-          color: gagal ? MERAH : HIJAU,
+          color: warna,
           fontVariantNumeric: 'tabular-nums',
         }}
       >
@@ -237,11 +246,16 @@ export default function RapotTrack({
   else if (terbitStatus === 'done') btnLabel = '✓ Terbit';
   else if (terbitStatus === 'error') btnLabel = 'Gagal · ulangi';
 
-  const status = tr.nilaiAkhir == null ? alasanTeks : tr.lulus ? 'LULUS' : 'MENGULANG';
+  // Vonis ikut peran track (QN gagal = DI BAWAH STANDAR, bukan MENGULANG).
+  const vonis = vonisTrack(tr.peran, tr.nilaiAkhir == null ? null : tr.lulus, alasanTeks);
+  const status = vonis.teks;
   const showNilai = tr.nilaiAkhir != null;
-  const stColor = tr.lulus === true ? HIJAU : tr.lulus === false ? MERAH : '#7a766f';
-  const stBg = tr.lulus === true ? BANNER_BG : tr.lulus === false ? MERAH_BG : '#f4f2ed';
-  const stBorder = tr.lulus === true ? BANNER_BORDER : tr.lulus === false ? MERAH_BORDER : '#e8e4dc';
+  const stColor =
+    vonis.nada === 'lulus' ? HIJAU : vonis.nada === 'mengulang' ? MERAH : vonis.nada === 'bawah_standar' ? AMBER : '#7a766f';
+  const stBg =
+    vonis.nada === 'lulus' ? BANNER_BG : vonis.nada === 'mengulang' ? MERAH_BG : vonis.nada === 'bawah_standar' ? AMBER_BG : '#f4f2ed';
+  const stBorder =
+    vonis.nada === 'lulus' ? BANNER_BORDER : vonis.nada === 'mengulang' ? MERAH_BORDER : vonis.nada === 'bawah_standar' ? AMBER_BORDER : '#e8e4dc';
 
   const berkalaAvg = tr.berkalaAvg ?? 0;
   const ujianSkor = tr.ujianSkor ?? 0;
@@ -515,6 +529,7 @@ export default function RapotTrack({
             {showNilai && (
               <div style={{ fontSize: 12, color: stColor, opacity: 0.85, marginTop: 4 }}>
                 Nilai akhir {tr.nilaiAkhir} · ambang lulus {ambang}
+                {vonis.nada === 'bawah_standar' && ' · bukan mengulang, tetap lanjut ke PB'}
               </div>
             )}
           </div>
@@ -635,7 +650,7 @@ export default function RapotTrack({
             <div style={KAP}>Ujian {short}</div>
             <div style={{ marginBottom: 8 }}>
               {tr.ujian ? (
-                <SnapCard snap={tr.ujian} />
+                <SnapCard snap={tr.ujian} peran={tr.peran} />
               ) : (
                 <div style={{ background: '#faf8f4', border: '1px solid #e8e4dc', borderRadius: 12, padding: '11px 12px', fontSize: 12, color: '#a8a39a' }}>
                   Belum ada Ujian {short}

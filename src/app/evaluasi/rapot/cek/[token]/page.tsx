@@ -4,7 +4,7 @@
 import type { Metadata } from 'next';
 import { supabaseAdmin } from '@/lib/supabase-admin';
 import type { RapotPayload, RapotPayloadLegacy, RapotPayloadTrack } from '@/lib/rapot';
-import { tierOf } from '@/lib/evaluasi';
+import { tierOf, vonisTrack } from '@/lib/evaluasi';
 import { keteranganKeputusanRapot } from '@/lib/evaluasi-keputusan-db';
 
 export const dynamic = 'force-dynamic';
@@ -186,18 +186,31 @@ function vmLegacy(payload: RapotPayloadLegacy): Vm {
   };
 }
 
+/** Pil vonis era track: ikut peran — QN gagal = DI BAWAH STANDAR (amber), bukan MENGULANG. */
+function pillTrack(peran: 'penentu' | 'prasyarat', lulus: boolean | null): Pill {
+  const v = vonisTrack(peran, lulus, 'Belum lengkap');
+  if (v.nada === 'bawah_standar') {
+    return { teks: v.teks, fg: AMBER_TUA, bg: AMBER_MUDA, border: AMBER_GARIS };
+  }
+  return pillLulus(lulus, 'Belum lengkap');
+}
+
 /** ERA BARU (0062) — satu rapot per track: QN prasyarat, PB penentu kelulusan. */
 function vmTrack(payload: RapotPayloadTrack): Vm {
   // `trackRapot` cuma dipastikan "sebuah objek" oleh kenaliBentuk — baca defensif.
   const tr = payload.trackRapot as Partial<RapotPayloadTrack['trackRapot']>;
   const angka = typeof tr.nilaiAkhir === 'number' ? tr.nilaiAkhir : null;
   const lulus = tr.lulus === true ? true : tr.lulus === false ? false : null;
+  // `peran` di payload lama bisa absen; QN = prasyarat, selebihnya penentu.
+  const peran: 'penentu' | 'prasyarat' =
+    tr.peran === 'prasyarat' || (tr.peran == null && payload.jenis_rapot === 'qn') ? 'prasyarat' : 'penentu';
+  const nada = vonisTrack(peran, lulus).nada;
 
   return {
     jenisLabel: payload.jenis_rapot === 'qn' ? 'Rapot QN' : 'Rapot PB',
     angka,
-    angkaColor: lulus === true ? HIJAU : lulus === false ? MERAH : MUTED,
-    pill: pillLulus(lulus, 'Belum lengkap'),
+    angkaColor: nada === 'lulus' ? HIJAU : nada === 'mengulang' ? MERAH : nada === 'bawah_standar' ? AMBER_TUA : MUTED,
+    pill: pillTrack(peran, lulus),
     tampilAmbang: true,
     predikat: null,
     peranTeks:
