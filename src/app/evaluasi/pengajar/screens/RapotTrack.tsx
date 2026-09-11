@@ -520,7 +520,7 @@ export default function RapotTrack({
           {/* Banner LULUS / MENGULANG */}
           <div style={{ background: stBg, borderBottom: `1px solid ${stBorder}`, padding: '20px 18px', textAlign: 'center' }}>
             <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: stColor, opacity: 0.8 }}>
-              Rapot {tr.label}
+              Rapot Ujian {shortOf(tr.track)}
               {id.mustawa != null ? ` · Level ${id.mustawa}` : ''}
             </div>
             <div style={{ fontSize: showNilai ? 34 : 16, fontWeight: 800, letterSpacing: '0.06em', color: stColor, lineHeight: 1.2, marginTop: 6 }}>

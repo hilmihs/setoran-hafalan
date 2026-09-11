@@ -394,9 +394,10 @@ export default function RapotTrackA4({
 
   const peranLabel = t.peran === 'penentu' ? 'penentu kelulusan' : 'prasyarat';
 
-  // Batch ujian-terpisah: dokumen ini murni hasil ujian, jadi judul dan penamaan
-  // jenis rapotnya tidak menyebut "Evaluasi" sama sekali.
-  const judul = t.ujianSaja ? `RAPOT ${ujianLabel.toUpperCase()}` : `RAPOT ${t.label.toUpperCase()}`;
+  // Judul selalu "RAPOT UJIAN QN/PB" — juga untuk batch yang punya sesi berkala
+  // (dokumennya tetap memuat sesi berkala; subjudul yang menyebutkannya).
+  // `t.label` ("Evaluasi QN") adalah nama instrumen penilaian, bukan nama rapot.
+  const judul = `RAPOT ${ujianLabel.toUpperCase()}`;
 
   // Vonis ikut PERAN track, bukan cuma `lulus`: QN di bawah ambang = DI BAWAH
   // STANDAR (amber), bukan MENGULANG — peserta tetap lanjut ke PB. Definisinya
@@ -437,7 +438,7 @@ export default function RapotTrackA4({
     { label: 'Level', value: levelVal },
     { label: 'Batch', value: batchVal },
     { label: 'Penguji', value: payload.penerbit },
-    { label: 'Jenis rapot', value: `${t.ujianSaja ? ujianLabel : t.label} · ${peranLabel}` },
+    { label: 'Jenis rapot', value: `Rapot ${ujianLabel} · ${peranLabel}` },
   ];
   // Tanggal ujian pindah ke identitas: tabel penilaian batch ujian-terpisah tak
   // lagi punya kolom tanggal.
@@ -463,7 +464,7 @@ export default function RapotTrackA4({
 
   // Jejak identitas untuk kaki halaman & kop lanjutan. Halaman 2 sering terlepas
   // dari halaman 1, jadi ia wajib memuat nama peserta sendiri.
-  const jejakDok = `${identitas.peserta} · ${t.ujianSaja ? `Rapot ${ujianLabel}` : `Rapot ${t.label}`}`;
+  const jejakDok = `${identitas.peserta} · Rapot ${ujianLabel}`;
   const subLanjutan = [
     identitas.peserta,
     identitas.halaqah ? `Halaqah ${identitas.halaqah}` : null,
