@@ -6,7 +6,8 @@ import { PenilaianPedagogisForm } from '@/app/kehadiran/ketua-kelompok/penilaian
 import { MonthNavSelect } from '@/components/MonthNavSelect';
 import { monthOptionsSince } from '@/lib/month';
 import { Icon } from '@/components/icons';
-import type { Gender } from '@/types/db';
+import type { Gender, PengajarSession } from '@/types/db';
+import { getKelompokDinilaiIds } from '@/lib/penilai-ketua';
 
 export const dynamic = 'force-dynamic';
 
@@ -34,11 +35,17 @@ const PED_FIELDS = [
   'catatan_umum',
 ] as const;
 
-const GENDER_TABS: Array<{ key: string; label: string }> = [
-  { key: 'akhwat', label: 'Akhwat' },
-  { key: 'ikhwan', label: 'Ikhwan' },
-];
+const GENDER_LABEL: Record<Gender, string> = { ikhwan: 'Ikhwan', akhwat: 'Akhwat' };
 
+/**
+ * Penilaian ketua kelompok. Dua jalur masuk, keduanya terkunci pada gender sesi:
+ *  - Koordinator (penuh) → menilai SEMUA ketua kelompok segendernya.
+ *  - Pengajar yang ditugaskan sebagai penilai (tabel `penilai_ketua_kelompok`,
+ *    mis. Ust. Syukri, Ust. Sofyan, Andi Hikmah, Risa Afrianti) → menilai ketua
+ *    dari kelompok-kelompok yang ditugaskan saja. Otorisasi simpannya di
+ *    /api/penilaian-pedagogis/upsert memakai aturan yang sama.
+ * Penilai ikhwan tidak melihat akhwat dan sebaliknya; parameter ?gender= diabaikan.
+ */
 export default async function PenilaianKetuaKelompokPage({
   searchParams,
 }: {
@@ -49,24 +56,27 @@ export default async function PenilaianKetuaKelompokPage({
   const koordinator = accesses.find((a) => a.role === 'koordinator') as
     | { role: 'koordinator'; gender: Gender }
     | undefined;
-  if (!koordinator) redirect('/2in1/koordinator/login');
+  const pengajar = accesses.find((a) => a.role === 'pengajar') as PengajarSession | undefined;
+  // Jalur penilai hanya bila bukan koordinator penuh; koordinator yang merangkap
+  // penilai tetap lewat jalur koordinator supaya cakupannya tidak menyempit.
+  const kelompokDinilai = !koordinator && pengajar ? await getKelompokDinilaiIds(pengajar.pengajar_id) : [];
+  const penilai = !koordinator && pengajar && kelompokDinilai.length > 0 ? pengajar : undefined;
+  if (!koordinator && !penilai) redirect('/2in1/koordinator/login');
 
   const cur = currentYearMonth();
   const ym = searchParams.month && /^\d{4}-\d{2}$/.test(searchParams.month) ? searchParams.month : cur;
-  const gender: Gender =
-    searchParams.gender === 'ikhwan' || searchParams.gender === 'akhwat'
-      ? searchParams.gender
-      : koordinator.gender;
+  const gender: Gender = koordinator ? koordinator.gender : penilai!.gender;
 
-  // Semua ketua kelompok segender.
-  const { data: ketuaRaw } = await supabaseAdmin
+  // Ketua kelompok segender: semuanya untuk koordinator, yang ditugaskan untuk penilai.
+  let q = supabaseAdmin
     .from('pengajar')
     .select('id, name, kelompok_id')
     .eq('is_ketua', true)
     .eq('active', true)
     .eq('gender', gender)
-    .neq('matrix_exclude', true)
-    .order('name');
+    .neq('matrix_exclude', true);
+  if (penilai) q = q.in('kelompok_id', kelompokDinilai);
+  const { data: ketuaRaw } = await q.order('name');
   const ketuas = (ketuaRaw ?? []) as Array<{ id: string; name: string; kelompok_id: string | null }>;
 
   const { data: kelompokRaw } = await supabaseAdmin.from('kelompok_pengajar').select('id, name');
@@ -96,7 +106,7 @@ export default async function PenilaianKetuaKelompokPage({
           <div className="wordmark">
             <span className="mark">M</span> Penilaian Ketua Kelompok
           </div>
-          <Link href="/2in1/koordinator" className="back">
+          <Link href={koordinator ? '/2in1/koordinator' : '/kehadiran/pengajar'} className="back">
             {Icon.back(12)} Dashboard
           </Link>
         </div>
@@ -106,7 +116,7 @@ export default async function PenilaianKetuaKelompokPage({
             <div style={{ flex: 1 }}>
               <h1 className="t-h1" style={{ margin: 0 }}>Penilaian Inspeksi — Ketua Kelompok</h1>
               <p className="t-small" style={{ margin: 0, color: 'var(--muted-2)' }}>
-                Skala 0–4 · auto-simpan · dinilai oleh koordinator ·{' '}
+                Skala 0–4 · auto-simpan · {GENDER_LABEL[gender]} ·{' '}
                 <strong style={{ color: belum ? 'var(--merah-ink)' : 'var(--hijau-ink)' }}>
                   {belum} belum dinilai
                 </strong>
@@ -115,27 +125,10 @@ export default async function PenilaianKetuaKelompokPage({
             <MonthNavSelect options={monthOptionsSince(ANCHOR_MONTH)} value={ym} />
           </div>
 
-          <div style={{ display: 'flex', gap: 6, marginBottom: 16, flexWrap: 'wrap' }}>
-            {GENDER_TABS.map((t) => {
-              const active = t.key === gender;
-              const params = new URLSearchParams();
-              params.set('month', ym);
-              params.set('gender', t.key);
-              return (
-                <Link
-                  key={t.key}
-                  href={`?${params.toString()}`}
-                  className={active ? 'btn btn-sm btn-primary' : 'btn btn-sm btn-ghost'}
-                  style={{ textDecoration: 'none', fontSize: 12 }}
-                >
-                  {t.label}
-                </Link>
-              );
-            })}
-          </div>
-
           {members.length === 0 ? (
-            <p className="t-small" style={{ color: 'var(--muted-2)' }}>Tidak ada ketua kelompok untuk gender ini.</p>
+            <p className="t-small" style={{ color: 'var(--muted-2)' }}>
+              {penilai ? 'Belum ada ketua kelompok yang ditugaskan kepada Anda.' : 'Tidak ada ketua kelompok untuk gender ini.'}
+            </p>
           ) : (
             <>
               <div className="t-tiny" style={{ marginBottom: 8 }}>EDIT {monthLabelOf(ym).toUpperCase()}</div>
