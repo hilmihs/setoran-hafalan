@@ -204,8 +204,14 @@ export async function getMaahirRekap(
     pertemuanByKelas.set(p.program_kelas_id, list);
   }
 
+  // Hanya anggota yang keanggotaannya beririsan dengan rentang bulan. Kelas yang
+  // dipensiunkan (semua anggotanya diberi selesai_tanggal — lihat saringKelasBubar
+  // di program-kelas.ts) dengan begitu hilang dari rekap bulan-bulan sesudahnya,
+  // tapi tetap utuh di bulan-bulan riwayatnya.
   const anggotaByKelas = new Map<string, typeof anggotaRows>();
   for (const a of anggotaRows ?? []) {
+    if (a.selesai_tanggal && a.selesai_tanggal < start) continue;
+    if (a.mulai_tanggal && a.mulai_tanggal > end) continue;
     const list = anggotaByKelas.get(a.program_kelas_id) ?? [];
     list.push(a);
     anggotaByKelas.set(a.program_kelas_id, list);
@@ -262,10 +268,19 @@ export async function getMaahirRekap(
     // matchKey: harian per (program,tanggal); mingguan per pekan.
     // Kelas yang baru dibentuk di tengah periode tak dianggap "belum diisi"
     // untuk tanggal sebelum ia berjalan.
+    // Kelas yang bubar di tengah bulan (semua anggotanya punya selesai_tanggal)
+    // tak diharapkan presensi lewat dari tanggal selesai terakhir itu.
+    const anggotaKelas = anggotaByKelas.get(k.id) ?? [];
+    if (anggotaKelas.length === 0 && pertemuan.length === 0) continue;
+    const akhirKelas =
+      anggotaKelas.length > 0 && anggotaKelas.every((a) => !!a.selesai_tanggal)
+        ? anggotaKelas.reduce((m, a) => (a.selesai_tanggal! > m ? a.selesai_tanggal! : m), '')
+        : null;
     const mulaiKelas = anchorKelas(k);
     const expectedStart = mulaiKelas > start ? mulaiKelas : start;
+    const expectedEnd = akhirKelas && akhirKelas < end ? akhirKelas : end;
     const expectedAll =
-      expectedStart > end ? [] : expectedDaysInRange(k, expectedStart, end, liburByKelas.get(k.id));
+      expectedStart > expectedEnd ? [] : expectedDaysInRange(k, expectedStart, expectedEnd, liburByKelas.get(k.id));
     // Filter ke program tertentu (mis. hanya At-Tibyan) bila diminta.
     const expected = opts?.program
       ? expectedAll.filter((e) => e.program === opts.program)
