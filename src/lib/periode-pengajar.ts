@@ -35,6 +35,17 @@ export function periodePengajarBerjalan(hariIni: string = hariIniJakarta()): str
   return periodePengajarOf(hariIni);
 }
 
+/**
+ * Periode default untuk tampilan rekap: periode berjalan, tapi tak pernah
+ * mendahului periode pertama (sebelum anchor, tampilkan periode pertama yang
+ * akan datang — bukan periode kosong yang tak punya sesi).
+ */
+export function periodePengajarTampilan(hariIni: string = hariIniJakarta()): string {
+  const first = periodePengajarOf(CHECKIN_PENGAJAR_ANCHOR);
+  const now = periodePengajarBerjalan(hariIni);
+  return now < first ? first : now;
+}
+
 /** Boleh menulis check-in / materi untuk `tanggal`? Hanya periode berjalan. */
 export function periodePengajarTerbuka(tanggal: string, hariIni: string = hariIniJakarta()): boolean {
   return periodePengajarOf(tanggal) === periodePengajarBerjalan(hariIni);
@@ -64,7 +75,8 @@ export function periodePengajarOptions(
   hariIni: string = hariIniJakarta()
 ): Array<{ value: string; label: string }> {
   const first = periodePengajarOf(CHECKIN_PENGAJAR_ANCHOR);
-  const last = periodePengajarBerjalan(hariIni);
+  // Sebelum anchor: tetap tawarkan periode pertama, jangan dropdown kosong.
+  const last = periodePengajarTampilan(hariIni);
   const out: Array<{ value: string; label: string }> = [];
   let [y, m] = first.split('-').map(Number);
   const [ly, lm] = last.split('-').map(Number);

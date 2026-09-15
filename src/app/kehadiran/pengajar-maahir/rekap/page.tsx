@@ -13,6 +13,7 @@ import {
   periodePengajarBerjalan,
   periodePengajarLabel,
   periodePengajarOptions,
+  periodePengajarTampilan,
 } from '@/lib/periode-pengajar';
 import { todayJakarta } from '@/lib/anggota-periode';
 import { MonthNavSelect } from '@/components/MonthNavSelect';
@@ -34,7 +35,7 @@ export default async function RekapPengajarMaahirSayaPage({
   const month =
     searchParams.month && options.some((o) => o.value === searchParams.month)
       ? searchParams.month
-      : periodePengajarBerjalan(hariIni);
+      : periodePengajarTampilan(hariIni);
   const sesi = await getSesiPengajar(akses, month, hariIni);
   const ringkas = ringkasSesi(sesi);
 

@@ -108,6 +108,8 @@ async function main() {
       check('periode berjalan pada 20 Sep = 2026-10', periode.periodePengajarBerjalan('2026-09-20') === '2026-10');
       check('tanggal periode lalu tertutup', periode.periodePengajarTerbuka('2026-10-10', '2026-10-20') === false);
       check('tanggal periode berjalan terbuka', periode.periodePengajarTerbuka('2026-10-14', '2026-10-15') === true);
+      check('sebelum anchor: tampilan = periode pertama', periode.periodePengajarTampilan('2026-09-15') === '2026-10');
+      check('sebelum anchor: opsi tetap 1 (periode pertama)', periode.periodePengajarOptions('2026-09-15').map((o) => o.value).join() === '2026-10');
       const opts = periode.periodePengajarOptions('2026-11-20');
       check('opsi periode: anchor s/d berjalan, terbaru dulu', opts.map((o) => o.value).join() === '2026-12,2026-11,2026-10', JSON.stringify(opts.map((o) => o.value)));
     }

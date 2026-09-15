@@ -10,7 +10,7 @@ import {
   tanggalPendek,
   type SesiPengajar,
 } from '@/lib/maahir-checkin-pengajar';
-import { periodePengajarBerjalan, periodePengajarLabel } from '@/lib/periode-pengajar';
+import { periodePengajarLabel, periodePengajarTampilan } from '@/lib/periode-pengajar';
 import { todayJakarta } from '@/lib/anggota-periode';
 import { FeatureNav } from '@/components/FeatureNav';
 import { SectionHeader } from '@/components/ui/SectionHeader';
@@ -32,7 +32,7 @@ export default async function PengajarMaahirPage() {
   if (!akses) redirect('/');
 
   const hariIni = todayJakarta();
-  const month = periodePengajarBerjalan(hariIni);
+  const month = periodePengajarTampilan(hariIni);
   const sesi = await getSesiPengajar(akses, month, hariIni);
   const ringkas = ringkasSesi(sesi);
   const hariIniSesi = sesi.filter((s) => s.tanggal === hariIni);
