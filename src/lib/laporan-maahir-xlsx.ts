@@ -2,7 +2,7 @@
 // keputusan). Dipisah dari route agar bisa diuji/di-generate mandiri.
 
 import ExcelJS from 'exceljs';
-import type { LaporanMaahir, StudentAtt } from '@/lib/laporan-maahir';
+import { labelRiwayatSP, labelSesiTakHadir, type LaporanMaahir, type StudentAtt } from '@/lib/laporan-maahir';
 import { PRESENSI_ANCHOR } from '@/lib/maahir-presensi';
 
 const BULAN_ID = [
@@ -57,7 +57,7 @@ export async function buildLaporanMaahirWorkbook(lap: LaporanMaahir, bulan: stri
     { width: 6 }, { width: 26 }, { width: 12 }, { width: 12 },
     { width: 11 }, { width: 11 }, { width: 10 }, { width: 7 },
     { width: 7 }, { width: 7 }, { width: 9 }, { width: 8 },
-    { width: 24 },
+    { width: 46 },
   ];
 
   const thin = { style: 'thin' as const, color: { argb: C.border } };
@@ -142,7 +142,13 @@ export async function buildLaporanMaahirWorkbook(lap: LaporanMaahir, bulan: stri
       }
     }
     for (let col = 1; col <= NCOL; col++) cell(r, col).border = allBorders;
-    ws.getRow(r).height = 17;
+    // Sel riwayat (multi-baris) butuh baris yang lebih tinggi; sel lain
+    // tetap 17 supaya tabel biasa tak melar.
+    const baris = Math.max(
+      1,
+      ...cells.map((cd) => (typeof cd.text === 'string' ? cd.text.split('\n').length : 1))
+    );
+    ws.getRow(r).height = baris > 1 ? baris * 13 + 4 : 17;
     r++;
   }
   const spacer = () => { r++; };
@@ -209,11 +215,10 @@ export async function buildLaporanMaahirWorkbook(lap: LaporanMaahir, bulan: stri
         { text: tanpaKet, from: 11, to: 11 },
         { text: st.online > 0 ? `${st.online}x` : '', from: 12, to: 12, ink: C.muted },
         {
-          text:
-            st.keterangan +
-            (st.diputihkan !== null
-              ? `${st.keterangan ? ' · ' : ''}diputihkan${st.diputihkan ? `: ${st.diputihkan}` : ''}`
-              : ''),
+          text: [
+            ...st.riwayat.map(labelSesiTakHadir),
+            ...(st.diputihkan !== null ? [`diputihkan${st.diputihkan ? `: ${st.diputihkan}` : ''}`] : []),
+          ].join('\n'),
           from: 13, to: NCOL, align: 'left', ink: C.muted,
         },
       ], i % 2 === 1);
@@ -390,12 +395,14 @@ export async function buildLaporanMaahirWorkbook(lap: LaporanMaahir, bulan: stri
   ]);
   tableHead([
     { text: 'Peserta', from: 1, to: 2, align: 'left' },
-    { text: 'Kelas', from: 3, to: 5, align: 'left' },
-    { text: 'SP', from: 6, to: 6 },
-    { text: 'Alpa', from: 7, to: 8 },
-    { text: 'Izin', from: 9, to: 9 },
-    { text: 'Sakit', from: 10, to: 10 },
-    { text: 'Hadir', from: 11, to: NCOL },
+    { text: 'Kelas', from: 3, to: 4, align: 'left' },
+    { text: 'SP', from: 5, to: 5 },
+    { text: 'Alpa', from: 6, to: 6 },
+    { text: 'Izin', from: 7, to: 7 },
+    { text: 'Sakit', from: 8, to: 8 },
+    { text: 'Hadir', from: 9, to: 9 },
+    { text: 'Penetapan', from: 10, to: 12 },
+    { text: 'Riwayat (tanggal · sesi · alasan)', from: 13, to: NCOL, align: 'left' },
   ]);
   if (sp.list.length === 0) {
     dataRow([{ text: 'Tidak ada peserta terkena SP.', from: 1, to: NCOL, align: 'left', ink: C.muted }]);
@@ -403,12 +410,17 @@ export async function buildLaporanMaahirWorkbook(lap: LaporanMaahir, bulan: stri
     sp.list.forEach((p, i) => {
       dataRow([
         { text: p.name, from: 1, to: 2, align: 'left' },
-        { text: p.kelasName, from: 3, to: 5, align: 'left', ink: C.muted },
-        { text: `SP${p.sp}`, from: 6, to: 6, bold: true, ink: p.sp >= 2 ? C.bad : C.ink },
-        { text: p.alpa, from: 7, to: 8 },
-        { text: p.izin, from: 9, to: 9 },
-        { text: p.sakit, from: 10, to: 10 },
-        { text: p.hadir + p.terlambat, from: 11, to: NCOL },
+        { text: p.kelasName, from: 3, to: 4, align: 'left', ink: C.muted },
+        { text: `SP${p.sp}`, from: 5, to: 5, bold: true, ink: p.sp >= 2 ? C.bad : C.ink },
+        { text: p.alpa, from: 6, to: 6 },
+        { text: p.izin, from: 7, to: 7 },
+        { text: p.sakit, from: 8, to: 8 },
+        { text: p.hadir + p.terlambat, from: 9, to: 9 },
+        {
+          text: p.penetapan.map((x) => `SP${x.level} ${x.tanggal.slice(8, 10)}/${x.tanggal.slice(5, 7)}`).join(' · '),
+          from: 10, to: 12, ink: C.muted,
+        },
+        { text: p.riwayat.map(labelRiwayatSP).join('\n'), from: 13, to: NCOL, align: 'left', ink: C.muted },
       ], i % 2 === 1);
     });
   }

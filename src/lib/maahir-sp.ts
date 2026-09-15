@@ -76,6 +76,53 @@ export type Penetapan = {
 /** Satu sesi yang menyumbang SP, dipakai menurunkan tanggal penetapan. */
 type SesiSP = { tanggal: string; jenis: 'alpa' | 'izin' };
 
+/** Program sesi yang ikut SP — lihat `SP_PROGRAMS`. */
+export type SPProgram = (typeof SP_PROGRAMS)[number];
+
+/** Sesi pelanggaran beserta konteks yang dibutuhkan laporan untuk menjelaskannya. */
+type SesiSPLengkap = SesiSP & {
+  program: SPProgram;
+  kelasName: string;
+  /** Alasan yang diisi ketua kelas saat presensi; null bila kosong. */
+  catatan: string | null;
+};
+
+/**
+ * Satu baris riwayat "kenapa dia kena SP": sesi pelanggaran yang MASIH dihitung
+ * (sudah bersih dari pemutihan), kronologis, dengan penanda tingkat SP yang
+ * tersentuh pada sesi itu.
+ */
+export type SesiRiwayatSP = SesiSPLengkap & {
+  /** Tingkat SP yang dicapai TEPAT pada sesi ini; null bila belum menembus ambang baru. */
+  menjadi: 1 | 2 | 3 | null;
+};
+
+const urutSesi = <T extends SesiSP & { program?: string }>(sesi: T[]): T[] =>
+  [...sesi].sort(
+    (x, y) =>
+      (x.tanggal < y.tanggal ? -1 : x.tanggal > y.tanggal ? 1 : 0) ||
+      (x.program ?? '').localeCompare(y.program ?? '')
+  );
+
+/**
+ * Riwayat kronologis untuk laporan. Logika ambangnya sama persis dengan
+ * `hitungPenetapan` — bedanya di sini setiap sesi tetap dilaporkan, dan sesi
+ * yang membuat hitungan menembus ambang diberi tanda `menjadi`.
+ */
+export function susunRiwayat(sesi: SesiSPLengkap[]): SesiRiwayatSP[] {
+  let alpa = 0;
+  let izin = 0;
+  let level: SPLevel = 0;
+  return urutSesi(sesi).map((s) => {
+    if (s.jenis === 'alpa') alpa++;
+    else izin++;
+    const baru = spLevel(alpa, izin);
+    const menjadi = baru > level ? (baru as 1 | 2 | 3) : null;
+    level = baru;
+    return { ...s, menjadi };
+  });
+}
+
 /**
  * Tanggal penetapan SP1/SP2/SP3 — diturunkan, bukan diinput. Sesi pelanggaran
  * diurutkan menaik lalu dihitung maju; tanggal pertemuan pertama yang membuat
@@ -85,7 +132,7 @@ type SesiSP = { tanggal: string; jenis: 'alpa' | 'izin' };
  * ikut bergeser ketika koordinator memutihkan sesuatu — persis seperti levelnya.
  */
 export function hitungPenetapan(sesi: SesiSP[]): Penetapan[] {
-  const urut = [...sesi].sort((x, y) => (x.tanggal < y.tanggal ? -1 : x.tanggal > y.tanggal ? 1 : 0));
+  const urut = urutSesi(sesi);
   const out: Penetapan[] = [];
   let alpa = 0;
   let izin = 0;
@@ -136,6 +183,8 @@ export type SPPeserta = {
   penetapan: Penetapan[];
   /** Pemutihan aktif milik orang ini; kosong = tak pernah diputihkan. */
   diputihkan: PemutihanRingkas[];
+  /** Sesi izin/alpa yang membentuk SP-nya, kronologis, dengan alasan ketua kelas. */
+  riwayat: SesiRiwayatSP[];
 };
 
 export type SPRekap = {
@@ -271,7 +320,11 @@ export async function getMaahirSP(opts?: {
   const pertById = new Map(
     pertRows.map((p) => [
       p.id as string,
-      { kelasId: p.program_kelas_id as string, tanggal: p.tanggal as string },
+      {
+        kelasId: p.program_kelas_id as string,
+        tanggal: p.tanggal as string,
+        program: p.program as SPProgram,
+      },
     ])
   );
   const pertIds = pertRows.map((p) => p.id as string);
@@ -312,10 +365,11 @@ export async function getMaahirSP(opts?: {
     pertemuan_id: string;
     anggota_id: string | null;
     status: string;
+    catatan: string | null;
   }>((from, to) =>
     supabaseAdmin
       .from('kehadiran_peserta')
-      .select('pertemuan_id, anggota_id, status')
+      .select('pertemuan_id, anggota_id, status, catatan')
       .in('pertemuan_id', pertIds)
       .not('diisi_at', 'is', null)
       .order('id')
@@ -339,8 +393,9 @@ export async function getMaahirSP(opts?: {
   const kosong = (): Tally => ({ H: 0, T: 0, I: 0, S: 0, A: 0 });
   const kotorByAnggota = new Map<string, Tally>();
   const bersihByAnggota = new Map<string, Tally>();
-  // Sesi pelanggaran yang masih berlaku, untuk menurunkan tanggal penetapan SP.
-  const sesiByAnggota = new Map<string, SesiSP[]>();
+  // Sesi pelanggaran yang masih berlaku: menurunkan tanggal penetapan SP dan
+  // menjadi riwayat "kenapa kena SP" di laporan.
+  const sesiByAnggota = new Map<string, SesiSPLengkap[]>();
   for (const k of kehadiranRows) {
     if (!k.anggota_id) continue;
     const p = pertById.get(k.pertemuan_id);
@@ -375,7 +430,13 @@ export async function getMaahirSP(opts?: {
             : 'alpa';
       if (jenis) {
         const arr = sesiByAnggota.get(k.anggota_id) ?? [];
-        arr.push({ tanggal: p.tanggal, jenis });
+        arr.push({
+          tanggal: p.tanggal,
+          jenis,
+          program: p.program,
+          kelasName: kelasById.get(p.kelasId)?.name ?? '—',
+          catatan: k.catatan?.trim() ? k.catatan.trim() : null,
+        });
         sesiByAnggota.set(k.anggota_id, arr);
       }
     }
@@ -393,7 +454,7 @@ export async function getMaahirSP(opts?: {
     kotor: Tally;
     bersih: Tally;
     /** Sesi pelanggaran seluruh baris keanggotaan orang ini, belum diurutkan. */
-    sesi: SesiSP[];
+    sesi: SesiSPLengkap[];
     diputihkan: PemutihanRingkas[];
     aktifSekarang: boolean;
   };
@@ -469,6 +530,7 @@ export async function getMaahirSP(opts?: {
       sp,
       spKotor,
       penetapan: hitungPenetapan(g.sesi),
+      riwayat: susunRiwayat(g.sesi),
       diputihkan: g.diputihkan.sort((a, b) =>
         (a.tanggal ?? a.month).localeCompare(b.tanggal ?? b.month)
       ),

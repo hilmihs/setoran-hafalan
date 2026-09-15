@@ -93,8 +93,11 @@ const ANG_B = '33333333-3333-4333-8333-333333333333'; // 1 alpa → SP1, akan di
 const TGL = ['2026-03-03', '2026-03-05', '2026-03-10', '2026-03-12'];
 
 const SEED = `
+-- Nama kelas sengaja cocok pola \`spMulaiKelas\` kumulatif penuh (Maahir 6A/6B
+-- Ikhwan): kelas lain baru menumpuk SP sejak SP_START_UMUM, jadi sesi Maret di
+-- bawah ini akan tersaring habis.
 INSERT INTO program_kelas (id, name, gender, jadwal_hari, presensi_sifat)
-  VALUES ('${KELAS_ID}', 'Kelas Uji', 'ikhwan', ARRAY['Selasa','Kamis'], 'harian');
+  VALUES ('${KELAS_ID}', 'Maahir 6A - Ikhwan', 'ikhwan', ARRAY['Selasa','Kamis'], 'harian');
 INSERT INTO program_kelas_anggota (id, program_kelas_id, name, whatsapp_number)
   VALUES ('${ANG_A}', '${KELAS_ID}', 'Peserta A', '628100000001'),
          ('${ANG_B}', '${KELAS_ID}', 'Peserta B', '628100000002');
@@ -103,15 +106,15 @@ INSERT INTO pertemuan_program (id, program_kelas_id, program, tanggal) VALUES
   ('aaaaaaa1-0000-4000-8000-000000000002', '${KELAS_ID}', 'kelas_maahir', '${TGL[1]}'),
   ('aaaaaaa1-0000-4000-8000-000000000003', '${KELAS_ID}', 'kelas_maahir', '${TGL[2]}'),
   ('aaaaaaa1-0000-4000-8000-000000000004', '${KELAS_ID}', 'kelas_maahir', '${TGL[3]}');
-INSERT INTO kehadiran_peserta (pertemuan_id, anggota_id, status, diisi_at) VALUES
-  ('aaaaaaa1-0000-4000-8000-000000000001', '${ANG_A}', 'tidak_ada_keterangan', now()),
-  ('aaaaaaa1-0000-4000-8000-000000000002', '${ANG_A}', 'tidak_ada_keterangan', now()),
-  ('aaaaaaa1-0000-4000-8000-000000000003', '${ANG_A}', 'tidak_ada_keterangan', now()),
-  ('aaaaaaa1-0000-4000-8000-000000000004', '${ANG_A}', 'hadir', now()),
-  ('aaaaaaa1-0000-4000-8000-000000000001', '${ANG_B}', 'tidak_ada_keterangan', now()),
-  ('aaaaaaa1-0000-4000-8000-000000000002', '${ANG_B}', 'hadir', now()),
-  ('aaaaaaa1-0000-4000-8000-000000000003', '${ANG_B}', 'hadir', now()),
-  ('aaaaaaa1-0000-4000-8000-000000000004', '${ANG_B}', 'hadir', now());
+INSERT INTO kehadiran_peserta (pertemuan_id, anggota_id, status, catatan, diisi_at) VALUES
+  ('aaaaaaa1-0000-4000-8000-000000000001', '${ANG_A}', 'tidak_ada_keterangan', 'tidak ada kabar', now()),
+  ('aaaaaaa1-0000-4000-8000-000000000002', '${ANG_A}', 'tidak_ada_keterangan', NULL, now()),
+  ('aaaaaaa1-0000-4000-8000-000000000003', '${ANG_A}', 'tidak_ada_keterangan', 'HP mati', now()),
+  ('aaaaaaa1-0000-4000-8000-000000000004', '${ANG_A}', 'hadir', NULL, now()),
+  ('aaaaaaa1-0000-4000-8000-000000000001', '${ANG_B}', 'tidak_ada_keterangan', NULL, now()),
+  ('aaaaaaa1-0000-4000-8000-000000000002', '${ANG_B}', 'hadir', NULL, now()),
+  ('aaaaaaa1-0000-4000-8000-000000000003', '${ANG_B}', 'hadir', NULL, now()),
+  ('aaaaaaa1-0000-4000-8000-000000000004', '${ANG_B}', 'hadir', NULL, now());
 `;
 
 async function main() {
@@ -141,6 +144,14 @@ async function main() {
       check('spKotor = sp saat belum diputihkan', a?.spKotor === 3 && b?.spKotor === 1);
       check('summary.total = 2', summary.total === 2, String(summary.total));
       check('summary.diputihkan = 0', summary.diputihkan === 0);
+      // Riwayat kronologis — bahan penjelasan "kenapa dia kena SP" di laporan.
+      const rw = a?.riwayat ?? [];
+      check('A riwayat 3 sesi', rw.length === 3, JSON.stringify(rw));
+      check('A riwayat urut menaik', rw.map((x) => x.tanggal).join() === [TGL[0], TGL[1], TGL[2]].join());
+      check('A riwayat menjadi SP1/2/3 berurutan', rw.map((x) => x.menjadi).join() === '1,2,3', JSON.stringify(rw.map((x) => x.menjadi)));
+      check('A riwayat catatan terbawa', rw[0]?.catatan === 'tidak ada kabar' && rw[1]?.catatan === null && rw[2]?.catatan === 'HP mati');
+      check('A riwayat program & kelas terisi', rw[0]?.program === 'kelas_maahir' && rw[0]?.kelasName === 'Maahir 6A - Ikhwan');
+      check('A riwayat jenis alpa', rw.every((x) => x.jenis === 'alpa'));
     }
 
     // 2. Putihkan satu tanggal alpa milik B → SP-nya luruh, TAPI tetap terdaftar.
@@ -167,6 +178,9 @@ async function main() {
       check('A tinggal 2 alpa (bukan 0)', a?.alpa === 2, String(a?.alpa));
       check('A turun ke SP2', a?.sp === 2, String(a?.sp));
       check('A spKotor tetap 3', a?.spKotor === 3, String(a?.spKotor));
+      const rw = a?.riwayat ?? [];
+      check('A riwayat: sesi diputihkan hilang', rw.length === 2 && rw[0]?.tanggal === TGL[1], JSON.stringify(rw));
+      check('A riwayat: penetapan bergeser (SP1 di sesi ke-2)', rw.map((x) => x.menjadi).join() === '1,2', JSON.stringify(rw.map((x) => x.menjadi)));
     }
 
     // 4. Rincian per peserta.

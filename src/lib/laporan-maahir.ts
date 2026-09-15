@@ -9,7 +9,7 @@ import { supabaseAdmin } from '@/lib/supabase-admin';
 import { fetchAllRows } from '@/lib/supabase-page';
 import { getLiburDatesForKelas } from '@/lib/maahir-libur';
 import { anchorKelas, expectedDaysInRange, filledKeyOf, todayJakarta } from '@/lib/maahir-presensi';
-import { getMaahirSP, periodeStartDate, type SPRekap } from '@/lib/maahir-sp';
+import { getMaahirSP, periodeStartDate, type SesiRiwayatSP, type SPRekap } from '@/lib/maahir-sp';
 import { getPemutihan } from '@/lib/maahir-pemutihan';
 import { getSetoranTargets, targetResolver } from '@/lib/setoran-target';
 import { getLaporanNotes, type LaporanNote } from '@/lib/laporan-note';
@@ -32,6 +32,18 @@ type Scope = 'kelas_maahir' | 'at_tibyan';
 
 export type PctCounts = { H: number; I: number; S: number; A: number; T: number };
 
+/**
+ * Satu sesi yang peserta TIDAK hadiri dalam periode, dengan alasan yang diisi
+ * ketua kelas — bahan kolom "Keterangan" tabel peserta di bawah target.
+ * `tanpa_keterangan` = pertemuan terisi untuk kelasnya tapi peserta ini tak
+ * punya baris presensi sama sekali (kelalaian pengisian, bukan alpa).
+ */
+export type SesiTakHadir = {
+  tanggal: string;
+  status: 'izin' | 'sakit' | 'alpa' | 'tanpa_keterangan';
+  catatan: string | null;
+};
+
 export type StudentAtt = {
   anggotaId: string;
   name: string;
@@ -46,6 +58,11 @@ export type StudentAtt = {
   /** (H+T)/filled * 100; null bila belum ada pertemuan; 100 bila semua sesinya sakit. */
   persen: number | null;
   keterangan: string; // catatan tergabung (bila ada)
+  /**
+   * Sesi tidak hadir dalam periode, kronologis. izin+alpa+tanpa_keterangan =
+   * `tidakHadir`; sakit ikut dilaporkan walau tak menggerus persen.
+   */
+  riwayat: SesiTakHadir[];
   mulaiTanggal: string | null; // tgl gabung kelas bila di tengah periode (denominator dipotong)
   online: number; // sesi yang dihadiri secara online
   diputihkan: string | null; // alasan pemutihan (persen dianggap 100%) bila ada
@@ -113,6 +130,30 @@ export type LaporanMaahir = {
   /** Catatan bebas koordinator untuk bulan ini. */
   notes: LaporanNote[];
 };
+
+const ddmm = (iso: string) => `${iso.slice(8, 10)}/${iso.slice(5, 7)}`;
+
+const LABEL_STATUS: Record<SesiTakHadir['status'], string> = {
+  izin: 'izin',
+  sakit: 'sakit (udzur)',
+  alpa: 'alpa',
+  tanpa_keterangan: 'tanpa ket.',
+};
+
+/** Satu baris riwayat tidak hadir — teks yang sama untuk halaman web & Excel. */
+export function labelSesiTakHadir(r: SesiTakHadir): string {
+  return `${ddmm(r.tanggal)} ${LABEL_STATUS[r.status]}${r.catatan ? ` — ${r.catatan}` : ''}`;
+}
+
+/** Satu baris riwayat SP: `04/09 Maahir · izin — alasan → SP1`. */
+export function labelRiwayatSP(r: SesiRiwayatSP): string {
+  const program = r.program === 'at_tibyan' ? 'At-Tibyan' : 'Maahir';
+  return (
+    `${ddmm(r.tanggal)} ${program} · ${r.jenis}` +
+    (r.catatan ? ` — ${r.catatan}` : '') +
+    (r.menjadi ? ` → SP${r.menjadi}` : '')
+  );
+}
 
 /** Rentang periode laporan bulanan Maahir: tgl 28 bulan lalu s/d 27 bulan ini. */
 export function monthRange(month: string): { start: string; end: string } {
@@ -253,6 +294,9 @@ export async function getLaporanMaahir(month: string): Promise<LaporanMaahir> {
   type Stat = { H: number; I: number; S: number; A: number; T: number; online: number; catatan: Set<string> };
   const statByAnggotaScope = new Map<string, Stat>(); // key: anggotaId|program
   const filledByKelasScope = new Map<string, Set<string>>(); // key: kelasId|program → set pertemuanId
+  // Baris presensi per anggota+scope, dipetakan per pertemuan — untuk menyusun
+  // riwayat tidak hadir (sesi tanpa baris = 'tanpa_keterangan').
+  const rowByAnggotaScope = new Map<string, Map<string, { code: Code; catatan: string | null }>>();
   // Setoran hafalan per anggota (khusus scope kelas_maahir): tanggal → halaman.
   const setoranByAnggota = new Map<string, Array<{ tanggal: string; halaman: number }>>();
 
@@ -305,6 +349,9 @@ export async function getLaporanMaahir(month: string): Promise<LaporanMaahir> {
       if (!st) { st = { H: 0, I: 0, S: 0, A: 0, T: 0, online: 0, catatan: new Set() }; statByAnggotaScope.set(sKey, st); }
       const code = STATUS_TO_CODE[k.status] ?? 'A';
       st[code]++;
+      let rows = rowByAnggotaScope.get(sKey);
+      if (!rows) { rows = new Map(); rowByAnggotaScope.set(sKey, rows); }
+      rows.set(k.pertemuan_id, { code, catatan: k.catatan?.trim() ? k.catatan.trim() : null });
       if (k.mode === 'online' && (code === 'H' || code === 'T')) st.online++;
       if (k.catatan && typeof k.catatan === 'string' && k.catatan.trim()) st.catatan.add(k.catatan.trim());
 
@@ -335,13 +382,30 @@ export async function getLaporanMaahir(month: string): Promise<LaporanMaahir> {
       // terdaftar tak boleh menggerus persentasenya).
       const mulaiTanggal = joinDateOf(a);
       const fset = filledByKelasScope.get(`${kelas.id}|${scope}`);
-      const terisi = !fset
-        ? 0
+      const pertemuanDitagih = !fset
+        ? []
         : [...fset].filter((pid) => {
             const tgl = pertemuanById.get(pid)?.tanggal ?? '';
             if (!dalamPeriode(a, tgl, start, end)) return false;
             return !pemutihanTanggal.has(`${a.id}|${tgl}`);
-          }).length;
+          });
+      const terisi = pertemuanDitagih.length;
+      // Riwayat tidak hadir dari penyebut yang sama — supaya jumlah baris
+      // izin+alpa+tanpa keterangan selalu sama dengan angka `tidakHadir`.
+      const rows = rowByAnggotaScope.get(`${a.id}|${scope}`);
+      const riwayat: SesiTakHadir[] = [];
+      for (const pid of pertemuanDitagih) {
+        const tgl = pertemuanById.get(pid)?.tanggal ?? '';
+        const row = rows?.get(pid);
+        if (!row) { riwayat.push({ tanggal: tgl, status: 'tanpa_keterangan', catatan: null }); continue; }
+        if (row.code === 'H' || row.code === 'T') continue;
+        riwayat.push({
+          tanggal: tgl,
+          status: row.code === 'I' ? 'izin' : row.code === 'S' ? 'sakit' : 'alpa',
+          catatan: row.catatan,
+        });
+      }
+      riwayat.sort((p, q) => (p.tanggal < q.tanggal ? -1 : p.tanggal > q.tanggal ? 1 : 0));
       // Sakit = udzur: sesinya dikeluarkan dari penyebut, jadi tak menggerus
       // persen. Semua sesi sakit → penyebut habis, dianggap hadir penuh.
       const filled = Math.max(0, terisi - counts.S);
@@ -370,6 +434,8 @@ export async function getLaporanMaahir(month: string): Promise<LaporanMaahir> {
         tidakHadir,
         persen,
         keterangan: st ? Array.from(st.catatan).join('; ') : '',
+        // Diputihkan sebulan → dianggap hadir penuh, riwayatnya pun dikosongkan.
+        riwayat: diputihkan !== null ? [] : riwayat,
         mulaiTanggal,
         online: st?.online ?? 0,
         diputihkan,

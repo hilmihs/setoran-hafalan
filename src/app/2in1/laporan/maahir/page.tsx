@@ -1,6 +1,11 @@
 import Link from 'next/link';
 import { requireOneOfRoles } from '@/lib/session';
-import { getLaporanMaahir, type StudentAtt } from '@/lib/laporan-maahir';
+import {
+  getLaporanMaahir,
+  labelRiwayatSP,
+  labelSesiTakHadir,
+  type StudentAtt,
+} from '@/lib/laporan-maahir';
 import { PRESENSI_ANCHOR } from '@/lib/maahir-presensi';
 import { periodeBerjalan } from '@/lib/periode-laporan';
 import { monthOptionsSince } from '@/lib/month';
@@ -225,7 +230,9 @@ function BawahTargetTable({ list }: { list: StudentAtt[] }) {
               Tanpa ket.
             </th>
             <th style={{ width: 60 }}>Online</th>
-            <th>Keterangan</th>
+            <th title="Tiap sesi tidak hadir: tanggal, status, dan alasan yang diisi ketua kelas.">
+              Keterangan
+            </th>
           </tr>
         </thead>
         <tbody>
@@ -256,7 +263,17 @@ function BawahTargetTable({ list }: { list: StudentAtt[] }) {
                 <td style={{ textAlign: 'center' }}>{tanpaKet}</td>
                 <td style={{ textAlign: 'center' }}>{s.online > 0 ? `${s.online}×` : '—'}</td>
                 <td className="t-tiny" style={{ color: 'var(--muted-2)' }}>
-                  {s.keterangan || '—'}
+                  {s.riwayat.length === 0 ? (
+                    s.diputihkan === null ? '—' : null
+                  ) : (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                      {s.riwayat.map((r) => (
+                        <span key={`${r.tanggal}|${r.status}`} style={{ whiteSpace: 'nowrap' }}>
+                          {labelSesiTakHadir(r)}
+                        </span>
+                      ))}
+                    </div>
+                  )}
                   {s.diputihkan !== null && (
                     <div style={{ color: 'var(--hijau-ink)' }}>
                       diputihkan{s.diputihkan ? `: ${s.diputihkan}` : ''}
@@ -480,6 +497,9 @@ function SPBlock({ lap }: { lap: Awaited<ReturnType<typeof getLaporanMaahir>> })
                 <th style={{ width: 50 }}>Sakit</th>
                 <th style={{ width: 60 }}>Hadir</th>
                 <th>Penetapan</th>
+                <th title="Sesi izin/alpa yang membentuk SP-nya, kronologis, dengan alasan dari ketua kelas. Sesi yang diputihkan tak tampil.">
+                  Riwayat
+                </th>
               </tr>
             </thead>
             <tbody>
@@ -504,6 +524,19 @@ function SPBlock({ lap }: { lap: Awaited<ReturnType<typeof getLaporanMaahir>> })
                         : p.penetapan
                             .map((r) => `SP${r.level} ${r.tanggal.slice(8, 10)}/${r.tanggal.slice(5, 7)}`)
                             .join(' · ')}
+                    </td>
+                    <td className="t-tiny" style={{ color: 'var(--muted-2)' }}>
+                      {p.riwayat.length === 0 ? (
+                        '—'
+                      ) : (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                          {p.riwayat.map((r) => (
+                            <span key={`${r.tanggal}|${r.program}`} style={{ whiteSpace: 'nowrap' }}>
+                              {labelRiwayatSP(r)}
+                            </span>
+                          ))}
+                        </div>
+                      )}
                     </td>
                   </tr>
                 );
