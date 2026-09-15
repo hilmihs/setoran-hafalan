@@ -53,6 +53,7 @@
     "seed-hits-demo-flow": "tsx --env-file=.env.local scripts/seed-hits-demo-flow.ts",
     "db": "tsx --env-file=.env.local scripts/db.ts",
     "test-sp": "tsx scripts/test-sp-pemutihan.ts",
+    "test-checkin-pengajar": "tsx scripts/test-checkin-pengajar.ts",
     "test-bulk": "tsx scripts/test-bulk-pemutihan.ts",
     "test-target": "tsx scripts/test-setoran-target.ts",
     "test-hits-xlsx": "tsx scripts/test-hits-xlsx.ts",

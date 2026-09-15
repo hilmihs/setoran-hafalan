@@ -550,6 +550,44 @@ export interface CheckinPengajar {
   created_at: string;
 }
 
+// ========== Check-in pengajar Kelas Maahir (0076) ==========
+
+/** Pengajar kelas Maahir (program_kelas). Identitas = WA; tanpa password sendiri. */
+export interface MaahirPengajar {
+  id: string;
+  name: string;
+  gender: Gender;
+  whatsapp_number: string;
+  active: boolean;
+  created_at: string;
+}
+
+export interface MaahirPengajarKelas {
+  id: string;
+  pengajar_id: string;
+  program_kelas_id: string;
+  active: boolean;
+  created_at: string;
+}
+
+export type StatusCheckinMaahir = 'hadir' | 'izin' | 'sakit';
+
+export interface MaahirCheckinPengajar {
+  id: string;
+  pengajar_id: string;
+  program_kelas_id: string;
+  tanggal: string;
+  status: StatusCheckinMaahir;
+  /** Jam isi apa adanya — tak ada aturan terlambat. */
+  checked_in_at: string;
+  /** true = diisi bukan di hari-H. */
+  susulan: boolean;
+  materi: string | null;
+  catatan: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface PengajuanAlasan {
   id: string;
   pengajar_id: string;

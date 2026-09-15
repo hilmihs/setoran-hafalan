@@ -16,6 +16,7 @@ import { SearchableBlocks } from '@/components/SearchableBlocks';
 import { Icon } from '@/components/icons';
 import { buildWaMeUrl, tplReminderKetuaIsiPresensi } from '@/lib/whatsapp';
 import { absUrl } from '@/lib/url';
+import { bolehLihatRekapPengajarMaahir } from '@/lib/maahir-checkin-pengajar-akses';
 
 export const dynamic = 'force-dynamic';
 
@@ -84,6 +85,7 @@ export default async function KoordinatorKehadiranPage({
   });
 
   const totalBelum = rekap.reduce((sum, k) => sum + k.belumDiisi, 0);
+  const bolehRekapPengajar = await bolehLihatRekapPengajarMaahir();
 
   return (
     <main style={{ minHeight: '100vh' }}>
@@ -112,6 +114,22 @@ export default async function KoordinatorKehadiranPage({
               </span>
             </p>
           </div>
+
+          {bolehRekapPengajar && (
+            <Link
+              href="/2in1/koordinator/kehadiran/pengajar"
+              className="card-flat"
+              style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 14px', marginBottom: 12, textDecoration: 'none', color: 'inherit', borderRadius: 10 }}
+            >
+              <div>
+                <div style={{ fontSize: 13, fontWeight: 600 }}>Kehadiran Pengajar Maahir</div>
+                <div className="t-tiny" style={{ color: 'var(--muted-2)' }}>
+                  Check-in & capaian materi pengajar kelas 6A–6D · periode 16–15
+                </div>
+              </div>
+              <span style={{ color: 'var(--muted-2)' }}>→</span>
+            </Link>
+          )}
 
           {/* Rentang tanggal — default periode 28–27, bisa diubah */}
           <form

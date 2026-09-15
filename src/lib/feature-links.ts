@@ -13,6 +13,12 @@ export interface FeatureLink {
    * pintunya dari menu.
    */
   superadminOnly?: boolean;
+  /**
+   * Akses yang tak bisa dibaca dari role sesi — diturunkan dari DB per-request
+   * (pengajar kelas Maahir lewat nomor WA; pemantau rekapnya lewat flag
+   * koordinator). Link hanya tampil bila opsi bersangkutan true.
+   */
+  requires?: 'pengajarMaahir' | 'rekapPengajarMaahir';
 }
 
 /**
@@ -58,6 +64,22 @@ export const FEATURE_LINKS: FeatureLink[] = [
     navLabel: 'Kehadiran',
     description: 'Check-in kehadiran Kelas Maahir, Kajian At-Tibyan',
     match: (a) => a.role === 'pengajar',
+  },
+  {
+    href: '/kehadiran/pengajar-maahir',
+    title: 'Check-in Kelas Maahir',
+    navLabel: 'Check-in Maahir',
+    description: 'Check-in kehadiran & materi tiap sesi kelas Maahir yang Anda ampu',
+    match: () => true,
+    requires: 'pengajarMaahir',
+  },
+  {
+    href: '/2in1/koordinator/kehadiran/pengajar',
+    title: 'Kehadiran Pengajar Maahir',
+    navLabel: 'Kehadiran Pengajar',
+    description: 'Rekap check-in & capaian materi pengajar kelas Maahir per periode 16–15',
+    match: () => true,
+    requires: 'rekapPengajarMaahir',
   },
   {
     href: '/kehadiran/pengajar/matrix',
@@ -205,12 +227,19 @@ export const FEATURE_LINKS: FeatureLink[] = [
   },
 ];
 
+export type FeatureLinkOpts = {
+  superadmin?: boolean;
+  pengajarMaahir?: boolean;
+  rekapPengajarMaahir?: boolean;
+};
+
 export function featureLinksFor(
   accesses: RoleAccess[],
-  opts: { superadmin?: boolean } = {}
+  opts: FeatureLinkOpts = {}
 ): FeatureLink[] {
   return FEATURE_LINKS.filter((f) => {
     if (f.superadminOnly && !opts.superadmin) return false;
+    if (f.requires && !opts[f.requires]) return false;
     return accesses.some((a) => f.match(a));
   });
 }

@@ -9,6 +9,7 @@ import { bolehLihatFiturTersembunyi } from '@/lib/admin-guard';
 import { isSuperadmin } from '@/lib/admin-guard';
 import { getSessionWa, findKetuaProgramKelas, findSelfAttendanceMembership } from '@/lib/program-kelas';
 import { getUnfilledMaahirDays, getUnfilledDaysForAnggota } from '@/lib/maahir-presensi';
+import { fiturOptsMaahirPengajar } from '@/lib/maahir-checkin-pengajar-akses';
 
 export const dynamic = 'force-dynamic';
 
@@ -39,6 +40,7 @@ export default async function HomePage({ searchParams }: { searchParams: { next?
 
     const available = featureLinksFor(accesses, {
       superadmin: await bolehLihatFiturTersembunyi(),
+      ...(await fiturOptsMaahirPengajar()),
     });
     const superadmin = await isSuperadmin();
 
