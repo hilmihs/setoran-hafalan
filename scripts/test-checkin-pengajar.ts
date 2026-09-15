@@ -162,6 +162,8 @@ async function main() {
       check('Selasa bukan jadwal ditolak', !bukanJadwal.ok);
       const libur = await lib.simpanCheckinPengajar(akses, { kelasId: KELAS_6C, tanggal: '2026-09-24', status: 'hadir', materi: '', catatan: '' }, actor, '2026-09-25');
       check('tanggal libur ditolak', !libur.ok);
+      const palsu = await lib.simpanCheckinPengajar(akses, { kelasId: KELAS_6C, tanggal: '2026-09-31', status: 'hadir', materi: '', catatan: '' }, actor, '2026-10-01');
+      check('tanggal kalender palsu ditolak', !palsu.ok && /valid/.test(palsu.ok ? '' : palsu.error), JSON.stringify(palsu));
       const depan = await lib.simpanCheckinPengajar(akses, { kelasId: KELAS_6C, tanggal: '2026-09-28', status: 'hadir', materi: '', catatan: '' }, actor, HARI_INI);
       check('tanggal depan ditolak', !depan.ok);
       const tutup = await lib.simpanCheckinPengajar(akses, { kelasId: KELAS_6C, tanggal: '2026-09-21', status: 'hadir', materi: '', catatan: '' }, actor, '2026-10-16');

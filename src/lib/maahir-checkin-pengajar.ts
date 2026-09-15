@@ -363,6 +363,14 @@ export type SimpanCheckinInput = {
 
 export type HasilTulis = { ok: true; checkin: MaahirCheckinPengajar } | { ok: false; error: string };
 
+/** 'YYYY-MM-DD' yang benar-benar ada di kalender (menolak 2026-02-30). */
+function tanggalValid(t: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(t)) return false;
+  const [y, m, d] = t.split('-').map(Number);
+  const dt = new Date(Date.UTC(y, m - 1, d));
+  return dt.getUTCFullYear() === y && dt.getUTCMonth() === m - 1 && dt.getUTCDate() === d;
+}
+
 const bersih = (s: string) => {
   const t = s.trim();
   return t ? t : null;
@@ -382,11 +390,11 @@ export async function simpanCheckinPengajar(
 ): Promise<HasilTulis> {
   const kelas = akses.kelas.find((k) => k.id === input.kelasId);
   if (!kelas) return { ok: false, error: 'Kelas bukan kelas yang Anda ampu.' };
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(input.tanggal)) return { ok: false, error: 'Tanggal tidak valid.' };
+  if (!tanggalValid(input.tanggal)) return { ok: false, error: 'Tanggal tidak valid.' };
   if (!STATUS_CHECKIN_MAAHIR.includes(input.status)) return { ok: false, error: 'Status tidak valid.' };
   if (input.tanggal > hariIni) return { ok: false, error: 'Sesi belum berlangsung — check-in hanya untuk hari ini atau sesi yang sudah lewat.' };
   if (!periodePengajarTerbuka(input.tanggal, hariIni)) {
-    return { ok: false, error: 'Periode sesi ini sudah ditutup (tanggal 15). Hubungi koordinator untuk koreksi.' };
+    return { ok: false, error: 'Periode sesi ini sudah ditutup (pengisian hanya sampai tanggal 15). Hubungi koordinator untuk koreksi.' };
   }
   const libur = await getLiburDatesForKelas([kelas.id], input.tanggal, input.tanggal);
   const terjadwal = sesiTerjadwalKelas(kelas, input.tanggal, input.tanggal, libur.get(kelas.id));
