@@ -36,6 +36,15 @@ import {
   rentangPertemuan,
   tanggalPertemuan,
 } from '@/lib/ketersediaan-pertemuan';
+import {
+  jumlahkan,
+  susunArus,
+  susunBarisJam,
+  susunPeta,
+  tanggalBatasAntrean,
+  tingkatPeta,
+} from '@/lib/ketersediaan-dasbor';
+import type { RingkasSlot } from '@/lib/ketersediaan-permintaan';
 import type { KsHariIdx, KsSlot } from '@/types/db';
 
 let failed = 0;
@@ -518,6 +527,98 @@ const sudahDapat = saring(
   { identitasDialokasikan: new Set(['81234567890|siti aminah']) }
 );
 eq(sudahDapat[0].status, 'diganti', 'identitas yang sudah dialokasikan: kiriman lain diganti');
+
+// ── Hitungan dashboard ─────────────────────────────────────────────────────
+console.log('\n# hitungan dashboard');
+
+const slotDasbor = (
+  id: string,
+  kelompok: 'ikhwan' | 'akhwat',
+  hari: string[],
+  hariIdx: KsHariIdx[],
+  mulai: string,
+  mode: 'online' | 'offline' = 'online'
+) =>
+  ({
+    id,
+    periode_id: 'P',
+    kelompok,
+    mode,
+    label: `${hari.join(' & ')} ${mulai} - 23:00 WIB`,
+    hari,
+    hari_idx: hariIdx,
+    waktu_mulai: `${mulai}:00`,
+    waktu_selesai: '23:00:00',
+    lokasi: mode === 'offline' ? 'Pejaten' : null,
+    aktif: true,
+    urutan: 0,
+    created_at: '',
+    updated_at: '',
+  }) as KsSlot;
+
+const ringkasDasbor = (antre: number, tersedia: number, terpakai = 0) =>
+  ({
+    slot_id: '',
+    antre,
+    dialokasikan: 0,
+    ditahan: 0,
+    terpakai_lain: 0,
+    pengajar_tersedia: tersedia,
+    pengajar_terpakai: terpakai,
+    halaqah_hidup: 0,
+    butuh_halaqah: 0,
+    dapat_dibentuk: 0,
+    belum_tertampung: 0,
+    antrean_tertua_hari: null,
+    butuh_pengajar: false,
+    riwayat: null,
+  }) as RingkasSlot;
+
+const barisJam = susunBarisJam(
+  [
+    slotDasbor('A', 'akhwat', ['Selasa', 'Kamis'], [1, 3], '20:00'),
+    slotDasbor('B', 'akhwat', ['Senin', 'Rabu'], [0, 2], '20:00'),
+    slotDasbor('C', 'akhwat', ['Senin', 'Rabu'], [0, 2], '20:00', 'offline'),
+    slotDasbor('D', 'ikhwan', ['Sabtu', 'Ahad'], [5, 6], '13:00'),
+  ],
+  new Map([
+    ['A', ringkasDasbor(432, 6)],
+    ['B', ringkasDasbor(20, 2, 1)],
+    ['C', ringkasDasbor(30, 0)],
+    ['D', ringkasDasbor(0, 3)],
+  ]),
+  12
+);
+eq(barisJam.map((b) => b.slot_id), ['A', 'C', 'B', 'D'], 'jam diurut dari kekurangan terbesar');
+eq(barisJam.map((b) => b.status), ['kurang', 'tanpa_pengajar', 'kurang', 'kosong'], 'status per jam');
+eq([barisJam[0].tampung, barisJam[0].sisa, barisJam[0].butuh, barisJam[0].bisa], [72, 360, 36, 6], 'daya tampung dibatasi pengajar');
+eq(barisJam.find((b) => b.slot_id === 'B')?.tampung, 12, 'pengajar yang sudah terpakai tidak dihitung bebas');
+eq(jumlahkan(barisJam).sisa, 398, 'jumlah belum tertampung');
+
+const peta = susunPeta(barisJam);
+eq(peta.hari.map((h) => h.label), ['Senin & Rabu', 'Selasa & Kamis', 'Sabtu & Ahad'], 'baris peta urut hari');
+eq(peta.jam, ['13:00', '20:00'], 'kolom peta urut jam');
+eq(
+  peta.sel['0,2|20:00'],
+  { antre: 50, sisa: 38, pengajar: 2, sisaOnline: 8, sisaOffline: 30, jumlahJam: 2 },
+  'sel peta menjumlah online dan offline'
+);
+eq([0, 1, 49, 50, 199, 360].map(tingkatPeta), [0, 1, 2, 3, 4, 5], 'tingkat warna peta');
+
+eq(
+  susunArus([
+    { didaftar_pada: '2026-09-09T03:19:20.000Z', gender: 'akhwat' },
+    { didaftar_pada: '2026-09-09T20:00:00.000Z', gender: 'ikhwan' },
+    { didaftar_pada: '2026-09-11T01:00:00.000Z', gender: 'akhwat' },
+  ]),
+  [
+    { tanggal: '2026-09-09', ikhwan: 0, akhwat: 1 },
+    { tanggal: '2026-09-10', ikhwan: 1, akhwat: 1 },
+    { tanggal: '2026-09-11', ikhwan: 1, akhwat: 2 },
+  ],
+  'arus kumulatif per hari WIB, hari tanpa pendaftar tetap ada'
+);
+eq(tanggalBatasAntrean('2026-09-09', 21), '2026-09-30', 'hari antrean tertua genap 21 hari');
 
 console.log(failed === 0 ? '\nSEMUA LULUS' : `\n${failed} GAGAL`);
 process.exit(failed === 0 ? 0 : 1);
