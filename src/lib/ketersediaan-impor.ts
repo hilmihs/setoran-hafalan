@@ -2,7 +2,7 @@ import 'server-only';
 import { getPool } from '@/lib/pg-core';
 import { supabaseAdmin } from '@/lib/supabase-admin';
 import type { Gender, KsHariIdx, KsModePengajar, KsPeriode } from '@/types/db';
-import { kunciJadwal, sesiDariSlot, type SesiSlot } from '@/lib/ketersediaan-slot';
+import { kunciJadwal, lokasiBaku, sesiDariSlot, type SesiSlot } from '@/lib/ketersediaan-slot';
 import { listPeriode } from '@/lib/ketersediaan-periode';
 import { alasanTerkunci, jadwalTerpakaiPengajar, kunciSlot, type JadwalTerpakai } from '@/lib/ketersediaan-bentrok';
 import { bacaKetersediaanXlsx, type BarisImpor } from '@/lib/ketersediaan-impor-xlsx';
@@ -232,7 +232,8 @@ async function simpanSatuPeriode(
       const semua = [...jamMilik.values()];
       const modes = new Set(semua.map((r) => r.mode));
       const mode: KsModePengajar = modes.size > 1 ? 'keduanya' : semua[0].mode;
-      const lokasi = semua.find((r) => r.mode === 'offline')?.lokasi ?? null;
+      const offline = semua.find((r) => r.mode === 'offline');
+      const lokasi = offline ? lokasiBaku(offline.lokasi) : null;
 
       const { rows: pengisian } = await client.query<{ id: string }>(
         `insert into ks_pengisian (periode_id, pengajar_id, mode, lokasi, komitmen, submitted_at, status, sumber)
@@ -269,7 +270,7 @@ async function simpanSatuPeriode(
               s.hari_idx,
               s.waktu_mulai,
               s.waktu_selesai,
-              r.mode === 'offline' ? (r.lokasi ?? 'Offline') : null,
+              r.mode === 'offline' ? lokasiBaku(r.lokasi) : null,
               ++urutan,
             ]
           );

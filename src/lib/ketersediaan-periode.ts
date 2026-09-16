@@ -1,7 +1,7 @@
 import 'server-only';
 import { supabaseAdmin } from '@/lib/supabase-admin';
 import type { Gender, KsMode, KsPeriode, KsSlot } from '@/types/db';
-import { uraikanSlot } from '@/lib/ketersediaan-slot';
+import { lokasiBaku, uraikanSlot } from '@/lib/ketersediaan-slot';
 
 /**
  * Periode penarikan ketersediaan + master slotnya.
@@ -150,7 +150,7 @@ export function siapkanSlot(
       // Batasan basis data: mode offline wajib berlokasi. Dokumen konsep mencatat
       // daftar offline belum diverifikasi ke koordinator lokasi, jadi diberi
       // penanda yang jelas-jelas menuntut diisi, bukan lokasi karangan.
-      lokasi: s.mode === 'offline' ? (s.lokasi ?? opts?.lokasiWajibDefault ?? 'Offline') : null,
+      lokasi: s.mode === 'offline' ? lokasiBaku(s.lokasi ?? opts?.lokasiWajibDefault) : null,
       urutan: i,
     });
   });

@@ -5,6 +5,7 @@
 // pemerataan pada alokasi berputar.
 import {
   bentrok,
+  lokasiBaku,
   rentangDariSlot,
   sesiDariSlot,
   hariKeIdx,
@@ -711,7 +712,7 @@ eq(
   [
     'akhwat|offline|Selasa & Kamis 16:00 - 17:30 WIB|Pejaten',
     'ikhwan|online|Senin & Rabu 20:00 - 21:30 WIB|null',
-    'akhwat|offline|Rabu 16:00 - 17:30 & Sabtu 13:00 - 14:30 WIB|Masjid Al Kautsar Matraman Jakarta Timur',
+    'akhwat|offline|Rabu 16:00 - 17:30 & Sabtu 13:00 - 14:30 WIB|Masjid Al-Kautsar Matraman',
   ],
   'hanya jam baru per gender & mode, tanpa kembar, tanpa pilihan tak terbaca; kelas dua waktu ikut'
 );
@@ -741,6 +742,14 @@ console.log('\n# orang yang sama di dua CSV');
     'waktu sama persis: tepat satu pemenang'
   );
 }
+
+console.log('\n# lokasi offline baku');
+eq(lokasiBaku('Masjid Al Kautsar Matraman Jakarta Timur'), 'Masjid Al-Kautsar Matraman', 'ejaan formulir Matraman');
+eq(lokasiBaku('Masjid Al-Kautsar Matraman'), 'Masjid Al-Kautsar Matraman', 'ejaan xlsx Matraman');
+eq(lokasiBaku('Offline'), 'Pejaten', 'offline tanpa tempat = Pejaten');
+eq(lokasiBaku(null), 'Pejaten', 'kosong = Pejaten');
+eq(lokasiBaku('Pejaten Akhwat'), 'Pejaten', 'Pejaten dengan embel-embel');
+eq(lokasiBaku('Bekasi'), 'Bekasi', 'lokasi lain dibiarkan');
 
 console.log(failed === 0 ? '\nSEMUA LULUS' : `\n${failed} GAGAL`);
 process.exit(failed === 0 ? 0 : 1);

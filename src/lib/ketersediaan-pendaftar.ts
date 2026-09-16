@@ -12,7 +12,7 @@ import type {
   KsPitaUmur,
   KsSlot,
 } from '@/types/db';
-import { hitungUmur, kunciJadwal, pitaUmur, sesiDariSlot, uraikanSlot } from '@/lib/ketersediaan-slot';
+import { hitungUmur, kunciJadwal, lokasiBaku, pitaUmur, sesiDariSlot, uraikanSlot } from '@/lib/ketersediaan-slot';
 import { listSlot } from '@/lib/ketersediaan-periode';
 
 /**
@@ -345,7 +345,7 @@ export function jamBaruDariFormulir(
       hari_idx: u.hari_idx,
       waktu_mulai: u.waktu_mulai,
       waktu_selesai: u.waktu_selesai,
-      lokasi: mode === 'offline' ? (u.lokasi ?? 'Offline') : null,
+      lokasi: mode === 'offline' ? lokasiBaku(u.lokasi) : null,
     });
   }
   return [...baru.values()];

@@ -291,6 +291,23 @@ export function susunLabel(hari_idx: readonly KsHariIdx[], mulai: string, selesa
   return `${urut.map(idxKeHari).join(' & ')} ${jamTeks} WIB`;
 }
 
+// ── Lokasi offline ────────────────────────────────────────────────────────
+
+/**
+ * Nama baku lokasi offline HITS. Sumbernya menulis tempat yang sama dengan
+ * cara berbeda — formulir "Masjid Al Kautsar Matraman Jakarta Timur", xlsx
+ * "Masjid Al-Kautsar Matraman", baris offline di sheet online hanya "Offline" —
+ * sehingga dashboard memecah satu lokasi menjadi beberapa.
+ *
+ * Offline tanpa keterangan tempat = Pejaten (ditegaskan koordinator 16 Sep 2026).
+ */
+export function lokasiBaku(teks: string | null | undefined): string {
+  const t = (teks ?? '').trim();
+  if (/kautsar|matraman/i.test(t)) return 'Masjid Al-Kautsar Matraman';
+  if (!t || /pejaten/i.test(t) || /^offline$/i.test(t)) return 'Pejaten';
+  return t;
+}
+
 // ── Bentrok ────────────────────────────────────────────────────────────────
 
 export interface RentangJadwal {

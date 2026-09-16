@@ -92,9 +92,13 @@ export function PanelImpor() {
   const perluPilih = baris.filter(
     (b) =>
       b.masalah.length === 0 &&
-      (b.cocok.status === 'nama_tak_ketemu' || b.cocok.status === 'nama_ganda' || b.cocok.cara === 'manual')
+      (b.cocok.status === 'nama_tak_ketemu' ||
+        b.cocok.status === 'nama_ganda' ||
+        // Nomor di xlsx bisa beda dengan nomor akun (ganti nomor): tetap boleh dipilih manual.
+        b.cocok.status === 'tanpa_akun' ||
+        b.cocok.cara === 'manual')
   );
-  const tanpaAkun = baris.filter((b) => b.cocok.status === 'tanpa_akun' || b.cocok.status === 'gender_beda');
+  const tanpaAkun = baris.filter((b) => b.cocok.status === 'gender_beda');
   const jamBermasalah = baris.filter((b) => b.masalah.length > 0);
   const lewatNama = baris.filter((b) => b.cocok.status === 'cocok' && b.cocok.cara === 'nama');
   const namaPeriode = new Map((pratinjau?.periode ?? []).map((p) => [p.id, p.nama]));
@@ -204,8 +208,9 @@ export function PanelImpor() {
                 <b>Pilih akun pengajarnya</b>
               </div>
               <p className="t-small" style={{ margin: 0, color: 'var(--ink-2)' }}>
-                Sheet offline tidak memuat nomor WA, jadi pengajar dicocokkan lewat nama. Yang dibiarkan kosong tidak
-                diimpor.
+                Nama tidak ditemukan, atau nomor WA di berkas belum terdaftar di akun mana pun (bisa jadi pengajarnya
+                ganti nomor). Pilih akunnya bila orangnya sama. Yang dibiarkan kosong tidak diimpor — buat akunnya dulu
+                lalu impor ulang.
               </p>
               <div className="table-scroll">
                 <table className="k-table">
@@ -270,10 +275,10 @@ export function PanelImpor() {
                   <span className="dot" />
                   {tanpaAkun.length} baris
                 </span>
-                <b>Nomor WA tanpa akun pengajar yang cocok — dilewati</b>
+                <b>Nomor WA milik akun bergender lain — dilewati</b>
               </div>
               <p className="t-small" style={{ margin: 0, color: 'var(--ink-2)' }}>
-                Buat atau betulkan akunnya dulu, lalu impor ulang. Nama yang mirip tidak dipasangkan otomatis.
+                Betulkan gender akunnya atau nomor di berkas, lalu impor ulang.
               </p>
               <ul style={{ margin: 0, paddingLeft: 18, fontSize: 13 }}>
                 {tanpaAkun.map((b) => (
