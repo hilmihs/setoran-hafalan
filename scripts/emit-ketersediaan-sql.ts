@@ -18,6 +18,7 @@ const BERKAS = [
   '0067_ketersediaan_cascade.sql',
   '0072_ketersediaan_pertemuan.sql',
   '0071_ketersediaan_rekaman.sql',
+  '0077_ketersediaan_impor_aturan.sql',
 ];
 
 /**

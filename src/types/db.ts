@@ -973,8 +973,12 @@ export interface KsPeriode {
   tenggat_konfirmasi_jam: number;
   penyegaran_hari: number;
   pengingat_penyegaran_hari: number;
-  /** Banyak pertemuan yang dibuat di CMS tilawah per halaqah. 0 = tidak membuat. */
+  /** Lama (0072). Tidak dibaca lagi — diganti dua kolom per jenjang di bawah. */
   jumlah_pertemuan: number;
+  /** Pertemuan yang dibuat di CMS tilawah untuk halaqah HITS Dasar. 0 = tidak membuat. */
+  jumlah_pertemuan_dasar: number;
+  /** Pertemuan yang dibuat di CMS tilawah untuk halaqah HITS Lanjutan. 0 = tidak membuat. */
+  jumlah_pertemuan_lanjutan: number;
   /** Gerbang kirim ke CMS tilawah. false = outbox hanya mencatat payload. */
   kirim_nyata: boolean;
   tilawah_program_id: number | null;
@@ -1005,6 +1009,9 @@ export interface KsSlot {
 
 export type KsPengisianStatus = 'aktif' | 'basi' | 'nonaktif';
 
+/** Asal isian: pengajar mengisi sendiri, atau diimpor koordinator dari xlsx. */
+export type KsPengisianSumber = 'form' | 'impor';
+
 export interface KsPengisian {
   id: string;
   periode_id: string;
@@ -1019,6 +1026,7 @@ export interface KsPengisian {
   pengingat_penyegaran_pada: string | null;
   status: KsPengisianStatus;
   terkunci: boolean;
+  sumber: KsPengisianSumber;
   created_at: string;
   updated_at: string;
 }
@@ -1050,6 +1058,8 @@ export interface KsKetersediaan {
   sanggahan_status: 'menunggu' | 'diterima' | 'ditolak' | null;
   sanggahan_catatan: string | null;
   catatan: string | null;
+  /** Urutan prioritas pengajar di jam ini (1 = didahulukan). null = tidak diatur. */
+  prioritas: number | null;
   created_at: string;
   updated_at: string;
 }
@@ -1083,7 +1093,8 @@ export interface KsPendaftarSumber {
   updated_at: string;
 }
 
-export type KsPendaftarStatus = 'valid' | 'ditahan' | 'dialokasikan' | 'batal';
+/** `diganti` = kiriman formulir lama dari orang yang sama, digantikan kiriman terbarunya. */
+export type KsPendaftarStatus = 'valid' | 'ditahan' | 'dialokasikan' | 'batal' | 'diganti';
 
 export interface KsPendaftar {
   id: string;
