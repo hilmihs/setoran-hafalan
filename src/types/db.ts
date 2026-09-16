@@ -951,9 +951,10 @@ export type KsMode = 'online' | 'offline';
 export type KsModePengajar = KsMode | 'keduanya';
 /** 0 = Senin … 6 = Ahad. Sejajar dengan `int_days` /api/days CMS tilawah. */
 export type KsHariIdx = 0 | 1 | 2 | 3 | 4 | 5 | 6;
-export type KsPitaUmur = '<=17' | '18-25' | '26-35' | '36-45' | '46+';
+/** Dua kelompok umur (keputusan 16 Sep 2026). Pendaftar 15–17 tahun ikut kelompok pertama. */
+export type KsPitaUmur = '<=45' | '46+';
 
-export const KS_PITA_UMUR: KsPitaUmur[] = ['<=17', '18-25', '26-35', '36-45', '46+'];
+export const KS_PITA_UMUR: KsPitaUmur[] = ['<=45', '46+'];
 
 export interface KsPeriode {
   id: string;

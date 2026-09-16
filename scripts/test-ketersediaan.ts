@@ -172,8 +172,8 @@ console.log('\n# umur & pita');
 const acuan = new Date('2026-08-30T00:00:00Z');
 eq(hitungUmur('2000-08-30', acuan), 26, 'ulang tahun tepat hari ini');
 eq(hitungUmur('2000-08-31', acuan), 25, 'ulang tahun besok belum dihitung');
-eq(pitaUmur(17), '<=17', 'pita 17');
-eq(pitaUmur(18), '18-25', 'pita 18');
+eq(pitaUmur(15), '<=45', 'pita 15 ikut kelompok pertama');
+eq(pitaUmur(45), '<=45', 'pita 45 masih kelompok pertama');
 eq(pitaUmur(46), '46+', 'pita 46');
 
 // ── Pengelompokan pendaftar ────────────────────────────────────────────────
@@ -200,7 +200,7 @@ function buatPendaftar(
 
 const g1 = kelompokkanPendaftar(
   'S1',
-  buatPendaftar(25, 'HITS Dasar', '18-25', 3, 'a'),
+  buatPendaftar(25, 'HITS Dasar', '<=45', 3, 'a'),
   periode,
   acuan
 );
@@ -209,8 +209,8 @@ eq(g1.every((g) => g.pendaftar_ids.length === 12), true, 'tiap halaqah tepat 12'
 eq(g1.every((g) => !g.pita_digabung), true, 'tidak ada penggabungan pita');
 
 const campur = [
-  ...buatPendaftar(12, 'HITS Dasar', '18-25', 3, 'b'),
-  ...buatPendaftar(12, 'HITS Lanjutan', '18-25', 3, 'c'),
+  ...buatPendaftar(12, 'HITS Dasar', '<=45', 3, 'b'),
+  ...buatPendaftar(12, 'HITS Lanjutan', '<=45', 3, 'c'),
 ];
 const g2 = kelompokkanPendaftar('S1', campur, periode, acuan);
 eq(g2.length, 2, 'dua level → dua halaqah terpisah');
@@ -218,21 +218,21 @@ eq(new Set(g2.map((g) => g.level)).size, 2, 'level tidak tercampur dalam satu ha
 
 // Sisa muda menunggu; sisa tua boleh dibentuk di atas ambang bawah.
 const sisaMuda = [
-  ...buatPendaftar(5, 'HITS Dasar', '18-25', 2, 'd'),
-  ...buatPendaftar(5, 'HITS Dasar', '26-35', 2, 'e'),
+  ...buatPendaftar(5, 'HITS Dasar', '<=45', 2, 'd'),
+  ...buatPendaftar(5, 'HITS Dasar', '46+', 2, 'e'),
 ];
 eq(kelompokkanPendaftar('S1', sisaMuda, periode, acuan).length, 0, 'sisa muda menunggu');
 
 const sisaTua = [
-  ...buatPendaftar(5, 'HITS Dasar', '18-25', 40, 'f'),
-  ...buatPendaftar(5, 'HITS Dasar', '26-35', 40, 'g'),
+  ...buatPendaftar(5, 'HITS Dasar', '<=45', 40, 'f'),
+  ...buatPendaftar(5, 'HITS Dasar', '46+', 40, 'g'),
 ];
 const g3 = kelompokkanPendaftar('S1', sisaTua, periode, acuan);
 eq(g3.length, 1, 'sisa tua digabung jadi satu halaqah');
 eq(g3[0].pita_digabung, true, 'ditandai sebagai pita digabung');
 eq(g3[0].pendaftar_ids.length, 10, 'isi 10, di atas ambang bawah 8');
 
-const sisaTuaKecil = buatPendaftar(7, 'HITS Dasar', '18-25', 40, 'h');
+const sisaTuaKecil = buatPendaftar(7, 'HITS Dasar', '<=45', 40, 'h');
 eq(
   kelompokkanPendaftar('S1', sisaTuaKecil, periode, acuan).length,
   0,
@@ -241,11 +241,11 @@ eq(
 
 // Antrean tertua harus terlayani lebih dulu.
 const urutUsia = [
-  ...buatPendaftar(12, 'HITS Dasar', '18-25', 2, 'i'),
-  ...buatPendaftar(12, 'HITS Dasar', '26-35', 30, 'j'),
+  ...buatPendaftar(12, 'HITS Dasar', '<=45', 2, 'i'),
+  ...buatPendaftar(12, 'HITS Dasar', '46+', 30, 'j'),
 ];
 const g4 = kelompokkanPendaftar('S1', urutUsia, periode, acuan);
-eq(g4[0].pita_umur, '26-35', 'kelompok dengan antrean tertua di urutan pertama');
+eq(g4[0].pita_umur, '46+', 'kelompok dengan antrean tertua di urutan pertama');
 
 // ── Alokasi berputar ───────────────────────────────────────────────────────
 console.log('\n# alokasi berputar');
@@ -256,7 +256,7 @@ function slotAlokasi(id: string, hari: KsHariIdx[], mulai: string, selesai: stri
     grup: Array.from({ length: jumlahGrup }, (_, i) => ({
       slot_id: id,
       level: 'HITS Dasar',
-      pita_umur: '18-25' as const,
+      pita_umur: '<=45' as const,
       pita_digabung: false,
       pendaftar_ids: [`${id}-p${i}`],
       usia_tertua_hari: 5,
