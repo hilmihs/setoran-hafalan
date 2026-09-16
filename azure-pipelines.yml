@@ -25,6 +25,11 @@ steps:
     env:
       ENV_AGENT_TOKEN: $(ENV_AGENT_TOKEN)
       ENV_CRON_SECRET: $(ENV_CRON_SECRET)
+      # CMS tilawah (modul ketersediaan). Klien membaca ENV_TILAWAH_* bila nama
+      # polosnya tidak ada; nilai "$(...)" yang belum diisi dianggap kosong.
+      ENV_TILAWAH_BASE_URL: $(ENV_TILAWAH_BASE_URL)
+      ENV_TILAWAH_EMAIL: $(ENV_TILAWAH_EMAIL)
+      ENV_TILAWAH_PASSWORD: $(ENV_TILAWAH_PASSWORD)
     inputs:
       targetType: "inline"
       script: |

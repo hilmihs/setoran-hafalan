@@ -53,10 +53,21 @@ export class TilawahError extends Error {
   }
 }
 
+/**
+ * Nilai env tilawah. Pipeline produksi menulis variabel ber-awalan ENV_
+ * (`ENV_TILAWAH_BASE_URL`) ke maahir.env, sementara lokal memakai nama polos —
+ * pola yang sama dengan `apiEnv` untuk API publik. Makro Azure yang belum diisi
+ * tertulis mentah sebagai "$(NAMA)"; itu dianggap kosong, bukan alamat.
+ */
+function envTilawah(nama: 'TILAWAH_BASE_URL' | 'TILAWAH_EMAIL' | 'TILAWAH_PASSWORD'): string {
+  const nilai = (process.env[nama] ?? process.env[`ENV_${nama}`] ?? '').trim();
+  return nilai.startsWith('$(') ? '' : nilai;
+}
+
 function konfigurasi(): { base: string; email: string; password: string } {
-  const base = (process.env.TILAWAH_BASE_URL ?? '').replace(/\/$/, '');
-  const email = process.env.TILAWAH_EMAIL ?? '';
-  const password = process.env.TILAWAH_PASSWORD ?? '';
+  const base = envTilawah('TILAWAH_BASE_URL').replace(/\/$/, '');
+  const email = envTilawah('TILAWAH_EMAIL');
+  const password = envTilawah('TILAWAH_PASSWORD');
   if (!base || !email || !password) {
     throw new TilawahError(
       'TILAWAH_BASE_URL / TILAWAH_EMAIL / TILAWAH_PASSWORD belum diset',
@@ -69,7 +80,7 @@ function konfigurasi(): { base: string; email: string; password: string } {
 /** Apakah integrasi tilawah tersedia sama sekali (tanpa melempar). */
 export function tilawahTerkonfigurasi(): boolean {
   return Boolean(
-    process.env.TILAWAH_BASE_URL && process.env.TILAWAH_EMAIL && process.env.TILAWAH_PASSWORD
+    envTilawah('TILAWAH_BASE_URL') && envTilawah('TILAWAH_EMAIL') && envTilawah('TILAWAH_PASSWORD')
   );
 }
 
