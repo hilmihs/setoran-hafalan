@@ -39,7 +39,8 @@ harus dikerjakan hari ini.
 | Offline - Al-Kautsar Matraman | ikhwan lalu akhwat | No, Nama, Online/Offline, Waktu, Kelas | baris "Ikhwan" / "Akhwat" memisahkan bagian, **tanpa WA** |
 
 Isi: 179 baris ketersediaan, 103 pengajar. Online: 84 nomor WA unik, 82 punya akun
-`pengajar` di produksi. Tiga baris offline Matraman berjam dua waktu berbeda
+`pengajar` di produksi. Pengajar offline (tanpa WA) dicocokkan lewat nama ke `pengajar`
+aktif segender: 16 cocok tunggal, 0 ganda, 5 tidak ditemukan. Tiga baris offline Matraman berjam dua waktu berbeda
 ("Rabu 16.00 - 17.30 dan Sabtu 13.00 - 14.30") dan tidak dapat diwakili satu jam.
 
 Pembaca berkas dibuat mengikuti **penanda**, bukan nomor baris: baris berisi
@@ -214,8 +215,8 @@ pengajar, gateway WhatsApp.
   Oktober masing-masing punya sumber CSV. Menempelkan formulir yang sama ke dua periode
   akan membuat pendaftar dialokasikan dua kali. Koordinator memilih satu.
 - **Jam offline di Oktober kosong pengajar.** Karena sheet offline adalah ketersediaan
-  September, 13 jam offline di periode Oktober tidak punya pengajar (360 pendaftar sah
-  bila formulir ditempel ke Oktober).
+  September, 16 jam offline di periode Oktober (11 akhwat, 5 ikhwan) tidak punya pengajar
+  — 531 pendaftar sah bila formulir ditempel ke Oktober.
 - **Tanggal mulai KBM batch September** belum dipastikan (xlsx: 3 September). Diisi
   koordinator saat membuat periode.
 
