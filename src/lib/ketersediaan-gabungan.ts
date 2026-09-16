@@ -2,7 +2,8 @@ import 'server-only';
 import { supabaseAdmin } from '@/lib/supabase-admin';
 import type { Gender, KsPeriode, KsPitaUmur, KsSlot } from '@/types/db';
 import { listSlot } from '@/lib/ketersediaan-periode';
-import { kunciJadwal, sesiDariSlot, type RentangJadwal } from '@/lib/ketersediaan-slot';
+import { bentrok, kunciJadwal, masihBerjalanPada, rentangDariSlot, sesiDariSlot } from '@/lib/ketersediaan-slot';
+import type { JadwalTerpakai } from '@/lib/ketersediaan-bentrok';
 import { jadwalTerpakaiPengajar } from '@/lib/ketersediaan-bentrok';
 import { alokasikan, kelompokkanPendaftar, type PendaftarAlokasi, type SlotAlokasi } from '@/lib/ketersediaan-alokasi';
 import { identitasPendaftar } from '@/lib/ketersediaan-pendaftar';
@@ -54,6 +55,7 @@ export async function susunGabungan(daftarPeriode: readonly KsPeriode[], sekaran
   const periode = [...daftarPeriode].sort((a, b) => a.mulai.localeCompare(b.mulai));
   const idPeriode = periode.map((p) => p.id);
   const namaPeriode = new Map(periode.map((p) => [p.id, p.nama]));
+  const mulaiPeriode = new Map(periode.map((p) => [p.id, p.mulai]));
   const acuan = periode[0]?.mulai ?? null;
   const aturan = periode[0];
 
@@ -148,6 +150,8 @@ export async function susunGabungan(daftarPeriode: readonly KsPeriode[], sekaran
   const tersedia = new Map<string, Set<string>>(); // slot wakil → pengajar
   const perTahapJam = new Map<string, Map<string, Set<string>>>(); // slot wakil → periode → pengajar
   const prioritasJam = new Map<string, number>();
+  /** `${slot wakil}|${pengajar}` → tanggal mulai tahap paling akhir tempat ia menawarkan jam itu. */
+  const acuanJam = new Map<string, string>();
   const pengajarGender = new Map<string, Gender>();
   const pengajarTahap = new Map<string, Set<string>>(); // periode → pengajar
   for (const k of (ketRows ?? []) as {
@@ -169,6 +173,8 @@ export async function susunGabungan(daftarPeriode: readonly KsPeriode[], sekaran
     pengajarTahap.get(p.periode_id)!.add(p.pengajar_id);
     pengajarGender.set(p.pengajar_id, wakil.get(kunciSlot.get(k.slot_id)!)!.kelompok);
     const kp = `${sid}|${p.pengajar_id}`;
+    const mulai = mulaiPeriode.get(p.periode_id)!;
+    if (!acuanJam.has(kp) || mulai > acuanJam.get(kp)!) acuanJam.set(kp, mulai);
     if (k.prioritas !== null) prioritasJam.set(kp, Math.min(prioritasJam.get(kp) ?? Infinity, k.prioritas));
   }
 
@@ -185,19 +191,30 @@ export async function susunGabungan(daftarPeriode: readonly KsPeriode[], sekaran
   }
 
   // ── Jadwal lama tiap pengajar (halaqah berjalan, kelas Maahir) ──
-  const jadwalPengajar = new Map<string, RentangJadwal[]>();
+  // Bentrok dinilai per jam pada tanggal mulai TAHAP tempat pengajar menawarkan
+  // jam itu: halaqah April yang selesai 11 Oktober mengunci jam di tahap yang
+  // mulai 5 Oktober, tetapi tidak di tahap yang mulai 21 Oktober. Pengajar yang
+  // bentrok dikeluarkan dari daftar tersedia jam itu sebelum simulasi.
+  const jadwalLama = new Map<string, JadwalTerpakai[]>();
   const cacheSelesaiBatch = new Map<string, string | null>();
   const semuaPengajar = [...pengajarGender.keys()];
   for (let i = 0; i < semuaPengajar.length; i += 8) {
     await Promise.all(
       semuaPengajar.slice(i, i + 8).map(async (id) => {
-        const t = await jadwalTerpakaiPengajar(id, { acuan, cacheSelesaiBatch });
-        jadwalPengajar.set(
-          id,
-          t.map((x) => x.rentang)
-        );
+        jadwalLama.set(id, await jadwalTerpakaiPengajar(id, { acuan, cacheSelesaiBatch }));
       })
     );
+  }
+  const slotWakilById = new Map([...wakil.values()].map((s) => [s.id, s]));
+  for (const [sid, orang] of tersedia) {
+    const rentang = rentangDariSlot(slotWakilById.get(sid)!);
+    for (const pid of [...orang]) {
+      const acuanTahap = acuanJam.get(`${sid}|${pid}`) ?? acuan;
+      const kunci = (jadwalLama.get(pid) ?? []).some(
+        (t) => masihBerjalanPada(t.selesai, acuanTahap) && rentang.some((r) => bentrok(r, t.rentang))
+      );
+      if (kunci) orang.delete(pid);
+    }
   }
 
   // ── Simulasi alokasi, tanpa menulis ──
@@ -219,7 +236,7 @@ export async function susunGabungan(daftarPeriode: readonly KsPeriode[], sekaran
     slots: slotAlokasi,
     tersedia: new Map([...tersedia].map(([k, v]) => [k, [...v]])),
     sudahDiSlot,
-    jadwalPengajar,
+    jadwalPengajar: new Map(),
     peringkat: (id, slotId) => prioritasJam.get(`${slotId}|${id}`) ?? 99,
   });
 
