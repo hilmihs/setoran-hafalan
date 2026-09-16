@@ -34,6 +34,7 @@ import {
   lebihBaru,
   saring,
   type BarisMentah,
+  normalWa,
 } from '@/lib/ketersediaan-pendaftar';
 import {
   jumlahPertemuanUntuk,
@@ -742,6 +743,13 @@ console.log('\n# orang yang sama di dua CSV');
     'waktu sama persis: tepat satu pemenang'
   );
 }
+
+console.log('\n# normalisasi WA');
+eq(normalWa('6208123456789'), '8123456789', '62 lalu 0: nol ikut dibuang');
+eq(normalWa('+62 (0)812-3456-789'), '8123456789', '+62 (0)');
+eq(normalWa('08123456789'), '8123456789', '0 depan');
+eq(normalWa(normalWa('6208123456789')), normalWa('6208123456789'), 'idempoten');
+eq(identitasPendaftar('6208123456789', 'Dewi'), identitasPendaftar('628123456789', 'dewi'), 'kiriman ulang dengan 62 0… dikenali orang yang sama');
 
 console.log('\n# lokasi offline baku');
 eq(lokasiBaku('Masjid Al Kautsar Matraman Jakarta Timur'), 'Masjid Al-Kautsar Matraman', 'ejaan formulir Matraman');

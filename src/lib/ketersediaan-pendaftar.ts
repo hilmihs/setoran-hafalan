@@ -85,7 +85,10 @@ export function normalWa(mentah: string | null | undefined): string | null {
   let d = String(mentah).replace(/\D/g, '');
   if (!d) return null;
   if (d.startsWith('62')) d = d.slice(2);
-  else if (d.startsWith('0')) d = d.replace(/^0+/, '');
+  // Nol depan dibuang juga SETELAH kode negara: pendaftar sering menulis
+  // "62 0812…" atau "+62 (0)812…". Tanpa ini nomor yang sama menghasilkan dua
+  // bentuk, dan kiriman ulang orang yang sama lolos sebagai dua pendaftar.
+  d = d.replace(/^0+/, '');
   if (d.length < 9 || d.length > 14) return null;
   return d;
 }
