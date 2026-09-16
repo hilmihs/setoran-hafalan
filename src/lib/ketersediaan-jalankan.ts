@@ -13,6 +13,8 @@ import {
 } from '@/lib/ketersediaan-alokasi';
 import { peringkatDari, urutanDariWaktuIsi, urutanUntuk, type Urutan } from '@/lib/ketersediaan-prioritas';
 import { catatKs } from '@/lib/ketersediaan-log';
+import { identitasPendaftar } from '@/lib/ketersediaan-pendaftar';
+import { identitasTerpakaiLintasPeriode } from '@/lib/ketersediaan-lintas-periode';
 
 /**
  * Penghubung antara mesin alokasi yang murni dan basis data.
@@ -56,11 +58,14 @@ export async function jalankanAlokasi(
   };
 
   // ── Permintaan: pendaftar sah yang belum dialokasikan ──
-  const { data: pendaftarRows } = await supabaseAdmin
-    .from('ks_pendaftar')
-    .select('id, slot_id, level_pilihan, pita_umur, didaftar_pada')
-    .eq('periode_id', periode.id)
-    .eq('status', 'valid');
+  const [{ data: pendaftarRows }, terpakaiLain] = await Promise.all([
+    supabaseAdmin
+      .from('ks_pendaftar')
+      .select('id, slot_id, level_pilihan, pita_umur, didaftar_pada, wa_normal, nama')
+      .eq('periode_id', periode.id)
+      .eq('status', 'valid'),
+    identitasTerpakaiLintasPeriode(periode.id),
+  ]);
 
   const pendaftar: PendaftarAlokasi[] = ((pendaftarRows ?? []) as {
     id: string;
@@ -68,8 +73,15 @@ export async function jalankanAlokasi(
     level_pilihan: string | null;
     pita_umur: KsPitaUmur | null;
     didaftar_pada: string | null;
+    wa_normal: string | null;
+    nama: string;
   }[])
     .filter((p): p is typeof p & { slot_id: string } => Boolean(p.slot_id))
+    .filter((p) => {
+      // Sudah masuk usulan di periode lain dari formulir yang sama.
+      const id = identitasPendaftar(p.wa_normal, p.nama);
+      return !id || !terpakaiLain.has(id);
+    })
     .map((p) => ({
       id: p.id,
       slot_id: p.slot_id,

@@ -17,7 +17,8 @@ import { getPeriode, getPeriodeAktif, listSlot, siapkanSlot, SLOT_BAWAAN } from 
 import { ringkasSlot } from '@/lib/ketersediaan-permintaan';
 import { catatRiwayatPeriode } from '@/lib/ketersediaan-ditahan';
 import { susunLabel, uraikanSlot } from '@/lib/ketersediaan-slot';
-import { tarikSumber, tebakPemetaan } from '@/lib/ketersediaan-pendaftar';
+import { identitasPendaftar, tarikSumber, tebakPemetaan } from '@/lib/ketersediaan-pendaftar';
+import { identitasTerpakaiLintasPeriode } from '@/lib/ketersediaan-lintas-periode';
 import { jalankanAlokasi } from '@/lib/ketersediaan-jalankan';
 import {
   geserYangKedaluwarsa,
@@ -503,6 +504,27 @@ export async function setujuiUsulan(input: { usulanId: string; tanggalMulai?: st
 
   const periode = await getPeriode(usulan.periode_id as string);
   if (!periode) return { ok: false, error: 'Periode tidak ditemukan.' };
+
+  // Periode lain bisa melahirkan usulan untuk orang yang sama setelah alokasi ini
+  // dijalankan. Periksa sebelum pengajar dihubungi.
+  const [{ data: identitasPeserta }, terpakaiLain] = await Promise.all([
+    supabaseAdmin
+      .from('ks_usulan_peserta')
+      .select('pendaftar:pendaftar_id(wa_normal, nama)')
+      .eq('usulan_id', input.usulanId),
+    identitasTerpakaiLintasPeriode(usulan.periode_id as string),
+  ]);
+  const sudahDiLain = ((identitasPeserta ?? []) as {
+    pendaftar?: { wa_normal: string | null; nama: string } | null;
+  }[])
+    .map((p) => (p.pendaftar ? identitasPendaftar(p.pendaftar.wa_normal, p.pendaftar.nama) : null))
+    .filter((id): id is string => id !== null && terpakaiLain.has(id));
+  if (sudahDiLain.length > 0) {
+    return {
+      ok: false,
+      error: `${sudahDiLain.length} peserta usulan ini sudah mendapat halaqah di ${terpakaiLain.get(sudahDiLain[0])}. Batalkan usulan ini, lalu jalankan alokasi lagi.`,
+    };
+  }
 
   const sekarang = new Date();
   const token = terbitkanToken();
