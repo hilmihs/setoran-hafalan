@@ -258,6 +258,17 @@ export function rentangDariHalaqah(h: {
   return { hari_idx: urai.hari_idx, mulai: m, selesai: s };
 }
 
+/**
+ * Apakah sebuah halaqah masih menempati jamnya pada tanggal acuan (YYYY-MM-DD).
+ *
+ * Tanpa tanggal selesai atau tanpa acuan dianggap masih — mengunci jam yang
+ * ternyata kosong lebih murah daripada membuka jam yang ternyata masih terisi.
+ */
+export function masihBerjalanPada(selesai: string | null, acuan: string | null): boolean {
+  if (!selesai || !acuan) return true;
+  return selesai.slice(0, 10) >= acuan.slice(0, 10);
+}
+
 // ── Pita umur ──────────────────────────────────────────────────────────────
 
 /**

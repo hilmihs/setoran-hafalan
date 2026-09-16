@@ -9,6 +9,7 @@ import {
   hariKeIdxSet,
   hitungUmur,
   jamKeMenit,
+  masihBerjalanPada,
   pitaUmur,
   rentangDariHalaqah,
   susunLabel,
@@ -409,6 +410,15 @@ eq(
   null,
   'jam kembar ditolak — CMS balas 400 untuk itu'
 );
+
+// ── Halaqah selesai ─────────────────────────────────────────────────────────
+console.log('\n# halaqah yang sudah selesai');
+
+eq(masihBerjalanPada('2026-08-30', '2026-10-21'), false, 'selesai sebelum KBM → tidak mengunci');
+eq(masihBerjalanPada('2026-10-11', '2026-09-21'), true, 'selesai setelah KBM → mengunci');
+eq(masihBerjalanPada('2026-10-21', '2026-10-21'), true, 'selesai tepat di hari KBM → masih mengunci');
+eq(masihBerjalanPada(null, '2026-10-21'), true, 'tanpa kaldik → tetap mengunci (aman)');
+eq(masihBerjalanPada('2026-08-30', null), true, 'tanpa acuan → perilaku lama');
 
 console.log(failed === 0 ? '\nSEMUA LULUS' : `\n${failed} GAGAL`);
 process.exit(failed === 0 ? 0 : 1);

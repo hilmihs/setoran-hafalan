@@ -53,7 +53,7 @@ export default async function KetersediaanPengajarPage() {
   const slot = semuaSlot.filter((s) => s.kelompok === sesi.gender);
 
   const [terpakai, ringkas] = await Promise.all([
-    jadwalTerpakaiPengajar(sesi.pengajar_id),
+    jadwalTerpakaiPengajar(sesi.pengajar_id, { acuan: periode.mulai }),
     ringkasSlot(periode, slot, sekarang),
   ]);
   const terkunci = kunciSlot(slot, terpakai);

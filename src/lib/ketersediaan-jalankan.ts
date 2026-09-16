@@ -121,8 +121,9 @@ export async function jalankanAlokasi(
 
   // ── Jadwal yang sudah terpakai tiap pengajar ──
   const jadwalPengajar = new Map<string, RentangJadwal[]>();
+  const cacheSelesaiBatch = new Map<string, string | null>();
   for (const id of pengajarDipakai) {
-    const terpakai = await jadwalTerpakaiPengajar(id);
+    const terpakai = await jadwalTerpakaiPengajar(id, { acuan: periode.mulai, cacheSelesaiBatch });
     jadwalPengajar.set(
       id,
       terpakai.map((t) => t.rentang)

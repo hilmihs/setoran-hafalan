@@ -3,6 +3,7 @@ import { supabaseAdmin } from '@/lib/supabase-admin';
 import type { KsHariIdx, KsSlot } from '@/types/db';
 import {
   bentrok,
+  masihBerjalanPada,
   rentangDariHalaqah,
   rentangDariSlot,
   type RentangJadwal,
@@ -36,11 +37,14 @@ export interface JadwalTerpakai {
   batch: string | null;
   rentang: RentangJadwal;
   label: string;
+  /** Tanggal pertemuan terakhir menurut kaldik; null bila tak diketahui atau bukan halaqah HITS. */
+  selesai: string | null;
 }
 
 interface HalaqahRow {
   id: string;
   name: string;
+  batch_id: string | null;
   jadwal_raw: string | null;
   jadwal_hari: string[] | null;
   waktu_mulai: string | null;
@@ -67,12 +71,81 @@ interface KelasRow {
   jadwal_waktu_selesai: string | null;
 }
 
+/**
+ * Tanggal pertemuan terakhir tiap halaqah HITS.
+ *
+ * `hits_halaqah` tidak punya kolom selesai, dan `active` tidak bisa dipercaya:
+ * batch Januari dan April 2026 masih `active=true` jauh setelah kelasnya
+ * berakhir, dan sinkronisasi sheet menghidupkannya lagi bila dimatikan manual.
+ * Kalender pendidikan justru lengkap untuk semua batch aktif (diperiksa 16 Sep
+ * 2026), jadi tanggal selesai = tanggal terbesar di kaldik batch-nya, atau di
+ * koreksi pertemuan halaqah itu bila lebih akhir.
+ *
+ * `cacheBatch` dipakai ulang oleh pemanggil yang memeriksa banyak pengajar
+ * sekaligus, supaya kaldik satu batch hanya dibaca sekali.
+ */
+export async function tanggalSelesaiHalaqah(
+  halaqah: readonly { id: string; batch_id: string | null }[],
+  cacheBatch: Map<string, string | null> = new Map()
+): Promise<Map<string, string | null>> {
+  const out = new Map<string, string | null>();
+  if (halaqah.length === 0) return out;
+
+  const batchBaru = [
+    ...new Set(halaqah.map((h) => h.batch_id).filter((b): b is string => Boolean(b))),
+  ].filter((b) => !cacheBatch.has(b));
+  if (batchBaru.length > 0) {
+    const { data } = await supabaseAdmin
+      .from('hits_kaldik_hari')
+      .select('batch_id, tanggal')
+      .in('batch_id', batchBaru);
+    for (const b of batchBaru) cacheBatch.set(b, null);
+    for (const r of (data ?? []) as { batch_id: string; tanggal: string }[]) {
+      const lama = cacheBatch.get(r.batch_id);
+      if (!lama || r.tanggal > lama) cacheBatch.set(r.batch_id, r.tanggal);
+    }
+  }
+
+  const { data: koreksi } = await supabaseAdmin
+    .from('hits_kaldik_pertemuan')
+    .select('halaqah_id, tanggal')
+    .in(
+      'halaqah_id',
+      halaqah.map((h) => h.id)
+    );
+  const koreksiTerakhir = new Map<string, string>();
+  for (const r of (koreksi ?? []) as { halaqah_id: string; tanggal: string }[]) {
+    const lama = koreksiTerakhir.get(r.halaqah_id);
+    if (!lama || r.tanggal > lama) koreksiTerakhir.set(r.halaqah_id, r.tanggal);
+  }
+
+  for (const h of halaqah) {
+    const kandidat = [
+      h.batch_id ? (cacheBatch.get(h.batch_id) ?? null) : null,
+      koreksiTerakhir.get(h.id) ?? null,
+    ].filter((x): x is string => Boolean(x));
+    out.set(h.id, kandidat.sort().pop() ?? null);
+  }
+  return out;
+}
+
 /** Semua jam yang sudah terpakai oleh seorang pengajar, siap dipakai penguncian slot. */
-export async function jadwalTerpakaiPengajar(pengajarId: string): Promise<JadwalTerpakai[]> {
+export async function jadwalTerpakaiPengajar(
+  pengajarId: string,
+  opts: {
+    /**
+     * Tanggal mulai KBM periode yang sedang diisi (YYYY-MM-DD). Halaqah HITS yang
+     * pertemuan terakhirnya lebih awal dari tanggal ini tidak mengunci apa pun.
+     * Tanpa acuan, perilaku lama: setiap halaqah aktif mengunci.
+     */
+    acuan?: string | null;
+    cacheSelesaiBatch?: Map<string, string | null>;
+  } = {}
+): Promise<JadwalTerpakai[]> {
   const [{ data: halaqah }, { data: kelas }, { data: usulan }] = await Promise.all([
     supabaseAdmin
       .from('hits_halaqah')
-      .select('id, name, jadwal_raw, jadwal_hari, waktu_mulai, waktu_selesai, batch:batch_id(name)')
+      .select('id, name, batch_id, jadwal_raw, jadwal_hari, waktu_mulai, waktu_selesai, batch:batch_id(name)')
       .eq('pengajar_id', pengajarId)
       .eq('active', true),
     supabaseAdmin
@@ -88,18 +161,26 @@ export async function jadwalTerpakaiPengajar(pengajarId: string): Promise<Jadwal
 
   const out: JadwalTerpakai[] = [];
 
-  for (const h of (halaqah ?? []) as HalaqahRow[]) {
+  const halaqahRows = (halaqah ?? []) as HalaqahRow[];
+  const selesai = opts.acuan
+    ? await tanggalSelesaiHalaqah(halaqahRows, opts.cacheSelesaiBatch)
+    : new Map<string, string | null>();
+
+  for (const h of halaqahRows) {
     const rentang = rentangDariHalaqah(h);
     // Halaqah tanpa jam yang dapat dibaca tidak boleh mengunci slot apa pun —
     // tak ada dasar menyatakan bentrok. Baris observasi lama seperti
     // "HITS 6 (observasi)" hanya berisi "Selasa & Jum'at" tanpa jam.
     if (!rentang) continue;
+    const tanggalSelesai = selesai.get(h.id) ?? null;
+    if (opts.acuan && !masihBerjalanPada(tanggalSelesai, opts.acuan)) continue;
     out.push({
       sumber: 'hits',
       nama: h.name,
       batch: h.batch?.name ?? null,
       rentang,
       label: h.jadwal_raw ?? '',
+      selesai: tanggalSelesai,
     });
   }
 
@@ -118,6 +199,7 @@ export async function jadwalTerpakaiPengajar(pengajarId: string): Promise<Jadwal
       batch: null,
       rentang,
       label: `${k.jadwal_hari ?? ''} ${(k.jadwal_waktu_mulai ?? '').slice(0, 5)}-${(k.jadwal_waktu_selesai ?? '').slice(0, 5)}`.trim(),
+      selesai: null,
     });
   }
 
@@ -131,6 +213,7 @@ export async function jadwalTerpakaiPengajar(pengajarId: string): Promise<Jadwal
       batch: null,
       rentang,
       label: u.slot.label,
+      selesai: null,
     });
   }
 
