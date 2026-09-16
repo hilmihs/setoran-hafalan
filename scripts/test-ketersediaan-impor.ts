@@ -7,6 +7,10 @@
  * Opsional: KS_XLSX=/jalur/berkas.xlsx untuk ikut memeriksa berkas nyata.
  */
 import { readFileSync } from 'node:fs';
+import { PGlite } from '@electric-sql/pglite';
+import { PGLiteSocketServer } from '@electric-sql/pglite-socket';
+
+const PORT = Number(process.env.PG_TEST_PORT ?? 54333);
 
 let passed = 0;
 let failed = 0;
@@ -66,6 +70,115 @@ async function xlsxTiruan(opsi: { tanpaBaris?: 'bilal-sabtu' } = {}): Promise<Ar
   mt.addRow([1, 'Aisyah Rahma', 'Offline', 'Rabu 16.00 - 17.30 dan Sabtu 13.00 - 14.30']);
 
   return (await wb.xlsx.writeBuffer()) as ArrayBuffer;
+}
+
+// Tabel luar yang dirujuk migrasi ks_* dan cek bentrok — bentuk minimum.
+const PRASYARAT = `
+CREATE TYPE gender AS ENUM ('ikhwan', 'akhwat');
+CREATE TABLE pengajar (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  name text NOT NULL, gender gender NOT NULL, whatsapp_number text NOT NULL,
+  active boolean NOT NULL DEFAULT true
+);
+CREATE TABLE hits_batch (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(), name text NOT NULL, start_date date
+);
+CREATE TABLE hits_halaqah (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  batch_id uuid REFERENCES hits_batch(id), name text NOT NULL,
+  jadwal_raw text, jadwal_hari text[] NOT NULL DEFAULT '{}',
+  waktu_mulai time, waktu_selesai time,
+  pengajar_id uuid REFERENCES pengajar(id), active boolean NOT NULL DEFAULT true
+);
+CREATE TABLE hits_kaldik_hari (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  batch_id uuid NOT NULL REFERENCES hits_batch(id), level text,
+  tanggal date NOT NULL, is_libur boolean NOT NULL DEFAULT false
+);
+CREATE TABLE hits_kaldik_pertemuan (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  halaqah_id uuid NOT NULL REFERENCES hits_halaqah(id),
+  pertemuan_no int NOT NULL, tanggal date NOT NULL
+);
+CREATE TABLE kelas_hits (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(), name text NOT NULL,
+  pengajar_id uuid REFERENCES pengajar(id),
+  jadwal_hari text, jadwal_waktu_mulai time, jadwal_waktu_selesai time
+);
+`;
+
+const MIGRASI = [
+  '0063_ketersediaan_inti',
+  '0064_ketersediaan_pendaftar',
+  '0065_ketersediaan_alokasi',
+  '0066_ketersediaan_hilir',
+  '0067_ketersediaan_cascade',
+  '0071_ketersediaan_rekaman',
+  '0072_ketersediaan_pertemuan',
+  '0077_ketersediaan_impor_aturan',
+];
+
+const ID = {
+  ahmad: 'a0000000-0000-4000-8000-000000000001',
+  bilal: 'a0000000-0000-4000-8000-000000000002',
+  khadijah: 'a0000000-0000-4000-8000-000000000003',
+  aisyah: 'a0000000-0000-4000-8000-000000000004',
+  batchLama: 'b0000000-0000-4000-8000-000000000001',
+  batchBaru: 'b0000000-0000-4000-8000-000000000002',
+  h1: 'c0000000-0000-4000-8000-000000000001',
+  h2: 'c0000000-0000-4000-8000-000000000002',
+  h3: 'c0000000-0000-4000-8000-000000000003',
+  sep: 'd0000000-0000-4000-8000-000000000001',
+  okt: 'd0000000-0000-4000-8000-000000000002',
+  slotSep: 'e0000000-0000-4000-8000-000000000001',
+  slotOkt: 'e0000000-0000-4000-8000-000000000002',
+};
+
+const SEED = `
+INSERT INTO pengajar (id, name, gender, whatsapp_number) VALUES
+  ('${ID.ahmad}', 'Ahmad Fauzan', 'ikhwan', '6281111111111'),
+  ('${ID.bilal}', 'Bilal Hakim', 'ikhwan', '6281222222222'),
+  ('${ID.khadijah}', 'Khadijah Maryam', 'akhwat', '6281333333333'),
+  ('${ID.aisyah}', 'Aisyah Rahma', 'akhwat', '6281444444444');
+
+-- Batch lama selesai 30 Agustus; batch baru berjalan sampai Januari 2027.
+INSERT INTO hits_batch (id, name, start_date) VALUES
+  ('${ID.batchLama}', 'HITS Online Januari 2026', '2026-01-01'),
+  ('${ID.batchBaru}', 'HITS untuk Orangtua ABK Juli 2026', '2026-07-03');
+INSERT INTO hits_kaldik_hari (batch_id, level, tanggal) VALUES
+  ('${ID.batchLama}', 'qoidah_nuroniyyah', '2026-01-12'),
+  ('${ID.batchLama}', 'perbaikan_bacaan', '2026-08-30'),
+  ('${ID.batchBaru}', 'qoidah_nuroniyyah', '2026-07-03'),
+  ('${ID.batchBaru}', 'qoidah_nuroniyyah', '2027-01-08');
+
+INSERT INTO hits_halaqah (id, batch_id, name, jadwal_raw, jadwal_hari, waktu_mulai, waktu_selesai, pengajar_id) VALUES
+  ('${ID.h1}', '${ID.batchLama}', 'HITS 031', 'Online Senin & Rabu 20:00 - 21:30 WIB', ARRAY['Senin','Rabu'], '20:00', '21:30', '${ID.ahmad}'),
+  ('${ID.h2}', '${ID.batchBaru}', 'HITS ABK 2', 'Online Selasa & Kamis 06:00 - 07:30 WIB', ARRAY['Selasa','Kamis'], '06:00', '07:30', '${ID.ahmad}'),
+  ('${ID.h3}', '${ID.batchLama}', 'HITS 044', 'Online Sabtu & Ahad 13:00 - 14:30 WIB', ARRAY['Sabtu','Ahad'], '13:00', '14:30', '${ID.bilal}');
+-- H3 dikoreksi: pertemuan terakhirnya mundur ke 1 November.
+INSERT INTO hits_kaldik_pertemuan (halaqah_id, pertemuan_no, tanggal) VALUES ('${ID.h3}', 50, '2026-11-01');
+
+INSERT INTO ks_periode (id, nama, mulai, selesai) VALUES
+  ('${ID.sep}', 'Batch September 2026', '2026-09-21', '2026-12-31'),
+  ('${ID.okt}', 'Batch Oktober 2026', '2026-10-21', '2027-01-31');
+INSERT INTO ks_slot (id, periode_id, kelompok, mode, label, hari, hari_idx, waktu_mulai, waktu_selesai) VALUES
+  ('${ID.slotSep}', '${ID.sep}', 'akhwat', 'online', 'Senin & Rabu 20:00 - 21:30 WIB', ARRAY['Senin','Rabu'], ARRAY[0,2]::smallint[], '20:00', '21:30'),
+  ('${ID.slotOkt}', '${ID.okt}', 'akhwat', 'online', 'Senin & Rabu 20:00 - 21:30 WIB', ARRAY['Senin','Rabu'], ARRAY[0,2]::smallint[], '20:00', '21:30');
+
+-- Siti ada di formulir kedua periode dan sudah dialokasikan di September.
+INSERT INTO ks_pendaftar (periode_id, sumber_row_key, nama, wa, wa_normal, slot_id, status, pita_umur) VALUES
+  ('${ID.sep}', 'k-siti', 'Siti Aminah', '6285000000001', '85000000001', '${ID.slotSep}', 'dialokasikan', '<=45'),
+  ('${ID.okt}', 'k-siti', 'Siti Aminah', '6285000000001', '85000000001', '${ID.slotOkt}', 'valid', '<=45'),
+  ('${ID.okt}', 'k-rahma', 'Rahma', '6285000000002', '85000000002', '${ID.slotOkt}', 'valid', '46+');
+`;
+
+async function gagalInsert(db: PGlite, sql: string): Promise<boolean> {
+  try {
+    await db.query(sql);
+    return false;
+  } catch {
+    return true;
+  }
 }
 
 async function main() {
@@ -128,6 +241,86 @@ async function main() {
     check('pilihan manual dipakai', cocokkanPengajar({ nama: 'Nama Asing', wa: null, gender: 'akhwat' }, daftar, 'p-khad').cara === 'manual');
     check('pilihan manual beda gender ditolak', cocokkanPengajar({ nama: 'Nama Asing', wa: null, gender: 'ikhwan' }, daftar, 'p-khad').pengajar_id === null);
     check('pilihan lewati', cocokkanPengajar({ nama: 'Nama Asing', wa: null, gender: 'akhwat' }, daftar, 'lewati').status === 'dilewati');
+  }
+
+  const db = new PGlite();
+  await db.exec(PRASYARAT);
+  for (const m of MIGRASI) {
+    const sql = readFileSync(`supabase/migrations/${m}.sql`, 'utf8').replace(/^\s*(begin|commit)\s*;\s*$/gim, '');
+    await db.exec(sql);
+  }
+  await db.exec(SEED);
+
+  console.log('\n# migrasi 0077');
+  check(
+    'pita lama ditolak',
+    await gagalInsert(db, `INSERT INTO ks_pendaftar (periode_id, sumber_row_key, pita_umur) VALUES ('${ID.okt}', 'x1', '18-25')`)
+  );
+  check(
+    'status diganti diterima',
+    !(await gagalInsert(db, `INSERT INTO ks_pendaftar (periode_id, sumber_row_key, status) VALUES ('${ID.okt}', 'x2', 'diganti')`))
+  );
+  // PGlite `query` hanya menerima satu statement; siapkan pengisiannya dulu.
+  await db.exec(`INSERT INTO ks_pengisian (periode_id, pengajar_id) VALUES ('${ID.okt}', '${ID.khadijah}')`);
+  check(
+    'prioritas 0 ditolak',
+    await gagalInsert(
+      db,
+      `INSERT INTO ks_ketersediaan (pengisian_id, slot_id, prioritas)
+         SELECT id, '${ID.slotOkt}', 0 FROM ks_pengisian WHERE pengajar_id = '${ID.khadijah}'`
+    )
+  );
+  check(
+    'sumber pengisian bawaan = form',
+    (await db.query<{ sumber: string }>(`SELECT sumber FROM ks_pengisian WHERE pengajar_id = '${ID.khadijah}'`)).rows[0]?.sumber === 'form'
+  );
+  const pertemuan = await db.query<{ d: number; l: number }>(
+    `SELECT jumlah_pertemuan_dasar d, jumlah_pertemuan_lanjutan l FROM ks_periode WHERE id = '${ID.okt}'`
+  );
+  check('bawaan pertemuan 50/26', pertemuan.rows[0].d === 50 && pertemuan.rows[0].l === 26, JSON.stringify(pertemuan.rows[0]));
+  await db.exec(`DELETE FROM ks_pendaftar WHERE sumber_row_key IN ('x1','x2'); DELETE FROM ks_pengisian;`);
+
+  const server = new PGLiteSocketServer({ db, port: PORT, host: '127.0.0.1' });
+  await server.start();
+  process.env.DATABASE_URL = `postgres://postgres@127.0.0.1:${PORT}/postgres`;
+  process.env.PG_POOL_MAX = '1';
+  process.env.SESSION_SECRET ??= '0123456789abcdef0123456789abcdef0123';
+
+  try {
+    const bentrok = await import('../src/lib/ketersediaan-bentrok');
+    const lintas = await import('../src/lib/ketersediaan-lintas-periode');
+    const permintaan = await import('../src/lib/ketersediaan-permintaan');
+    const periodeLib = await import('../src/lib/ketersediaan-periode');
+
+    console.log('\n# halaqah selesai tidak mengunci');
+    {
+      const tanpaAcuan = await bentrok.jadwalTerpakaiPengajar(ID.ahmad);
+      check('tanpa acuan: dua halaqah mengunci (perilaku lama)', tanpaAcuan.length === 2, JSON.stringify(tanpaAcuan.map((t) => t.nama)));
+      const okt = await bentrok.jadwalTerpakaiPengajar(ID.ahmad, { acuan: '2026-10-21' });
+      check('acuan 21 Okt: HITS 031 (selesai 30 Agu) tidak mengunci', okt.map((t) => t.nama).join() === 'HITS ABK 2', JSON.stringify(okt.map((t) => t.nama)));
+      check('tanggal selesai terbawa', okt[0]?.selesai === '2027-01-08', String(okt[0]?.selesai));
+      const bilal = await bentrok.jadwalTerpakaiPengajar(ID.bilal, { acuan: '2026-10-21' });
+      check('koreksi pertemuan memperpanjang: HITS 044 masih mengunci', bilal.map((t) => t.nama).join() === 'HITS 044', JSON.stringify(bilal));
+    }
+
+    console.log('\n# satu formulir dua periode');
+    {
+      const terpakai = await lintas.identitasTerpakaiLintasPeriode(ID.okt);
+      check('Siti terdeteksi sudah dapat di September', terpakai.get('85000000001|siti aminah') === 'Batch September 2026', JSON.stringify([...terpakai]));
+      check('periode September sendiri tidak mengecualikan Siti', (await lintas.identitasTerpakaiLintasPeriode(ID.sep)).size === 0);
+
+      const periode = await periodeLib.getPeriode(ID.okt);
+      const slots = await periodeLib.listSlot(ID.okt);
+      const ringkas = await permintaan.ringkasSlot(periode!, slots, new Date('2026-09-16T05:00:00Z'));
+      const r = ringkas.get(ID.slotOkt)!;
+      check('Oktober: antre hanya Rahma', r.antre === 1, JSON.stringify(r));
+      check('Oktober: Siti dihitung terpakai_lain', r.terpakai_lain === 1, JSON.stringify(r));
+    }
+
+    // ── [SISIPAN IMPOR] ── Task 12 menambahkan uji impor tepat di atas baris ini.
+  } finally {
+    await server.stop();
+    await db.close();
   }
 
   console.log(`\n${passed} lulus, ${failed} gagal`);
