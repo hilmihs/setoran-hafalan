@@ -57,7 +57,7 @@ kolom pertamanya "No" adalah kepala. Kolom dikenali dari judulnya.
 1. Koordinator membuka **Pengaturan → Impor ketersediaan pengajar** dan mengunggah xlsx.
 2. Server membaca berkas dan mengembalikan **pratinjau**. Tidak ada yang disimpan.
 3. Pratinjau per bagian (September online, Oktober online, September offline):
-   - jumlah pengajar dan jam; periode tujuan (pilih periode yang ada, atau "buat periode baru")
+   - jumlah pengajar dan jam; periode tujuan dipilih dari periode yang ada (ditebak dari nama bulan). Periode dibuat lewat panel "Buat periode" di tab yang sama.
    - tabel pengajar: nama, nomor, **akun** (cocok / tidak ditemukan / gender tidak cocok),
      jam-jam beserta prioritasnya, dan masalah per baris
 4. Baris tanpa WA dicocokkan lewat **nama**. Hasilnya: cocok tunggal, beberapa kandidat,
