@@ -115,7 +115,8 @@ export async function ubahAturanPeriode(input: {
   jedaMulaiHari: number;
   tenggatKonfirmasiJam: number;
   penyegaranHari: number;
-  jumlahPertemuan: number;
+  jumlahPertemuanDasar: number;
+  jumlahPertemuanLanjutan: number;
 }): Promise<Hasil> {
   const a = await aktor();
   const lama = await getPeriode(input.periodeId);
@@ -133,7 +134,8 @@ export async function ubahAturanPeriode(input: {
     jeda_mulai_hari: input.jedaMulaiHari,
     tenggat_konfirmasi_jam: input.tenggatKonfirmasiJam,
     penyegaran_hari: input.penyegaranHari,
-    jumlah_pertemuan: input.jumlahPertemuan,
+    jumlah_pertemuan_dasar: Math.max(0, Math.min(200, input.jumlahPertemuanDasar)),
+    jumlah_pertemuan_lanjutan: Math.max(0, Math.min(200, input.jumlahPertemuanLanjutan)),
     updated_at: new Date().toISOString(),
   };
   await supabaseAdmin.from('ks_periode').update(patch).eq('id', input.periodeId);

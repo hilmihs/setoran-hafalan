@@ -173,7 +173,8 @@ async function main() {
       minimal_slot: 1,
       // Sengaja kecil: mekanismenya yang diuji di sini, sedangkan penanggalan
       // 22 pertemuan sudah diuji terhadap data produksi di test-ketersediaan.
-      jumlah_pertemuan: 4,
+      jumlah_pertemuan_dasar: 4,
+      jumlah_pertemuan_lanjutan: 4,
       tilawah_program_id: programHits.id,
       tilawah_batch_id: batchId,
       kirim_nyata: KIRIM,

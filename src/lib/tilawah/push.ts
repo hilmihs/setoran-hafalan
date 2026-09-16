@@ -22,6 +22,7 @@ import type {
   TilawahEnvelope,
 } from './types';
 import {
+  jumlahPertemuanUntuk,
   namaPertemuan,
   rentangPertemuan,
   tanggalPertemuan,
@@ -73,11 +74,14 @@ export async function antrekanPengiriman(usulanId: string): Promise<void> {
   // itu juga yang membuat kegagalan di tengah bisa dilanjutkan, bukan diulang.
   const { data: usulan } = await supabaseAdmin
     .from('ks_usulan')
-    .select('periode:periode_id(jumlah_pertemuan)')
+    .select('level, periode:periode_id(jumlah_pertemuan_dasar, jumlah_pertemuan_lanjutan)')
     .eq('id', usulanId)
     .maybeSingle();
-  const jumlahPertemuan =
-    (usulan?.periode as { jumlah_pertemuan: number } | null)?.jumlah_pertemuan ?? 0;
+  const aturan = usulan?.periode as
+    | { jumlah_pertemuan_dasar: number; jumlah_pertemuan_lanjutan: number }
+    | null
+    | undefined;
+  const jumlahPertemuan = aturan ? jumlahPertemuanUntuk(aturan, String(usulan?.level ?? '')) : 0;
 
   let urutan = 1;
   for (let i = 1; i <= jumlahPertemuan; i++) {
