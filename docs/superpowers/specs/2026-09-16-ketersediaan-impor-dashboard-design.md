@@ -267,7 +267,8 @@ spasi dirapatkan). Dalam satu tarikan:
   semua baris lain `diganti`;
 - satu nomor dengan **nama berbeda** (sekeluarga) bukan lagi alasan menahan.
 
-`diganti` ikut dibekukan terhadap tarikan ulang kecuali identitasnya berubah.
+`diganti` dihitung ulang di setiap tarikan dari seluruh isi CSV — bukan status beku.
+Yang tetap beku hanya `dialokasikan` dan `batal`, seperti sekarang.
 Simulasi: 530 baris tertahan → 0; pendaftar sah naik 419 → 443 (ikhwan), 2.572 → 2.819 (akhwat).
 
 ### 8.3 Pita umur dua kelompok
@@ -318,9 +319,6 @@ Nilainya diisi pemilik proses di Variable Group.
 
 ## 9. Catatan terbuka
 
-- **Pendaftar untuk periode mana.** Formulir pendaftar satu set; periode September dan
-  Oktober masing-masing punya sumber CSV. Menempelkan formulir yang sama ke dua periode
-  akan membuat pendaftar dialokasikan dua kali. Koordinator memilih satu.
 - **Jam offline di Oktober kosong pengajar.** Karena sheet offline adalah ketersediaan
   September, 16 jam offline di periode Oktober (11 akhwat, 5 ikhwan) tidak punya pengajar
   — 531 pendaftar sah bila formulir ditempel ke Oktober.
