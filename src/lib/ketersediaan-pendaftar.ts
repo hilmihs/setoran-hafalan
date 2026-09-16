@@ -30,6 +30,8 @@ export interface HasilTarik {
   diperbarui: number;
   valid: number;
   ditahan: number;
+  /** Kiriman lama yang digantikan kiriman terbaru dari orang yang sama. */
+  diganti: number;
   /** Baris yang bahkan tidak punya kunci — tidak bisa disimpan sama sekali. */
   dilewati: number;
   peringatan: string[];
@@ -81,6 +83,30 @@ export function normalWa(mentah: string | null | undefined): string | null {
   else if (d.startsWith('0')) d = d.replace(/^0+/, '');
   if (d.length < 9 || d.length > 14) return null;
   return d;
+}
+
+/** Nama untuk dibandingkan: huruf kecil, tanpa tanda diakritik, spasi dirapatkan. */
+export function namaNormal(nama: string): string {
+  return nama
+    .toLowerCase()
+    .normalize('NFKD')
+    .replace(/[̀-ͯ]/g, '')
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim();
+}
+
+/**
+ * Identitas satu pendaftar: nomor WA ternormalisasi + nama ternormalisasi.
+ *
+ * Bukan nomor saja: satu nomor lazim dipakai sekeluarga (ibu mendaftarkan
+ * anak-anaknya), dan mereka orang yang berbeda. Bukan juga kunci baris sheet:
+ * kiriman ulang dari orang yang sama menghasilkan timestamp baru.
+ */
+export function identitasPendaftar(wa: string | null | undefined, nama: string): string | null {
+  const w = normalWa(wa);
+  const n = namaNormal(nama ?? '');
+  if (!w || !n) return null;
+  return `${w}|${n}`;
 }
 
 export type FormatTanggal = 'dmy' | 'mdy';
@@ -263,7 +289,7 @@ export interface BarisSiap {
   slot_id: string | null;
   rekaman_url: string | null;
   didaftar_pada: string | null;
-  status: 'valid' | 'ditahan';
+  status: 'valid' | 'ditahan' | 'diganti';
   alasan_ditahan: string[];
 }
 
@@ -278,7 +304,11 @@ export interface BarisSiap {
 export function saring(
   baris: readonly BarisMentah[],
   slots: readonly KsSlot[],
-  sekarang: Date
+  sekarang: Date,
+  opts: {
+    /** Identitas yang barisnya sudah dialokasikan — semua kiriman lainnya diganti. */
+    identitasDialokasikan?: ReadonlySet<string>;
+  } = {}
 ): BarisSiap[] {
   const slotAktif = slots.filter((s) => s.aktif);
   const perLabel = new Map<string, KsSlot[]>();
@@ -289,20 +319,31 @@ export function saring(
     perLabel.get(k)!.push(s);
   }
 
-  // Nomor ganda ditentukan atas seluruh tarikan, bukan per baris.
-  const hitungWa = new Map<string, number>();
-  for (const b of baris) {
-    const n = normalWa(b.wa);
-    if (n) hitungWa.set(n, (hitungWa.get(n) ?? 0) + 1);
+  // Kiriman ulang: satu orang yang mengisi formulir berkali-kali hanya diwakili
+  // kiriman TERBARU — aturan yang sama dengan formulir pengajar. Nomor yang sama
+  // dengan nama berbeda (sekeluarga) bukan kiriman ulang.
+  const terbaru = new Map<string, number>();
+  for (let i = 0; i < baris.length; i++) {
+    const id = identitasPendaftar(baris[i].wa, baris[i].nama);
+    if (!id) continue;
+    const j = terbaru.get(id);
+    if (j === undefined || (baris[i].didaftar_pada ?? '') >= (baris[j].didaftar_pada ?? '')) {
+      terbaru.set(id, i);
+    }
   }
 
   const out: BarisSiap[] = [];
-  for (const b of baris) {
+  for (let i = 0; i < baris.length; i++) {
+    const b = baris[i];
     const alasan: string[] = [];
+
+    const identitas = identitasPendaftar(b.wa, b.nama);
+    const diganti =
+      identitas !== null &&
+      (Boolean(opts.identitasDialokasikan?.has(identitas)) || terbaru.get(identitas) !== i);
 
     const wa = normalWa(b.wa);
     if (!wa) alasan.push('Nomor WhatsApp kosong atau tidak sah');
-    else if ((hitungWa.get(wa) ?? 0) > 1) alasan.push('Nomor WhatsApp dipakai lebih dari satu pendaftar');
 
     const nama = b.nama.trim();
     if (!nama) alasan.push('Nama kosong');
@@ -360,8 +401,8 @@ export function saring(
       slot_id: slotId,
       rekaman_url: b.rekaman_url,
       didaftar_pada: b.didaftar_pada,
-      status: alasan.length === 0 ? 'valid' : 'ditahan',
-      alasan_ditahan: alasan,
+      status: diganti ? 'diganti' : alasan.length === 0 ? 'valid' : 'ditahan',
+      alasan_ditahan: diganti ? [] : alasan,
     });
   }
   return out;
@@ -386,6 +427,7 @@ export async function tarikSumber(
     diperbarui: 0,
     valid: 0,
     ditahan: 0,
+    diganti: 0,
     dilewati: 0,
     peringatan: [],
   };
@@ -406,22 +448,33 @@ export async function tarikSumber(
     return hasil;
   }
 
-  const siap = saring(baris, slots, sekarang);
-
   const { data: adaRows } = await supabaseAdmin
     .from('ks_pendaftar')
-    .select('id, sumber_row_key, status')
+    .select('id, sumber_row_key, status, wa_normal, nama')
     .eq('periode_id', periode.id);
-  const ada = new Map(
-    ((adaRows ?? []) as { id: string; sumber_row_key: string; status: string }[]).map((r) => [
-      r.sumber_row_key,
-      r,
-    ])
+  const adaList = (adaRows ?? []) as {
+    id: string;
+    sumber_row_key: string;
+    status: string;
+    wa_normal: string | null;
+    nama: string;
+  }[];
+  const ada = new Map(adaList.map((r) => [r.sumber_row_key, r]));
+  // Orang yang sudah masuk usulan: baris itulah kebenarannya (dibekukan di bawah),
+  // semua kirimannya yang lain berstatus diganti.
+  const identitasDialokasikan = new Set(
+    adaList
+      .filter((r) => r.status === 'dialokasikan')
+      .map((r) => identitasPendaftar(r.wa_normal, r.nama))
+      .filter((x): x is string => x !== null)
   );
+
+  const siap = saring(baris, slots, sekarang, { identitasDialokasikan });
 
   const stempel = sekarang.toISOString();
   for (const b of siap) {
     if (b.status === 'valid') hasil.valid++;
+    else if (b.status === 'diganti') hasil.diganti++;
     else hasil.ditahan++;
 
     const lama = ada.get(b.sumber_row_key);
@@ -478,7 +531,7 @@ export async function tarikSumber(
     .update({
       terakhir_tarik: stempel,
       terakhir_status: 'ok',
-      terakhir_pesan: `${hasil.baru} baru, ${hasil.diperbarui} diperbarui, ${hasil.ditahan} ditahan`,
+      terakhir_pesan: `${hasil.baru} baru, ${hasil.diperbarui} diperbarui, ${hasil.ditahan} ditahan, ${hasil.diganti} diganti kiriman baru`,
       updated_at: stempel,
     })
     .eq('id', sumber.id);

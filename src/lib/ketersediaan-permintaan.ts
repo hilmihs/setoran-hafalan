@@ -1,6 +1,8 @@
 import 'server-only';
 import { supabaseAdmin } from '@/lib/supabase-admin';
 import type { Gender, KsPeriode, KsSlot } from '@/types/db';
+import { identitasPendaftar } from '@/lib/ketersediaan-pendaftar';
+import { identitasTerpakaiLintasPeriode } from '@/lib/ketersediaan-lintas-periode';
 
 /**
  * Pasokan (pengajar) vs permintaan (pendaftar) per slot.
@@ -31,7 +33,9 @@ export interface RingkasSlot {
   dialokasikan: number;
   /** Ditahan saringan mutu; tidak dihitung sampai dibereskan. */
   ditahan: number;
-  /** Pengajar terverifikasi yang menyatakan bersedia di slot ini. */
+  /** Pendaftar sah di periode ini yang sudah masuk usulan di periode lain. Tidak ikut antre. */
+  terpakai_lain: number;
+  /** Pengajar bersedia di slot ini (terverifikasi + diajukan) — definisi yang sama dengan mesin alokasi. */
   pengajar_tersedia: number;
   /** Pengajar yang sudah memegang halaqah di slot ini pada periode berjalan. */
   pengajar_terpakai: number;
@@ -56,6 +60,8 @@ interface PendaftarRingkas {
   slot_id: string | null;
   status: string;
   didaftar_pada: string | null;
+  wa_normal: string | null;
+  nama: string;
 }
 
 interface KetersediaanRingkas {
@@ -84,26 +90,31 @@ export async function ringkasSlot(
   slots: readonly KsSlot[],
   sekarang: Date
 ): Promise<Map<string, RingkasSlot>> {
-  const [{ data: pendaftar }, { data: ketersediaan }, { data: usulan }, riwayat] = await Promise.all([
+  const [{ data: pendaftar }, { data: ketersediaan }, { data: usulan }, riwayat, terpakaiLain] = await Promise.all([
     supabaseAdmin
       .from('ks_pendaftar')
-      .select('slot_id, status, didaftar_pada')
+      .select('slot_id, status, didaftar_pada, wa_normal, nama')
       .eq('periode_id', periode.id),
+    // Sama dengan mesin alokasi: 'diajukan' juga pasokan. Sebelumnya papan hanya
+    // menghitung 'terverifikasi', jadi angka di layar selalu lebih kecil dari yang
+    // benar-benar dipakai alokasi.
     supabaseAdmin
       .from('ks_ketersediaan')
       .select('slot_id, status, pengisian:pengisian_id(pengajar_id, status)')
-      .eq('status', 'terverifikasi'),
+      .in('status', ['terverifikasi', 'diajukan']),
     supabaseAdmin
       .from('ks_usulan')
       .select('slot_id, pengajar_id, status')
       .eq('periode_id', periode.id)
       .in('status', STATUS_HALAQAH_HIDUP),
     riwayatSlot(slots),
+    identitasTerpakaiLintasPeriode(periode.id),
   ]);
 
   const slotIds = new Set(slots.map((s) => s.id));
 
   const antre = new Map<string, number>();
+  const lain = new Map<string, number>();
   const dialokasikan = new Map<string, number>();
   const ditahan = new Map<string, number>();
   const tertua = new Map<string, number>();
@@ -111,6 +122,11 @@ export async function ringkasSlot(
   for (const p of (pendaftar ?? []) as PendaftarRingkas[]) {
     if (!p.slot_id || !slotIds.has(p.slot_id)) continue;
     if (p.status === 'valid') {
+      const id = identitasPendaftar(p.wa_normal, p.nama);
+      if (id && terpakaiLain.has(id)) {
+        lain.set(p.slot_id, (lain.get(p.slot_id) ?? 0) + 1);
+        continue;
+      }
       antre.set(p.slot_id, (antre.get(p.slot_id) ?? 0) + 1);
       if (p.didaftar_pada) {
         const hari = Math.floor((sekarang.getTime() - new Date(p.didaftar_pada).getTime()) / HARI_MS);
@@ -164,6 +180,7 @@ export async function ringkasSlot(
       antre: a,
       dialokasikan: dialokasikan.get(s.id) ?? 0,
       ditahan: ditahan.get(s.id) ?? 0,
+      terpakai_lain: lain.get(s.id) ?? 0,
       pengajar_tersedia: tersedia,
       pengajar_terpakai: terpakai,
       halaqah_hidup: halaqahHidup.get(s.id) ?? 0,

@@ -284,10 +284,11 @@ export function hitungUmur(tanggalLahir: string, acuan: Date): number | null {
   return umur;
 }
 
+/**
+ * Dua kelompok saja. Lima pita lama membuat kelompok jarang genap 12 orang:
+ * pada data 16 Sep 2026 ikhwan hanya membentuk 11 halaqah dengan lima pita,
+ * 19 dengan dua pita, dari pengajar dan pendaftar yang sama.
+ */
 export function pitaUmur(umur: number): KsPitaUmur {
-  if (umur <= 17) return '<=17';
-  if (umur <= 25) return '18-25';
-  if (umur <= 35) return '26-35';
-  if (umur <= 45) return '36-45';
-  return '46+';
+  return umur <= 45 ? '<=45' : '46+';
 }

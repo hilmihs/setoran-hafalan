@@ -23,14 +23,20 @@ import {
   type SlotAlokasi,
 } from '@/lib/ketersediaan-alokasi';
 import { usulkanHari, usulkanSesi, hariTidakKonsisten } from '@/lib/tilawah/map';
-import { bacaTanggal, deteksiFormatTanggal } from '@/lib/ketersediaan-pendaftar';
+import {
+  bacaTanggal,
+  deteksiFormatTanggal,
+  identitasPendaftar,
+  saring,
+  type BarisMentah,
+} from '@/lib/ketersediaan-pendaftar';
 import {
   jumlahPertemuanUntuk,
   namaPertemuan,
   rentangPertemuan,
   tanggalPertemuan,
 } from '@/lib/ketersediaan-pertemuan';
-import type { KsHariIdx } from '@/types/db';
+import type { KsHariIdx, KsSlot } from '@/types/db';
 
 let failed = 0;
 function eq(actual: unknown, expected: unknown, label: string) {
@@ -174,8 +180,8 @@ console.log('\n# umur & pita');
 const acuan = new Date('2026-08-30T00:00:00Z');
 eq(hitungUmur('2000-08-30', acuan), 26, 'ulang tahun tepat hari ini');
 eq(hitungUmur('2000-08-31', acuan), 25, 'ulang tahun besok belum dihitung');
-eq(pitaUmur(17), '<=17', 'pita 17');
-eq(pitaUmur(18), '18-25', 'pita 18');
+eq(pitaUmur(15), '<=45', 'pita 15 ikut kelompok pertama');
+eq(pitaUmur(45), '<=45', 'pita 45 masih kelompok pertama');
 eq(pitaUmur(46), '46+', 'pita 46');
 
 // ── Pengelompokan pendaftar ────────────────────────────────────────────────
@@ -202,7 +208,7 @@ function buatPendaftar(
 
 const g1 = kelompokkanPendaftar(
   'S1',
-  buatPendaftar(25, 'HITS Dasar', '18-25', 3, 'a'),
+  buatPendaftar(25, 'HITS Dasar', '<=45', 3, 'a'),
   periode,
   acuan
 );
@@ -211,8 +217,8 @@ eq(g1.every((g) => g.pendaftar_ids.length === 12), true, 'tiap halaqah tepat 12'
 eq(g1.every((g) => !g.pita_digabung), true, 'tidak ada penggabungan pita');
 
 const campur = [
-  ...buatPendaftar(12, 'HITS Dasar', '18-25', 3, 'b'),
-  ...buatPendaftar(12, 'HITS Lanjutan', '18-25', 3, 'c'),
+  ...buatPendaftar(12, 'HITS Dasar', '<=45', 3, 'b'),
+  ...buatPendaftar(12, 'HITS Lanjutan', '<=45', 3, 'c'),
 ];
 const g2 = kelompokkanPendaftar('S1', campur, periode, acuan);
 eq(g2.length, 2, 'dua level → dua halaqah terpisah');
@@ -220,21 +226,21 @@ eq(new Set(g2.map((g) => g.level)).size, 2, 'level tidak tercampur dalam satu ha
 
 // Sisa muda menunggu; sisa tua boleh dibentuk di atas ambang bawah.
 const sisaMuda = [
-  ...buatPendaftar(5, 'HITS Dasar', '18-25', 2, 'd'),
-  ...buatPendaftar(5, 'HITS Dasar', '26-35', 2, 'e'),
+  ...buatPendaftar(5, 'HITS Dasar', '<=45', 2, 'd'),
+  ...buatPendaftar(5, 'HITS Dasar', '46+', 2, 'e'),
 ];
 eq(kelompokkanPendaftar('S1', sisaMuda, periode, acuan).length, 0, 'sisa muda menunggu');
 
 const sisaTua = [
-  ...buatPendaftar(5, 'HITS Dasar', '18-25', 40, 'f'),
-  ...buatPendaftar(5, 'HITS Dasar', '26-35', 40, 'g'),
+  ...buatPendaftar(5, 'HITS Dasar', '<=45', 40, 'f'),
+  ...buatPendaftar(5, 'HITS Dasar', '46+', 40, 'g'),
 ];
 const g3 = kelompokkanPendaftar('S1', sisaTua, periode, acuan);
 eq(g3.length, 1, 'sisa tua digabung jadi satu halaqah');
 eq(g3[0].pita_digabung, true, 'ditandai sebagai pita digabung');
 eq(g3[0].pendaftar_ids.length, 10, 'isi 10, di atas ambang bawah 8');
 
-const sisaTuaKecil = buatPendaftar(7, 'HITS Dasar', '18-25', 40, 'h');
+const sisaTuaKecil = buatPendaftar(7, 'HITS Dasar', '<=45', 40, 'h');
 eq(
   kelompokkanPendaftar('S1', sisaTuaKecil, periode, acuan).length,
   0,
@@ -243,11 +249,11 @@ eq(
 
 // Antrean tertua harus terlayani lebih dulu.
 const urutUsia = [
-  ...buatPendaftar(12, 'HITS Dasar', '18-25', 2, 'i'),
-  ...buatPendaftar(12, 'HITS Dasar', '26-35', 30, 'j'),
+  ...buatPendaftar(12, 'HITS Dasar', '<=45', 2, 'i'),
+  ...buatPendaftar(12, 'HITS Dasar', '46+', 30, 'j'),
 ];
 const g4 = kelompokkanPendaftar('S1', urutUsia, periode, acuan);
-eq(g4[0].pita_umur, '26-35', 'kelompok dengan antrean tertua di urutan pertama');
+eq(g4[0].pita_umur, '46+', 'kelompok dengan antrean tertua di urutan pertama');
 
 // ── Alokasi berputar ───────────────────────────────────────────────────────
 console.log('\n# alokasi berputar');
@@ -258,7 +264,7 @@ function slotAlokasi(id: string, hari: KsHariIdx[], mulai: string, selesai: stri
     grup: Array.from({ length: jumlahGrup }, (_, i) => ({
       slot_id: id,
       level: 'HITS Dasar',
-      pita_umur: '18-25' as const,
+      pita_umur: '<=45' as const,
       pita_digabung: false,
       pendaftar_ids: [`${id}-p${i}`],
       usia_tertua_hari: 5,
@@ -455,6 +461,63 @@ const hasilJ2 = alokasikan({
   peringkat: peringkatJam,
 });
 eq(hasilJ2.penempatan[0]?.pengajar_id, 'p1', 'jam J2 jatuh ke prioritas #1 di J2');
+
+// ── Identitas & kiriman ulang ──────────────────────────────────────────────
+console.log('\n# kiriman ulang formulir');
+
+eq(identitasPendaftar('0812-3456-7890', '  Siti   Aminah '), '81234567890|siti aminah', 'identitas: nomor & nama dinormalkan');
+eq(identitasPendaftar('6281234567890', 'SITI AMINAH'), '81234567890|siti aminah', 'identitas: 62 dan huruf besar setara');
+eq(identitasPendaftar(null, 'Siti'), null, 'identitas: tanpa nomor → null');
+
+const slotUji = {
+  id: 'SL',
+  periode_id: 'P',
+  kelompok: 'akhwat',
+  mode: 'online',
+  label: 'Senin & Rabu 20:00 - 21:30 WIB',
+  hari: ['Senin', 'Rabu'],
+  hari_idx: [0, 2],
+  waktu_mulai: '20:00',
+  waktu_selesai: '21:30',
+  lokasi: null,
+  aktif: true,
+  urutan: 0,
+  created_at: '',
+  updated_at: '',
+} as KsSlot;
+
+const kiriman = (nama: string, wa: string, waktu: string): BarisMentah => ({
+  nama,
+  wa,
+  tanggal_lahir: null,
+  umur_isian: 30,
+  gender: 'akhwat',
+  level: 'HITS Dasar',
+  slot_label_raw: 'Online Senin & Rabu 20:00 - 21:30 WIB',
+  rekaman_url: null,
+  didaftar_pada: waktu,
+  kunci: `${wa}-${waktu}`,
+});
+
+const ulang = saring(
+  [
+    kiriman('Siti Aminah', '081234567890', '2026-09-09T03:00:00.000Z'),
+    kiriman('siti  aminah', '6281234567890', '2026-09-10T03:00:00.000Z'),
+    kiriman('Rahma', '081234567890', '2026-09-09T04:00:00.000Z'),
+  ],
+  [slotUji],
+  new Date('2026-09-16T05:00:00Z')
+);
+eq(ulang.map((b) => b.status), ['diganti', 'valid', 'valid'], 'kiriman lama diganti, sekeluarga tetap sah');
+eq(ulang[0].alasan_ditahan, [], 'baris diganti tidak membawa alasan tertahan');
+
+const sudahDapat = saring(
+  [kiriman('Siti Aminah', '081234567890', '2026-09-12T03:00:00.000Z')],
+  [slotUji],
+  new Date('2026-09-16T05:00:00Z'),
+  { identitasDialokasikan: new Set(['81234567890|siti aminah']) }
+);
+eq(sudahDapat[0].status, 'diganti', 'identitas yang sudah dialokasikan: kiriman lain diganti');
 
 console.log(failed === 0 ? '\nSEMUA LULUS' : `\n${failed} GAGAL`);
 process.exit(failed === 0 ? 0 : 1);
