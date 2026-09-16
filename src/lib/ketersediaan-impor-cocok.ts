@@ -47,8 +47,45 @@ export function namaPengajarNormal(nama: string): string {
     .join(' ');
 }
 
-function kata(nama: string): Set<string> {
-  return new Set(namaPengajarNormal(nama).split(' ').filter((t) => t.length > 2));
+/**
+ * Bentuk ejaan sebuah kata nama. Nama di xlsx ditulis tangan dan sering berbeda
+ * ejaan dengan akunnya: "Khoiriyyah"/"Khoiriyah", "Durrotussyifa"/"Durrotusyifa",
+ * "Lathifah"/"Latifah", "Rinnie"/"Rinny". Huruf ganda dirapatkan, th/dh jadi t/d,
+ * y jadi i, dan akhiran -ie jadi -i.
+ */
+function ejaan(t: string): string {
+  return t
+    .replace(/th/g, 't')
+    .replace(/dh/g, 'd')
+    .replace(/y/g, 'i')
+    .replace(/(.)\1+/g, '$1')
+    .replace(/ie$/, 'i');
+}
+
+function kata(nama: string): string[] {
+  return [...new Set(namaPengajarNormal(nama).split(' ').filter((t) => t.length > 2).map(ejaan))];
+}
+
+/** Dua kata dianggap sama bila ejaannya sama, atau salah satu awalan yang lain (≥ 5 huruf): "Chandra" ~ "Chandrawatty". */
+function kataSama(a: string, b: string): boolean {
+  if (a === b) return true;
+  const [pendek, panjang] = a.length <= b.length ? [a, b] : [b, a];
+  return pendek.length >= 5 && panjang.startsWith(pendek);
+}
+
+function jumlahSama(a: readonly string[], b: readonly string[]): number {
+  return a.filter((x) => b.some((y) => kataSama(x, y))).length;
+}
+
+/** Akun bernama mirip — hanya usulan untuk dipilih koordinator, tidak pernah dipasang otomatis. */
+function kandidatNama(nama: string, segender: readonly PengajarRingkas[]): { id: string; name: string }[] {
+  const k = kata(nama);
+  return segender
+    .map((p) => ({ p, n: jumlahSama(k, kata(p.name)) }))
+    .filter((x) => x.n > 0)
+    .sort((a, b) => b.n - a.n || a.p.name.localeCompare(b.p.name))
+    .slice(0, 5)
+    .map(({ p }) => ({ id: p.id, name: p.name }));
 }
 
 const hasil = (h: Partial<HasilCocok> & Pick<HasilCocok, 'status'>): HasilCocok => ({
@@ -77,7 +114,15 @@ export function cocokkanPengajar(
 
   if (baris.wa) {
     const p = aktif.find((x) => normalWa(x.whatsapp_number) === baris.wa);
-    if (!p) return hasil({ status: 'tanpa_akun', cara: 'wa' });
+    // Nomor di xlsx bisa berbeda dengan nomor akun (orang ganti nomor). Nama yang
+    // mirip ditawarkan sebagai pilihan, tidak dipasang otomatis.
+    if (!p) {
+      return hasil({
+        status: 'tanpa_akun',
+        cara: 'wa',
+        kandidat: kandidatNama(baris.nama, aktif.filter((x) => x.gender === baris.gender)),
+      });
+    }
     if (p.gender !== baris.gender) return hasil({ status: 'gender_beda', cara: 'wa', nama_akun: p.name });
     return hasil({ status: 'cocok', cara: 'wa', pengajar_id: p.id, nama_akun: p.name });
   }
@@ -87,16 +132,8 @@ export function cocokkanPengajar(
   let cocok = segender.filter((p) => namaPengajarNormal(p.name) === sasaran);
   if (cocok.length === 0) {
     const k = kata(baris.nama);
-    const syarat = Math.min(2, k.size);
-    cocok =
-      syarat === 0
-        ? []
-        : segender.filter((p) => {
-            const milik = kata(p.name);
-            let sama = 0;
-            for (const x of k) if (milik.has(x)) sama++;
-            return sama >= syarat;
-          });
+    const syarat = Math.min(2, k.length);
+    cocok = syarat === 0 ? [] : segender.filter((p) => jumlahSama(k, kata(p.name)) >= syarat);
   }
 
   if (cocok.length === 1) {
@@ -105,5 +142,5 @@ export function cocokkanPengajar(
   if (cocok.length > 1) {
     return hasil({ status: 'nama_ganda', cara: 'nama', kandidat: cocok.map(({ id, name }) => ({ id, name })) });
   }
-  return hasil({ status: 'nama_tak_ketemu', cara: 'nama' });
+  return hasil({ status: 'nama_tak_ketemu', cara: 'nama', kandidat: kandidatNama(baris.nama, segender) });
 }

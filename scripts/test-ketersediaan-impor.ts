@@ -238,6 +238,24 @@ async function main() {
     check('nama panjang cocok lewat dua kata', panjang.pengajar_id === 'p-adam' && panjang.cara === 'nama', JSON.stringify(panjang));
     check('dua kandidat → nama_ganda', cocokkanPengajar({ nama: 'Fauzi Muhammad', wa: null, gender: 'ikhwan' }, daftar).status === 'nama_ganda');
     check('akun nonaktif tidak dipakai', cocokkanPengajar({ nama: 'Umar Said', wa: null, gender: 'ikhwan' }, daftar).status === 'nama_tak_ketemu');
+    {
+      const nyata = [
+        { id: 'a1', name: 'Salma Khoiriyah', gender: 'akhwat', whatsapp_number: '6281', active: true },
+        { id: 'a2', name: 'Durrotusyifa', gender: 'akhwat', whatsapp_number: '6282', active: true },
+        { id: 'a3', name: 'Rinny Chandrawatty', gender: 'akhwat', whatsapp_number: '6283', active: true },
+        { id: 'a4', name: 'Sri Wulan Aprilia', gender: 'akhwat', whatsapp_number: '6284', active: true },
+        { id: 'a5', name: 'Nur Latifah Anshoriah', gender: 'akhwat', whatsapp_number: '6285', active: true },
+        { id: 'a6', name: 'Salma Suhailah Nizzati', gender: 'akhwat', whatsapp_number: '6286', active: true },
+      ] as const;
+      const c = (nama: string, wa: string | null = null) => cocokkanPengajar({ nama, wa, gender: 'akhwat' }, nyata as never);
+      check('ejaan huruf ganda: Salma Khoiriyyah', c('Salma Khoiriyyah').pengajar_id === 'a1', JSON.stringify(c('Salma Khoiriyyah')));
+      check('ejaan huruf ganda: Durrotussyifa', c('Durrotussyifa').pengajar_id === 'a2');
+      check('awalan kata: Rinnie Chandra', c('Rinnie Chandra').pengajar_id === 'a3', JSON.stringify(c('Rinnie Chandra')));
+      const wulan = c('Sri Wulan', '89999999999');
+      check('WA beda: tetap tanpa_akun, akun senama ditawarkan', wulan.status === 'tanpa_akun' && wulan.kandidat[0]?.id === 'a4', JSON.stringify(wulan));
+      const asing = c('Fauzia Rahmani');
+      check('nama tak ketemu: tanpa kandidat palsu', asing.status === 'nama_tak_ketemu' && asing.kandidat.length === 0, JSON.stringify(asing));
+    }
     check('pilihan manual dipakai', cocokkanPengajar({ nama: 'Nama Asing', wa: null, gender: 'akhwat' }, daftar, 'p-khad').cara === 'manual');
     check('pilihan manual beda gender ditolak', cocokkanPengajar({ nama: 'Nama Asing', wa: null, gender: 'ikhwan' }, daftar, 'p-khad').pengajar_id === null);
     check('pilihan lewati', cocokkanPengajar({ nama: 'Nama Asing', wa: null, gender: 'akhwat' }, daftar, 'lewati').status === 'dilewati');
