@@ -1,7 +1,7 @@
 import 'server-only';
 import { supabaseAdmin } from '@/lib/supabase-admin';
 import type { KsPendaftarSumber, KsPeriode } from '@/types/db';
-import { getPeriodeAktif, listSlot } from '@/lib/ketersediaan-periode';
+import { getPeriodeAktif } from '@/lib/ketersediaan-periode';
 import { tarikSumber } from '@/lib/ketersediaan-pendaftar';
 import { geserYangKedaluwarsa } from '@/lib/ketersediaan-konfirmasi';
 import { catatKs } from '@/lib/ketersediaan-log';
@@ -53,10 +53,9 @@ export async function jalankanBerkala(sekarang = new Date()): Promise<HasilBerka
     .select('*')
     .eq('periode_id', periode.id)
     .eq('aktif', true);
-  const slots = await listSlot(periode.id);
   for (const s of (sumberRows ?? []) as KsPendaftarSumber[]) {
     try {
-      const h = await tarikSumber(s, periode, slots, sekarang);
+      const h = await tarikSumber(s, periode, sekarang);
       hasil.pendaftar.push(`${s.nama}: ${h.baru} baru, ${h.diperbarui} diperbarui, ${h.ditahan} ditahan`);
     } catch (e) {
       const pesan = (e as Error).message;

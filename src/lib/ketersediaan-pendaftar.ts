@@ -4,6 +4,8 @@ import { supabaseAdmin } from '@/lib/supabase-admin';
 import { parseCsv } from '@/lib/csv';
 import type {
   Gender,
+  KsHariIdx,
+  KsMode,
   KsPemetaanKolom,
   KsPendaftarSumber,
   KsPeriode,
@@ -11,6 +13,7 @@ import type {
   KsSlot,
 } from '@/types/db';
 import { hitungUmur, pitaUmur, uraikanSlot } from '@/lib/ketersediaan-slot';
+import { listSlot } from '@/lib/ketersediaan-periode';
 
 /**
  * Tarik responses Google Form pendaftaran murid sebagai CSV publish-to-web.
@@ -32,6 +35,8 @@ export interface HasilTarik {
   ditahan: number;
   /** Kiriman lama yang digantikan kiriman terbaru dari orang yang sama. */
   diganti: number;
+  /** Jam yang dipilih pendaftar dan baru ditambahkan ke master periode. */
+  jamBaru: number;
   /** Baris yang bahkan tidak punya kunci — tidak bisa disimpan sama sekali. */
   dilewati: number;
   peringatan: string[];
@@ -293,6 +298,59 @@ export interface BarisSiap {
   alasan_ditahan: string[];
 }
 
+export interface JamBaruFormulir {
+  kelompok: Gender;
+  mode: KsMode;
+  label: string;
+  hari: string[];
+  hari_idx: KsHariIdx[];
+  waktu_mulai: string;
+  waktu_selesai: string;
+  lokasi: string | null;
+}
+
+/**
+ * Jam yang dipilih pendaftar tetapi belum ada di master periode.
+ *
+ * Keputusan 16 Sep 2026: master jam = gabungan jam dari xlsx pengajar DAN jam dari
+ * formulir pendaftar. Tanpa ini, pendaftar yang memilih jam tanpa pengajar
+ * tertahan sebagai "slot tidak ada di master" — padahal justru merekalah bukti
+ * jam itu butuh pengajar, dan dashboard harus menghitungnya begitu.
+ *
+ * Kuncinya sama dengan `saring` (hari + jam mulai, mode, kelompok), jadi jam yang
+ * ditambahkan di sini pasti dipakai saringan. Jam yang sudah ada — termasuk yang
+ * DINONAKTIFKAN koordinator — tidak dibuat lagi.
+ */
+export function jamBaruDariFormulir(
+  baris: readonly BarisMentah[],
+  slots: readonly KsSlot[]
+): JamBaruFormulir[] {
+  const kunci = (g: Gender, mode: KsMode, hariIdx: readonly number[], mulai: string) =>
+    `${g}|${mode}|${hariIdx.join(',')}|${mulai.slice(0, 5)}`;
+  const ada = new Set(slots.map((s) => kunci(s.kelompok, s.mode, s.hari_idx, s.waktu_mulai)));
+
+  const baru = new Map<string, JamBaruFormulir>();
+  for (const b of baris) {
+    if (!b.gender || !b.slot_label_raw) continue;
+    const u = uraikanSlot(b.slot_label_raw);
+    if (!u) continue;
+    const mode: KsMode = u.mode ?? 'online';
+    const k = kunci(b.gender, mode, u.hari_idx, u.waktu_mulai);
+    if (ada.has(k) || baru.has(k)) continue;
+    baru.set(k, {
+      kelompok: b.gender,
+      mode,
+      label: u.label,
+      hari: u.hari,
+      hari_idx: u.hari_idx,
+      waktu_mulai: u.waktu_mulai,
+      waktu_selesai: u.waktu_selesai,
+      lokasi: mode === 'offline' ? (u.lokasi ?? 'Offline') : null,
+    });
+  }
+  return [...baru.values()];
+}
+
 /**
  * Saringan mutu data.
  *
@@ -301,6 +359,22 @@ export interface BarisSiap {
  * dibereskan. Ini penting karena nomor WA menjadi email palsu akun murid di CMS
  * tilawah — satu nomor kotor merusak akun yang dibuat atas nama orang itu.
  */
+export interface KirimanLain {
+  didaftar_pada: string | null;
+  kunci: string;
+}
+
+/**
+ * Urutan kiriman lintas CSV. Waktu kirim menentukan; bila sama persis, kunci baris
+ * dipakai sebagai penentu supaya kedua CSV tidak sama-sama merasa menang.
+ */
+export function lebihBaru(a: KirimanLain, b: KirimanLain): boolean {
+  const ta = a.didaftar_pada ? new Date(a.didaftar_pada).getTime() : 0;
+  const tb = b.didaftar_pada ? new Date(b.didaftar_pada).getTime() : 0;
+  if (ta !== tb) return ta > tb;
+  return a.kunci > b.kunci;
+}
+
 export function saring(
   baris: readonly BarisMentah[],
   slots: readonly KsSlot[],
@@ -308,6 +382,12 @@ export function saring(
   opts: {
     /** Identitas yang barisnya sudah dialokasikan — semua kiriman lainnya diganti. */
     identitasDialokasikan?: ReadonlySet<string>;
+    /**
+     * Kiriman terbaru tiap identitas di CSV LAIN pada periode yang sama. Satu
+     * periode boleh punya banyak formulir; orang yang mengisi dua formulir tetap
+     * satu antrean, diwakili kiriman terbarunya.
+     */
+    terbaruLain?: ReadonlyMap<string, KirimanLain>;
   } = {}
 ): BarisSiap[] {
   const slotAktif = slots.filter((s) => s.aktif);
@@ -338,9 +418,12 @@ export function saring(
     const alasan: string[] = [];
 
     const identitas = identitasPendaftar(b.wa, b.nama);
+    const lain = identitas !== null ? opts.terbaruLain?.get(identitas) : undefined;
     const diganti =
       identitas !== null &&
-      (Boolean(opts.identitasDialokasikan?.has(identitas)) || terbaru.get(identitas) !== i);
+      (Boolean(opts.identitasDialokasikan?.has(identitas)) ||
+        terbaru.get(identitas) !== i ||
+        (lain !== undefined && lebihBaru(lain, { didaftar_pada: b.didaftar_pada, kunci: b.kunci })));
 
     const wa = normalWa(b.wa);
     if (!wa) alasan.push('Nomor WhatsApp kosong atau tidak sah');
@@ -418,7 +501,29 @@ export function saring(
 export async function tarikSumber(
   sumber: KsPendaftarSumber,
   periode: KsPeriode,
-  slots: readonly KsSlot[],
+  sekarang: Date
+): Promise<HasilTarik> {
+  const res = await fetch(sumber.csv_url, { cache: 'no-store', redirect: 'follow' });
+  if (!res.ok) throw new Error(`Gagal menarik CSV (HTTP ${res.status}). Pastikan sheet "Publish to web".`);
+  const teks = await res.text();
+  if (teks.startsWith('<!DOCTYPE html') || teks.includes('<html')) {
+    throw new Error('Sheet mengembalikan HTML — kemungkinan belum dipublikasikan ke web.');
+  }
+  return terapkanCsvSumber(sumber, periode, teks, sekarang);
+}
+
+/**
+ * Terapkan isi CSV satu sumber ke periode: tambah jam baru ke master, saring,
+ * lalu simpan. Dipisah dari `tarikSumber` supaya bisa diuji tanpa jaringan.
+ *
+ * Master jam dibaca ulang di sini, bukan dioper pemanggil: beberapa sumber
+ * (ikhwan, akhwat) ditarik berurutan, dan jam yang dibuat sumber sebelumnya
+ * harus terlihat oleh sumber berikutnya.
+ */
+export async function terapkanCsvSumber(
+  sumber: KsPendaftarSumber,
+  periode: KsPeriode,
+  teks: string,
   sekarang: Date
 ): Promise<HasilTarik> {
   const hasil: HasilTarik = {
@@ -428,16 +533,10 @@ export async function tarikSumber(
     valid: 0,
     ditahan: 0,
     diganti: 0,
+    jamBaru: 0,
     dilewati: 0,
     peringatan: [],
   };
-
-  const res = await fetch(sumber.csv_url, { cache: 'no-store', redirect: 'follow' });
-  if (!res.ok) throw new Error(`Gagal menarik CSV (HTTP ${res.status}). Pastikan sheet "Publish to web".`);
-  const teks = await res.text();
-  if (teks.startsWith('<!DOCTYPE html') || teks.includes('<html')) {
-    throw new Error('Sheet mengembalikan HTML — kemungkinan belum dipublikasikan ke web.');
-  }
 
   const { baris, kepala } = bacaCsv(teks, sumber.pemetaan_kolom);
   hasil.dibaca = baris.length;
@@ -450,14 +549,16 @@ export async function tarikSumber(
 
   const { data: adaRows } = await supabaseAdmin
     .from('ks_pendaftar')
-    .select('id, sumber_row_key, status, wa_normal, nama')
+    .select('id, sumber_id, sumber_row_key, status, wa_normal, nama, didaftar_pada')
     .eq('periode_id', periode.id);
   const adaList = (adaRows ?? []) as {
     id: string;
+    sumber_id: string | null;
     sumber_row_key: string;
     status: string;
     wa_normal: string | null;
     nama: string;
+    didaftar_pada: string | null;
   }[];
   const ada = new Map(adaList.map((r) => [r.sumber_row_key, r]));
   // Orang yang sudah masuk usulan: baris itulah kebenarannya (dibekukan di bawah),
@@ -469,7 +570,34 @@ export async function tarikSumber(
       .filter((x): x is string => x !== null)
   );
 
-  const siap = saring(baris, slots, sekarang, { identitasDialokasikan });
+  // Kiriman terbaru tiap orang di CSV lain periode ini. Baris batal tidak ikut:
+  // orang yang dibatalkan boleh mendaftar lagi lewat formulir mana pun.
+  const terbaruLain = new Map<string, KirimanLain & { id: string }>();
+  for (const r of adaList) {
+    if (r.sumber_id === sumber.id || r.status === 'batal') continue;
+    const id = identitasPendaftar(r.wa_normal, r.nama);
+    if (!id) continue;
+    const kiriman = { id: r.id, didaftar_pada: r.didaftar_pada, kunci: r.sumber_row_key };
+    const lama = terbaruLain.get(id);
+    if (!lama || lebihBaru(kiriman, lama)) terbaruLain.set(id, kiriman);
+  }
+
+  const slots = await listSlot(periode.id);
+  let urutan = slots.reduce((m, s) => Math.max(m, s.urutan), 0);
+  for (const j of jamBaruDariFormulir(baris, slots)) {
+    const { data: slotBaru, error } = await supabaseAdmin
+      .from('ks_slot')
+      .insert({ periode_id: periode.id, ...j, urutan: ++urutan })
+      .select('*')
+      .single();
+    if (error || !slotBaru) {
+      throw new Error(`Gagal menambah jam "${j.label}" ke master: ${error?.message ?? 'tanpa balasan'}`);
+    }
+    slots.push(slotBaru as KsSlot);
+    hasil.jamBaru++;
+  }
+
+  const siap = saring(baris, slots, sekarang, { identitasDialokasikan, terbaruLain });
 
   const stempel = sekarang.toISOString();
   for (const b of siap) {
@@ -526,12 +654,33 @@ export async function tarikSumber(
     }
   }
 
+  // Arah sebaliknya: baris CSV lain yang kini kalah baru oleh CSV ini. Yang kalah
+  // turun ke 'diganti' sekarang juga; yang justru menang dibereskan saat CSV-nya
+  // sendiri ditarik (tarikan berkala dan "Tarik semua" selalu menarik semua CSV).
+  const pemenangIni = new Map<string, KirimanLain>();
+  for (const b of siap) {
+    if (b.status === 'diganti') continue;
+    const id = identitasPendaftar(b.wa_normal, b.nama);
+    if (id) pemenangIni.set(id, { didaftar_pada: b.didaftar_pada, kunci: b.sumber_row_key });
+  }
+  for (const r of adaList) {
+    if (r.sumber_id === sumber.id || (r.status !== 'valid' && r.status !== 'ditahan')) continue;
+    const id = identitasPendaftar(r.wa_normal, r.nama);
+    const menang = id ? pemenangIni.get(id) : undefined;
+    if (!menang || !lebihBaru(menang, { didaftar_pada: r.didaftar_pada, kunci: r.sumber_row_key })) continue;
+    await supabaseAdmin
+      .from('ks_pendaftar')
+      .update({ status: 'diganti', alasan_ditahan: [], updated_at: stempel })
+      .eq('id', r.id);
+    hasil.diganti++;
+  }
+
   await supabaseAdmin
     .from('ks_pendaftar_sumber')
     .update({
       terakhir_tarik: stempel,
       terakhir_status: 'ok',
-      terakhir_pesan: `${hasil.baru} baru, ${hasil.diperbarui} diperbarui, ${hasil.ditahan} ditahan, ${hasil.diganti} diganti kiriman baru`,
+      terakhir_pesan: `${hasil.baru} baru, ${hasil.diperbarui} diperbarui, ${hasil.ditahan} ditahan, ${hasil.diganti} diganti kiriman baru, ${hasil.jamBaru} jam baru di master`,
       updated_at: stempel,
     })
     .eq('id', sumber.id);

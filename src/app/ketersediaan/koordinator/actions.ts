@@ -411,15 +411,14 @@ export async function tarikPendaftarSekarang(input: { periodeId: string }): Prom
   const sumber = (sumberRows ?? []) as KsPendaftarSumber[];
   if (sumber.length === 0) return { ok: false, error: 'Belum ada sumber pendaftar yang aktif.' };
 
-  const slots = await listSlot(input.periodeId);
   const sekarang = new Date();
   const ringkas: string[] = [];
 
   for (const s of sumber) {
     try {
-      const h = await tarikSumber(s, periode, slots, sekarang);
+      const h = await tarikSumber(s, periode, sekarang);
       ringkas.push(
-        `${s.nama}: ${h.dibaca} baris → ${h.baru} baru, ${h.diperbarui} diperbarui, ${h.ditahan} ditahan` +
+        `${s.nama}: ${h.dibaca} baris → ${h.baru} baru, ${h.diperbarui} diperbarui, ${h.ditahan} ditahan, ${h.diganti} diganti kiriman baru, ${h.jamBaru} jam baru di master` +
           (h.peringatan.length ? ` — ${h.peringatan.join('; ')}` : '')
       );
     } catch (e) {

@@ -389,6 +389,72 @@ async function main() {
       const log = await q<{ n: string }>(`select count(*)::text n from ks_log where aksi = 'impor_ketersediaan'`);
       check('setiap impor tercatat per periode', log[0].n === '6', log[0].n);
     }
+
+    console.log('\n# banyak CSV pendaftar dalam satu periode');
+    {
+      const pendaftarLib = await import('../src/lib/ketersediaan-pendaftar');
+      const { supabaseAdmin } = await import('../src/lib/supabase-admin');
+      const { getPool } = await import('../src/lib/pg-core');
+      const q = async <T,>(sql: string, p: unknown[] = []) => (await getPool().query(sql, p)).rows as T[];
+
+      const idPeriode = 'd0000000-0000-4000-8000-0000000000c5';
+      await q(`INSERT INTO ks_periode (id, nama, mulai, selesai) VALUES ($1, 'Uji CSV', '2026-09-21', '2026-12-31')`, [idPeriode]);
+      await q(
+        `INSERT INTO ks_slot (periode_id, kelompok, mode, label, hari, hari_idx, waktu_mulai, waktu_selesai, urutan)
+         VALUES ($1, 'akhwat', 'online', 'Senin & Rabu 20:00 - 21:30 WIB', ARRAY['Senin','Rabu'], ARRAY[0,2]::smallint[], '20:00', '21:30', 1)`,
+        [idPeriode]
+      );
+      const pemetaan = { nama: 'Nama', wa: 'WA', gender: 'Jenis Kelamin', umur: 'Usia', level: 'Program', slot: 'Jadwal', timestamp: 'Timestamp' };
+      const buatSumber = async (nama: string) => {
+        const { data } = await supabaseAdmin
+          .from('ks_pendaftar_sumber')
+          .insert({ periode_id: idPeriode, nama, csv_url: `https://contoh.test/${nama}.csv`, pemetaan_kolom: pemetaan })
+          .select('*')
+          .single();
+        return data as import('../src/types/db').KsPendaftarSumber;
+      };
+      const kepala = 'Timestamp,Nama,WA,Jenis Kelamin,Usia,Program,Jadwal';
+      const csvLama = [
+        kepala,
+        '13/09/2026 10.00.00,Fatimah Zahra,081299990001,Perempuan,30,HITS Dasar,Online Senin & Rabu 20:00 - 21:30 WIB',
+        '13/09/2026 11.00.00,Maryam Ulfa,081299990002,Perempuan,50,HITS Dasar,"Offline di Pejaten Selasa & Kamis, 16.00 - 17.30"',
+      ].join('\n');
+      const csvBaru = [
+        kepala,
+        '15/09/2026 09.00.00,Fatimah Zahra,081299990001,Perempuan,30,HITS Lanjutan,Online Senin & Rabu 20:00 - 21:30 WIB',
+      ].join('\n');
+
+      const periode = (await (await import('../src/lib/ketersediaan-periode')).getPeriode(idPeriode))!;
+      const sumberA = await buatSumber('formulir-lama');
+      const sumberB = await buatSumber('formulir-baru');
+      const sekarang = new Date('2026-09-16T05:00:00Z');
+
+      const h1 = await pendaftarLib.terapkanCsvSumber(sumberA, periode, csvLama, sekarang);
+      check('CSV pertama: jam Pejaten masuk master', h1.jamBaru === 1, JSON.stringify(h1));
+      const maryam = await q<{ status: string; slot_id: string | null }>(
+        `SELECT status, slot_id FROM ks_pendaftar WHERE periode_id = $1 AND nama = 'Maryam Ulfa'`, [idPeriode]
+      );
+      check('pendaftar jam baru langsung valid dengan slot', maryam[0]?.status === 'valid' && Boolean(maryam[0]?.slot_id), JSON.stringify(maryam));
+
+      const h2 = await pendaftarLib.terapkanCsvSumber(sumberB, periode, csvBaru, sekarang);
+      check('CSV kedua tidak menambah jam', h2.jamBaru === 0, JSON.stringify(h2));
+      const fatimah = async () =>
+        q<{ sumber_id: string; status: string }>(
+          `SELECT sumber_id, status FROM ks_pendaftar WHERE periode_id = $1 AND nama = 'Fatimah Zahra' ORDER BY didaftar_pada`, [idPeriode]
+        );
+      let f = await fatimah();
+      check(
+        'Fatimah di dua CSV: kiriman lama diganti, yang baru valid',
+        f.length === 2 && f[0].sumber_id === sumberA.id && f[0].status === 'diganti' && f[1].status === 'valid',
+        JSON.stringify(f)
+      );
+
+      const h3 = await pendaftarLib.terapkanCsvSumber(sumberA, periode, csvLama, sekarang);
+      f = await fatimah();
+      check('tarik ulang CSV lama: tetap satu antrean, tanpa jam baru', h3.jamBaru === 0 && f[0].status === 'diganti' && f[1].status === 'valid', JSON.stringify({ h3, f }));
+      const valid = await q<{ n: string }>(`SELECT count(*)::text n FROM ks_pendaftar WHERE periode_id = $1 AND status = 'valid'`, [idPeriode]);
+      check('antrean periode: 2 orang, bukan 3 baris', valid[0].n === '2', valid[0].n);
+    }
   } finally {
     await server.stop();
     await db.close();

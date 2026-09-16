@@ -159,10 +159,16 @@ export async function simpanImpor(
   return hasil;
 }
 
-/** Offline di lokasi berbeda pada jam yang sama adalah dua jam berbeda. */
-function kunciJam(g: Gender, mode: string, hariIdx: readonly number[], mulai: string, lokasi: string | null): string {
-  const tempat = mode === 'offline' ? (lokasi ?? '').trim().toLowerCase() : '';
-  return `${g}|${mode}|${hariIdx.join(',')}|${mulai.slice(0, 5)}|${tempat}`;
+/**
+ * Kunci satu jam master: gender, mode, hari, jam mulai. Lokasi sengaja TIDAK ikut —
+ * kunci ini harus sama dengan yang dipakai penyaring pendaftar dan penambah jam
+ * dari formulir (`jamBaruDariFormulir`). Bila lokasi ikut, teks lokasi yang
+ * berbeda ejaan ("Masjid Al-Kautsar Matraman" di xlsx, "Masjid Al Kautsar Matraman
+ * Jakarta Timur" di formulir) melahirkan dua jam kembar, dan setiap pendaftar di
+ * jam itu tertahan sebagai "cocok ke lebih dari satu baris master".
+ */
+function kunciJam(g: Gender, mode: string, hariIdx: readonly number[], mulai: string): string {
+  return `${g}|${mode}|${hariIdx.join(',')}|${mulai.slice(0, 5)}`;
 }
 
 async function simpanSatuPeriode(
@@ -175,7 +181,7 @@ async function simpanSatuPeriode(
   const perPengajar = new Map<string, Map<string, BarisPratinjau>>();
   for (const r of rows) {
     const pid = r.cocok.pengajar_id!;
-    const k = kunciJam(r.gender, r.mode, r.slot!.hari_idx, r.slot!.waktu_mulai, r.lokasi);
+    const k = kunciJam(r.gender, r.mode, r.slot!.hari_idx, r.slot!.waktu_mulai);
     if (!perPengajar.has(pid)) perPengajar.set(pid, new Map());
     const jam = perPengajar.get(pid)!;
     const lama = jam.get(k);
@@ -209,7 +215,7 @@ async function simpanSatuPeriode(
          from ks_slot where periode_id = $1`,
       [periode.id]
     );
-    const slotId = new Map(slotRows.map((s) => [kunciJam(s.kelompok, s.mode, s.hari_idx, s.waktu_mulai, s.lokasi), s.id]));
+    const slotId = new Map(slotRows.map((s) => [kunciJam(s.kelompok, s.mode, s.hari_idx, s.waktu_mulai), s.id]));
     let urutan = slotRows.reduce((m, s) => Math.max(m, s.urutan), 0);
 
     let slotBaru = 0;

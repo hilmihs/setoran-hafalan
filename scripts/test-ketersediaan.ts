@@ -27,6 +27,8 @@ import {
   bacaTanggal,
   deteksiFormatTanggal,
   identitasPendaftar,
+  jamBaruDariFormulir,
+  lebihBaru,
   saring,
   type BarisMentah,
 } from '@/lib/ketersediaan-pendaftar';
@@ -619,6 +621,69 @@ eq(
   'arus kumulatif per hari WIB, hari tanpa pendaftar tetap ada'
 );
 eq(tanggalBatasAntrean('2026-09-09', 21), '2026-09-30', 'hari antrean tertua genap 21 hari');
+
+// ── Jam dari formulir masuk master ─────────────────────────────────────────
+console.log('\n# jam formulir yang belum ada di master');
+
+const pilihan = (gender: 'ikhwan' | 'akhwat' | null, slot: string, kunci: string): BarisMentah => ({
+  nama: 'Uji',
+  wa: '081200000000',
+  tanggal_lahir: null,
+  umur_isian: 30,
+  gender,
+  level: 'HITS Dasar',
+  slot_label_raw: slot,
+  rekaman_url: null,
+  didaftar_pada: '2026-09-10T03:00:00.000Z',
+  kunci,
+});
+
+const jamBaru = jamBaruDariFormulir(
+  [
+    pilihan('akhwat', 'Online Senin & Rabu 20:00 - 21:30 WIB', 'j1'), // sudah ada: slotUji
+    pilihan('akhwat', 'Offline di Pejaten Selasa & Kamis, 16.00 - 17.30', 'j2'),
+    pilihan('akhwat', 'Offline di Pejaten Selasa & Kamis, 16.00 - 17.30', 'j3'), // kembar
+    pilihan('ikhwan', 'Online Senin & Rabu 20:00 - 21:30 WIB', 'j4'), // jam sama, gender lain
+    pilihan('akhwat', 'This choice no longer accepts responses', 'j5'),
+    pilihan('akhwat', 'Offline di Masjid Al Kautsar Matraman Jakarta Timur Rabu 16.00 - 17.30 dan Sabtu 13.00 - 14.30', 'j6'),
+    pilihan(null, 'Online Sabtu & Ahad 06:00 - 07:30 WIB', 'j7'), // gender tak diketahui
+  ],
+  [slotUji]
+);
+eq(
+  jamBaru.map((j) => `${j.kelompok}|${j.mode}|${j.label}|${j.lokasi}`),
+  [
+    'akhwat|offline|Selasa & Kamis 16:00 - 17:30 WIB|Pejaten',
+    'ikhwan|online|Senin & Rabu 20:00 - 21:30 WIB|null',
+  ],
+  'hanya jam baru per gender & mode, tanpa kembar, tanpa pilihan tak terbaca'
+);
+eq(
+  jamBaruDariFormulir([pilihan('akhwat', 'Online Senin & Rabu 20:00 - 21:30 WIB', 'x')], [{ ...slotUji, aktif: false }]).length,
+  0,
+  'jam yang dinonaktifkan koordinator tidak dihidupkan lagi'
+);
+
+// ── Banyak CSV dalam satu periode ─────────────────────────────────────────
+console.log('\n# orang yang sama di dua CSV');
+{
+  const b = { ...pilihan('akhwat', 'Online Senin & Rabu 20:00 - 21:30 WIB', 'csv2-a'), nama: 'Fatimah Zahra' };
+  const idF = identitasPendaftar(b.wa, b.nama)!;
+  const lebihLama = saring([b], [slotUji], new Date('2026-09-16T00:00:00Z'), {
+    terbaruLain: new Map([[idF, { didaftar_pada: '2026-09-12T00:00:00.000Z', kunci: 'csv1-a' }]]),
+  });
+  eq(lebihLama[0].status, 'diganti', 'CSV lain punya kiriman lebih baru → baris ini diganti');
+  const lebihBaruIni = saring([b], [slotUji], new Date('2026-09-16T00:00:00Z'), {
+    terbaruLain: new Map([[idF, { didaftar_pada: '2026-09-01T00:00:00.000Z', kunci: 'csv1-a' }]]),
+  });
+  eq(lebihBaruIni[0].status, 'valid', 'kiriman ini lebih baru → tetap valid');
+  eq(
+    lebihBaru({ didaftar_pada: '2026-09-10T03:00:00.000Z', kunci: 'b' }, { didaftar_pada: '2026-09-10T03:00:00.000Z', kunci: 'a' }) !==
+      lebihBaru({ didaftar_pada: '2026-09-10T03:00:00.000Z', kunci: 'a' }, { didaftar_pada: '2026-09-10T03:00:00.000Z', kunci: 'b' }),
+    true,
+    'waktu sama persis: tepat satu pemenang'
+  );
+}
 
 console.log(failed === 0 ? '\nSEMUA LULUS' : `\n${failed} GAGAL`);
 process.exit(failed === 0 ? 0 : 1);
