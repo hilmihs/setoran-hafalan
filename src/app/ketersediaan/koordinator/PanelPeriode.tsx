@@ -11,36 +11,29 @@ import {
 } from './actions';
 import { Angka, Bagian, Kotak, useAksi } from './ui';
 
-interface Props {
-  periode: KsPeriode | null;
-  daftarPeriode: { id: string; nama: string; aktif: boolean }[];
-  superadmin: boolean;
-}
-
-export function PanelPeriode({ periode, superadmin }: Props) {
-  return periode ? (
+export function PanelPeriode({ periode, superadmin }: { periode: KsPeriode; superadmin: boolean }) {
+  return (
     <>
       <AturanPeriode periode={periode} />
       <TujuanTilawah periode={periode} superadmin={superadmin} />
     </>
-  ) : (
-    <PeriodeBaru />
   );
 }
 
-function PeriodeBaru() {
+export function PeriodeBaru() {
   const { pending, jalan, tampilan } = useAksi();
   const [nama, setNama] = useState('');
   const [mulai, setMulai] = useState('');
   const [selesai, setSelesai] = useState('');
   const [minimalSlot, setMinimalSlot] = useState(3);
   const [kapasitas, setKapasitas] = useState(12);
-  const [isiBawaan, setIsiBawaan] = useState(true);
+  // Master bawaan sudah tertinggal dari formulir nyata; jam diisi lewat impor xlsx.
+  const [isiBawaan, setIsiBawaan] = useState(false);
 
   return (
     <Bagian
       judul="Buat periode"
-      keterangan="Periode lepas dari batch HITS — satu periode boleh melahirkan halaqah di beberapa batch."
+      keterangan="Satu periode = satu batch KBM, mis. Batch Oktober 2026. Tanggal mulai adalah hari pertama KBM: dipakai menentukan halaqah lama mana yang masih berjalan."
     >
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'flex-end' }}>
         <label style={{ display: 'flex', flexDirection: 'column', gap: 2, flex: '1 1 220px' }}>
@@ -49,11 +42,11 @@ function PeriodeBaru() {
             className="input"
             value={nama}
             onChange={(e) => setNama(e.target.value)}
-            placeholder="September–Oktober 2026"
+            placeholder="Batch Oktober 2026"
           />
         </label>
         <label style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-          <span className="t-small" style={{ color: 'var(--muted-2)' }}>Mulai</span>
+          <span className="t-small" style={{ color: 'var(--muted-2)' }}>Mulai KBM</span>
           <input className="input" type="date" value={mulai} onChange={(e) => setMulai(e.target.value)} />
         </label>
         <label style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
