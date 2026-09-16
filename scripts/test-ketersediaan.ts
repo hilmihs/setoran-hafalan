@@ -24,6 +24,7 @@ import {
 import { usulkanHari, usulkanSesi, hariTidakKonsisten } from '@/lib/tilawah/map';
 import { bacaTanggal, deteksiFormatTanggal } from '@/lib/ketersediaan-pendaftar';
 import {
+  jumlahPertemuanUntuk,
   namaPertemuan,
   rentangPertemuan,
   tanggalPertemuan,
@@ -409,6 +410,14 @@ eq(
   null,
   'jam kembar ditolak — CMS balas 400 untuk itu'
 );
+
+// ── Pertemuan per jenjang ───────────────────────────────────────────────────
+console.log('\n# jumlah pertemuan per jenjang');
+
+const aturanPertemuan = { jumlah_pertemuan_dasar: 50, jumlah_pertemuan_lanjutan: 26 };
+eq(jumlahPertemuanUntuk(aturanPertemuan, 'HITS Dasar'), 50, 'Dasar 50 pertemuan');
+eq(jumlahPertemuanUntuk(aturanPertemuan, 'HITS Lanjutan'), 26, 'Lanjutan 26 pertemuan');
+eq(jumlahPertemuanUntuk(aturanPertemuan, 'hits lanjutan'), 26, 'huruf kecil tetap dikenali');
 
 console.log(failed === 0 ? '\nSEMUA LULUS' : `\n${failed} GAGAL`);
 process.exit(failed === 0 ? 0 : 1);

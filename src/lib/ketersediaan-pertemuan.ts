@@ -1,4 +1,4 @@
-import type { KsHariIdx } from '@/types/db';
+import type { KsHariIdx, KsPeriode } from '@/types/db';
 
 /**
  * Tanggal pertemuan sebuah halaqah.
@@ -76,4 +76,17 @@ export function rentangPertemuan(
   const s = `${tanggal} ${jam(waktuSelesai)}`;
   if (s <= m) return null;
   return { mulai: m, selesai: s };
+}
+
+/**
+ * Jumlah pertemuan yang dibuat di CMS tilawah untuk satu halaqah.
+ * HITS Dasar dan Lanjutan berbeda panjangnya (50 dan 26 per keputusan 16 Sep
+ * 2026), jadi angkanya dipilih dari jenjang usulan, bukan satu angka periode.
+ * "Alumni HITS" sudah dilebur ke Lanjutan oleh `bacaLevel`.
+ */
+export function jumlahPertemuanUntuk(
+  periode: Pick<KsPeriode, 'jumlah_pertemuan_dasar' | 'jumlah_pertemuan_lanjutan'>,
+  level: string
+): number {
+  return /lanjut/i.test(level) ? periode.jumlah_pertemuan_lanjutan : periode.jumlah_pertemuan_dasar;
 }
