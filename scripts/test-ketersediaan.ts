@@ -22,13 +22,19 @@ import {
   type SlotAlokasi,
 } from '@/lib/ketersediaan-alokasi';
 import { usulkanHari, usulkanSesi, hariTidakKonsisten } from '@/lib/tilawah/map';
-import { bacaTanggal, deteksiFormatTanggal } from '@/lib/ketersediaan-pendaftar';
+import {
+  bacaTanggal,
+  deteksiFormatTanggal,
+  identitasPendaftar,
+  saring,
+  type BarisMentah,
+} from '@/lib/ketersediaan-pendaftar';
 import {
   namaPertemuan,
   rentangPertemuan,
   tanggalPertemuan,
 } from '@/lib/ketersediaan-pertemuan';
-import type { KsHariIdx } from '@/types/db';
+import type { KsHariIdx, KsSlot } from '@/types/db';
 
 let failed = 0;
 function eq(actual: unknown, expected: unknown, label: string) {
@@ -409,6 +415,63 @@ eq(
   null,
   'jam kembar ditolak — CMS balas 400 untuk itu'
 );
+
+// ── Identitas & kiriman ulang ──────────────────────────────────────────────
+console.log('\n# kiriman ulang formulir');
+
+eq(identitasPendaftar('0812-3456-7890', '  Siti   Aminah '), '81234567890|siti aminah', 'identitas: nomor & nama dinormalkan');
+eq(identitasPendaftar('6281234567890', 'SITI AMINAH'), '81234567890|siti aminah', 'identitas: 62 dan huruf besar setara');
+eq(identitasPendaftar(null, 'Siti'), null, 'identitas: tanpa nomor → null');
+
+const slotUji = {
+  id: 'SL',
+  periode_id: 'P',
+  kelompok: 'akhwat',
+  mode: 'online',
+  label: 'Senin & Rabu 20:00 - 21:30 WIB',
+  hari: ['Senin', 'Rabu'],
+  hari_idx: [0, 2],
+  waktu_mulai: '20:00',
+  waktu_selesai: '21:30',
+  lokasi: null,
+  aktif: true,
+  urutan: 0,
+  created_at: '',
+  updated_at: '',
+} as KsSlot;
+
+const kiriman = (nama: string, wa: string, waktu: string): BarisMentah => ({
+  nama,
+  wa,
+  tanggal_lahir: null,
+  umur_isian: 30,
+  gender: 'akhwat',
+  level: 'HITS Dasar',
+  slot_label_raw: 'Online Senin & Rabu 20:00 - 21:30 WIB',
+  rekaman_url: null,
+  didaftar_pada: waktu,
+  kunci: `${wa}-${waktu}`,
+});
+
+const ulang = saring(
+  [
+    kiriman('Siti Aminah', '081234567890', '2026-09-09T03:00:00.000Z'),
+    kiriman('siti  aminah', '6281234567890', '2026-09-10T03:00:00.000Z'),
+    kiriman('Rahma', '081234567890', '2026-09-09T04:00:00.000Z'),
+  ],
+  [slotUji],
+  new Date('2026-09-16T05:00:00Z')
+);
+eq(ulang.map((b) => b.status), ['diganti', 'valid', 'valid'], 'kiriman lama diganti, sekeluarga tetap sah');
+eq(ulang[0].alasan_ditahan, [], 'baris diganti tidak membawa alasan tertahan');
+
+const sudahDapat = saring(
+  [kiriman('Siti Aminah', '081234567890', '2026-09-12T03:00:00.000Z')],
+  [slotUji],
+  new Date('2026-09-16T05:00:00Z'),
+  { identitasDialokasikan: new Set(['81234567890|siti aminah']) }
+);
+eq(sudahDapat[0].status, 'diganti', 'identitas yang sudah dialokasikan: kiriman lain diganti');
 
 console.log(failed === 0 ? '\nSEMUA LULUS' : `\n${failed} GAGAL`);
 process.exit(failed === 0 ? 0 : 1);
