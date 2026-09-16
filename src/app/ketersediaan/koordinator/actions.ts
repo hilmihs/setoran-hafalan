@@ -19,6 +19,7 @@ import { catatRiwayatPeriode } from '@/lib/ketersediaan-ditahan';
 import { susunLabel, uraikanSlot } from '@/lib/ketersediaan-slot';
 import { identitasPendaftar, tarikSumber, tebakPemetaan } from '@/lib/ketersediaan-pendaftar';
 import { identitasTerpakaiLintasPeriode } from '@/lib/ketersediaan-lintas-periode';
+import { parseCsv } from '@/lib/csv';
 import { jalankanAlokasi } from '@/lib/ketersediaan-jalankan';
 import {
   geserYangKedaluwarsa,
@@ -388,26 +389,51 @@ export async function intipKolomCsv(input: { csvUrl: string }): Promise<Hasil> {
     if (teks.includes('<html')) {
       return { ok: false, error: 'Sheet mengembalikan HTML — aktifkan "Publish to web".' };
     }
-    const kepala = (teks.split('\n')[0] ?? '')
-      .split(',')
-      .map((h) => h.replace(/^"|"$/g, '').trim())
-      .filter(Boolean);
+    // Judul kolom Google Form lazim memuat koma ("Pilihan Jam Belajar (WIB, 90 menit)"),
+    // jadi kepala dibaca pengurai CSV, bukan dipecah koma.
+    const kepala = (parseCsv(teks)[0] ?? []).map((h) => h.trim()).filter(Boolean);
     return { ok: true, pesan: `${kepala.length} kolom terbaca.`, data: { kepala, usulan: tebakPemetaan(kepala) } };
   } catch (e) {
     return { ok: false, error: `Gagal membuka CSV: ${(e as Error).message}` };
   }
 }
 
-export async function tarikPendaftarSekarang(input: { periodeId: string }): Promise<Hasil> {
+/**
+ * Hentikan atau lanjutkan penarikan satu CSV. Pendaftar yang sudah tertarik tetap
+ * di antrean — menonaktifkan hanya berarti link itu tidak ditarik lagi.
+ */
+export async function aturSumberAktif(input: { periodeId: string; sumberId: string; aktif: boolean }): Promise<Hasil> {
+  const a = await aktor();
+  await supabaseAdmin
+    .from('ks_pendaftar_sumber')
+    .update({ aktif: input.aktif, updated_at: new Date().toISOString() })
+    .eq('id', input.sumberId)
+    .eq('periode_id', input.periodeId);
+  await catatKs({
+    periode_id: input.periodeId,
+    entitas: 'ks_pendaftar_sumber',
+    aksi: input.aktif ? 'aktifkan_sumber' : 'nonaktifkan_sumber',
+    sesudah: { sumber_id: input.sumberId },
+    aktor_wa: a.wa,
+    aktor_nama: a.nama,
+  });
+  segarkan();
+  return { ok: true, pesan: input.aktif ? 'CSV kembali ditarik.' : 'CSV tidak ditarik lagi. Pendaftar yang sudah masuk tetap di antrean.' };
+}
+
+/** Tarik semua CSV aktif periode ini, atau satu CSV saja bila `sumberId` diberikan. */
+export async function tarikPendaftarSekarang(input: { periodeId: string; sumberId?: string }): Promise<Hasil> {
   const a = await aktor();
   const periode = await getPeriode(input.periodeId);
   if (!periode) return { ok: false, error: 'Periode tidak ditemukan.' };
 
-  const { data: sumberRows } = await supabaseAdmin
+  let kueri = supabaseAdmin
     .from('ks_pendaftar_sumber')
     .select('*')
     .eq('periode_id', input.periodeId)
     .eq('aktif', true);
+  if (input.sumberId) kueri = kueri.eq('id', input.sumberId);
+  const { data: sumberRows } = await kueri.order('created_at', { ascending: true });
   const sumber = (sumberRows ?? []) as KsPendaftarSumber[];
   if (sumber.length === 0) return { ok: false, error: 'Belum ada sumber pendaftar yang aktif.' };
 
