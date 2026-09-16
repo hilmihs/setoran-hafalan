@@ -317,7 +317,78 @@ async function main() {
       check('Oktober: Siti dihitung terpakai_lain', r.terpakai_lain === 1, JSON.stringify(r));
     }
 
-    // ── [SISIPAN IMPOR] ── Task 12 menambahkan uji impor tepat di atas baris ini.
+    console.log('\n# impor xlsx ke basis data');
+    {
+      const impor = await import('../src/lib/ketersediaan-impor');
+      const { supabaseAdmin } = await import('../src/lib/supabase-admin');
+      const { getPool } = await import('../src/lib/pg-core');
+      const q = async <T,>(sql: string, p: unknown[] = []) => (await getPool().query(sql, p)).rows as T[];
+      const aktor = { wa: '628100000009', nama: 'Koor Uji' };
+
+      // Ahmad dan Khadijah sudah mengisi sendiri di Oktober — impor tidak boleh menyentuhnya.
+      await supabaseAdmin.from('ks_pengisian').insert({ periode_id: ID.okt, pengajar_id: ID.ahmad, sumber: 'form', komitmen: true });
+      await supabaseAdmin.from('ks_pengisian').insert({ periode_id: ID.okt, pengajar_id: ID.khadijah, sumber: 'form', komitmen: true });
+
+      const berkas = await xlsxTiruan();
+      const pilihan = { tujuan: {} as Record<string, string>, manual: {} as Record<string, string> };
+      const pratinjau = await impor.susunPratinjau(berkas, pilihan);
+      const tebak = Object.fromEntries(pratinjau.bagian.map((b) => [b.kunci, b.tujuan]));
+      check(
+        'tujuan ditebak dari nama bulan',
+        tebak['online|September 2026'] === ID.sep && tebak['offline|September 2026'] === ID.sep && tebak['online|Oktober 2026'] === ID.okt,
+        JSON.stringify(tebak)
+      );
+      const asing = pratinjau.baris.find((b) => b.nama === 'Nama Asing')!;
+      check('nama asing perlu dipilih', asing.cocok.status === 'nama_tak_ketemu' && !asing.siap);
+      check('tanpa akun terdeteksi', pratinjau.baris.find((b) => b.nama === 'Tanpa Akun')?.cocok.status === 'tanpa_akun');
+      check(
+        'Khadijah offline cocok lewat nama',
+        pratinjau.baris.find((b) => b.sheet === 'Offline - Pejaten Akhwat' && b.cocok.pengajar_id === ID.khadijah)?.cocok.cara === 'nama'
+      );
+
+      pilihan.manual[asing.kunci] = 'lewati';
+      const h1 = await impor.simpanImpor(berkas, pilihan, aktor, 'uji.xlsx');
+      const sep1 = h1.periode.find((p) => p.id === ID.sep)!;
+      const okt1 = h1.periode.find((p) => p.id === ID.okt)!;
+      check('September: 3 pengajar, 5 jam, 4 jam baru', sep1.pengajar === 3 && sep1.jam === 5 && sep1.slotBaru === 4, JSON.stringify(sep1));
+      check('Oktober: Bilal masuk, Ahmad dilindungi', okt1.pengajar === 1 && okt1.jam === 1 && okt1.dilindungi === 1 && okt1.slotBaru === 1, JSON.stringify(okt1));
+
+      const ket = await q<{ nama: string; label: string; prioritas: number | null; bentrok_alasan: string | null; lokasi: string | null; sumber: string; pmode: string }>(
+        `select p.name nama, s.label, k.prioritas, k.bentrok_alasan, s.lokasi, i.sumber, i.mode pmode
+           from ks_ketersediaan k
+           join ks_pengisian i on i.id = k.pengisian_id
+           join pengajar p on p.id = i.pengajar_id
+           join ks_slot s on s.id = k.slot_id
+          where i.periode_id = $1
+          order by p.name, s.label`,
+        [ID.sep]
+      );
+      const bilalSabtu = ket.find((k) => k.nama === 'Bilal Hakim' && k.label.startsWith('Sabtu'));
+      check('bentrok dicatat, tidak mengunci', Boolean(bilalSabtu?.bentrok_alasan?.includes('HITS 044')), JSON.stringify(bilalSabtu));
+      check('halaqah yang sudah selesai tidak tercatat bentrok', ket.find((k) => k.nama === 'Ahmad Fauzan')?.bentrok_alasan === null);
+      check('prioritas per jam tersimpan', ket.find((k) => k.nama === 'Bilal Hakim' && k.label.startsWith('Senin'))?.prioritas === 2);
+      check('lokasi offline dari judul sheet', ket.find((k) => k.nama === 'Khadijah Maryam')?.lokasi === 'Pejaten');
+      check('pengisian Bilal = keduanya', ket.find((k) => k.nama === 'Bilal Hakim')?.pmode === 'keduanya');
+      check('semua pengisian September bersumber impor', ket.every((k) => k.sumber === 'impor'));
+      const formOkt = await q<{ nama: string }>(
+        `select p.name nama from ks_pengisian i join pengajar p on p.id = i.pengajar_id
+          where i.periode_id = $1 and i.sumber = 'form' order by 1`,
+        [ID.okt]
+      );
+      check('isian sendiri di Oktober utuh', formOkt.map((r) => r.nama).join() === 'Ahmad Fauzan,Khadijah Maryam', JSON.stringify(formOkt));
+
+      const h2 = await impor.simpanImpor(berkas, pilihan, aktor, 'uji.xlsx');
+      const sep2 = h2.periode.find((p) => p.id === ID.sep)!;
+      check('impor ulang idempoten', sep2.jam === 5 && sep2.slotBaru === 0 && sep2.dihapus === 0, JSON.stringify(sep2));
+      const slotSep = await q<{ n: string }>(`select count(*)::text n from ks_slot where periode_id = $1`, [ID.sep]);
+      check('master September: 1 lama + 4 dari impor', slotSep[0].n === '5', slotSep[0].n);
+
+      const h3 = await impor.simpanImpor(await xlsxTiruan({ tanpaBaris: 'bilal-sabtu' }), pilihan, aktor, 'uji.xlsx');
+      check('jam yang hilang dari berkas dihapus', h3.periode.find((p) => p.id === ID.sep)?.dihapus === 1, JSON.stringify(h3.periode));
+
+      const log = await q<{ n: string }>(`select count(*)::text n from ks_log where aksi = 'impor_ketersediaan'`);
+      check('setiap impor tercatat per periode', log[0].n === '6', log[0].n);
+    }
   } finally {
     await server.stop();
     await db.close();
