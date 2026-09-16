@@ -334,7 +334,7 @@ async function susunPayloadPertemuan(
     throw new Error('Halaqah belum terbentuk di CMS tilawah — jalankan langkahnya lebih dulu.');
   }
 
-  const tanggal = tanggalPertemuan(mulai, slot.hari_idx, ke)[ke - 1];
+  const tanggal = tanggalPertemuan(mulai, slot.hari_idx, ke, periode.libur ?? [])[ke - 1];
   if (!tanggal) throw new Error(`Tanggal pertemuan ke-${ke} tidak dapat dihitung.`);
 
   // Kelas dua waktu: jam pertemuan mengikuti hari tanggalnya.

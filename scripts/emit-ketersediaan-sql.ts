@@ -19,6 +19,7 @@ const BERKAS = [
   '0072_ketersediaan_pertemuan.sql',
   '0071_ketersediaan_rekaman.sql',
   '0077_ketersediaan_impor_aturan.sql',
+  '0078_ketersediaan_libur_periode.sql',
 ];
 
 /**

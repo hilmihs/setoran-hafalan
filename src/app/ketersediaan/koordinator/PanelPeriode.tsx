@@ -1,7 +1,9 @@
 'use client';
 
-import { useState } from 'react';
-import type { KsPeriode } from '@/types/db';
+import { useMemo, useState } from 'react';
+import type { KsHariIdx, KsPeriode } from '@/types/db';
+import { idxKeHari } from '@/lib/ketersediaan-slot';
+import { tanggalPertemuan, teksLibur, uraiLibur } from '@/lib/ketersediaan-pertemuan';
 import {
   buatPeriode,
   rekamRiwayatPeriode,
@@ -11,10 +13,19 @@ import {
 } from './actions';
 import { Angka, Bagian, Kotak, useAksi } from './ui';
 
-export function PanelPeriode({ periode, superadmin }: { periode: KsPeriode; superadmin: boolean }) {
+export function PanelPeriode({
+  periode,
+  superadmin,
+  polaHari,
+}: {
+  periode: KsPeriode;
+  superadmin: boolean;
+  /** Pola hari jam aktif periode ini, untuk pratinjau pertemuan terakhir. */
+  polaHari: KsHariIdx[][];
+}) {
   return (
     <>
-      <AturanPeriode periode={periode} />
+      <AturanPeriode periode={periode} polaHari={polaHari} />
       <TujuanTilawah periode={periode} superadmin={superadmin} />
     </>
   );
@@ -82,8 +93,12 @@ export function PeriodeBaru() {
   );
 }
 
-function AturanPeriode({ periode }: { periode: KsPeriode }) {
+function AturanPeriode({ periode, polaHari }: { periode: KsPeriode; polaHari: KsHariIdx[][] }) {
   const { pending, jalan, tampilan } = useAksi();
+  const [nama, setNama] = useState(periode.nama);
+  const [mulai, setMulai] = useState(periode.mulai.slice(0, 10));
+  const [selesai, setSelesai] = useState(periode.selesai.slice(0, 10));
+  const [liburTeks, setLiburTeks] = useState(teksLibur(periode.libur ?? []));
   const [minimalSlot, setMinimalSlot] = useState(periode.minimal_slot);
   const [kapasitas, setKapasitas] = useState(periode.kapasitas_halaqah);
   const [ambangBentuk, setAmbangBentuk] = useState(periode.ambang_bentuk);
@@ -95,11 +110,82 @@ function AturanPeriode({ periode }: { periode: KsPeriode }) {
   const [pertemuanDasar, setPertemuanDasar] = useState(periode.jumlah_pertemuan_dasar);
   const [pertemuanLanjutan, setPertemuanLanjutan] = useState(periode.jumlah_pertemuan_lanjutan);
 
+  const libur = useMemo(() => uraiLibur(liburTeks), [liburTeks]);
+  // Pertemuan terakhir per pola hari, dengan libur yang sedang diketik — supaya
+  // tanggal selesai periode bisa dicocokkan sebelum disimpan.
+  const pratinjau = useMemo(
+    () =>
+      polaHari.map((hari) => {
+        const akhir = (n: number) => (n > 0 ? tanggalPertemuan(mulai, hari, n, libur.libur).at(-1) ?? null : null);
+        return { hari: hari.map(idxKeHari).join(' & '), dasar: akhir(pertemuanDasar), lanjutan: akhir(pertemuanLanjutan) };
+      }),
+    [polaHari, mulai, libur, pertemuanDasar, pertemuanLanjutan]
+  );
+  const terakhir = pratinjau.map((p) => p.dasar ?? p.lanjutan).filter((x): x is string => Boolean(x)).sort().at(-1) ?? null;
+
   return (
     <Bagian
       judul="Aturan periode"
       keterangan="Angka-angka ini yang dipakai mesin: kapan halaqah boleh dibentuk, berapa lama antrean boleh menunggu, dan berapa lama pengajar punya waktu mengonfirmasi."
     >
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'flex-end', marginBottom: 12 }}>
+        <label style={{ display: 'flex', flexDirection: 'column', gap: 2, flex: '1 1 220px' }}>
+          <span className="t-small" style={{ color: 'var(--muted-2)' }}>Nama periode</span>
+          <input id="aturan-nama" className="input" value={nama} onChange={(e) => setNama(e.target.value)} />
+        </label>
+        <label style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+          <span className="t-small" style={{ color: 'var(--muted-2)' }}>Mulai KBM</span>
+          <input id="aturan-mulai" className="input" type="date" value={mulai} onChange={(e) => setMulai(e.target.value)} />
+        </label>
+        <label style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+          <span className="t-small" style={{ color: 'var(--muted-2)' }}>Selesai</span>
+          <input id="aturan-selesai" className="input" type="date" value={selesai} onChange={(e) => setSelesai(e.target.value)} />
+        </label>
+      </div>
+
+      <label style={{ display: 'flex', flexDirection: 'column', gap: 2, marginBottom: 6 }}>
+        <span className="t-small" style={{ color: 'var(--muted-2)' }}>
+          Tanggal libur — satu per baris. Pertemuan yang jatuh di tanggal ini dilompati.
+        </span>
+        <textarea
+          id="aturan-libur"
+          className="input"
+          rows={Math.max(4, liburTeks.split('\n').length + 1)}
+          value={liburTeks}
+          onChange={(e) => setLiburTeks(e.target.value)}
+          placeholder={'25/12/2026 Natal\n01/01/2027 Tahun Baru\n08/02/2027 - 23/03/2027 Ramadhan + 2 pekan'}
+          style={{ fontFamily: 'var(--font-mono, ui-monospace, monospace)', fontSize: 13 }}
+        />
+      </label>
+      {libur.galat.length > 0 && <Kotak nada="galat">{libur.galat.join('\n')}</Kotak>}
+      {pratinjau.length > 0 && (
+        <div style={{ overflowX: 'auto', marginBottom: 12 }}>
+          <table className="t-small" style={{ borderCollapse: 'collapse', fontVariantNumeric: 'tabular-nums' }}>
+            <thead>
+              <tr style={{ color: 'var(--muted-2)', textAlign: 'left' }}>
+                <th style={{ padding: '4px 12px 4px 0' }}>Hari</th>
+                <th style={{ padding: '4px 12px 4px 0' }}>Pertemuan terakhir Dasar</th>
+                <th style={{ padding: '4px 12px 4px 0' }}>Pertemuan terakhir Lanjutan</th>
+              </tr>
+            </thead>
+            <tbody>
+              {pratinjau.map((p) => (
+                <tr key={p.hari}>
+                  <td style={{ padding: '2px 12px 2px 0' }}>{p.hari}</td>
+                  <td style={{ padding: '2px 12px 2px 0' }}>{tampilTanggal(p.dasar)}</td>
+                  <td style={{ padding: '2px 12px 2px 0' }}>{tampilTanggal(p.lanjutan)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          {terakhir && terakhir > selesai && (
+            <Kotak nada="galat">
+              Pertemuan terakhir jatuh {tampilTanggal(terakhir)}, setelah tanggal selesai periode. Mundurkan tanggal selesai.
+            </Kotak>
+          )}
+        </div>
+      )}
+
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10 }}>
         <Angka label="Minimal slot" nilai={minimalSlot} ubah={setMinimalSlot} min={0} max={50} />
         <Angka label="Kapasitas halaqah" nilai={kapasitas} ubah={setKapasitas} min={1} max={100} />
@@ -113,7 +199,7 @@ function AturanPeriode({ periode }: { periode: KsPeriode }) {
         <Angka label="Pertemuan · HITS Lanjutan" nilai={pertemuanLanjutan} ubah={setPertemuanLanjutan} min={0} max={200} />
       </div>
       <p className="t-small" style={{ color: 'var(--muted-2)', marginTop: 6 }}>
-        Pertemuan dibuat di CMS tilawah pada hari slot, berturut-turut sejak tanggal mulai.
+        Pertemuan dibuat di CMS tilawah pada hari slot sejak tanggal mulai, melompati tanggal libur di atas.
         HITS Dasar 50 pertemuan, HITS Lanjutan 26. Pendaftar &ldquo;Alumni HITS&rdquo; ikut
         Lanjutan. Isi 0 bila pertemuan akan dibuat manual di sana.
       </p>
@@ -126,6 +212,10 @@ function AturanPeriode({ periode }: { periode: KsPeriode }) {
           jalan(() =>
             ubahAturanPeriode({
               periodeId: periode.id,
+              nama,
+              mulai,
+              selesai,
+              liburTeks,
               minimalSlot,
               kapasitas,
               ambangBentuk,
@@ -222,4 +312,15 @@ function TujuanTilawah({ periode, superadmin }: { periode: KsPeriode; superadmin
       )}
     </Bagian>
   );
+}
+
+function tampilTanggal(t: string | null): string {
+  if (!t) return '—';
+  return new Date(`${t}T00:00:00Z`).toLocaleDateString('id-ID', {
+    weekday: 'short',
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+    timeZone: 'UTC',
+  });
 }

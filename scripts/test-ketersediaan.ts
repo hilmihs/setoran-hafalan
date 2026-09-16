@@ -40,6 +40,8 @@ import {
   rentangPertemuan,
   tanggalPertemuan,
   jamPadaTanggal,
+  teksLibur,
+  uraiLibur,
 } from '@/lib/ketersediaan-pertemuan';
 import {
   jumlahkan,
@@ -446,6 +448,28 @@ eq(tanggalPertemuan('2026-07-27', [0, 2], 0).length, 0, 'jumlah 0 → tak ada pe
 eq(tanggalPertemuan('2026-07-27', [], 5).length, 0, 'tanpa hari slot → tak ada pertemuan');
 eq(tanggalPertemuan('bukan-tanggal', [0], 3).length, 0, 'tanggal tak terbaca → tak ada pertemuan');
 eq(tanggalPertemuan('2026-07-27', [4], 3), ['2026-07-31', '2026-08-07', '2026-08-14'], 'slot sekali sepekan');
+
+console.log('\n# tanggal libur periode');
+{
+  const { libur, galat } = uraiLibur('25/12/2026 Natal\n\n08/02/2027 - 23/03/2027 Ramadhan + 2 pekan\n2027-01-01 Tahun Baru\n31/02/2027 salah\n10/03/2027 s.d. 01/03/2027 terbalik');
+  eq(libur, [
+    { mulai: '2026-12-25', selesai: '2026-12-25', keterangan: 'Natal' },
+    { mulai: '2027-01-01', selesai: '2027-01-01', keterangan: 'Tahun Baru' },
+    { mulai: '2027-02-08', selesai: '2027-03-23', keterangan: 'Ramadhan + 2 pekan' },
+  ], 'libur terurai & terurut');
+  eq(galat.length, 2, 'tanggal mustahil dan rentang terbalik dilaporkan');
+  eq(uraiLibur(teksLibur(libur)).libur, libur, 'teksLibur ↔ uraiLibur bolak-balik');
+  eq(
+    tanggalPertemuan('2026-12-23', [2, 4], 3, libur),
+    ['2026-12-23', '2026-12-30', '2027-01-06'],
+    'Jumat 25 Des & Jumat 1 Jan dilompati (Rabu & Jumat)'
+  );
+  const tanpa = tanggalPertemuan('2026-10-05', [0, 2], 50);
+  const dengan = tanggalPertemuan('2026-10-05', [0, 2], 50, libur);
+  eq(dengan.length, 50, 'tetap 50 pertemuan');
+  eq(dengan.some((t) => t >= '2027-02-08' && t <= '2027-03-23'), false, 'tak ada pertemuan di Ramadhan + 2 pekan');
+  eq(dengan.at(-1)! > tanpa.at(-1)!, true, 'pertemuan terakhir mundur karena libur');
+}
 
 eq(namaPertemuan(1), 'P1', 'nama pertemuan P1');
 eq(namaPertemuan(22), 'P22', 'nama pertemuan P22');

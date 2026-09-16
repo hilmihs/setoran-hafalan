@@ -116,6 +116,7 @@ const MIGRASI = [
   '0071_ketersediaan_rekaman',
   '0072_ketersediaan_pertemuan',
   '0077_ketersediaan_impor_aturan',
+  '0078_ketersediaan_libur_periode',
 ];
 
 const ID = {

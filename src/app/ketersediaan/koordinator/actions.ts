@@ -20,6 +20,7 @@ import { susunLabel, uraikanSlot } from '@/lib/ketersediaan-slot';
 import { identitasPendaftar, tarikSumber, tebakPemetaan } from '@/lib/ketersediaan-pendaftar';
 import { identitasTerpakaiLintasPeriode } from '@/lib/ketersediaan-lintas-periode';
 import { parseCsv } from '@/lib/csv';
+import { uraiLibur } from '@/lib/ketersediaan-pertemuan';
 import { jalankanAlokasi } from '@/lib/ketersediaan-jalankan';
 import {
   geserYangKedaluwarsa,
@@ -109,6 +110,11 @@ export async function buatPeriode(input: {
 
 export async function ubahAturanPeriode(input: {
   periodeId: string;
+  nama: string;
+  mulai: string;
+  selesai: string;
+  /** Satu libur per baris, lihat `uraiLibur`. */
+  liburTeks: string;
   minimalSlot: number;
   kapasitas: number;
   ambangBentuk: number;
@@ -126,8 +132,20 @@ export async function ubahAturanPeriode(input: {
   if (input.ambangBawah > input.ambangBentuk) {
     return { ok: false, error: 'Ambang bawah tidak boleh melebihi ambang bentuk.' };
   }
+  const nama = input.nama.trim();
+  if (!nama) return { ok: false, error: 'Nama periode wajib diisi.' };
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(input.mulai) || !/^\d{4}-\d{2}-\d{2}$/.test(input.selesai)) {
+    return { ok: false, error: 'Tanggal mulai dan selesai wajib diisi.' };
+  }
+  if (input.selesai < input.mulai) return { ok: false, error: 'Tanggal selesai tidak boleh sebelum tanggal mulai.' };
+  const { libur, galat } = uraiLibur(input.liburTeks);
+  if (galat.length > 0) return { ok: false, error: `Daftar libur belum benar:\n${galat.join('\n')}` };
 
   const patch = {
+    nama,
+    mulai: input.mulai,
+    selesai: input.selesai,
+    libur,
     minimal_slot: input.minimalSlot,
     kapasitas_halaqah: input.kapasitas,
     ambang_bentuk: input.ambangBentuk,
@@ -148,6 +166,10 @@ export async function ubahAturanPeriode(input: {
     entitas_id: input.periodeId,
     aksi: 'ubah_aturan',
     sebelum: {
+      nama: lama.nama,
+      mulai: lama.mulai,
+      selesai: lama.selesai,
+      libur: lama.libur,
       minimal_slot: lama.minimal_slot,
       kapasitas_halaqah: lama.kapasitas_halaqah,
       ambang_bentuk: lama.ambang_bentuk,

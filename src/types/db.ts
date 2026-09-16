@@ -956,6 +956,13 @@ export type KsPitaUmur = '<=45' | '46+';
 
 export const KS_PITA_UMUR: KsPitaUmur[] = ['<=45', '46+'];
 
+/** Rentang libur periode, tanggal `YYYY-MM-DD` inklusif. */
+export interface KsLibur {
+  mulai: string;
+  selesai: string;
+  keterangan: string;
+}
+
 export interface KsPeriode {
   id: string;
   nama: string;
@@ -980,6 +987,8 @@ export interface KsPeriode {
   jumlah_pertemuan_dasar: number;
   /** Pertemuan yang dibuat di CMS tilawah untuk halaqah HITS Lanjutan. 0 = tidak membuat. */
   jumlah_pertemuan_lanjutan: number;
+  /** Tanggal yang dilompati saat menyusun tanggal pertemuan (0078). */
+  libur: KsLibur[];
   /** Gerbang kirim ke CMS tilawah. false = outbox hanya mencatat payload. */
   kirim_nyata: boolean;
   tilawah_program_id: number | null;

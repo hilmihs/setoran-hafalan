@@ -260,7 +260,11 @@ export default async function KetersediaanKoordinatorPage({
         <PanelImpor />
         <PeriodeBaru />
         <PanelSlot periodeId={periode.id} slots={slots} />
-        <PanelPeriode periode={periode} superadmin={superadmin} />
+        <PanelPeriode
+          periode={periode}
+          superadmin={superadmin}
+          polaHari={[...new Map(slotAktif.map((s) => [s.hari_idx.join(','), s.hari_idx])).values()].sort((a, b) => a.join().localeCompare(b.join()))}
+        />
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
           <a className="btn btn-sm btn-ghost" href={`/api/ketersediaan/ekspor?periode=${periode.id}`}>
             Unduh xlsx periode ini
