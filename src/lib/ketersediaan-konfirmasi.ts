@@ -140,7 +140,7 @@ async function cariPengganti(
 ): Promise<string | null> {
   const { data: ket } = await supabaseAdmin
     .from('ks_ketersediaan')
-    .select('slot_id, pengisian:pengisian_id(pengajar_id, periode_id, status, submitted_at)')
+    .select('slot_id, prioritas, pengisian:pengisian_id(pengajar_id, periode_id, status, submitted_at)')
     .eq('slot_id', slotId)
     .in('status', ['terverifikasi', 'diajukan']);
 
@@ -155,16 +155,19 @@ async function cariPengganti(
   );
 
   const kandidat = ((ket ?? []) as {
+    prioritas: number | null;
     pengisian?: { pengajar_id: string; periode_id: string; status: string; submitted_at: string | null } | null;
   }[])
-    .map((k) => k.pengisian)
-    .filter(
-      (p): p is NonNullable<typeof p> =>
-        Boolean(p) && p!.periode_id === periodeId && p!.status !== 'nonaktif'
-    )
+    .filter((k) => Boolean(k.pengisian))
+    .map((k) => ({ ...k.pengisian!, prioritas: k.prioritas }))
+    .filter((p) => p.periode_id === periodeId && p.status !== 'nonaktif')
     .filter((p) => p.pengajar_id !== kecuali && !dipakai.has(p.pengajar_id))
-    // Pemutus seri dokumen konsep: pengisi form lebih awal didahulukan.
-    .sort((a, b) => (a.submitted_at ?? '').localeCompare(b.submitted_at ?? ''));
+    // Prioritas di jam ini dulu; pemutus seri dokumen konsep: pengisi form lebih awal.
+    .sort(
+      (a, b) =>
+        (a.prioritas ?? Number.MAX_SAFE_INTEGER) - (b.prioritas ?? Number.MAX_SAFE_INTEGER) ||
+        (a.submitted_at ?? '').localeCompare(b.submitted_at ?? '')
+    );
 
   return kandidat[0]?.pengajar_id ?? null;
 }

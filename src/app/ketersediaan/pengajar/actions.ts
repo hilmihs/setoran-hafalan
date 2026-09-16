@@ -73,7 +73,7 @@ export async function simpanKetersediaan(input: MasukanSimpan): Promise<Hasil> {
 
   // Slot yang bertabrakan dengan jadwal mengajar berjalan tidak boleh dipilih,
   // kecuali sanggahannya sudah diterima koordinator.
-  const terpakai = await jadwalTerpakaiPengajar(sesi.pengajar_id);
+  const terpakai = await jadwalTerpakaiPengajar(sesi.pengajar_id, { acuan: periode.mulai });
   const terkunci = kunciSlot(slotMilikKelompok, terpakai);
   const { data: sanggahDiterima } = await supabaseAdmin
     .from('ks_ketersediaan')
