@@ -180,7 +180,7 @@ export async function tambahSlot(input: {
     return { ok: false, error: 'Slot offline wajib berlokasi.' };
   }
 
-  const label = susunLabel(urai.hari_idx, urai.waktu_mulai, urai.waktu_selesai);
+  const label = urai.label;
   const adaSlot = await listSlot(input.periodeId);
   if (
     adaSlot.some(

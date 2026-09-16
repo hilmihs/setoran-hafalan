@@ -8,7 +8,6 @@ import { Bagian, Kotak } from './ui';
 
 const LABEL_MASALAH: Record<string, string> = {
   jam_tak_terbaca: 'jam tidak terbaca',
-  dua_waktu: 'satu kelas dengan dua waktu berbeda',
   wa_tak_sah: 'nomor WA tidak sah',
 };
 
@@ -297,7 +296,7 @@ export function PanelImpor() {
                 <b>Jam tidak bisa disimpan — dilewati</b>
               </div>
               <p className="t-small" style={{ margin: 0, color: 'var(--ink-2)' }}>
-                Satu jam di sistem hanya bisa menyimpan satu waktu. Kelas yang harinya berjam beda belum didukung.
+                Periksa penulisan jamnya di xlsx, lalu impor ulang. Contoh yang terbaca: &ldquo;Senin &amp; Rabu 06.00 - 07.30&rdquo; atau &ldquo;Rabu 16.00 - 17.30 dan Sabtu 13.00 - 14.30&rdquo;.
               </p>
               <ul style={{ margin: 0, paddingLeft: 18, fontSize: 13 }}>
                 {jamBermasalah.map((b) => (

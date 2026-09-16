@@ -1,5 +1,5 @@
 import type { KsHariIdx, KsSlot } from '@/types/db';
-import { hariKeIdxSet, timeKeMenit } from '@/lib/ketersediaan-slot';
+import { hariKeIdxSet, timeKeMenit, uraikanSlot } from '@/lib/ketersediaan-slot';
 import type { TilawahDay, TilawahLevel, TilawahSession } from './types';
 
 /**
@@ -136,6 +136,18 @@ export function usulkanSesi(
 
   if (mulai === null || selesai === null) {
     return { session_id: null, nama: null, keyakinan: 'tidak_ada', alasan: 'jam slot tidak terbaca', kandidat: semua };
+  }
+
+  // Kelas dua waktu tidak punya satu sesi yang benar. Jam sebenarnya tetap
+  // terkirim per pertemuan, jadi halaqahnya cukup memakai sesi penampung.
+  if (uraikanSlot(slot.label)?.duaWaktu) {
+    return {
+      session_id: null,
+      nama: null,
+      keyakinan: 'tidak_ada',
+      alasan: 'kelas dua waktu — pilih sesi penampung (mis. 00:00 - 00:00); jam tiap hari ikut terkirim di setiap pertemuan',
+      kandidat: semua,
+    };
   }
 
   const cocok = aktif.filter(

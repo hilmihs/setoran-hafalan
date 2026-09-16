@@ -167,33 +167,33 @@ export async function jadwalTerpakaiPengajar(
     : new Map<string, string | null>();
 
   for (const h of halaqahRows) {
-    const rentang = rentangDariHalaqah(h);
     // Halaqah tanpa jam yang dapat dibaca tidak boleh mengunci slot apa pun —
     // tak ada dasar menyatakan bentrok. Baris observasi lama seperti
     // "HITS 6 (observasi)" hanya berisi "Selasa & Jum'at" tanpa jam.
-    if (!rentang) continue;
+    // Kelas dua waktu menghasilkan satu entri per jam.
     const tanggalSelesai = selesai.get(h.id) ?? null;
     if (opts.acuan && !masihBerjalanPada(tanggalSelesai, opts.acuan)) continue;
-    out.push({
-      sumber: 'hits',
-      nama: h.name,
-      batch: h.batch?.name ?? null,
-      rentang,
-      label: h.jadwal_raw ?? '',
-      selesai: tanggalSelesai,
-    });
+    for (const rentang of rentangDariHalaqah(h)) {
+      out.push({
+        sumber: 'hits',
+        nama: h.name,
+        batch: h.batch?.name ?? null,
+        rentang,
+        label: h.jadwal_raw ?? '',
+        selesai: tanggalSelesai,
+      });
+    }
   }
 
   for (const k of (kelas ?? []) as KelasRow[]) {
     // kelas_hits menyimpan hari sebagai satu teks ("Senin, Rabu"), bukan larik.
-    const rentang = rentangDariHalaqah({
+    const semuaRentang = rentangDariHalaqah({
       jadwal_hari: k.jadwal_hari ? k.jadwal_hari.split(/[&,/]|\bdan\b/i) : null,
       waktu_mulai: k.jadwal_waktu_mulai,
       waktu_selesai: k.jadwal_waktu_selesai,
       jadwal_raw: k.jadwal_hari,
     });
-    if (!rentang) continue;
-    out.push({
+    for (const rentang of semuaRentang) out.push({
       sumber: 'maahir',
       nama: k.name,
       batch: null,
@@ -205,16 +205,16 @@ export async function jadwalTerpakaiPengajar(
 
   for (const u of (usulan ?? []) as UsulanRow[]) {
     if (!u.slot) continue;
-    const rentang = rentangDariSlot(u.slot);
-    if (!rentang) continue;
-    out.push({
-      sumber: 'usulan',
-      nama: u.nama_halaqah ?? 'Halaqah baru',
-      batch: null,
-      rentang,
-      label: u.slot.label,
-      selesai: null,
-    });
+    for (const rentang of rentangDariSlot(u.slot)) {
+      out.push({
+        sumber: 'usulan',
+        nama: u.nama_halaqah ?? 'Halaqah baru',
+        batch: null,
+        rentang,
+        label: u.slot.label,
+        selesai: null,
+      });
+    }
   }
 
   return out;
@@ -232,14 +232,13 @@ export interface SlotTerkunci {
  * adalah tabrakan pertama, karena itu yang perlu diterangkan ke pengajar.
  */
 export function kunciSlot(
-  slots: readonly Pick<KsSlot, 'id' | 'hari_idx' | 'waktu_mulai' | 'waktu_selesai'>[],
+  slots: readonly Pick<KsSlot, 'id' | 'label' | 'hari_idx' | 'waktu_mulai' | 'waktu_selesai'>[],
   terpakai: readonly JadwalTerpakai[]
 ): Map<string, JadwalTerpakai> {
   const kunci = new Map<string, JadwalTerpakai>();
   for (const s of slots) {
     const rentang = rentangDariSlot(s);
-    if (!rentang) continue;
-    const tabrakan = terpakai.find((t) => bentrok(rentang, t.rentang));
+    const tabrakan = terpakai.find((t) => rentang.some((r) => bentrok(r, t.rentang)));
     if (tabrakan) kunci.set(s.id, tabrakan);
   }
   return kunci;

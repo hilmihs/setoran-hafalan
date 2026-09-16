@@ -1,7 +1,8 @@
 import 'server-only';
 import { getPool } from '@/lib/pg-core';
 import { supabaseAdmin } from '@/lib/supabase-admin';
-import type { Gender, KsModePengajar, KsPeriode } from '@/types/db';
+import type { Gender, KsHariIdx, KsModePengajar, KsPeriode } from '@/types/db';
+import { kunciJadwal, sesiDariSlot, type SesiSlot } from '@/lib/ketersediaan-slot';
 import { listPeriode } from '@/lib/ketersediaan-periode';
 import { alasanTerkunci, jadwalTerpakaiPengajar, kunciSlot, type JadwalTerpakai } from '@/lib/ketersediaan-bentrok';
 import { bacaKetersediaanXlsx, type BarisImpor } from '@/lib/ketersediaan-impor-xlsx';
@@ -167,8 +168,8 @@ export async function simpanImpor(
  * Jakarta Timur" di formulir) melahirkan dua jam kembar, dan setiap pendaftar di
  * jam itu tertahan sebagai "cocok ke lebih dari satu baris master".
  */
-function kunciJam(g: Gender, mode: string, hariIdx: readonly number[], mulai: string): string {
-  return `${g}|${mode}|${hariIdx.join(',')}|${mulai.slice(0, 5)}`;
+function kunciJam(g: Gender, mode: string, sesi: readonly SesiSlot[]): string {
+  return `${g}|${mode}|${kunciJadwal(sesi)}`;
 }
 
 async function simpanSatuPeriode(
@@ -181,7 +182,7 @@ async function simpanSatuPeriode(
   const perPengajar = new Map<string, Map<string, BarisPratinjau>>();
   for (const r of rows) {
     const pid = r.cocok.pengajar_id!;
-    const k = kunciJam(r.gender, r.mode, r.slot!.hari_idx, r.slot!.waktu_mulai);
+    const k = kunciJam(r.gender, r.mode, r.slot!.sesi);
     if (!perPengajar.has(pid)) perPengajar.set(pid, new Map());
     const jam = perPengajar.get(pid)!;
     const lama = jam.get(k);
@@ -206,16 +207,19 @@ async function simpanSatuPeriode(
       id: string;
       kelompok: Gender;
       mode: string;
-      hari_idx: number[];
+      label: string;
+      hari_idx: KsHariIdx[];
       waktu_mulai: string;
+      waktu_selesai: string;
       lokasi: string | null;
       urutan: number;
     }>(
-      `select id, kelompok::text as kelompok, mode, hari_idx, waktu_mulai::text as waktu_mulai, lokasi, urutan
+      `select id, kelompok::text as kelompok, mode, label, hari_idx, waktu_mulai::text as waktu_mulai,
+              waktu_selesai::text as waktu_selesai, lokasi, urutan
          from ks_slot where periode_id = $1`,
       [periode.id]
     );
-    const slotId = new Map(slotRows.map((s) => [kunciJam(s.kelompok, s.mode, s.hari_idx, s.waktu_mulai), s.id]));
+    const slotId = new Map(slotRows.map((s) => [kunciJam(s.kelompok, s.mode, sesiDariSlot(s)), s.id]));
     let urutan = slotRows.reduce((m, s) => Math.max(m, s.urutan), 0);
 
     let slotBaru = 0;
@@ -276,7 +280,7 @@ async function simpanSatuPeriode(
         slotMilik.push(sid);
 
         const tabrakan = kunciSlot(
-          [{ id: sid, hari_idx: s.hari_idx, waktu_mulai: s.waktu_mulai, waktu_selesai: s.waktu_selesai }],
+          [{ id: sid, label: s.label, hari_idx: s.hari_idx, waktu_mulai: s.waktu_mulai, waktu_selesai: s.waktu_selesai }],
           terpakai.get(pid) ?? []
         ).get(sid);
 

@@ -204,7 +204,7 @@ async function main() {
     check('lokasi Matraman utuh', matIkhwan?.lokasi === 'Masjid Al-Kautsar Matraman', String(matIkhwan?.lokasi));
     const aisyah = semua.find((b) => b.nama === 'Aisyah Rahma');
     check('bagian kedua Matraman bergender akhwat', aisyah?.gender === 'akhwat');
-    check('jam dua waktu ditandai', aisyah?.masalah.join() === 'dua_waktu' && aisyah?.slot === null, JSON.stringify(aisyah?.masalah));
+    check('jam dua waktu terurai', aisyah?.masalah.length === 0 && aisyah?.slot?.label === 'Rabu 16:00 - 17:30 & Sabtu 13:00 - 14:30 WIB', JSON.stringify([aisyah?.masalah, aisyah?.slot?.label]));
     check('tidak ada baris terlewat', hasil.terlewat.length === 0, JSON.stringify(hasil.terlewat));
 
     if (process.env.KS_XLSX) {
@@ -214,7 +214,7 @@ async function main() {
       );
       const baris = nyata.bagian.flatMap((b) => b.baris);
       check('berkas nyata: 179 baris', baris.length === 179, String(baris.length));
-      check('berkas nyata: 3 jam dua waktu', baris.filter((b) => b.masalah.includes('dua_waktu')).length === 3);
+      check('berkas nyata: 3 jam dua waktu terurai', baris.filter((b) => b.slot?.duaWaktu).length === 3);
       check('berkas nyata: tiga bagian', nyata.bagian.length === 3, nyata.bagian.map((b) => b.kunci).join());
     }
   }
@@ -350,7 +350,9 @@ async function main() {
       const h1 = await impor.simpanImpor(berkas, pilihan, aktor, 'uji.xlsx');
       const sep1 = h1.periode.find((p) => p.id === ID.sep)!;
       const okt1 = h1.periode.find((p) => p.id === ID.okt)!;
-      check('September: 3 pengajar, 5 jam, 4 jam baru', sep1.pengajar === 3 && sep1.jam === 5 && sep1.slotBaru === 4, JSON.stringify(sep1));
+      check('September: 4 pengajar, 6 jam, 5 jam baru (termasuk kelas dua waktu Aisyah)', sep1.pengajar === 4 && sep1.jam === 6 && sep1.slotBaru === 5, JSON.stringify(sep1));
+      const duaWaktu = await q<{ label: string; waktu_mulai: string }>(`select label, waktu_mulai::text from ks_slot where periode_id = $1 and label like 'Rabu 16:00 - 17:30 & %'`, [ID.sep]);
+      check('jam dua waktu tersimpan dengan label baku', duaWaktu.length === 1 && duaWaktu[0].label === 'Rabu 16:00 - 17:30 & Sabtu 13:00 - 14:30 WIB', JSON.stringify(duaWaktu));
       check('Oktober: Bilal masuk, Ahmad dilindungi', okt1.pengajar === 1 && okt1.jam === 1 && okt1.dilindungi === 1 && okt1.slotBaru === 1, JSON.stringify(okt1));
 
       const ket = await q<{ nama: string; label: string; prioritas: number | null; bentrok_alasan: string | null; lokasi: string | null; sumber: string; pmode: string }>(
@@ -379,9 +381,9 @@ async function main() {
 
       const h2 = await impor.simpanImpor(berkas, pilihan, aktor, 'uji.xlsx');
       const sep2 = h2.periode.find((p) => p.id === ID.sep)!;
-      check('impor ulang idempoten', sep2.jam === 5 && sep2.slotBaru === 0 && sep2.dihapus === 0, JSON.stringify(sep2));
+      check('impor ulang idempoten', sep2.jam === 6 && sep2.slotBaru === 0 && sep2.dihapus === 0, JSON.stringify(sep2));
       const slotSep = await q<{ n: string }>(`select count(*)::text n from ks_slot where periode_id = $1`, [ID.sep]);
-      check('master September: 1 lama + 4 dari impor', slotSep[0].n === '5', slotSep[0].n);
+      check('master September: 1 lama + 5 dari impor', slotSep[0].n === '6', slotSep[0].n);
 
       const h3 = await impor.simpanImpor(await xlsxTiruan({ tanpaBaris: 'bilal-sabtu' }), pilihan, aktor, 'uji.xlsx');
       check('jam yang hilang dari berkas dihapus', h3.periode.find((p) => p.id === ID.sep)?.dihapus === 1, JSON.stringify(h3.periode));

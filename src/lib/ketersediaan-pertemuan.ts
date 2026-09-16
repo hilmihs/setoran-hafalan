@@ -53,6 +53,21 @@ export function tanggalPertemuan(
   return out;
 }
 
+/**
+ * Jam pertemuan pada sebuah tanggal. Kelas dua waktu ("Rabu 16:00 - 17:30 &
+ * Sabtu 13:00 - 14:30") berjam beda per hari, jadi jamnya dipilih dari hari
+ * tanggal itu. null bila tanggal itu bukan hari belajar kelasnya.
+ */
+export function jamPadaTanggal(
+  tanggal: string,
+  sesi: readonly { hari_idx: KsHariIdx; mulai: string; selesai: string }[]
+): { mulai: string; selesai: string } | null {
+  const d = new Date(`${tanggal.slice(0, 10)}T00:00:00Z`);
+  if (Number.isNaN(d.getTime())) return null;
+  const s = sesi.find((x) => x.hari_idx === idxHari(d));
+  return s ? { mulai: s.mulai, selesai: s.selesai } : null;
+}
+
 /** Nama pertemuan mengikuti kebiasaan yang sudah ada di CMS: P1, P2, … */
 export function namaPertemuan(urutan: number): string {
   return `P${urutan}`;

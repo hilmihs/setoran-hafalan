@@ -21,7 +21,9 @@ import type {
   EnrolMuridBody,
   TilawahEnvelope,
 } from './types';
+import { sesiDariSlot } from '@/lib/ketersediaan-slot';
 import {
+  jamPadaTanggal,
   jumlahPertemuanUntuk,
   namaPertemuan,
   rentangPertemuan,
@@ -305,7 +307,7 @@ async function susunPayloadPertemuan(
   const { data: u } = await supabaseAdmin
     .from('ks_usulan')
     .select(
-      'id, tanggal_mulai, tilawah_halaqah_id, slot:slot_id(hari_idx, waktu_mulai, waktu_selesai, mode, lokasi), pengajar:pengajar_id(name, whatsapp_number)'
+      'id, tanggal_mulai, tilawah_halaqah_id, slot:slot_id(label, hari_idx, waktu_mulai, waktu_selesai, mode, lokasi), pengajar:pengajar_id(name, whatsapp_number)'
     )
     .eq('id', usulanId)
     .maybeSingle();
@@ -313,6 +315,7 @@ async function susunPayloadPertemuan(
   if (ke < 1) throw new Error('Nomor pertemuan tidak sah.');
 
   const slot = u.slot as {
+    label: string;
     hari_idx: KsHariIdx[];
     waktu_mulai: string;
     waktu_selesai: string;
@@ -334,7 +337,10 @@ async function susunPayloadPertemuan(
   const tanggal = tanggalPertemuan(mulai, slot.hari_idx, ke)[ke - 1];
   if (!tanggal) throw new Error(`Tanggal pertemuan ke-${ke} tidak dapat dihitung.`);
 
-  const rentang = rentangPertemuan(tanggal, slot.waktu_mulai, slot.waktu_selesai);
+  // Kelas dua waktu: jam pertemuan mengikuti hari tanggalnya.
+  const jam = jamPadaTanggal(tanggal, sesiDariSlot(slot));
+  if (!jam) throw new Error(`Jam pertemuan ke-${ke} (${tanggal}) tidak dapat ditentukan dari jadwal "${slot.label}".`);
+  const rentang = rentangPertemuan(tanggal, jam.mulai, jam.selesai);
   if (!rentang) {
     throw new Error('Jam selesai tidak lebih besar dari jam mulai — CMS menolak pertemuan seperti itu.');
   }

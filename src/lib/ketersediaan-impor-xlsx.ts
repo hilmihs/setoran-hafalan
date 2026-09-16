@@ -18,7 +18,7 @@ import { normalWa } from '@/lib/ketersediaan-pendaftar';
  * Kolom dikenali dari judulnya supaya urutannya boleh berubah.
  */
 
-export type MasalahBaris = 'jam_tak_terbaca' | 'dua_waktu' | 'wa_tak_sah';
+export type MasalahBaris = 'jam_tak_terbaca' | 'wa_tak_sah';
 
 export interface BarisImpor {
   /** Stabil selama berkasnya sama: kunci pilihan manual koordinator. */
@@ -53,9 +53,6 @@ export interface HasilBacaXlsx {
   /** Baris data yang tak dapat ditempatkan (gender atau batch tak diketahui) — dilaporkan, tidak ditebak. */
   terlewat: { sheet: string; nomorBaris: number; alasan: string }[];
 }
-
-/** Satu rentang jam. Lebih dari satu dalam satu sel = satu kelas berjam beda per hari. */
-const POLA_RENTANG = /\d{1,2}\s*[.:]\s*\d{2}\s*[-–—]\s*\d{1,2}\s*[.:]\s*\d{2}/g;
 
 function teks(v: ExcelJS.CellValue | undefined): string {
   if (v === null || v === undefined) return '';
@@ -148,10 +145,10 @@ export async function bacaKetersediaanXlsx(data: ArrayBuffer): Promise<HasilBaca
       const prioritas = /^\d+$/.test(prioritasTeks) && Number(prioritasTeks) > 0 ? Number(prioritasTeks) : null;
 
       const masalah: MasalahBaris[] = [];
-      const rentang = waktu.match(POLA_RENTANG) ?? [];
-      const slot = rentang.length > 1 ? null : uraikanSlot(waktu);
-      if (rentang.length > 1) masalah.push('dua_waktu');
-      else if (!slot) masalah.push('jam_tak_terbaca');
+      // Kelas dua waktu ("Rabu 16.00 - 17.30 dan Sabtu 13.00 - 14.30") kini
+      // terurai menjadi satu jam dengan waktu per hari.
+      const slot = uraikanSlot(waktu);
+      if (!slot) masalah.push('jam_tak_terbaca');
       if (waMentah && !wa) masalah.push('wa_tak_sah');
 
       const kunciBagian = `${mode}|${b}`;

@@ -12,7 +12,7 @@ import type {
   KsPitaUmur,
   KsSlot,
 } from '@/types/db';
-import { hitungUmur, pitaUmur, uraikanSlot } from '@/lib/ketersediaan-slot';
+import { hitungUmur, kunciJadwal, pitaUmur, sesiDariSlot, uraikanSlot } from '@/lib/ketersediaan-slot';
 import { listSlot } from '@/lib/ketersediaan-periode';
 
 /**
@@ -317,7 +317,7 @@ export interface JamBaruFormulir {
  * tertahan sebagai "slot tidak ada di master" — padahal justru merekalah bukti
  * jam itu butuh pengajar, dan dashboard harus menghitungnya begitu.
  *
- * Kuncinya sama dengan `saring` (hari + jam mulai, mode, kelompok), jadi jam yang
+ * Kuncinya sama dengan `saring` (jam mulai tiap hari, mode, kelompok), jadi jam yang
  * ditambahkan di sini pasti dipakai saringan. Jam yang sudah ada — termasuk yang
  * DINONAKTIFKAN koordinator — tidak dibuat lagi.
  */
@@ -325,9 +325,9 @@ export function jamBaruDariFormulir(
   baris: readonly BarisMentah[],
   slots: readonly KsSlot[]
 ): JamBaruFormulir[] {
-  const kunci = (g: Gender, mode: KsMode, hariIdx: readonly number[], mulai: string) =>
-    `${g}|${mode}|${hariIdx.join(',')}|${mulai.slice(0, 5)}`;
-  const ada = new Set(slots.map((s) => kunci(s.kelompok, s.mode, s.hari_idx, s.waktu_mulai)));
+  const kunci = (g: Gender, mode: KsMode, jadwal: string) =>
+    `${g}|${mode}|${jadwal}`;
+  const ada = new Set(slots.map((s) => kunci(s.kelompok, s.mode, kunciJadwal(sesiDariSlot(s)))));
 
   const baru = new Map<string, JamBaruFormulir>();
   for (const b of baris) {
@@ -335,7 +335,7 @@ export function jamBaruDariFormulir(
     const u = uraikanSlot(b.slot_label_raw);
     if (!u) continue;
     const mode: KsMode = u.mode ?? 'online';
-    const k = kunci(b.gender, mode, u.hari_idx, u.waktu_mulai);
+    const k = kunci(b.gender, mode, kunciJadwal(u.sesi));
     if (ada.has(k) || baru.has(k)) continue;
     baru.set(k, {
       kelompok: b.gender,
@@ -393,8 +393,8 @@ export function saring(
   const slotAktif = slots.filter((s) => s.aktif);
   const perLabel = new Map<string, KsSlot[]>();
   for (const s of slotAktif) {
-    const u = uraikanSlot(s.label);
-    const k = u ? `${u.hari_idx.join(',')}|${u.waktu_mulai}` : s.label.toLowerCase();
+    const sesi = sesiDariSlot(s);
+    const k = sesi.length > 0 ? kunciJadwal(sesi) : s.label.toLowerCase();
     if (!perLabel.has(k)) perLabel.set(k, []);
     perLabel.get(k)!.push(s);
   }
@@ -455,7 +455,7 @@ export function saring(
       alasan.push('Pilihan jam sudah penuh di form saat pendaftar mengirim');
     } else if (b.slot_label_raw) {
       const u = uraikanSlot(b.slot_label_raw);
-      const kandidat = u ? (perLabel.get(`${u.hari_idx.join(',')}|${u.waktu_mulai}`) ?? []) : [];
+      const kandidat = u ? (perLabel.get(kunciJadwal(u.sesi)) ?? []) : [];
       // Mode ikut menyaring bila teks pilihannya menyebutkannya. Tanpa ini
       // pendaftar "Offline … Selasa & Kamis 16.00" mendarat di slot ONLINE
       // berjam sama — kelasnya benar jamnya, salah tempatnya.

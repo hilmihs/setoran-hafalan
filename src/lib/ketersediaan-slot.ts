@@ -94,11 +94,24 @@ export function timeKeMenit(t: string | null | undefined): number | null {
   return jamKeMenit(t);
 }
 
+/** Satu hari belajar dan jamnya. Jam "HH:MM". */
+export interface SesiSlot {
+  hari_idx: KsHariIdx;
+  mulai: string;
+  selesai: string;
+}
+
 export interface SlotTerurai {
   hari: string[];
+  /** Gabungan semua hari, terurut. */
   hari_idx: KsHariIdx[];
+  /** Jam hari pertama. Untuk kelas dua waktu, jam hari lain ada di `sesi`. */
   waktu_mulai: string;
   waktu_selesai: string;
+  /** Jam per hari, terurut menurut hari. Kelas biasa: semua harinya berjam sama. */
+  sesi: SesiSlot[];
+  /** Hari-harinya berjam berbeda, mis. "Rabu 16.00 - 17.30 dan Sabtu 13.00 - 14.30". */
+  duaWaktu: boolean;
   mode: KsMode | null;
   /** Teks lokasi yang menempel pada pilihan offline, bila ada. */
   lokasi: string | null;
@@ -140,11 +153,14 @@ function pindaiHari(teks: string): { idx: KsHariIdx[]; posisiAwal: number } {
  *   "Online Selasa & Jum'at 06:00 - 07:30 WIB"          ← hits_halaqah.jadwal_raw
  *   "Offline di Pejaten Senin & Rabu 16:30 - 18:00 WIB" ← pilihan form pendaftaran
  *
- * Mengembalikan null bila hari atau jam tidak dapat dibaca, DAN bila teksnya
- * memuat lebih dari satu rentang jam — mis. "Senin 07.30 - 09.00 WIB & Selasa
- * 13.00 - 14.30 WIB", yang berarti dua jadwal berbeda dan tidak dapat diwakili
- * satu slot. Menebaknya akan menaruh kelas pada jam yang salah, jadi baris
- * seperti itu ditahan untuk diperiksa manusia.
+ * Kelas dua waktu juga diterima, asal setiap rentang jam didahului harinya
+ * sendiri dan harinya tidak berulang:
+ *   "Offline Matraman Rabu 16.00 - 17.30 dan Sabtu 13.00 - 14.30"
+ * Hasilnya satu slot dengan jam per hari di `sesi`. Rentang jam yang tidak
+ * punya hari sendiri ("Senin 06.00 - 07.30 / 16.00 - 17.30") tetap ditolak —
+ * menebaknya akan menaruh kelas pada jam yang salah.
+ *
+ * Mengembalikan null bila hari atau jam tidak dapat dibaca.
  */
 export function uraikanSlot(teks: string): SlotTerurai | null {
   if (!teks) return null;
@@ -160,29 +176,107 @@ export function uraikanSlot(teks: string): SlotTerurai | null {
 
   const rentang = [...sisa.matchAll(POLA_RENTANG)];
   if (rentang.length === 0) return null;
-  if (rentang.length > 1) return null; // dua jadwal berbeda — bukan satu slot
 
-  const { idx: hari_idx, posisiAwal } = pindaiHari(sisa.slice(0, rentang[0].index ?? sisa.length));
-  if (hari_idx.length === 0) return null;
+  // Setiap rentang jam memiliki hari yang tertulis di antara rentang sebelumnya
+  // dan dirinya. Kelas biasa hanya punya satu potongan.
+  const potongan: { hari: KsHariIdx[]; mulai: number; selesai: number }[] = [];
+  let posisiLokasi = -1;
+  let dari = 0;
+  for (const m of rentang) {
+    const ujung = m.index ?? 0;
+    const { idx, posisiAwal } = pindaiHari(sisa.slice(dari, ujung));
+    if (idx.length === 0) return null;
+    if (potongan.length === 0) posisiLokasi = posisiAwal;
+    const mulai = jamKeMenit(m[1]);
+    const selesai = jamKeMenit(m[2]);
+    if (mulai === null || selesai === null || selesai <= mulai) return null;
+    potongan.push({ hari: idx, mulai, selesai });
+    dari = ujung + m[0].length;
+  }
 
-  const mulai = jamKeMenit(rentang[0][1]);
-  const selesai = jamKeMenit(rentang[0][2]);
-  if (mulai === null || selesai === null || selesai <= mulai) return null;
+  const sesi: SesiSlot[] = [];
+  for (const pt of potongan) {
+    for (const h of pt.hari) {
+      if (sesi.some((x) => x.hari_idx === h)) return null; // hari yang sama dua jam — bukan satu kelas
+      sesi.push({ hari_idx: h, mulai: menitKeJam(pt.mulai), selesai: menitKeJam(pt.selesai) });
+    }
+  }
+  sesi.sort((a, b) => a.hari_idx - b.hari_idx);
 
   // Teks sebelum nama hari pertama adalah lokasi, bila ada. "di Pejaten" → "Pejaten".
-  const depan = posisiAwal > 0 ? sisa.slice(0, posisiAwal).trim() : '';
+  const depan = posisiLokasi > 0 ? sisa.slice(0, posisiLokasi).trim() : '';
   const lokasi = depan.replace(/^di\s+/i, '').trim() || null;
 
-  const hari = hari_idx.map(idxKeHari);
+  const hari_idx = sesi.map((x) => x.hari_idx);
   return {
-    hari,
+    hari: hari_idx.map(idxKeHari),
     hari_idx,
-    waktu_mulai: menitKeJam(mulai),
-    waktu_selesai: menitKeJam(selesai),
+    waktu_mulai: sesi[0].mulai,
+    waktu_selesai: sesi[0].selesai,
+    sesi,
+    duaWaktu: !seragam(sesi),
     mode,
     lokasi,
-    label: `${hari.join(' & ')} ${menitKeJam(mulai)} - ${menitKeJam(selesai)} WIB`,
+    label: labelSesi(sesi),
   };
+}
+
+function seragam(sesi: readonly SesiSlot[]): boolean {
+  return sesi.every((x) => x.mulai === sesi[0].mulai && x.selesai === sesi[0].selesai);
+}
+
+/**
+ * Label baku dari jam per hari. Hari berjam sama dikelompokkan:
+ *   "Senin & Rabu 06:00 - 07:30 WIB"
+ *   "Rabu 16:00 - 17:30 & Sabtu 13:00 - 14:30 WIB"
+ * Label ini dibaca ulang oleh `uraikanSlot`, jadi bentuknya harus tetap terurai.
+ */
+export function labelSesi(sesi: readonly SesiSlot[]): string {
+  const kelompok: { hari: KsHariIdx[]; mulai: string; selesai: string }[] = [];
+  for (const x of [...sesi].sort((a, b) => a.hari_idx - b.hari_idx)) {
+    const ada = kelompok.find((k) => k.mulai === x.mulai && k.selesai === x.selesai);
+    if (ada) ada.hari.push(x.hari_idx);
+    else kelompok.push({ hari: [x.hari_idx], mulai: x.mulai, selesai: x.selesai });
+  }
+  return `${kelompok.map((k) => `${k.hari.map(idxKeHari).join(' & ')} ${k.mulai} - ${k.selesai}`).join(' & ')} WIB`;
+}
+
+/**
+ * Jam per hari sebuah baris ks_slot. Kolom `waktu_mulai/selesai` hanya menyimpan
+ * satu jam, jadi kelas dua waktu dibaca dari labelnya — label selalu ditulis
+ * sistem lewat `labelSesi`, bukan diketik bebas.
+ */
+export function sesiDariSlot(slot: {
+  label: string;
+  hari_idx: readonly KsHariIdx[];
+  waktu_mulai: string;
+  waktu_selesai: string;
+}): SesiSlot[] {
+  const urai = uraikanSlot(slot.label);
+  if (urai?.duaWaktu && samaHari(urai.hari_idx, slot.hari_idx)) return urai.sesi;
+  const mulai = timeKeMenit(slot.waktu_mulai);
+  const selesai = timeKeMenit(slot.waktu_selesai);
+  if (mulai === null || selesai === null) return [];
+  return [...slot.hari_idx]
+    .sort((a, b) => a - b)
+    .map((h) => ({ hari_idx: h, mulai: menitKeJam(mulai), selesai: menitKeJam(selesai) }));
+}
+
+function samaHari(a: readonly number[], b: readonly number[]): boolean {
+  const x = [...a].sort((p, q) => p - q);
+  const y = [...b].sort((p, q) => p - q);
+  return x.length === y.length && x.every((v, i) => v === y[i]);
+}
+
+/**
+ * Kunci pencocokan jadwal: hari dan jam mulai tiap hari. Jam selesai sengaja
+ * tidak ikut — ejaan pilihan formulir dan xlsx kadang berbeda semenit di ujung.
+ */
+export function kunciJadwal(sesi: readonly SesiSlot[]): string {
+  return [...sesi]
+    .sort((a, b) => a.hari_idx - b.hari_idx)
+    .map((x) => `${x.hari_idx}@${x.mulai.slice(0, 5)}`)
+    .join(',');
 }
 
 /**
@@ -217,16 +311,36 @@ export function bentrok(a: RentangJadwal, b: RentangJadwal): boolean {
   return a.mulai < b.selesai && a.selesai > b.mulai;
 }
 
-/** Bentuk RentangJadwal dari baris ks_slot. */
+/** Ubah jam per hari menjadi rentang bentrok; hari berjam sama digabung. */
+export function rentangDariSesi(sesi: readonly SesiSlot[]): RentangJadwal[] {
+  const out: { hari_idx: KsHariIdx[]; mulai: number; selesai: number }[] = [];
+  for (const x of sesi) {
+    const mulai = jamKeMenit(x.mulai);
+    const selesai = jamKeMenit(x.selesai);
+    if (mulai === null || selesai === null) continue;
+    const ada = out.find((r) => r.mulai === mulai && r.selesai === selesai);
+    if (ada) ada.hari_idx.push(x.hari_idx);
+    else out.push({ hari_idx: [x.hari_idx], mulai, selesai });
+  }
+  return out;
+}
+
+/**
+ * Rentang bentrok dari baris ks_slot. Kelas biasa menghasilkan satu rentang,
+ * kelas dua waktu satu rentang per jam. Kosong bila jamnya tak terbaca.
+ */
 export function rentangDariSlot(slot: {
+  label: string;
   hari_idx: KsHariIdx[];
   waktu_mulai: string;
   waktu_selesai: string;
-}): RentangJadwal | null {
-  const mulai = timeKeMenit(slot.waktu_mulai);
-  const selesai = timeKeMenit(slot.waktu_selesai);
-  if (mulai === null || selesai === null) return null;
-  return { hari_idx: slot.hari_idx, mulai, selesai };
+}): RentangJadwal[] {
+  return rentangDariSesi(sesiDariSlot(slot));
+}
+
+/** Apakah salah satu rentang `a` bentrok dengan salah satu rentang `b`. */
+export function bentrokSalahSatu(a: readonly RentangJadwal[], b: readonly RentangJadwal[]): boolean {
+  return a.some((x) => b.some((y) => bentrok(x, y)));
 }
 
 /**
@@ -235,27 +349,26 @@ export function rentangDariSlot(slot: {
  * Kolomnya sering tidak lengkap: sebagian halaqah lama hanya punya `jadwal_raw`
  * berisi "Selasa & Jum'at" tanpa jam sama sekali (baris observasi). Urutan
  * usaha: kolom terurai dulu, lalu jatuh ke penguraian `jadwal_raw`.
- * Mengembalikan null bila jam tetap tak diketahui — halaqah tanpa jam tidak
- * boleh mengunci slot mana pun, karena tak ada dasar menyatakan bentrok.
+ * Kelas dua waktu hanya dapat dikenali dari `jadwal_raw`: kolom terurai hanya
+ * menyimpan satu jam. Karena itu `jadwal_raw` berjam ganda didahulukan.
+ * Mengembalikan larik kosong bila jam tetap tak diketahui — halaqah tanpa jam
+ * tidak boleh mengunci slot mana pun, karena tak ada dasar menyatakan bentrok.
  */
 export function rentangDariHalaqah(h: {
   jadwal_hari: string[] | null;
   waktu_mulai: string | null;
   waktu_selesai: string | null;
   jadwal_raw: string | null;
-}): RentangJadwal | null {
+}): RentangJadwal[] {
+  const urai = h.jadwal_raw ? uraikanSlot(h.jadwal_raw) : null;
+  if (urai?.duaWaktu) return rentangDariSesi(urai.sesi);
   const mulai = timeKeMenit(h.waktu_mulai);
   const selesai = timeKeMenit(h.waktu_selesai);
   const idx = hariKeIdxSet(h.jadwal_hari ?? []);
   if (idx.length > 0 && mulai !== null && selesai !== null && selesai > mulai) {
-    return { hari_idx: idx, mulai, selesai };
+    return [{ hari_idx: idx, mulai, selesai }];
   }
-  const urai = h.jadwal_raw ? uraikanSlot(h.jadwal_raw) : null;
-  if (!urai) return null;
-  const m = jamKeMenit(urai.waktu_mulai);
-  const s = jamKeMenit(urai.waktu_selesai);
-  if (m === null || s === null) return null;
-  return { hari_idx: urai.hari_idx, mulai: m, selesai: s };
+  return urai ? rentangDariSesi(urai.sesi) : [];
 }
 
 /**

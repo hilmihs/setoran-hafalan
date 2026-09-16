@@ -5,6 +5,8 @@
 // pemerataan pada alokasi berputar.
 import {
   bentrok,
+  rentangDariSlot,
+  sesiDariSlot,
   hariKeIdx,
   hariKeIdxSet,
   hitungUmur,
@@ -37,6 +39,7 @@ import {
   namaPertemuan,
   rentangPertemuan,
   tanggalPertemuan,
+  jamPadaTanggal,
 } from '@/lib/ketersediaan-pertemuan';
 import {
   jumlahkan,
@@ -122,11 +125,40 @@ eq(
   'Al Kautsar',
   'lokasi tanpa kata "di"'
 );
-eq(
-  uraikanSlot('Offline Al Kautsar Senin 07.30 - 09.00 WIB & Selasa 13.00 - 14.30 WIB'),
-  null,
-  'dua rentang jam berbeda ditolak, bukan ditebak'
-);
+{
+  const dua = uraikanSlot('Offline Masjid Al-Kautsar Matraman Rabu 16.00 - 17.30 dan Sabtu 13.00 - 14.30');
+  eq(dua?.label, 'Rabu 16:00 - 17:30 & Sabtu 13:00 - 14:30 WIB', 'kelas dua waktu: label baku');
+  eq(dua?.lokasi, 'Masjid Al-Kautsar Matraman', 'kelas dua waktu: lokasi');
+  eq(dua?.duaWaktu, true, 'kelas dua waktu ditandai');
+  eq(uraikanSlot(dua!.label)?.sesi, dua?.sesi, 'label baku terurai ulang ke jam yang sama');
+  eq(
+    uraikanSlot('Offline Al Kautsar Senin 07.30 - 09.00 WIB & Selasa 13.00 - 14.30 WIB')?.sesi,
+    [{ hari_idx: 0, mulai: '07:30', selesai: '09:00' }, { hari_idx: 1, mulai: '13:00', selesai: '14:30' }],
+    'jam per hari'
+  );
+  eq(uraikanSlot('Senin 06.00 - 07.30 / 16.00 - 17.30'), null, 'rentang tanpa hari sendiri ditolak');
+  eq(uraikanSlot('Senin 06.00 - 07.30 dan Senin 16.00 - 17.30'), null, 'hari sama dua jam ditolak');
+  eq(uraikanSlot('Senin 06.00 - 07.30 dan Rabu 06.00 - 07.30')?.label, 'Senin & Rabu 06:00 - 07:30 WIB', 'jam sama dilebur jadi kelas biasa');
+  const slotDua = { label: dua!.label, hari_idx: dua!.hari_idx, waktu_mulai: '16:00:00', waktu_selesai: '17:30:00' };
+  eq(rentangDariSlot(slotDua).length, 2, 'slot dua waktu → dua rentang bentrok');
+  eq(
+    rentangDariSlot(slotDua).some((x) => bentrok(x, { hari_idx: [5], mulai: 13 * 60 + 30, selesai: 15 * 60 })),
+    true,
+    'Sabtu 13:30 bentrok dengan sesi Sabtu 13:00'
+  );
+  eq(
+    rentangDariSlot(slotDua).some((x) => bentrok(x, { hari_idx: [5], mulai: 16 * 60, selesai: 17 * 60 + 30 })),
+    false,
+    'Sabtu 16:00 tidak bentrok (jam 16:00 hanya hari Rabu)'
+  );
+  eq(jamPadaTanggal('2026-10-03', sesiDariSlot(slotDua)), { mulai: '13:00', selesai: '14:30' }, 'pertemuan Sabtu memakai jam Sabtu');
+  eq(jamPadaTanggal('2026-09-30', sesiDariSlot(slotDua)), { mulai: '16:00', selesai: '17:30' }, 'pertemuan Rabu memakai jam Rabu');
+  eq(
+    rentangDariHalaqah({ jadwal_hari: ['Rabu', 'Sabtu'], waktu_mulai: '16:00', waktu_selesai: '17:30', jadwal_raw: 'Rabu 16.00 - 17.30 dan Sabtu 13.00 - 14.30' }).length,
+    2,
+    'halaqah lama dua waktu dibaca dari jadwal_raw'
+  );
+}
 eq(
   uraikanSlot('Online Selasa & Kamis 10.00 -11.30 WIB')?.waktu_selesai,
   '11:30',
@@ -151,7 +183,7 @@ eq(
     waktu_selesai: '07:30:00',
     jadwal_raw: null,
   }),
-  { hari_idx: [1, 4], mulai: 360, selesai: 450 },
+  [{ hari_idx: [1, 4], mulai: 360, selesai: 450 }],
   'halaqah dari kolom terurai'
 );
 eq(
@@ -161,7 +193,7 @@ eq(
     waktu_selesai: null,
     jadwal_raw: 'Online Sabtu & Ahad 13:00 - 14:30 WIB',
   }),
-  { hari_idx: [5, 6], mulai: 780, selesai: 870 },
+  [{ hari_idx: [5, 6], mulai: 780, selesai: 870 }],
   'halaqah jatuh ke jadwal_raw'
 );
 eq(
@@ -171,7 +203,7 @@ eq(
     waktu_selesai: null,
     jadwal_raw: "Selasa & Jum'at",
   }),
-  null,
+  [],
   'halaqah tanpa jam tidak mengunci apa pun'
 );
 
@@ -271,7 +303,7 @@ console.log('\n# alokasi berputar');
 
 function slotAlokasi(id: string, hari: KsHariIdx[], mulai: string, selesai: string, jumlahGrup: number): SlotAlokasi {
   return {
-    slot: { id, hari_idx: hari, waktu_mulai: mulai, waktu_selesai: selesai },
+    slot: { id, label: susunLabel(hari, mulai, selesai), hari_idx: hari, waktu_mulai: mulai, waktu_selesai: selesai },
     grup: Array.from({ length: jumlahGrup }, (_, i) => ({
       slot_id: id,
       level: 'HITS Dasar',
@@ -655,8 +687,9 @@ eq(
   [
     'akhwat|offline|Selasa & Kamis 16:00 - 17:30 WIB|Pejaten',
     'ikhwan|online|Senin & Rabu 20:00 - 21:30 WIB|null',
+    'akhwat|offline|Rabu 16:00 - 17:30 & Sabtu 13:00 - 14:30 WIB|Masjid Al Kautsar Matraman Jakarta Timur',
   ],
-  'hanya jam baru per gender & mode, tanpa kembar, tanpa pilihan tak terbaca'
+  'hanya jam baru per gender & mode, tanpa kembar, tanpa pilihan tak terbaca; kelas dua waktu ikut'
 );
 eq(
   jamBaruDariFormulir([pilihan('akhwat', 'Online Senin & Rabu 20:00 - 21:30 WIB', 'x')], [{ ...slotUji, aktif: false }]).length,

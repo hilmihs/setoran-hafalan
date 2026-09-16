@@ -1,5 +1,5 @@
 import type { KsHariIdx, KsPeriode, KsPitaUmur, KsSlot } from '@/types/db';
-import { bentrok, type RentangJadwal, rentangDariSlot } from '@/lib/ketersediaan-slot';
+import { bentrokSalahSatu, type RentangJadwal, rentangDariSlot } from '@/lib/ketersediaan-slot';
 
 /**
  * Mesin pembentukan halaqah dan alokasi pengajar.
@@ -137,7 +137,7 @@ export function kelompokkanPendaftar(
 }
 
 export interface SlotAlokasi {
-  slot: Pick<KsSlot, 'id' | 'hari_idx' | 'waktu_mulai' | 'waktu_selesai'>;
+  slot: Pick<KsSlot, 'id' | 'label' | 'hari_idx' | 'waktu_mulai' | 'waktu_selesai'>;
   grup: GrupUsulan[];
   /** Total antrean di slot ini — dipakai memutus urutan pelayanan. */
   antre: number;
@@ -214,7 +214,7 @@ export function alokasikan(masukan: MasukanAlokasi): HasilAlokasi {
       const antrian = sisaGrup.get(s.slot.id) ?? [];
       if (antrian.length === 0) continue;
       const rentang = rentangDariSlot(s.slot);
-      if (!rentang) continue;
+      if (rentang.length === 0) continue;
 
       const sudah = terpakaiDiSlot.get(s.slot.id) ?? new Set<string>();
       terpakaiDiSlot.set(s.slot.id, sudah);
@@ -227,7 +227,7 @@ export function alokasikan(masukan: MasukanAlokasi): HasilAlokasi {
         const kandidat = (masukan.tersedia.get(s.slot.id) ?? [])
           .filter((p) => !sudah.has(p))
           .filter((p) => (dapat.get(p) ?? 0) === putaran - 1)
-          .filter((p) => !(jadwal.get(p) ?? []).some((r) => bentrok(r, rentang)))
+          .filter((p) => !bentrokSalahSatu(jadwal.get(p) ?? [], rentang))
           .sort((a, b) => {
             const pa = masukan.peringkat(a, s.slot.id);
             const pb = masukan.peringkat(b, s.slot.id);
@@ -249,7 +249,7 @@ export function alokasikan(masukan: MasukanAlokasi): HasilAlokasi {
         sudah.add(pilih);
         dapat.set(pilih, (dapat.get(pilih) ?? 0) + 1);
         if (!jadwal.has(pilih)) jadwal.set(pilih, []);
-        jadwal.get(pilih)!.push(rentang);
+        jadwal.get(pilih)!.push(...rentang);
         ditempatkan += 1;
       }
     }
@@ -264,11 +264,3 @@ export function alokasikan(masukan: MasukanAlokasi): HasilAlokasi {
   return { penempatan, tanpaPengajar, putaranTerpakai: putaran };
 }
 
-/** Bentuk RentangJadwal dari slot; diekspor ulang agar pemanggil tak perlu dua impor. */
-export function rentangSlot(s: {
-  hari_idx: KsHariIdx[];
-  waktu_mulai: string;
-  waktu_selesai: string;
-}): RentangJadwal | null {
-  return rentangDariSlot(s);
-}
