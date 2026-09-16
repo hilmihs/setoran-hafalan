@@ -420,5 +420,32 @@ eq(masihBerjalanPada('2026-10-21', '2026-10-21'), true, 'selesai tepat di hari K
 eq(masihBerjalanPada(null, '2026-10-21'), true, 'tanpa kaldik → tetap mengunci (aman)');
 eq(masihBerjalanPada('2026-08-30', null), true, 'tanpa acuan → perilaku lama');
 
+// ── Prioritas per jam ───────────────────────────────────────────────────────
+console.log('\n# prioritas per jam');
+
+// Pengajar yang sama punya urutan berlawanan di dua jam. Diuji satu jam per
+// panggilan supaya hasilnya ditentukan prioritas, bukan kaidah putaran.
+const prioritasJam: Record<string, number> = { 'J1|p1': 2, 'J1|p2': 1, 'J2|p1': 1, 'J2|p2': 2 };
+const peringkatJam = (id: string, slot: string) => prioritasJam[`${slot}|${id}`] ?? 99;
+
+const hasilJ1 = alokasikan({
+  slots: [slotAlokasi('J1', [0, 2], '06:00', '07:30', 1)],
+  tersedia: new Map([['J1', ['p1', 'p2']]]),
+  sudahDiSlot: new Map(),
+  jadwalPengajar: new Map(),
+  peringkat: peringkatJam,
+});
+eq(hasilJ1.penempatan[0]?.pengajar_id, 'p2', 'jam J1 jatuh ke prioritas #1 di J1');
+eq(hasilJ1.penempatan[0]?.urutan_prioritas, 1, 'urutan_prioritas dicatat per jam');
+
+const hasilJ2 = alokasikan({
+  slots: [slotAlokasi('J2', [1, 3], '20:00', '21:30', 1)],
+  tersedia: new Map([['J2', ['p1', 'p2']]]),
+  sudahDiSlot: new Map(),
+  jadwalPengajar: new Map(),
+  peringkat: peringkatJam,
+});
+eq(hasilJ2.penempatan[0]?.pengajar_id, 'p1', 'jam J2 jatuh ke prioritas #1 di J2');
+
 console.log(failed === 0 ? '\nSEMUA LULUS' : `\n${failed} GAGAL`);
 process.exit(failed === 0 ? 0 : 1);

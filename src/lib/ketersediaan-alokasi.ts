@@ -153,8 +153,12 @@ export interface MasukanAlokasi {
   sudahDiSlot: Map<string, Set<string>>;
   /** pengajar_id → jadwal yang sudah terpakai (HITS, Maahir, halaqah baru). */
   jadwalPengajar: Map<string, RentangJadwal[]>;
-  /** pengajar_id → nomor urut prioritas; kecil lebih didahulukan. */
-  peringkat: (pengajarId: string) => number;
+  /**
+   * Nomor urut prioritas pengajar DI JAM ITU; kecil lebih didahulukan. Prioritas
+   * dari xlsx berlaku per jam — pengajar yang sama bisa #1 di satu jam dan #4 di
+   * jam lain. Hanya memutus urutan di dalam satu putaran; kaidah pemerataan tetap.
+   */
+  peringkat: (pengajarId: string, slotId: string) => number;
 }
 
 export interface Penempatan {
@@ -225,8 +229,8 @@ export function alokasikan(masukan: MasukanAlokasi): HasilAlokasi {
           .filter((p) => (dapat.get(p) ?? 0) === putaran - 1)
           .filter((p) => !(jadwal.get(p) ?? []).some((r) => bentrok(r, rentang)))
           .sort((a, b) => {
-            const pa = masukan.peringkat(a);
-            const pb = masukan.peringkat(b);
+            const pa = masukan.peringkat(a, s.slot.id);
+            const pb = masukan.peringkat(b, s.slot.id);
             if (pa !== pb) return pa - pb;
             return a.localeCompare(b);
           });
@@ -240,7 +244,7 @@ export function alokasikan(masukan: MasukanAlokasi): HasilAlokasi {
           pengajar_id: pilih,
           grup,
           putaran,
-          urutan_prioritas: masukan.peringkat(pilih),
+          urutan_prioritas: masukan.peringkat(pilih, s.slot.id),
         });
         sudah.add(pilih);
         dapat.set(pilih, (dapat.get(pilih) ?? 0) + 1);

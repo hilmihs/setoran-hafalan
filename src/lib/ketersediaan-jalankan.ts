@@ -83,14 +83,17 @@ export async function jalankanAlokasi(
   // ── Pasokan: pengajar terverifikasi per slot ──
   const { data: ketRows } = await supabaseAdmin
     .from('ks_ketersediaan')
-    .select('slot_id, status, pengisian:pengisian_id(pengajar_id, periode_id, status)')
+    .select('slot_id, status, prioritas, pengisian:pengisian_id(pengajar_id, periode_id, status)')
     .in('status', ['terverifikasi', 'diajukan']);
 
   const slotIds = new Set(slots.map((s) => s.id));
   const tersedia = new Map<string, string[]>();
   const pengajarDipakai = new Set<string>();
+  /** `${slot_id}|${pengajar_id}` → prioritas di jam itu. */
+  const prioritasJam = new Map<string, number>();
   for (const k of (ketRows ?? []) as {
     slot_id: string;
+    prioritas: number | null;
     pengisian?: { pengajar_id: string; periode_id: string; status: string } | null;
   }[]) {
     const p = k.pengisian;
@@ -99,6 +102,7 @@ export async function jalankanAlokasi(
     // lewat urutan — bukan dihapus dari kolam.
     if (p.status === 'nonaktif') continue;
     if (!slotIds.has(k.slot_id)) continue;
+    if (k.prioritas !== null) prioritasJam.set(`${k.slot_id}|${p.pengajar_id}`, k.prioritas);
     if (!tersedia.has(k.slot_id)) tersedia.set(k.slot_id, []);
     if (!tersedia.get(k.slot_id)!.includes(p.pengajar_id)) {
       tersedia.get(k.slot_id)!.push(p.pengajar_id);
@@ -152,9 +156,12 @@ export async function jalankanAlokasi(
     tersedia,
     sudahDiSlot,
     jadwalPengajar,
-    peringkat: (id) => {
-      // Peringkat dibaca dari urutan sesuai gender pengajar; keduanya digabung
-      // supaya satu fungsi cukup untuk mesin yang tidak mengenal gender.
+    peringkat: (id, slotId) => {
+      // Prioritas per jam (dari impor xlsx) menang. Selebihnya urutan preset atau
+      // waktu isi sesuai gender; keduanya digabung supaya satu fungsi cukup untuk
+      // mesin yang tidak mengenal gender.
+      const dariJam = prioritasJam.get(`${slotId}|${id}`);
+      if (dariJam !== undefined) return dariJam;
       const dariIkhwan = urutan.ikhwan.peringkat.get(id);
       if (dariIkhwan !== undefined) return dariIkhwan;
       const dariAkhwat = urutan.akhwat.peringkat.get(id);
