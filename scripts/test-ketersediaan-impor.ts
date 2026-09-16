@@ -476,6 +476,33 @@ async function main() {
       const valid = await q<{ n: string }>(`SELECT count(*)::text n FROM ks_pendaftar WHERE periode_id = $1 AND status = 'valid'`, [idPeriode]);
       check('antrean periode: 2 orang, bukan 3 baris', valid[0].n === '2', valid[0].n);
     }
+
+    console.log('\n# gabungan dua tahap');
+    {
+      const { susunGabungan } = await import('../src/lib/ketersediaan-gabungan');
+      const periodeLib = await import('../src/lib/ketersediaan-periode');
+      const { getPool } = await import('../src/lib/pg-core');
+      const q = async <T,>(sql: string, p: unknown[] = []) => (await getPool().query(sql, p)).rows as T[];
+      const sep = (await periodeLib.getPeriode(ID.sep))!;
+      const okt = (await periodeLib.getPeriode(ID.okt))!;
+      // Rahma juga ada di CSV September (orang yang sama, kiriman sama) — tetap satu orang.
+      await q(
+        `INSERT INTO ks_pendaftar (periode_id, sumber_row_key, nama, wa, wa_normal, slot_id, status, pita_umur)
+         VALUES ($1, 'k-rahma', 'Rahma', '6285000000002', '85000000002', $2, 'valid', '46+')`,
+        [ID.sep, ID.slotSep]
+      );
+      const h = await susunGabungan([okt, sep], new Date('2026-09-16T05:00:00Z'));
+      const wakil = h.slots.find((s) => s.label === 'Senin & Rabu 20:00 - 21:30 WIB' && s.kelompok === 'akhwat');
+      check('jam sama dua tahap jadi satu baris', h.slots.filter((s) => s.label === 'Senin & Rabu 20:00 - 21:30 WIB' && s.kelompok === 'akhwat').length === 1);
+      const r = wakil ? h.ringkas.get(wakil.id) : undefined;
+      check('Rahma di dua CSV dihitung sekali', r?.antre === 1, JSON.stringify(r));
+      check('Siti sudah dialokasikan di September tidak ikut antre', r?.dialokasikan === 1, JSON.stringify(r));
+      check('urutan tahap menurut tanggal mulai', h.periode[0].id === ID.sep, JSON.stringify(h.periode));
+      const tot = h.pengajar.ikhwan.total + h.pengajar.akhwat.total;
+      const perTahap = [...h.pengajar.ikhwan.perTahap, ...h.pengajar.akhwat.perTahap].reduce((n, t) => n + t.n, 0);
+      check('pengajar gabungan tidak lebih dari jumlah per tahap', tot > 0 && tot <= perTahap, JSON.stringify(h.pengajar));
+      check('simulasi tidak menulis usulan', (await q<{ n: string }>('select count(*)::text n from ks_usulan'))[0].n === '0');
+    }
   } finally {
     await server.stop();
     await db.close();

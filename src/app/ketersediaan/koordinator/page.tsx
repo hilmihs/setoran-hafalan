@@ -16,7 +16,7 @@ import {
   tanggalBatasAntrean,
   type BarisJam,
 } from '@/lib/ketersediaan-dasbor';
-import type { Gender } from '@/types/db';
+import type { Gender, KsPeriode } from '@/types/db';
 import { PanelPeriode, PeriodeBaru } from './PanelPeriode';
 import { PanelSlot } from './PanelSlot';
 import { PanelKerja } from './PanelKerja';
@@ -37,7 +37,8 @@ import {
   type TugasGender,
 } from './data';
 import { bacaGender, bacaTab, tautanDasbor, type TabDasbor } from './dasbor/navigasi';
-import { KepalaDasbor } from './dasbor/KepalaDasbor';
+import { KepalaDasbor, PERIODE_GABUNGAN } from './dasbor/KepalaDasbor';
+import { susunGabungan } from '@/lib/ketersediaan-gabungan';
 import { TabRingkasan, type ButirTugas } from './dasbor/TabRingkasan';
 import { TabJam } from './dasbor/TabJam';
 import { DaftarPengajar } from './dasbor/DaftarPengajar';
@@ -80,6 +81,19 @@ export default async function KetersediaanKoordinatorPage({
         </p>
         <PeriodeBaru />
       </Bingkai>
+    );
+  }
+
+  const tahapAktif = semuaPeriode.filter((p) => p.aktif);
+  if (searchParams.periode === PERIODE_GABUNGAN && tahapAktif.length >= 2) {
+    return (
+      <HalamanGabungan
+        tahap={tahapAktif}
+        semuaPeriode={semuaPeriode}
+        tab={tab === 'jam' ? 'jam' : 'ringkasan'}
+        g={g}
+        sekarang={sekarang}
+      />
     );
   }
 
@@ -297,6 +311,170 @@ export default async function KetersediaanKoordinatorPage({
         }}
       />
       {isi}
+    </Bingkai>
+  );
+}
+
+async function HalamanGabungan({
+  tahap,
+  semuaPeriode,
+  tab,
+  g,
+  sekarang,
+}: {
+  tahap: KsPeriode[];
+  semuaPeriode: KsPeriode[];
+  tab: 'ringkasan' | 'jam';
+  g: 'semua' | Gender;
+  sekarang: Date;
+}) {
+  const hasil = await susunGabungan(tahap, sekarang);
+  const aturan = [...tahap].sort((a, b) => a.mulai.localeCompare(b.mulai))[0];
+
+  // Daya tampung per jam diambil dari simulasi alokasi, bukan perkiraan
+  // pengajar × kapasitas: pengajar yang menyanggupi banyak jam hanya bisa
+  // memegang sebagian, dan simulasi yang tahu mana.
+  const jamSemua = susunBarisJam(hasil.slots, hasil.ringkas, aturan.kapasitas_halaqah).map((b): BarisJam => {
+    const tampung = hasil.tampungSim.get(b.slot_id) ?? 0;
+    const sisa = Math.max(0, b.antre - tampung);
+    return {
+      ...b,
+      tampung,
+      sisa,
+      bisa: Math.floor(tampung / aturan.kapasitas_halaqah),
+      status: b.antre === 0 ? 'kosong' : b.pengajar === 0 ? 'tanpa_pengajar' : sisa > 0 ? 'kurang' : 'cukup',
+    };
+  }).sort((a, b) => b.sisa - a.sisa || b.antre - a.antre || a.label.localeCompare(b.label));
+  const jam = g === 'semua' ? jamSemua : jamSemua.filter((b) => b.kelompok === g);
+
+  const angkaUntuk = (baris: readonly BarisJam[], gender?: Gender) => ({
+    ...jumlahkan(baris),
+    tertahan: gender ? hasil.tertahan[gender] : hasil.tertahan.ikhwan + hasil.tertahan.akhwat,
+    pengajar: gender ? hasil.pengajar[gender].total : hasil.pengajar.ikhwan.total + hasil.pengajar.akhwat.total,
+  });
+  const angka = angkaUntuk(jam, g === 'semua' ? undefined : g);
+  const pecah =
+    g === 'semua'
+      ? {
+          ikhwan: angkaUntuk(jamSemua.filter((b) => b.kelompok === 'ikhwan'), 'ikhwan'),
+          akhwat: angkaUntuk(jamSemua.filter((b) => b.kelompok === 'akhwat'), 'akhwat'),
+        }
+      : null;
+
+  const href = (t: TabDasbor) => tautanDasbor({ periode: PERIODE_GABUNGAN, tab: t, g });
+  const tanpaPengajar = jam.filter((b) => b.status === 'tanpa_pengajar');
+  const kurang = jam.filter((b) => b.status === 'kurang');
+  const butir: ButirTugas[] = [];
+  if (tanpaPengajar.length > 0) {
+    butir.push({
+      nada: 'merah',
+      judul: `${tanpaPengajar.length} jam tanpa pengajar di tahap mana pun`,
+      desk: `${fmt(tanpaPengajar.reduce((a, b) => a + b.antre, 0))} pendaftar memilih jam itu.`,
+      href: href('jam'),
+      label: 'Lihat jam',
+    });
+  }
+  if (kurang.length > 0) {
+    butir.push({
+      nada: 'kuning',
+      judul: `${kurang.length} jam kekurangan pengajar`,
+      desk: `${fmt(kurang.reduce((a, b) => a + b.sisa, 0))} pendaftar tetap belum tertampung walau pengajar kedua tahap dipakai.`,
+      href: href('jam'),
+      label: 'Lihat jam',
+    });
+  }
+
+  const genderTampil: Gender[] = g === 'semua' ? ['ikhwan', 'akhwat'] : [g];
+  const kartuTahap = (
+    <div className="ks-kartu">
+      <div className="ks-kartu-kepala">
+        <h2>Daya tampung gabungan</h2>
+        <p>Simulasi alokasi dengan pengajar semua tahap — tidak menyimpan apa pun</p>
+      </div>
+      <div className="ks-kartu-isi">
+        <div className="table-scroll">
+          <table className="k-table" style={{ fontVariantNumeric: 'tabular-nums' }}>
+            <thead>
+              <tr>
+                <th>Kelompok</th>
+                <th>Menunggu</th>
+                {hasil.periode.map((p) => (
+                  <th key={p.id}>Pengajar {p.nama}</th>
+                ))}
+                <th>Pengajar gabungan</th>
+                <th>Halaqah terbentuk</th>
+                <th>Tertampung</th>
+                <th>Belum</th>
+              </tr>
+            </thead>
+            <tbody>
+              {genderTampil.map((x) => {
+                const sim = hasil.simulasi[x];
+                const persen = sim.antre > 0 ? Math.round((sim.peserta / sim.antre) * 100) : 0;
+                return (
+                  <tr key={x}>
+                    <td style={{ textTransform: 'capitalize', fontWeight: 600 }}>{x}</td>
+                    <td>{fmt(sim.antre)}</td>
+                    {hasil.pengajar[x].perTahap.map((t) => (
+                      <td key={t.periode}>{fmt(t.n)}</td>
+                    ))}
+                    <td>{fmt(hasil.pengajar[x].total)}</td>
+                    <td>
+                      {fmt(sim.halaqah)}
+                      <div className="sub">{fmt(sim.pengajarDapat)} pengajar kebagian</div>
+                    </td>
+                    <td>
+                      {fmt(sim.peserta)}
+                      <div className="sub">{persen}% dari yang menunggu</div>
+                    </td>
+                    <td>{fmt(Math.max(0, sim.antre - sim.peserta))}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+        <p className="t-small" style={{ color: 'var(--ink-2)', margin: '10px 0 0' }}>
+          Pendaftar di CSV beberapa tahap dihitung sekali. Pengajar yang bersedia di jam yang sama pada dua tahap
+          dihitung sekali, karena kedua tahap berjalan bersamaan. Halaqah hanya terbentuk dari kelompok penuh (
+          {aturan.kapasitas_halaqah} orang per level dan kelompok umur); sisa yang belum genap menunggu pendaftar
+          berikutnya.
+        </p>
+      </div>
+    </div>
+  );
+
+  return (
+    <Bingkai>
+      <Kop />
+      <FeatureNav current="/ketersediaan/koordinator" />
+      <h1 className="t-h1" style={{ margin: '8px 0 2px' }}>Kelola Ketersediaan Mengajar</h1>
+      <p className="t-small" style={{ color: 'var(--muted)', margin: 0 }}>
+        Gabungan {hasil.periode.map((p) => p.nama).join(' + ')}. Untuk membentuk halaqah, buka tahapnya masing-masing.
+      </p>
+      <KepalaDasbor
+        periode={semuaPeriode}
+        aktif={aturan}
+        gabungan
+        tab={tab}
+        g={g}
+        hitungan={{ jam: tanpaPengajar.length }}
+      />
+      {tab === 'ringkasan' ? (
+        <TabRingkasan
+          angka={angka}
+          pecah={pecah}
+          tugas={butir}
+          teratas={jam.filter((b) => b.sisa > 0).slice(0, 5)}
+          peta={susunPeta(jam)}
+          hrefJam={href('jam')}
+          tampilGender={g === 'semua'}
+          ketTampung="Hasil simulasi alokasi dengan pengajar semua tahap. Pengajar yang menyanggupi banyak jam tidak dihitung berulang."
+          sisipan={kartuTahap}
+        />
+      ) : (
+        <TabJam baris={jam} tampilGender={g === 'semua'} />
+      )}
     </Bingkai>
   );
 }

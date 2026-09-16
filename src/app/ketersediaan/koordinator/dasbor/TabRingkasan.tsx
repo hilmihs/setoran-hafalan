@@ -26,6 +26,8 @@ export function TabRingkasan({
   peta,
   hrefJam,
   tampilGender,
+  ketTampung,
+  sisipan,
 }: {
   angka: AngkaRingkasan;
   /** Pecahan per gender; null bila dashboard sudah disaring satu gender. */
@@ -35,6 +37,10 @@ export function TabRingkasan({
   peta: Peta;
   hrefJam: string;
   tampilGender: boolean;
+  /** Penjelasan angka "Bisa ditampung" bila cara hitungnya berbeda (mis. simulasi gabungan). */
+  ketTampung?: string;
+  /** Kartu tambahan di bawah deretan angka. */
+  sisipan?: React.ReactNode;
 }) {
   const persen = angka.antre > 0 ? Math.round((angka.sisa / angka.antre) * 100) : 0;
   const pecahan = (k: keyof AngkaRingkasan) =>
@@ -64,7 +70,9 @@ export function TabRingkasan({
           <span className="l">Bisa ditampung</span>
           <span className="v">{fmt(angka.tampung)}</span>
           {pecahan('tampung')}
-          <span className="ket">Pengajar bebas di tiap jam × kapasitas, tidak lebih dari yang mengantre di jam itu.</span>
+          <span className="ket">
+            {ketTampung ?? 'Pengajar bebas di tiap jam × kapasitas, tidak lebih dari yang mengantre di jam itu.'}
+          </span>
         </div>
         <div className={`stat${angka.sisa > 0 ? ' buruk' : ''}`}>
           <span className="l">Belum tertampung</span>
@@ -82,6 +90,8 @@ export function TabRingkasan({
         Sudah masuk usulan di periode ini: <b>{fmt(angka.dialokasikan)}</b> · sudah dapat halaqah di periode lain:{' '}
         <b>{fmt(angka.terpakaiLain)}</b> · ditahan saringan: <b>{fmt(angka.tertahan)}</b>
       </p>
+
+      {sisipan}
 
       <div className="ks-dua">
         <div className="ks-kartu">
