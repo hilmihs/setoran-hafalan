@@ -1,7 +1,7 @@
-# Impor Ketersediaan Pengajar & Dashboard Koordinator
+# Impor Ketersediaan Pengajar, Dashboard Koordinator & Aturan Sinkronisasi 21 September
 
 **Tanggal:** 16 September 2026
-**Status:** rancangan, menunggu persetujuan
+**Status:** disetujui 16 Sep 2026 (mockup: artifact "Dashboard Ketersediaan Mengajar")
 **Modul:** Ketersediaan Mengajar HITS (`ks_*`) — lanjutan `2026-08-30-ketersediaan-mengajar-hits-design.md`
 **Tenggat:** sinkronisasi pertama Senin 21 September 2026
 
@@ -27,6 +27,9 @@ harus dikerjakan hari ini.
 | Sheet offline (Pejaten Ikhwan, Pejaten Akhwat, Al-Kautsar Matraman) | **Ketersediaan untuk periode September.** |
 | Prioritas | Disimpan **per jam**, sesuai kolom Prioritas di xlsx. |
 | Master jam periode | **Gabungan** jam di formulir pendaftar dan jam di xlsx. |
+| Formulir pendaftar | **Satu formulir melayani dua periode.** Pendaftar boleh mulai September atau Oktober; sistem menjamin satu orang hanya mendapat satu halaqah. |
+| Chart | Ditambahkan: peta kekurangan hari × jam, dan arus pendaftar per hari. |
+| Aturan yang ikut dikerjakan | Yang perlu sebelum sinkronisasi 21 Sep dan sebelum pengiriman pertama ke CMS (§8). |
 
 ## 3. Bentuk berkas xlsx (terverifikasi 16 Sep 2026)
 
@@ -93,7 +96,9 @@ Dibaca dengan `exceljs` yang sudah menjadi dependensi.
 
 ## 5. Skema
 
-Migrasi `0077_ketersediaan_impor.sql` (nomor bebas terakhir diperiksa 16 Sep: `0076`):
+Migrasi `0077_ketersediaan_impor_aturan.sql` (nomor bebas terakhir diperiksa 16 Sep:
+`0076`; tidak ada branch lain yang memakai `0077`–`0079`). Nama constraint diperiksa di
+produksi.
 
 ```sql
 alter table ks_ketersediaan
@@ -102,10 +107,28 @@ alter table ks_ketersediaan
 alter table ks_pengisian
   add column if not exists sumber text not null default 'form'
   check (sumber in ('form', 'impor'));
+
+alter table ks_pendaftar drop constraint if exists ks_pendaftar_pita_umur_check;
+alter table ks_pendaftar add constraint ks_pendaftar_pita_umur_check
+  check (pita_umur in ('<=45', '46+'));
+alter table ks_usulan drop constraint if exists ks_usulan_pita_umur_check;
+alter table ks_usulan add constraint ks_usulan_pita_umur_check
+  check (pita_umur in ('<=45', '46+'));
+
+alter table ks_pendaftar drop constraint if exists ks_pendaftar_status_check;
+alter table ks_pendaftar add constraint ks_pendaftar_status_check
+  check (status in ('valid', 'ditahan', 'dialokasikan', 'batal', 'diganti'));
+
+alter table ks_periode
+  add column if not exists jumlah_pertemuan_dasar integer not null default 50
+    check (jumlah_pertemuan_dasar between 0 and 200),
+  add column if not exists jumlah_pertemuan_lanjutan integer not null default 26
+    check (jumlah_pertemuan_lanjutan between 0 and 200);
 ```
 
-Keduanya menambah kolom bernilai bawaan; tidak ada data lama yang berubah (produksi
-kosong). `src/types/db.ts` diperbarui. DDL produksi dijalankan pemilik proses.
+Aman karena seluruh tabel `ks_*` di produksi masih kosong (diperiksa 16 Sep) — mengganti
+CHECK pita umur tidak menabrak data lama. `src/types/db.ts` diperbarui. DDL produksi
+dijalankan pemilik proses, satu statement per kiriman.
 
 ## 6. Prioritas per jam di mesin alokasi
 
@@ -184,7 +207,27 @@ Isi panel yang sudah ada dipindahkan, tidak ditulis ulang:
 `getPeriodeAktif()` tetap dipakai halaman lain; dashboard memakai `?periode=` dengan
 bawaan periode aktif terbaru.
 
-### 7.6 Gaya
+### 7.6 Chart
+
+Dua chart, masing-masing punya tugas yang tidak bisa dikerjakan tabel:
+
+1. **Peta kekurangan** — tab Ringkasan, lebar penuh di bawah "Perlu tindakan".
+   Baris = pasangan hari (Senin & Rabu, Selasa & Kamis, …), kolom = jam mulai, isi sel =
+   **belum tertampung** (online + offline dijumlah, ikut saring gender). Satu hue
+   bergradasi (biru, 6 tingkat: kosong, 1–24, 25–49, 50–99, 100–199, ≥200), angka di dalam
+   sel dengan warna teks mengikuti terang-gelap sel, tooltip saat disorot memecah
+   online/offline dan jumlah pengajar. Sel tanpa pilihan jam di formulir tampil sebagai
+   garis tipis, bukan nol. Grid CSS, tanpa pustaka. Tampilan tabelnya adalah papan jam.
+2. **Arus pendaftar** — tab Pendaftar. Garis kumulatif per hari sejak formulir dibuka,
+   satu garis per gender (ikhwan slot 1 `#2a78d6`, akhwat slot 2 `#eb6834`; lolos
+   validator palet: CVD ΔE 24.7, normal ΔE 33.6, kontras ≥ 3:1 di permukaan `#ffffff`).
+   Garis 2px, label di ujung garis, legenda, crosshair + tooltip. Satu sumbu Y.
+   Garis tegak tipis menandai hari antrean tertua menyentuh `usia_antrean_maks_hari`.
+   Memakai `recharts`, seperti `MatrixTrendChart`.
+
+Teks, angka, dan label memakai token teks, tidak pernah warna seri.
+
+### 7.7 Gaya
 
 Mengikuti token dan komponen `globals.css` yang sudah ada — `.stat`, `.badge-*`,
 `.k-table`, `.filter-bar`, `.banner`, `.btn-sm` — tanpa pustaka baru. Angka memakai
@@ -192,22 +235,86 @@ Mengikuti token dan komponen `globals.css` yang sudah ada — `.stat`, `.badge-*
 untuk yang bisa diklik. Lebar maksimum naik dari 1000px menjadi 1180px karena papan jam
 dan tabel pengajar bertumpu pada kolom. Setiap tabel lebar dibungkus `.table-scroll`.
 
-## 8. Di luar cakupan spec ini
+## 8. Aturan yang ikut dikerjakan
 
-Dikerjakan di rencana terpisah, tetapi **dibutuhkan sebelum sinkronisasi 21 September**:
+Semuanya terbukti perlu dari simulasi dengan data sebenarnya (deck "Siklus Pendaftaran
+HITS", 16 Sep).
 
-- halaqah batch lama yang masih `active=true` berhenti mengunci jadwal (pakai tanggal
-  pertemuan terakhir dari `hits_kaldik_hari`);
-- kiriman ulang formulir: yang terakhir per nomor + nama yang berlaku;
-- pita umur dua kelompok (≤45, 46+) — mengubah CHECK di `ks_pendaftar` dan `ks_usulan`;
-- batch September 2026 dicatat di `hits_batch`.
+### 8.1 Halaqah yang sudah selesai berhenti mengunci jadwal
 
-Setelahnya, sebelum 14 Oktober: jumlah pertemuan per jenjang (Dasar 50, Lanjutan 26),
-pemetaan `TILAWAH_*` di `azure-pipelines.yml`, batch September & Oktober dibuat di CMS
-tilawah, pengiriman antrean tanpa diklik berulang.
+`jadwalTerpakaiPengajar()` membaca `hits_halaqah.active` mentah-mentah; batch Januari
+dan April masih `active=true` sehingga 38 dari 82 jam Oktober terkunci palsu. Mengubah
+`active` tidak tahan karena sinkronisasi sheet menghidupkannya lagi.
 
-Tidak dikerjakan: jam dua waktu dalam satu kelas (tetap dilaporkan), membuka halaman
-pengajar, gateway WhatsApp.
+Aturan baru: tiap halaqah HITS punya **tanggal selesai** = tanggal terbesar dari
+`hits_kaldik_hari` untuk batch-nya (semua level) dan `hits_kaldik_pertemuan` milik
+halaqah itu. Halaqah **tidak mengunci** bila tanggal selesainya lebih awal dari
+**tanggal mulai KBM periode** (`ks_periode.mulai`). Halaqah tanpa kaldik tetap mengunci
+(perilaku lama, aman). `jadwalTerpakaiPengajar` menerima tanggal acuan itu.
+
+Terverifikasi di produksi 16 Sep: semua batch aktif punya kaldik. Januari selesai 30 Agu,
+Juni 20 Sep, Safar Juli 4 Okt, April **11 Okt**, ABK dan Nurul Iman Juli Januari 2027.
+Untuk periode yang KBM-nya sebelum 11 Okt, halaqah April tetap mengunci — memang benar.
+
+### 8.2 Kiriman ulang formulir
+
+Identitas pendaftar = **nomor WA ternormalisasi + nama ternormalisasi** (huruf kecil,
+spasi dirapatkan). Dalam satu tarikan:
+
+- satu identitas dengan beberapa baris → baris **terbaru** yang diproses; baris lain
+  berstatus baru **`diganti`**, tidak ditampilkan sebagai tertahan;
+- bila salah satu baris identitas itu sudah `dialokasikan`, baris itulah kebenarannya dan
+  semua baris lain `diganti`;
+- satu nomor dengan **nama berbeda** (sekeluarga) bukan lagi alasan menahan.
+
+`diganti` ikut dibekukan terhadap tarikan ulang kecuali identitasnya berubah.
+Simulasi: 530 baris tertahan → 0; pendaftar sah naik 419 → 443 (ikhwan), 2.572 → 2.819 (akhwat).
+
+### 8.3 Pita umur dua kelompok
+
+`≤45` dan `46+`. Pendaftar 15–17 tahun masuk kelompok pertama. Mengganti
+`pitaUmur()`, `KsPitaUmur`, `KS_PITA_UMUR`, label tampilan, dan ekspor xlsx.
+Simulasi batch Oktober: ikhwan 11 → 19 halaqah.
+
+### 8.4 Satu formulir, dua periode
+
+Sumber CSV yang sama boleh dipasang ke periode September dan Oktober. Karena kunci baris
+(`sumber_row_key`) dan identitas (§8.2) sama di kedua periode:
+
+- pendaftar yang identitasnya sudah `dialokasikan` di periode **mana pun** tidak dihitung
+  antre dan tidak ikut dialokasikan di periode lain;
+- dashboard menampilkannya sebagai "sudah dapat halaqah di <periode>", terpisah dari
+  angka pendaftar sah;
+- `setujuiUsulan` memeriksa ulang sebelum menerbitkan token, dan menolak bila ada
+  peserta yang sudah dialokasikan di periode lain sejak alokasi dijalankan.
+
+Pengecualian dihitung saat dibaca (bukan ditulis ke baris periode lain), sehingga
+membatalkan usulan di satu periode otomatis mengembalikan orangnya ke antrean periode lain.
+
+### 8.5 Jumlah pertemuan per jenjang
+
+`ks_periode.jumlah_pertemuan` (satu angka, bawaan 22) diganti dua kolom:
+`jumlah_pertemuan_dasar` (bawaan 50) dan `jumlah_pertemuan_lanjutan` (bawaan 26).
+`antrekanPengiriman` memilih sesuai `ks_usulan.level`. Kolom lama dibiarkan dan tidak
+dibaca lagi — dihapus di migrasi berikutnya setelah rilis.
+
+### 8.6 `TILAWAH_*` sampai ke aplikasi produksi
+
+`azure-pipelines.yml` memetakan `ENV_TILAWAH_BASE_URL`, `ENV_TILAWAH_EMAIL`,
+`ENV_TILAWAH_PASSWORD` ke `env:` task dan menuliskannya ke `maahir.env`, mengikuti pola
+`ENV_CRON_SECRET`. Akun produksi terbukti bisa login (16 Sep, 11 program terbaca).
+Nilainya diisi pemilik proses di Variable Group.
+
+### 8.7 Tidak dikerjakan sekarang
+
+- **Batch September 2026 di `hits_batch`.** Tidak dibutuhkan: batch itu belum ada di CMS
+  tilawah maupun di Maahir, sehingga halaqah September akan lahir dari modul ini dan
+  sudah terlihat oleh cek bentrok lewat `ks_usulan`.
+- `program_kelas` dan `program_kehadiran` sebagai sumber bentrok — dampaknya hari ini
+  satu pengajar.
+- Jam dua waktu dalam satu kelas (tetap dilaporkan), gateway WhatsApp, kabar hari ke-45,
+  layar centang grup T−7, pengiriman antrean tanpa klik berulang — sebelum 7/14 Okt,
+  rencana terpisah.
 
 ## 9. Catatan terbuka
 
@@ -223,6 +330,8 @@ pengajar, gateway WhatsApp.
 ## 10. Verifikasi
 
 - `npm run typecheck`
+- Simulasi ulang dengan data sebenarnya memakai fungsi yang sudah diubah: angka batch
+  Oktober harus sama dengan simulasi 16 Sep (ikhwan 19 halaqah, akhwat 54) tanpa kunci palsu.
 - `NODE_PATH=./scripts/node-shims npx tsx scripts/test-ketersediaan.ts` — termasuk uji
   baru: pembaca xlsx terhadap berkas nyata (179 baris, 5 sheet, 3 bagian), pencocokan
   nama, prioritas per jam di alokasi.
