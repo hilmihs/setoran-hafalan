@@ -14,6 +14,7 @@ import type {
 } from '@/types/db';
 import { hitungUmur, kunciJadwal, lokasiBaku, pitaUmur, sesiDariSlot, uraikanSlot } from '@/lib/ketersediaan-slot';
 import { listSlot } from '@/lib/ketersediaan-periode';
+import { ambilCsvTerbit } from '@/lib/ketersediaan-csv-url';
 
 /**
  * Tarik responses Google Form pendaftaran murid sebagai CSV publish-to-web.
@@ -506,12 +507,7 @@ export async function tarikSumber(
   periode: KsPeriode,
   sekarang: Date
 ): Promise<HasilTarik> {
-  const res = await fetch(sumber.csv_url, { cache: 'no-store', redirect: 'follow' });
-  if (!res.ok) throw new Error(`Gagal menarik CSV (HTTP ${res.status}). Pastikan sheet "Publish to web".`);
-  const teks = await res.text();
-  if (teks.startsWith('<!DOCTYPE html') || teks.includes('<html')) {
-    throw new Error('Sheet mengembalikan HTML — kemungkinan belum dipublikasikan ke web.');
-  }
+  const teks = await ambilCsvTerbit(sumber.csv_url);
   return terapkanCsvSumber(sumber, periode, teks, sekarang);
 }
 

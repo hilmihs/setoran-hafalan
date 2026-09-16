@@ -5,6 +5,7 @@ import { supabaseAdmin } from '@/lib/supabase-admin';
 import { requirePengajar } from '@/lib/session';
 import { getSessionWa } from '@/lib/program-kelas';
 import { catatKs } from '@/lib/ketersediaan-log';
+import { jagaFiturKetersediaan } from '@/lib/ketersediaan-akses';
 import { formTerbuka, getPeriodeAktif, listSlot } from '@/lib/ketersediaan-periode';
 import { jadwalTerpakaiPengajar, kunciSlot } from '@/lib/ketersediaan-bentrok';
 import type { KsCekButir, KsKetersediaanStatus, KsModePengajar } from '@/types/db';
@@ -31,6 +32,7 @@ interface MasukanSimpan {
  */
 export async function simpanKetersediaan(input: MasukanSimpan): Promise<Hasil> {
   const sesi = await requirePengajar();
+  await jagaFiturKetersediaan();
   const wa = await getSessionWa();
 
   const periode = await getPeriodeAktif();
@@ -205,6 +207,7 @@ export async function simpanKetersediaan(input: MasukanSimpan): Promise<Hasil> {
  */
 export async function sanggahBentrok(input: { slotId: string; alasan: string }): Promise<Hasil> {
   const sesi = await requirePengajar();
+  await jagaFiturKetersediaan();
   const wa = await getSessionWa();
   const alasan = input.alasan.trim();
   if (alasan.length < 10) {

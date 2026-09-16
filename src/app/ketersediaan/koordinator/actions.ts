@@ -20,6 +20,8 @@ import { susunLabel, uraikanSlot } from '@/lib/ketersediaan-slot';
 import { identitasPendaftar, tarikSumber, tebakPemetaan } from '@/lib/ketersediaan-pendaftar';
 import { identitasTerpakaiLintasPeriode } from '@/lib/ketersediaan-lintas-periode';
 import { parseCsv } from '@/lib/csv';
+import { jagaFiturKetersediaan } from '@/lib/ketersediaan-akses';
+import { ambilCsvTerbit, urlCsvSah } from '@/lib/ketersediaan-csv-url';
 import { uraiLibur } from '@/lib/ketersediaan-pertemuan';
 import { jalankanAlokasi } from '@/lib/ketersediaan-jalankan';
 import {
@@ -34,6 +36,7 @@ export type Hasil = { ok: true; pesan: string; data?: unknown } | { ok: false; e
 
 async function aktor(): Promise<{ wa: string | null; nama: string }> {
   const sesi = await requireOneOfRoles(['koordinator']);
+  await jagaFiturKetersediaan();
   return { wa: await getSessionWa(), nama: sesi.name };
 }
 
@@ -363,9 +366,8 @@ export async function simpanSumberPendaftar(input: {
   pemetaan: KsPemetaanKolom;
 }): Promise<Hasil> {
   const a = await aktor();
-  if (!/^https?:\/\//.test(input.csvUrl)) {
-    return { ok: false, error: 'URL CSV tidak sah. Gunakan tautan publish-to-web format CSV.' };
-  }
+  const sah = urlCsvSah(input.csvUrl);
+  if (!sah.ok) return { ok: false, error: sah.error };
 
   if (input.sumberId) {
     await supabaseAdmin
@@ -403,20 +405,17 @@ export async function simpanSumberPendaftar(input: {
  * supaya koordinator melihat kolom apa saja yang benar-benar ada di sheet.
  */
 export async function intipKolomCsv(input: { csvUrl: string }): Promise<Hasil> {
-  await requireOneOfRoles(['koordinator']);
+  await aktor();
   try {
-    const res = await fetch(input.csvUrl, { cache: 'no-store', redirect: 'follow' });
-    if (!res.ok) return { ok: false, error: `Gagal membuka CSV (HTTP ${res.status}).` };
-    const teks = await res.text();
-    if (teks.includes('<html')) {
-      return { ok: false, error: 'Sheet mengembalikan HTML — aktifkan "Publish to web".' };
-    }
+    const teks = await ambilCsvTerbit(input.csvUrl);
     // Judul kolom Google Form lazim memuat koma ("Pilihan Jam Belajar (WIB, 90 menit)"),
     // jadi kepala dibaca pengurai CSV, bukan dipecah koma.
     const kepala = (parseCsv(teks)[0] ?? []).map((h) => h.trim()).filter(Boolean);
     return { ok: true, pesan: `${kepala.length} kolom terbaca.`, data: { kepala, usulan: tebakPemetaan(kepala) } };
   } catch (e) {
-    return { ok: false, error: `Gagal membuka CSV: ${(e as Error).message}` };
+    // Pesan dari ambilCsvTerbit sudah ramah; galat jaringan mentah tidak dipantulkan.
+    const pesan = (e as Error).message;
+    return { ok: false, error: /^(Gagal|Sheet|CSV|Gunakan|Tautan|URL)/.test(pesan) ? pesan : 'Gagal membuka CSV. Periksa tautan dan coba lagi.' };
   }
 }
 
@@ -748,7 +747,7 @@ export async function tetapkanTujuanTilawah(input: {
 
 /** Periode aktif untuk dipakai komponen klien tanpa menebak. */
 export async function periodeAktifRingkas(): Promise<Hasil> {
-  await requireOneOfRoles(['koordinator']);
+  await aktor();
   const p = await getPeriodeAktif();
   return p
     ? { ok: true, pesan: p.nama, data: { id: p.id, nama: p.nama } }
@@ -777,7 +776,7 @@ export interface Pengingat {
  * slot yang antreannya menumpuk tanpa pengajar bebas.
  */
 export async function daftarPengingat(input: { periodeId: string }): Promise<Hasil> {
-  await requireOneOfRoles(['koordinator']);
+  await aktor();
   const periode = await getPeriode(input.periodeId);
   if (!periode) return { ok: false, error: 'Periode tidak ditemukan.' };
 
