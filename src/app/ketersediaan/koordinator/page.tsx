@@ -14,6 +14,7 @@ import {
   susunBarisJam,
   susunPeta,
   tanggalBatasAntrean,
+  terapkanSimulasi,
   type BarisJam,
 } from '@/lib/ketersediaan-dasbor';
 import type { Gender, KsPeriode } from '@/types/db';
@@ -34,12 +35,13 @@ import {
   muatSumber,
   muatTugas,
   muatUsulan,
+  BATAS_USULAN,
   type TugasGender,
 } from './data';
 import { bacaGender, bacaTab, tautanDasbor, type TabDasbor } from './dasbor/navigasi';
 import { KepalaDasbor, PERIODE_GABUNGAN } from './dasbor/KepalaDasbor';
 import { susunGabungan } from '@/lib/ketersediaan-gabungan';
-import { TabRingkasan, type ButirTugas } from './dasbor/TabRingkasan';
+import { TabRingkasan, type ButirTugas, type PetaBerjudul } from './dasbor/TabRingkasan';
 import { TabJam } from './dasbor/TabJam';
 import { DaftarPengajar } from './dasbor/DaftarPengajar';
 import { ArusPendaftarChart } from './dasbor/ArusPendaftarChart';
@@ -47,6 +49,18 @@ import { ArusPendaftarChart } from './dasbor/ArusPendaftarChart';
 export const dynamic = 'force-dynamic';
 
 const fmt = (n: number) => n.toLocaleString('id-ID');
+
+/**
+ * Heatmap selalu per gender: jam ikhwan dan akhwat yang sama tidak boleh
+ * dijumlah, karena pengajarnya tidak bisa saling menggantikan.
+ */
+function petaPerGender(baris: readonly BarisJam[], g: 'semua' | Gender): PetaBerjudul[] {
+  if (g !== 'semua') return [{ judul: null, peta: susunPeta(baris) }];
+  return (['ikhwan', 'akhwat'] as const).map((x) => ({
+    judul: x === 'ikhwan' ? 'Ikhwan' : 'Akhwat',
+    peta: susunPeta(baris.filter((b) => b.kelompok === x)),
+  }));
+}
 
 export default async function KetersediaanKoordinatorPage({
   searchParams,
@@ -109,7 +123,15 @@ export default async function KetersediaanKoordinatorPage({
   const saring = <T,>(xs: readonly T[], genderDari: (x: T) => Gender | null): T[] =>
     g === 'semua' ? [...xs] : xs.filter((x) => genderDari(x) === g);
 
-  const jamSemua = susunBarisJam(slotAktif, ringkas, periode.kapasitas_halaqah);
+  // Ringkasan dan tab jam memakai daya tampung hasil simulasi alokasi (sama
+  // dengan pandangan gabungan), bukan perkiraan pengajar × kapasitas yang
+  // menghitung pengajar banyak-jam berulang. Tab lain tak menampilkannya, jadi
+  // simulasinya — yang mahal — tidak dijalankan di sana.
+  const perkiraan = susunBarisJam(slotAktif, ringkas, periode.kapasitas_halaqah);
+  const jamSemua =
+    tab === 'ringkasan' || tab === 'jam'
+      ? terapkanSimulasi(perkiraan, (await susunGabungan([periode], sekarang)).tampungSim, periode.kapasitas_halaqah)
+      : perkiraan;
   const jam = saring(jamSemua, (b) => b.kelompok);
   const pengajar = saring(pengajarSemua, (p) => p.gender);
   const pendaftar = saring(pendaftarSemua, (p) => p.gender);
@@ -138,6 +160,8 @@ export default async function KetersediaanKoordinatorPage({
           usulanMenunggu: tugas.ikhwan.usulanMenunggu + tugas.akhwat.usulanMenunggu,
           tenggatLewat: tugas.ikhwan.tenggatLewat + tugas.akhwat.tenggatLewat,
           sanggahan: tugas.ikhwan.sanggahan + tugas.akhwat.sanggahan,
+          ditolak: tugas.ikhwan.ditolak + tugas.akhwat.ditolak,
+          gagal: tugas.ikhwan.gagal + tugas.akhwat.gagal,
         }
       : tugas[g];
 
@@ -171,6 +195,20 @@ export default async function KetersediaanKoordinatorPage({
       desk: 'Belum digeser ke pengajar berikutnya. Jalankan "Sapu yang lewat tenggat".',
       href: href('usulan'),
       label: 'Buka usulan',
+    });
+  }
+  if (tugasG.ditolak + tugasG.gagal > 0) {
+    butir.push({
+      nada: 'merah',
+      judul: [
+        tugasG.ditolak > 0 ? `${tugasG.ditolak} usulan ditolak pengajar` : null,
+        tugasG.gagal > 0 ? `${tugasG.gagal} gagal dikirim ke CMS tilawah` : null,
+      ]
+        .filter(Boolean)
+        .join(' · '),
+      desk: 'Lihat alasannya di Riwayat usulan. Usulan yang masih memegang peserta perlu dibatalkan supaya muridnya kembali antre.',
+      href: href('usulan'),
+      label: 'Buka riwayat',
     });
   }
   if (tugasG.usulanMenunggu > 0) {
@@ -218,9 +256,10 @@ export default async function KetersediaanKoordinatorPage({
         pecah={pecah}
         tugas={butir}
         teratas={jam.filter((b) => b.sisa > 0).slice(0, 5)}
-        peta={susunPeta(jam)}
+        peta={petaPerGender(jam, g)}
         hrefJam={href('jam')}
         tampilGender={g === 'semua'}
+        ketTampung="Hasil simulasi alokasi dengan pengajar periode ini. Pengajar yang menyanggupi banyak jam tidak dihitung berulang, dan hanya kelompok level & umur yang genap yang dihitung."
       />
     );
   } else if (tab === 'jam') {
@@ -228,7 +267,10 @@ export default async function KetersediaanKoordinatorPage({
   } else if (tab === 'pengajar') {
     isi = <DaftarPengajar baris={pengajar} tampilGender={g === 'semua'} />;
   } else if (tab === 'pendaftar') {
-    const [ditahan, sumber] = await Promise.all([ringkasDitahan(periode.id), muatSumber(periode.id)]);
+    const [ditahan, sumber] = await Promise.all([
+      ringkasDitahan(periode.id, { gender: g === 'semua' ? undefined : g }),
+      muatSumber(periode.id),
+    ]);
     const arus = susunArus(pendaftar);
     isi = (
       <div className="ks-isi">
@@ -245,8 +287,8 @@ export default async function KetersediaanKoordinatorPage({
             />
           </div>
         </div>
-        <PanelDitahan periodeId={periode.id} ringkas={ditahan} />
-        <PanelPendaftar periodeId={periode.id} sumber={sumber} />
+        <PanelDitahan key={`ditahan-${periode.id}-${g}`} periodeId={periode.id} ringkas={ditahan} />
+        <PanelPendaftar key={`pendaftar-${periode.id}`} periodeId={periode.id} sumber={sumber} />
       </div>
     );
   } else if (tab === 'usulan') {
@@ -259,13 +301,16 @@ export default async function KetersediaanKoordinatorPage({
     isi = (
       <div className="ks-isi">
         <PanelKerja
+          key={`kerja-${periode.id}`}
           periodeId={periode.id}
-          antrean={antrean}
-          usulan={usulan}
+          antrean={saring(antrean, (b) => b.gender)}
+          usulan={saring(usulan.kartu, (u) => u.gender)}
+          terpotong={usulan.terpotong}
+          batas={BATAS_USULAN}
           preset={preset.map((p) => ({ id: p.id, nama: p.nama, gender: p.gender, tipe: p.tipe }))}
         />
-        <PanelGrupPool periodeId={periode.id} baris={grupPool} />
-        <PanelPengingat periodeId={periode.id} />
+        <PanelGrupPool key={`grup-${periode.id}`} periodeId={periode.id} baris={saring(grupPool, (b) => b.gender)} />
+        <PanelPengingat key={`pengingat-${periode.id}`} periodeId={periode.id} />
       </div>
     );
   } else {
@@ -273,8 +318,9 @@ export default async function KetersediaanKoordinatorPage({
       <div className="ks-isi">
         <PanelImpor />
         <PeriodeBaru />
-        <PanelSlot periodeId={periode.id} slots={slots} />
+        <PanelSlot key={`slot-${periode.id}`} periodeId={periode.id} slots={slots} />
         <PanelPeriode
+          key={`periode-${periode.id}`}
           periode={periode}
           superadmin={superadmin}
           polaHari={[...new Map(slotAktif.map((s) => [s.hari_idx.join(','), s.hari_idx])).values()].sort((a, b) => a.join().localeCompare(b.join()))}
@@ -307,7 +353,7 @@ export default async function KetersediaanKoordinatorPage({
         hitungan={{
           jam: tanpaPengajar.length,
           pendaftar: angka.tertahan,
-          usulan: tugasG.usulanMenunggu + tugasG.tenggatLewat + tugasG.sanggahan,
+          usulan: tugasG.usulanMenunggu + tugasG.tenggatLewat + tugasG.sanggahan + tugasG.ditolak + tugasG.gagal,
         }}
       />
       {isi}
@@ -334,17 +380,11 @@ async function HalamanGabungan({
   // Daya tampung per jam diambil dari simulasi alokasi, bukan perkiraan
   // pengajar × kapasitas: pengajar yang menyanggupi banyak jam hanya bisa
   // memegang sebagian, dan simulasi yang tahu mana.
-  const jamSemua = susunBarisJam(hasil.slots, hasil.ringkas, aturan.kapasitas_halaqah).map((b): BarisJam => {
-    const tampung = hasil.tampungSim.get(b.slot_id) ?? 0;
-    const sisa = Math.max(0, b.antre - tampung);
-    return {
-      ...b,
-      tampung,
-      sisa,
-      bisa: Math.floor(tampung / aturan.kapasitas_halaqah),
-      status: b.antre === 0 ? 'kosong' : b.pengajar === 0 ? 'tanpa_pengajar' : sisa > 0 ? 'kurang' : 'cukup',
-    };
-  }).sort((a, b) => b.sisa - a.sisa || b.antre - a.antre || a.label.localeCompare(b.label));
+  const jamSemua = terapkanSimulasi(
+    susunBarisJam(hasil.slots, hasil.ringkas, aturan.kapasitas_halaqah),
+    hasil.tampungSim,
+    aturan.kapasitas_halaqah
+  );
   const jam = g === 'semua' ? jamSemua : jamSemua.filter((b) => b.kelompok === g);
 
   const angkaUntuk = (baris: readonly BarisJam[], gender?: Gender) => ({
@@ -466,9 +506,15 @@ async function HalamanGabungan({
           pecah={pecah}
           tugas={butir}
           teratas={jam.filter((b) => b.sisa > 0).slice(0, 5)}
-          peta={susunPeta(jam)}
+          peta={petaPerGender(jam, g)}
           hrefJam={href('jam')}
           tampilGender={g === 'semua'}
+          catatan={
+            <>
+              Sudah masuk usulan di tahap mana pun: <b>{fmt(angka.dialokasikan)}</b> · ditahan saringan:{' '}
+              <b>{fmt(angka.tertahan)}</b> · pendaftar yang sama di beberapa tahap dihitung sekali
+            </>
+          }
           ketTampung="Hasil simulasi alokasi dengan pengajar semua tahap. Pengajar yang menyanggupi banyak jam tidak dihitung berulang."
           sisipan={kartuTahap}
         />

@@ -22,13 +22,17 @@ import {
  *     dokumen konsep menyebutnya terpisah dari HITS: "slot tidak bentrok dengan
  *     kelas Maahir dan program wajib Maahir".
  *
- *  3. Halaqah hasil sistem ini yang sudah dikonfirmasi/terkirim. Ini wajib:
- *     halaqah yang dibentuk di sini masuk ke CMS tilawah, tetapi TIDAK otomatis
- *     muncul di `hits_halaqah` — tabel itu diisi dari Google Sheet yang disync
- *     manual per batch. Tanpa sumber ketiga, pengajar yang baru saja mendapat
- *     halaqah lewat sistem ini terlihat kosong dan akan dijatah lagi pada jam
- *     yang sama.
+ *  3. Usulan hidup hasil sistem ini (usulan sampai terkirim), LINTAS SEMUA
+ *     PERIODE. Ini wajib: halaqah yang dibentuk di sini masuk ke CMS tilawah,
+ *     tetapi TIDAK otomatis muncul di `hits_halaqah` — tabel itu diisi dari
+ *     Google Sheet yang disync manual per batch. Status 'usulan' ikut dihitung:
+ *     dua periode (mis. tahap 5 dan 21 Oktober) dapat menjalankan alokasi
+ *     berurutan sebelum koordinator sempat menyetujui apa pun, dan tanpa itu
+ *     pengajar yang sama dijatah dua kali pada jam yang sama.
  */
+
+/** Status usulan yang menempati jam pengajar. Sama dengan indeks unik uq_ks_usulan_hidup. */
+export const STATUS_USULAN_HIDUP = ['usulan', 'disetujui', 'menunggu', 'dikonfirmasi', 'dikirim'] as const;
 
 export interface JadwalTerpakai {
   sumber: 'hits' | 'maahir' | 'usulan';
@@ -39,6 +43,11 @@ export interface JadwalTerpakai {
   label: string;
   /** Tanggal pertemuan terakhir menurut kaldik; null bila tak diketahui atau bukan halaqah HITS. */
   selesai: string | null;
+  /** Hanya untuk sumber 'usulan': status usulannya. */
+  status_usulan?: string;
+  /** Hanya untuk sumber 'usulan': slot dan periode asalnya. */
+  slot_id?: string;
+  periode_id?: string;
 }
 
 interface HalaqahRow {
@@ -55,6 +64,10 @@ interface HalaqahRow {
 interface UsulanRow {
   id: string;
   nama_halaqah: string | null;
+  status: string;
+  slot_id: string;
+  periode_id: string;
+  periode?: { selesai: string } | null;
   slot?: {
     label: string;
     hari_idx: KsHariIdx[];
@@ -154,9 +167,11 @@ export async function jadwalTerpakaiPengajar(
       .eq('pengajar_id', pengajarId),
     supabaseAdmin
       .from('ks_usulan')
-      .select('id, nama_halaqah, slot:slot_id(label, hari_idx, waktu_mulai, waktu_selesai)')
+      .select(
+        'id, nama_halaqah, status, slot_id, periode_id, periode:periode_id(selesai), slot:slot_id(label, hari_idx, waktu_mulai, waktu_selesai)'
+      )
       .eq('pengajar_id', pengajarId)
-      .in('status', ['dikonfirmasi', 'dikirim']),
+      .in('status', [...STATUS_USULAN_HIDUP]),
   ]);
 
   const out: JadwalTerpakai[] = [];
@@ -205,6 +220,10 @@ export async function jadwalTerpakaiPengajar(
 
   for (const u of (usulan ?? []) as UsulanRow[]) {
     if (!u.slot) continue;
+    // Usulan milik periode yang sudah berakhir sebelum acuan tidak mengunci.
+    const selesaiPeriode = u.periode?.selesai ?? null;
+    if (opts.acuan && !masihBerjalanPada(selesaiPeriode, opts.acuan)) continue;
+    // rentangDariSlot memecah jam per hari, jadi slot dua waktu terbaca utuh.
     for (const rentang of rentangDariSlot(u.slot)) {
       out.push({
         sumber: 'usulan',
@@ -212,7 +231,10 @@ export async function jadwalTerpakaiPengajar(
         batch: null,
         rentang,
         label: u.slot.label,
-        selesai: null,
+        selesai: selesaiPeriode,
+        status_usulan: u.status,
+        slot_id: u.slot_id,
+        periode_id: u.periode_id,
       });
     }
   }
@@ -238,7 +260,11 @@ export function kunciSlot(
   const kunci = new Map<string, JadwalTerpakai>();
   for (const s of slots) {
     const rentang = rentangDariSlot(s);
-    const tabrakan = terpakai.find((t) => rentang.some((r) => bentrok(r, t.rentang)));
+    // Usulan pengajar di slot ITU sendiri bukan tabrakan: ia justru sedang
+    // memegang jam itu, dan mengunci slotnya akan memaksa ketersediaannya dicabut.
+    const tabrakan = terpakai.find(
+      (t) => t.slot_id !== s.id && rentang.some((r) => bentrok(r, t.rentang))
+    );
     if (tabrakan) kunci.set(s.id, tabrakan);
   }
   return kunci;
@@ -252,6 +278,10 @@ export function kunciSlot(
  */
 export function alasanTerkunci(t: JadwalTerpakai): string {
   const dari = t.batch ? `${t.nama} (${t.batch})` : t.nama;
+  if (t.sumber === 'usulan' && t.status_usulan !== 'dikonfirmasi' && t.status_usulan !== 'dikirim') {
+    // Belum diumumkan ke pengajar: jangan sebut halaqahnya sudah ada.
+    return 'Terisi — jam ini sedang disiapkan untuk halaqah Anda';
+  }
   if (t.sumber === 'usulan') return `Terisi — halaqah baru Anda ${dari} berada di jam ini`;
   if (t.sumber === 'maahir') return `Terisi — Anda mengajar kelas Maahir ${dari} di jam ini`;
   return `Terisi — Anda mengajar ${dari} di jam ini`;

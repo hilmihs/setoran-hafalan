@@ -24,6 +24,19 @@ export async function getPeriodeAktif(): Promise<KsPeriode | null> {
   return (data as KsPeriode | null) ?? null;
 }
 
+/**
+ * Periode aktif yang formnya sedang terbuka, mulai paling awal lebih dulu.
+ * Dipakai halaman pengajar: tahap yang lebih dekat KBM-nya didahulukan.
+ */
+export async function periodeTerbukaUntukPengajar(sekarang: Date): Promise<KsPeriode[]> {
+  const { data } = await supabaseAdmin
+    .from('ks_periode')
+    .select('*')
+    .eq('aktif', true)
+    .order('mulai', { ascending: true });
+  return ((data ?? []) as KsPeriode[]).filter((p) => formTerbuka(p, sekarang));
+}
+
 export async function getPeriode(id: string): Promise<KsPeriode | null> {
   const { data } = await supabaseAdmin.from('ks_periode').select('*').eq('id', id).maybeSingle();
   return (data as KsPeriode | null) ?? null;

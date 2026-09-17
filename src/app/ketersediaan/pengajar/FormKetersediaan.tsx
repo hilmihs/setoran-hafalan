@@ -19,6 +19,7 @@ export interface SlotTampil {
 }
 
 interface Props {
+  periodeId: string;
   slots: SlotTampil[];
   awalDipilih: string[];
   awalMode: 'online' | 'offline' | 'keduanya';
@@ -71,6 +72,7 @@ export function FormKetersediaan(props: Props) {
     setPesan(null);
     mulai(async () => {
       const r = await simpanKetersediaan({
+        periodeId: props.periodeId,
         slotIds: [...dipilih],
         mode,
         lokasi,
@@ -106,6 +108,7 @@ export function FormKetersediaan(props: Props) {
         {urut.map((s) => (
           <KartuSlot
             key={s.id}
+            periodeId={props.periodeId}
             slot={s}
             dicentang={dipilih.has(s.id)}
             bisaDiubah={bisaDiubah}
@@ -198,11 +201,13 @@ export function FormKetersediaan(props: Props) {
 }
 
 function KartuSlot({
+  periodeId,
   slot,
   dicentang,
   bisaDiubah,
   onAlih,
 }: {
+  periodeId: string;
   slot: SlotTampil;
   dicentang: boolean;
   bisaDiubah: boolean;
@@ -217,7 +222,7 @@ function KartuSlot({
   function kirimSanggahan() {
     setGalat(null);
     mulai(async () => {
-      const r = await sanggahBentrok({ slotId: slot.id, alasan });
+      const r = await sanggahBentrok({ slotId: slot.id, alasan, periodeId });
       if (r.ok) {
         setHasil(r.pesan);
         setBukaSanggah(false);

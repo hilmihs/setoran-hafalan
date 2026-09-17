@@ -11,6 +11,12 @@ export interface ButirTugas {
   label: string;
 }
 
+export interface PetaBerjudul {
+  /** null bila hanya satu gender yang ditampilkan. */
+  judul: string | null;
+  peta: Peta;
+}
+
 export interface AngkaRingkasan extends AngkaJam {
   pengajar: number;
 }
@@ -27,6 +33,7 @@ export function TabRingkasan({
   hrefJam,
   tampilGender,
   ketTampung,
+  catatan,
   sisipan,
 }: {
   angka: AngkaRingkasan;
@@ -34,11 +41,14 @@ export function TabRingkasan({
   pecah: { ikhwan: AngkaRingkasan; akhwat: AngkaRingkasan } | null;
   tugas: ButirTugas[];
   teratas: BarisJam[];
-  peta: Peta;
+  /** Satu heatmap per gender — jam ikhwan dan akhwat tidak pernah dijumlah. */
+  peta: PetaBerjudul[];
   hrefJam: string;
   tampilGender: boolean;
   /** Penjelasan angka "Bisa ditampung" bila cara hitungnya berbeda (mis. simulasi gabungan). */
   ketTampung?: string;
+  /** Pengganti kalimat di bawah deretan angka, mis. untuk pandangan gabungan. */
+  catatan?: React.ReactNode;
   /** Kartu tambahan di bawah deretan angka. */
   sisipan?: React.ReactNode;
 }) {
@@ -87,8 +97,12 @@ export function TabRingkasan({
       </div>
 
       <p className="ks-catatan-angka" style={{ margin: 0 }}>
-        Sudah masuk usulan di periode ini: <b>{fmt(angka.dialokasikan)}</b> · sudah dapat halaqah di periode lain:{' '}
-        <b>{fmt(angka.terpakaiLain)}</b> · ditahan saringan: <b>{fmt(angka.tertahan)}</b>
+        {catatan ?? (
+          <>
+            Sudah masuk usulan di periode ini: <b>{fmt(angka.dialokasikan)}</b> · sudah dapat halaqah di periode lain:{' '}
+            <b>{fmt(angka.terpakaiLain)}</b> · ditahan saringan: <b>{fmt(angka.tertahan)}</b>
+          </>
+        )}
       </p>
 
       {sisipan}
@@ -170,7 +184,12 @@ export function TabRingkasan({
           <p>Makin gelap, makin banyak pendaftar yang belum tertampung</p>
         </div>
         <div className="ks-kartu-isi">
-          <PetaKekurangan peta={peta} />
+          {peta.map((p) => (
+            <div key={p.judul ?? 'satu'} className="ks-peta-gender">
+              {p.judul && <h3 className="ks-peta-judul">{p.judul}</h3>}
+              <PetaKekurangan peta={p.peta} />
+            </div>
+          ))}
         </div>
       </div>
     </div>

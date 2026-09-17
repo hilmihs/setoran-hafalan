@@ -4,7 +4,8 @@ import { bolehLihatFiturTersembunyi } from '@/lib/admin-guard';
 import { supabaseAdmin } from '@/lib/supabase-admin';
 import { LogoutButton } from '@/components/LogoutButton';
 import { FeatureNav } from '@/components/FeatureNav';
-import { formTerbuka, getPeriodeAktif, listSlot } from '@/lib/ketersediaan-periode';
+import Link from 'next/link';
+import { formTerbuka, getPeriodeAktif, listSlot, periodeTerbukaUntukPengajar } from '@/lib/ketersediaan-periode';
 import {
   alasanTerkunci,
   jadwalTerpakaiPengajar,
@@ -15,7 +16,19 @@ import { FormKetersediaan, type SlotTampil } from './FormKetersediaan';
 
 export const dynamic = 'force-dynamic';
 
-export default async function KetersediaanPengajarPage() {
+const tanggalPendek = (t: string) =>
+  new Date(`${t.slice(0, 10)}T00:00:00Z`).toLocaleDateString('id-ID', {
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+    timeZone: 'UTC',
+  });
+
+export default async function KetersediaanPengajarPage({
+  searchParams,
+}: {
+  searchParams?: { periode?: string };
+}) {
   const sesi = await requirePengajar();
   // Fitur masih disembunyikan: sudah ter-deploy tetapi belum diumumkan ke
   // pengajar. Menyembunyikan dari menu saja tidak cukup — URL-nya tetap bisa
@@ -24,7 +37,12 @@ export default async function KetersediaanPengajarPage() {
   if (!(await bolehLihatFiturTersembunyi())) notFound();
 
   const sekarang = new Date();
-  const periode = await getPeriodeAktif();
+  // Beberapa tahap bisa terbuka bersamaan (mis. mulai 5 dan 21 Oktober). Pengajar
+  // memilih; bawaannya tahap yang KBM-nya paling dekat. Bila tak satu pun
+  // terbuka, periode aktif terbaru tetap ditampilkan dalam keadaan tertutup.
+  const terbukaSemua = await periodeTerbukaUntukPengajar(sekarang);
+  const periode =
+    terbukaSemua.find((p) => p.id === searchParams?.periode) ?? terbukaSemua[0] ?? (await getPeriodeAktif());
 
   const kop = (
     <div className="topbar">
@@ -107,7 +125,9 @@ export default async function KetersediaanPengajarPage() {
     };
   });
 
-  const jadwalSaya = terpakai.map((t) => ({
+  // Usulan yang belum disetujui koordinator tetap mengunci jam, tetapi belum
+  // diumumkan ke pengajar — jangan tampil sebagai "halaqah yang Anda pegang".
+  const jadwalSaya = terpakai.filter((t) => t.sumber !== 'usulan' || t.status_usulan === 'dikonfirmasi' || t.status_usulan === 'dikirim').map((t) => ({
     nama: t.nama,
     batch: t.batch,
     label: t.label,
@@ -120,6 +140,20 @@ export default async function KetersediaanPengajarPage() {
       <FeatureNav current="/ketersediaan/pengajar" />
 
       <h1 className="t-h1" style={{ marginBottom: 4 }}>Ketersediaan Mengajar HITS</h1>
+      {terbukaSemua.length > 1 && (
+        <nav aria-label="Pilih periode" style={{ display: 'flex', gap: 8, flexWrap: 'wrap', margin: '8px 0 12px' }}>
+          {terbukaSemua.map((p) => (
+            <Link
+              key={p.id}
+              href={`/ketersediaan/pengajar?periode=${p.id}`}
+              className={p.id === periode.id ? 'btn btn-sm' : 'btn btn-sm btn-ghost'}
+              aria-current={p.id === periode.id ? 'page' : undefined}
+            >
+              {p.nama} · mulai {tanggalPendek(p.mulai)}
+            </Link>
+          ))}
+        </nav>
+      )}
       <p className="t-small" style={{ color: 'var(--muted-2)', marginBottom: 16 }}>
         Periode <strong>{periode.nama}</strong>. Nyatakan slot waktu yang Anda sanggupi —
         bukan tanggal. Kelas dibentuk saat murid cukup dan pengajar tersedia.
@@ -154,6 +188,8 @@ export default async function KetersediaanPengajarPage() {
       )}
 
       <FormKetersediaan
+        key={periode.id}
+        periodeId={periode.id}
         slots={daftar}
         awalDipilih={dipilih}
         awalMode={(pengisian?.mode as 'online' | 'offline' | 'keduanya') ?? 'online'}

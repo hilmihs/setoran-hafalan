@@ -22,6 +22,15 @@ export function PanelPengingat({ periodeId }: { periodeId: string }) {
   const [ditandai, setDitandai] = useState<Set<string>>(new Set());
 
   const penyegaran = daftar.filter((d) => d.pengisian_id);
+
+  const susun = () =>
+    jalan(
+      () => daftarPengingat({ periodeId }),
+      (data) => {
+        setDaftar(((data as { pengingat?: Pengingat[] })?.pengingat ?? []).slice(0, 200));
+        setDibuka(true);
+      }
+    );
   const butuhPengajar = daftar.filter((d) => !d.pengisian_id);
 
   return (
@@ -33,15 +42,7 @@ export function PanelPengingat({ periodeId }: { periodeId: string }) {
         <button
           className="btn btn-sm"
           disabled={pending}
-          onClick={() =>
-            jalan(
-              () => daftarPengingat({ periodeId }),
-              (data) => {
-                setDaftar(((data as { pengingat?: Pengingat[] })?.pengingat ?? []).slice(0, 200));
-                setDibuka(true);
-              }
-            )
-          }
+          onClick={susun}
         >
           {pending ? 'Menyusun…' : 'Susun daftar pengingat'}
         </button>
@@ -50,7 +51,16 @@ export function PanelPengingat({ periodeId }: { periodeId: string }) {
             className="btn btn-sm btn-ghost"
             disabled={pending || ditandai.size === 0}
             onClick={() =>
-              jalan(() => tandaiPengingatTerkirim({ pengisianIds: [...ditandai] }), () => setDitandai(new Set()))
+              jalan(
+                () => tandaiPengingatTerkirim({ pengisianIds: [...ditandai] }),
+                // Muat ulang supaya keterangan "sudah diingatkan" langsung terlihat;
+                // pesan hasil penandaan tetap tampil di atas.
+                async () => {
+                  setDitandai(new Set());
+                  const r = await daftarPengingat({ periodeId });
+                  if (r.ok) setDaftar(((r.data as { pengingat?: Pengingat[] })?.pengingat ?? []).slice(0, 200));
+                }
+              )
             }
           >
             Tandai {ditandai.size} pengingat sudah dikirim
@@ -82,6 +92,8 @@ export function PanelPengingat({ periodeId }: { periodeId: string }) {
                 style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}
               >
                 <input
+                  id={`pengingat-${d.pengisian_id}`}
+                  aria-label={`Tandai pengingat untuk ${d.nama} sudah dikirim`}
                   type="checkbox"
                   checked={ditandai.has(d.pengisian_id!)}
                   onChange={(e) => {
@@ -91,10 +103,10 @@ export function PanelPengingat({ periodeId }: { periodeId: string }) {
                     setDitandai(n);
                   }}
                 />
-                <span className="t-small" style={{ flex: '1 1 200px' }}>
+                <label htmlFor={`pengingat-${d.pengisian_id}`} className="t-small" style={{ flex: '1 1 200px' }}>
                   {d.nama}
                   <span style={{ color: 'var(--muted-2)' }}> · {d.keterangan}</span>
-                </span>
+                </label>
                 <a className="btn btn-sm btn-ghost" href={d.waUrl} target="_blank" rel="noopener noreferrer">
                   Kirim
                 </a>

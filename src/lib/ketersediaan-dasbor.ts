@@ -72,6 +72,35 @@ export function susunBarisJam(
     .sort((a, b) => b.sisa - a.sisa || b.antre - a.antre || a.label.localeCompare(b.label));
 }
 
+/**
+ * Ganti daya tampung perkiraan dengan hasil simulasi alokasi.
+ *
+ * `susunBarisJam` memperkirakan tampung = pengajar bebas × kapasitas per jam.
+ * Itu melebih-lebihkan: pengajar yang menyanggupi lima jam terhitung lima kali,
+ * dan kelompok level/umur yang belum genap diperlakukan seolah sudah jadi
+ * halaqah. Simulasi (`susunGabungan`) menjalankan mesin alokasi yang sama tanpa
+ * menulis, jadi angkanya yang dipakai — baik untuk satu periode maupun gabungan.
+ */
+export function terapkanSimulasi(
+  baris: readonly BarisJam[],
+  tampungSim: ReadonlyMap<string, number>,
+  kapasitas: number
+): BarisJam[] {
+  return baris
+    .map((b): BarisJam => {
+      const tampung = Math.min(b.antre, tampungSim.get(b.slot_id) ?? 0);
+      const sisa = Math.max(0, b.antre - tampung);
+      return {
+        ...b,
+        tampung,
+        sisa,
+        bisa: Math.floor(tampung / Math.max(1, kapasitas)),
+        status: b.antre === 0 ? 'kosong' : b.pengajar === 0 ? 'tanpa_pengajar' : sisa > 0 ? 'kurang' : 'cukup',
+      };
+    })
+    .sort((a, b) => b.sisa - a.sisa || b.antre - a.antre || a.label.localeCompare(b.label));
+}
+
 export interface AngkaJam {
   antre: number;
   tampung: number;

@@ -77,6 +77,8 @@ interface UsulanRingkas {
 }
 
 const STATUS_HALAQAH_HIDUP = ['disetujui', 'menunggu', 'dikonfirmasi', 'dikirim'];
+/** Pengajar terpakai dihitung seperti mesin alokasi: usulan yang belum disetujui pun sudah memegang jamnya. */
+const STATUS_MEMEGANG_JAM = ['usulan', ...STATUS_HALAQAH_HIDUP];
 
 /**
  * Hitung ringkasan untuk semua slot sebuah periode sekaligus.
@@ -98,15 +100,22 @@ export async function ringkasSlot(
     // Sama dengan mesin alokasi: 'diajukan' juga pasokan. Sebelumnya papan hanya
     // menghitung 'terverifikasi', jadi angka di layar selalu lebih kecil dari yang
     // benar-benar dipakai alokasi.
-    supabaseAdmin
-      .from('ks_ketersediaan')
-      .select('slot_id, status, pengisian:pengisian_id(pengajar_id, status)')
-      .in('status', ['terverifikasi', 'diajukan']),
+    // Hanya baris milik slot periode ini — bukan seluruh tabel lintas periode.
+    slots.length > 0
+      ? supabaseAdmin
+          .from('ks_ketersediaan')
+          .select('slot_id, status, pengisian:pengisian_id(pengajar_id, status)')
+          .in(
+            'slot_id',
+            slots.map((s) => s.id)
+          )
+          .in('status', ['terverifikasi', 'diajukan'])
+      : Promise.resolve({ data: [] as KetersediaanRingkas[] }),
     supabaseAdmin
       .from('ks_usulan')
       .select('slot_id, pengajar_id, status')
       .eq('periode_id', periode.id)
-      .in('status', STATUS_HALAQAH_HIDUP),
+      .in('status', STATUS_MEMEGANG_JAM),
     riwayatSlot(slots),
     identitasTerpakaiLintasPeriode(periode.id),
   ]);
@@ -156,7 +165,7 @@ export async function ringkasSlot(
   const halaqahHidup = new Map<string, number>();
   for (const u of (usulan ?? []) as UsulanRingkas[]) {
     if (!slotIds.has(u.slot_id)) continue;
-    halaqahHidup.set(u.slot_id, (halaqahHidup.get(u.slot_id) ?? 0) + 1);
+    if (STATUS_HALAQAH_HIDUP.includes(u.status)) halaqahHidup.set(u.slot_id, (halaqahHidup.get(u.slot_id) ?? 0) + 1);
     if (u.pengajar_id) {
       if (!terpakaiPerSlot.has(u.slot_id)) terpakaiPerSlot.set(u.slot_id, new Set());
       terpakaiPerSlot.get(u.slot_id)!.add(u.pengajar_id);

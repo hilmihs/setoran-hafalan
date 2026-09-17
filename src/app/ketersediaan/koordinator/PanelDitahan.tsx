@@ -140,6 +140,7 @@ function BarisTampil({
   pending: boolean;
   jalan: ReturnType<typeof useAksi>['jalan'];
 }) {
+  const [yakin, setYakin] = useState(false);
   return (
     <tr style={{ borderBottom: '1px solid var(--line)' }}>
       <td style={{ padding: '6px 8px' }}>
@@ -176,13 +177,26 @@ function BarisTampil({
         >
           Loloskan
         </button>{' '}
-        <button
-          className="btn btn-sm btn-ghost"
-          disabled={pending}
-          onClick={() => jalan(() => batalkanPendaftar({ periodeId, pendaftarId: baris.id }))}
-        >
-          Batalkan
-        </button>
+        {yakin ? (
+          <>
+            <button
+              className="btn btn-sm"
+              disabled={pending}
+              onClick={() => jalan(() => batalkanPendaftar({ periodeId, pendaftarId: baris.id }))}
+            >
+              Ya, batalkan
+            </button>{' '}
+            <button className="btn btn-sm btn-ghost" disabled={pending} onClick={() => setYakin(false)}>
+              Tidak
+            </button>
+          </>
+        ) : (
+          // Dua langkah: pembatalan mengeluarkan orangnya dari antrean dan tarikan
+          // CSV berikutnya tidak menghidupkannya lagi.
+          <button className="btn btn-sm btn-ghost" disabled={pending} onClick={() => setYakin(true)}>
+            Batalkan
+          </button>
+        )}
       </td>
     </tr>
   );

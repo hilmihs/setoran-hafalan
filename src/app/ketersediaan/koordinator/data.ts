@@ -1,10 +1,52 @@
 import 'server-only';
 import { supabaseAdmin } from '@/lib/supabase-admin';
+import { absUrl } from '@/lib/url';
+import { buildWaMeUrl, tplKonfirmasiHalaqahPenuh } from '@/lib/whatsapp';
 import type { Gender, KsMode, KsPendaftarSumber, KsPengisianSumber } from '@/types/db';
 import type { BarisAntrean, KartuUsulan } from './PanelKerja';
 import type { BarisGrup } from './PanelGrupPool';
 
 const STATUS_HIDUP = ['disetujui', 'menunggu', 'dikonfirmasi', 'dikirim'];
+/** Status yang tampil di papan kerja; sisanya masuk "Riwayat". */
+const STATUS_PAPAN = ['usulan', 'disetujui', 'menunggu', 'dikonfirmasi', 'dikirim'];
+const STATUS_RIWAYAT = ['ditolak', 'kedaluwarsa', 'batal', 'gagal'];
+export const BATAS_USULAN = 200;
+
+/** Tanggal & waktu WIB untuk teks yang dibaca manusia. */
+export function waktuWib(iso: string): string {
+  return new Date(iso).toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' });
+}
+
+/**
+ * Tautan wa.me berisi pesan konfirmasi halaqah penuh.
+ *
+ * Satu-satunya penyusun pesan ini: dipakai saat usulan disetujui dan saat papan
+ * menampilkan ulang tautan untuk usulan yang masih menunggu. Tautan yang hanya
+ * muncul sekali sesudah klik gampang hilang (halaman dimuat ulang, koordinator
+ * lain yang menyetujui), padahal tanpa itu pengajar tak pernah tahu.
+ */
+export function tautanWaKonfirmasi(u: {
+  token: string;
+  tenggat: string;
+  tanggalMulai: string;
+  pengajar: { name: string; gender: Gender; whatsapp_number: string };
+  slotLabel: string;
+  level: string;
+  jumlahPeserta: number;
+}): { waUrl: string; konfirmasiUrl: string } {
+  const konfirmasiUrl = absUrl(`/ketersediaan/konfirmasi/${u.token}`);
+  const teks = tplKonfirmasiHalaqahPenuh({
+    pengajarName: u.pengajar.name,
+    pengajarGender: u.pengajar.gender,
+    slotLabel: u.slotLabel,
+    level: u.level,
+    jumlahPeserta: u.jumlahPeserta,
+    tanggalMulai: u.tanggalMulai,
+    batasKonfirmasi: waktuWib(u.tenggat),
+    konfirmasiUrl,
+  });
+  return { waUrl: buildWaMeUrl(u.pengajar.whatsapp_number, teks), konfirmasiUrl };
+}
 
 // ── Panel lama (dipindah dari page.tsx) ────────────────────────────────────
 
@@ -13,16 +55,16 @@ export async function muatAntrean(periodeId: string): Promise<BarisAntrean[]> {
     .from('ks_pengisian')
     .select('id, pengajar:pengajar_id(name, gender)')
     .eq('periode_id', periodeId);
-  const namaPengisian = new Map(
-    ((pengisian ?? []) as { id: string; pengajar?: { name: string; gender: Gender } | null }[]).map(
-      (p) => [p.id, p.pengajar?.name ?? '—']
-    )
-  );
+  const pengisianRows = (pengisian ?? []) as { id: string; pengajar?: { name: string; gender: Gender } | null }[];
+  const namaPengisian = new Map(pengisianRows.map((p) => [p.id, p.pengajar?.name ?? '—']));
+  const genderPengisian = new Map(pengisianRows.map((p) => [p.id, p.pengajar?.gender ?? null]));
   if (namaPengisian.size === 0) return [];
 
+  // Disaring per pengisian periode ini, bukan membaca seluruh tabel.
   const { data: baris } = await supabaseAdmin
     .from('ks_ketersediaan')
     .select('id, pengisian_id, status, sanggahan_status, bentrok_alasan, catatan, slot:slot_id(label)')
+    .in('pengisian_id', [...namaPengisian.keys()])
     .in('status', ['perlu_konfirmasi', 'diajukan']);
 
   const out: BarisAntrean[] = [];
@@ -44,6 +86,7 @@ export async function muatAntrean(periodeId: string): Promise<BarisAntrean[]> {
     if (!perluDisentuh) continue;
     out.push({
       id: b.id,
+      gender: genderPengisian.get(b.pengisian_id) ?? null,
       pengajar: nama,
       slot: b.slot?.label ?? '—',
       status: b.status,
@@ -55,32 +98,55 @@ export async function muatAntrean(periodeId: string): Promise<BarisAntrean[]> {
   return out;
 }
 
-export async function muatUsulan(periodeId: string): Promise<KartuUsulan[]> {
-  const { data } = await supabaseAdmin
-    .from('ks_usulan')
-    .select(
-      'id, status, level, pita_umur, pita_digabung, putaran, tanggal_mulai, token_kedaluwarsa, tilawah_halaqah_id, grup_wa_link, slot:slot_id(label), pengajar:pengajar_id(name)'
-    )
-    .eq('periode_id', periodeId)
-    .in('status', ['usulan', 'disetujui', 'menunggu', 'dikonfirmasi', 'kedaluwarsa', 'dikirim', 'gagal'])
-    .order('created_at', { ascending: false })
-    .limit(200);
+export interface DaftarUsulan {
+  kartu: KartuUsulan[];
+  /** true bila riwayat atau papan dipotong di BATAS_USULAN baris terbaru. */
+  terpotong: boolean;
+}
 
-  const baris = (data ?? []) as {
-    id: string;
-    status: string;
-    level: string;
-    pita_umur: string | null;
-    pita_digabung: boolean;
-    putaran: number;
-    tanggal_mulai: string | null;
-    token_kedaluwarsa: string | null;
-    tilawah_halaqah_id: number | null;
-    grup_wa_link: string | null;
-    slot?: { label: string } | null;
-    pengajar?: { name: string } | null;
-  }[];
-  if (baris.length === 0) return [];
+type BarisUsulanDb = {
+  id: string;
+  status: string;
+  level: string;
+  pita_umur: string | null;
+  pita_digabung: boolean;
+  putaran: number;
+  tanggal_mulai: string | null;
+  token_kedaluwarsa: string | null;
+  akses_token: string | null;
+  alasan_tolak: string | null;
+  tilawah_halaqah_id: number | null;
+  grup_wa_link: string | null;
+  slot?: { label: string; kelompok: Gender } | null;
+  pengajar?: { name: string; gender: Gender; whatsapp_number: string } | null;
+};
+
+export async function muatUsulan(periodeId: string): Promise<DaftarUsulan> {
+  const kolom =
+    'id, status, level, pita_umur, pita_digabung, putaran, tanggal_mulai, token_kedaluwarsa, akses_token, alasan_tolak, tilawah_halaqah_id, grup_wa_link, slot:slot_id(label, kelompok), pengajar:pengajar_id(name, gender, whatsapp_number)';
+  // Papan dan riwayat dibaca terpisah: riwayat yang panjang tidak boleh
+  // mendesak usulan yang masih perlu ditindaklanjuti keluar dari batas.
+  const [{ data: papan }, { data: riwayat }] = await Promise.all([
+    supabaseAdmin
+      .from('ks_usulan')
+      .select(kolom)
+      .eq('periode_id', periodeId)
+      .in('status', STATUS_PAPAN)
+      .order('created_at', { ascending: false })
+      .limit(BATAS_USULAN + 1),
+    supabaseAdmin
+      .from('ks_usulan')
+      .select(kolom)
+      .eq('periode_id', periodeId)
+      .in('status', STATUS_RIWAYAT)
+      .order('updated_at', { ascending: false })
+      .limit(BATAS_USULAN + 1),
+  ]);
+  const papanRows = (papan ?? []) as BarisUsulanDb[];
+  const riwayatRows = (riwayat ?? []) as BarisUsulanDb[];
+  const terpotong = papanRows.length > BATAS_USULAN || riwayatRows.length > BATAS_USULAN;
+  const baris = [...papanRows.slice(0, BATAS_USULAN), ...riwayatRows.slice(0, BATAS_USULAN)];
+  if (baris.length === 0) return { kartu: [], terpotong: false };
 
   const { data: peserta } = await supabaseAdmin
     .from('ks_usulan_peserta')
@@ -96,21 +162,42 @@ export async function muatUsulan(periodeId: string): Promise<KartuUsulan[]> {
     if (p.status === 'terenroll') terenrol.set(p.usulan_id, (terenrol.get(p.usulan_id) ?? 0) + 1);
   }
 
-  return baris.map((b) => ({
-    id: b.id,
-    status: b.status,
-    slot: b.slot?.label ?? '—',
-    pengajar: b.pengajar?.name ?? '(belum ada)',
-    level: b.level,
-    pita: b.pita_digabung ? 'pita digabung' : (b.pita_umur ?? '—'),
-    putaran: b.putaran,
-    peserta: hitung.get(b.id) ?? 0,
-    terenrol: terenrol.get(b.id) ?? 0,
-    tanggal_mulai: b.tanggal_mulai,
-    tenggat: b.token_kedaluwarsa,
-    tilawah_halaqah_id: b.tilawah_halaqah_id,
-    grup_wa_link: b.grup_wa_link,
-  }));
+  const kartu = baris.map((b): KartuUsulan => {
+    const jumlah = hitung.get(b.id) ?? 0;
+    // Tautan WA hanya untuk yang masih menunggu konfirmasi: token status lain
+    // sudah mati atau tidak boleh beredar lagi.
+    const wa =
+      b.status === 'menunggu' && b.akses_token && b.token_kedaluwarsa && b.pengajar && b.slot
+        ? tautanWaKonfirmasi({
+            token: b.akses_token,
+            tenggat: b.token_kedaluwarsa,
+            tanggalMulai: b.tanggal_mulai ?? '-',
+            pengajar: b.pengajar,
+            slotLabel: b.slot.label,
+            level: b.level,
+            jumlahPeserta: jumlah,
+          }).waUrl
+        : null;
+    return {
+      id: b.id,
+      status: b.status,
+      slot: b.slot?.label ?? '—',
+      gender: b.slot?.kelompok ?? null,
+      pengajar: b.pengajar?.name ?? '(belum ada)',
+      level: b.level,
+      pita: b.pita_digabung ? 'pita digabung' : (b.pita_umur ?? '—'),
+      putaran: b.putaran,
+      peserta: jumlah,
+      terenrol: terenrol.get(b.id) ?? 0,
+      tanggal_mulai: b.tanggal_mulai,
+      tenggat: b.token_kedaluwarsa,
+      tilawah_halaqah_id: b.tilawah_halaqah_id,
+      grup_wa_link: b.grup_wa_link,
+      alasan_tolak: b.alasan_tolak,
+      wa_url: wa,
+    };
+  });
+  return { kartu, terpotong };
 }
 
 export async function muatGrupPool(periodeId: string): Promise<BarisGrup[]> {
@@ -239,10 +326,13 @@ export interface TugasGender {
   usulanMenunggu: number;
   tenggatLewat: number;
   sanggahan: number;
+  /** Usulan yang ditolak pengajar atau gagal dikirim — perlu dilihat koordinator. */
+  ditolak: number;
+  gagal: number;
 }
 
 export async function muatTugas(periodeId: string, sekarang: Date): Promise<Record<Gender, TugasGender>> {
-  const kosong = (): TugasGender => ({ usulanMenunggu: 0, tenggatLewat: 0, sanggahan: 0 });
+  const kosong = (): TugasGender => ({ usulanMenunggu: 0, tenggatLewat: 0, sanggahan: 0, ditolak: 0, gagal: 0 });
   const out: Record<Gender, TugasGender> = { ikhwan: kosong(), akhwat: kosong() };
 
   const [{ data: usulan }, { data: sanggah }] = await Promise.all([
@@ -250,11 +340,8 @@ export async function muatTugas(periodeId: string, sekarang: Date): Promise<Reco
       .from('ks_usulan')
       .select('status, token_kedaluwarsa, slot:slot_id(kelompok)')
       .eq('periode_id', periodeId)
-      .in('status', ['usulan', 'menunggu']),
-    supabaseAdmin
-      .from('ks_ketersediaan')
-      .select('slot:slot_id(kelompok, periode_id)')
-      .eq('sanggahan_status', 'menunggu'),
+      .in('status', ['usulan', 'menunggu', 'ditolak', 'gagal']),
+    muatSanggahanMenunggu(periodeId),
   ]);
 
   for (const u of (usulan ?? []) as {
@@ -264,12 +351,27 @@ export async function muatTugas(periodeId: string, sekarang: Date): Promise<Reco
   }[]) {
     if (!u.slot) continue;
     if (u.status === 'usulan') out[u.slot.kelompok].usulanMenunggu += 1;
+    else if (u.status === 'ditolak') out[u.slot.kelompok].ditolak += 1;
+    else if (u.status === 'gagal') out[u.slot.kelompok].gagal += 1;
     else if (u.token_kedaluwarsa && new Date(u.token_kedaluwarsa) < sekarang) out[u.slot.kelompok].tenggatLewat += 1;
   }
   for (const s of (sanggah ?? []) as { slot?: { kelompok: Gender; periode_id: string } | null }[]) {
     if (s.slot && s.slot.periode_id === periodeId) out[s.slot.kelompok].sanggahan += 1;
   }
   return out;
+}
+
+/** Sanggahan menunggu milik periode ini — dibaca per slot periode, bukan seluruh tabel. */
+async function muatSanggahanMenunggu(periodeId: string): Promise<{ data: unknown[] }> {
+  const { data: slot } = await supabaseAdmin.from('ks_slot').select('id').eq('periode_id', periodeId);
+  const ids = ((slot ?? []) as { id: string }[]).map((s) => s.id);
+  if (ids.length === 0) return { data: [] };
+  const { data } = await supabaseAdmin
+    .from('ks_ketersediaan')
+    .select('slot:slot_id(kelompok, periode_id)')
+    .in('slot_id', ids)
+    .eq('sanggahan_status', 'menunggu');
+  return { data: data ?? [] };
 }
 
 export interface PendaftarRingkas {

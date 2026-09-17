@@ -159,6 +159,13 @@ export interface MasukanAlokasi {
    * jam lain. Hanya memutus urutan di dalam satu putaran; kaidah pemerataan tetap.
    */
   peringkat: (pengajarId: string, slotId: string) => number;
+  /**
+   * pengajar_id → halaqah hidup yang SUDAH dipegangnya dari alokasi sebelumnya
+   * (semua periode aktif). Tanpa ini hitungan putaran mulai dari nol setiap kali
+   * alokasi dijalankan, sehingga pengajar yang kemarin sudah dapat satu ikut
+   * bersaing lagi di putaran pertama melawan yang belum dapat sama sekali.
+   */
+  sudahDapat?: ReadonlyMap<string, number>;
 }
 
 export interface Penempatan {
@@ -173,6 +180,7 @@ export interface HasilAlokasi {
   penempatan: Penempatan[];
   /** Kelompok yang siap tetapi tidak mendapat pengajar — inilah "butuh pengajar". */
   tanpaPengajar: GrupUsulan[];
+  /** Putaran terakhir yang benar-benar menempatkan sesuatu; 0 bila tidak ada penempatan. */
   putaranTerpakai: number;
 }
 
@@ -184,12 +192,13 @@ export interface HasilAlokasi {
  *    ia tidak bisa mengajar dua kelas serentak;
  *  · slot baru tidak boleh bertabrakan jam dengan halaqah lain miliknya,
  *    termasuk yang baru saja dijatah dalam alokasi ini;
- *  · pada putaran N hanya pengajar dengan tepat N−1 halaqah baru yang boleh
- *    menerima.
+ *  · pada putaran N hanya pengajar dengan tepat N−1 halaqah (lama + baru) yang
+ *    boleh menerima. Halaqah lama ikut dihitung lewat `sudahDapat`; pengajar yang
+ *    sudah memegang lebih banyak menunggu sampai putarannya tiba.
  */
 export function alokasikan(masukan: MasukanAlokasi): HasilAlokasi {
   const penempatan: Penempatan[] = [];
-  const dapat = new Map<string, number>();
+  const dapat = new Map<string, number>(masukan.sudahDapat ?? []);
   const jadwal = new Map<string, RentangJadwal[]>();
   for (const [k, v] of masukan.jadwalPengajar) jadwal.set(k, [...v]);
   const terpakaiDiSlot = new Map<string, Set<string>>();
@@ -204,8 +213,16 @@ export function alokasikan(masukan: MasukanAlokasi): HasilAlokasi {
   const sisaGrup = new Map<string, GrupUsulan[]>();
   for (const s of slots) sisaGrup.set(s.slot.id, [...s.grup]);
 
-  let putaran = 1;
-  const BATAS_PUTARAN = 100; // penjaga; alokasi nyata berhenti jauh sebelum ini
+  // Putaran dimulai dari jumlah halaqah paling sedikit yang sudah dipegang
+  // kandidat mana pun: bila semua sudah dapat satu, putaran 1 kosong dan tak
+  // boleh menghentikan alokasi.
+  const semuaKandidat = [...new Set([...masukan.tersedia.values()].flat())];
+  const minimumDapat = semuaKandidat.length
+    ? Math.min(...semuaKandidat.map((p) => dapat.get(p) ?? 0))
+    : 0;
+  let putaran = minimumDapat + 1;
+  let putaranTerakhir = 0;
+  const BATAS_PUTARAN = putaran + 100; // penjaga; alokasi nyata berhenti jauh sebelum ini
 
   while (putaran <= BATAS_PUTARAN) {
     let ditempatkan = 0;
@@ -254,13 +271,22 @@ export function alokasikan(masukan: MasukanAlokasi): HasilAlokasi {
       }
     }
 
-    if (ditempatkan === 0) break;
+    if (ditempatkan === 0) {
+      // Putaran kosong baru berarti selesai bila tak ada lagi pengajar yang
+      // menunggu putaran lebih tinggi (mis. yang sudah memegang dua halaqah lama)
+      // dan masih ada kelompok tersisa.
+      const masihAda = [...sisaGrup.values()].some((g) => g.length > 0);
+      const adaYangLebihTinggi = semuaKandidat.some((p) => (dapat.get(p) ?? 0) >= putaran);
+      if (!masihAda || !adaYangLebihTinggi) break;
+    } else {
+      putaranTerakhir = putaran;
+    }
     putaran += 1;
   }
 
   const tanpaPengajar: GrupUsulan[] = [];
   for (const sisa of sisaGrup.values()) tanpaPengajar.push(...sisa);
 
-  return { penempatan, tanpaPengajar, putaranTerpakai: putaran };
+  return { penempatan, tanpaPengajar, putaranTerpakai: putaranTerakhir };
 }
 

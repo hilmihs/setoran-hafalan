@@ -1,6 +1,7 @@
 'use client';
 
 import { useMemo, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import type { KsHariIdx, KsPeriode } from '@/types/db';
 import { idxKeHari } from '@/lib/ketersediaan-slot';
 import { tanggalPertemuan, teksLibur, uraiLibur } from '@/lib/ketersediaan-pertemuan';
@@ -33,6 +34,7 @@ export function PanelPeriode({
 
 export function PeriodeBaru() {
   const { pending, jalan, tampilan } = useAksi();
+  const router = useRouter();
   const [nama, setNama] = useState('');
   const [mulai, setMulai] = useState('');
   const [selesai, setSelesai] = useState('');
@@ -82,8 +84,18 @@ export function PeriodeBaru() {
         style={{ marginTop: 10 }}
         disabled={pending}
         onClick={() =>
-          jalan(() =>
-            buatPeriode({ nama, mulai, selesai, minimalSlot, kapasitas, isiSlotBawaan: isiBawaan })
+          jalan(
+            () => buatPeriode({ nama, mulai, selesai, minimalSlot, kapasitas, isiSlotBawaan: isiBawaan }),
+            (data) => {
+              // Kosongkan form supaya klik kedua tidak membuat periode kembar,
+              // lalu pindah ke periode baru — tanpa itu dashboard tetap di periode lama.
+              setNama('');
+              setMulai('');
+              setSelesai('');
+              setIsiBawaan(false);
+              const id = (data as { id?: string } | undefined)?.id;
+              if (id) router.push(`/ketersediaan/koordinator?periode=${id}&tab=pengaturan`);
+            }
           )
         }
       >
@@ -253,6 +265,8 @@ function TujuanTilawah({ periode, superadmin }: { periode: KsPeriode; superadmin
   const { pending, jalan, tampilan } = useAksi();
   const [program, setProgram] = useState(periode.tilawah_program_id ?? 0);
   const [batch, setBatch] = useState(periode.tilawah_batch_id ?? 0);
+  const [ketikNama, setKetikNama] = useState('');
+  const namaCocok = ketikNama.trim() === periode.nama.trim();
 
   return (
     <Bagian
@@ -264,7 +278,8 @@ function TujuanTilawah({ periode, superadmin }: { periode: KsPeriode; superadmin
         <Angka label="batch_id" nilai={batch} ubah={setBatch} min={0} />
         <button
           className="btn btn-sm"
-          disabled={pending}
+          disabled={pending || periode.kirim_nyata}
+          title={periode.kirim_nyata ? 'Matikan pengiriman nyata dulu' : undefined}
           onClick={() =>
             jalan(() =>
               tetapkanTujuanTilawah({
@@ -278,6 +293,11 @@ function TujuanTilawah({ periode, superadmin }: { periode: KsPeriode; superadmin
           Simpan tujuan
         </button>
       </div>
+      {periode.kirim_nyata && (
+        <p className="t-small" style={{ color: 'var(--muted-2)', marginTop: 6 }}>
+          Tujuan terkunci selama pengiriman nyata menyala — matikan dulu untuk menggantinya.
+        </p>
+      )}
 
       <Kotak nada={periode.kirim_nyata ? 'baik' : 'netral'}>
         {periode.kirim_nyata
@@ -288,21 +308,47 @@ function TujuanTilawah({ periode, superadmin }: { periode: KsPeriode; superadmin
       {superadmin ? (
         <>
           {tampilan}
-          <button
-            className="btn btn-sm"
-            disabled={pending}
-            onClick={() =>
-              jalan(() => nyalakanKirimNyata({ periodeId: periode.id, nyala: !periode.kirim_nyata }))
-            }
-          >
-            {periode.kirim_nyata ? 'Matikan pengiriman nyata' : 'Nyalakan pengiriman nyata'}
-          </button>
-          {!periode.kirim_nyata && (
-            <p className="t-small" style={{ color: 'var(--muted-2)', marginTop: 6 }}>
-              CMS tilawah tidak menyediakan endpoint hapus. Halaqah dan akun murid yang salah
-              terkirim hanya dapat dibereskan manual dari dalam CMS — nyalakan setelah satu
-              halaqah uji terbukti benar.
-            </p>
+          {periode.kirim_nyata ? (
+            <button
+              className="btn btn-sm"
+              disabled={pending}
+              onClick={() => jalan(() => nyalakanKirimNyata({ periodeId: periode.id, nyala: false }))}
+            >
+              Matikan pengiriman nyata
+            </button>
+          ) : (
+            <>
+              <p className="t-small" style={{ color: 'var(--muted-2)', margin: '6px 0' }}>
+                CMS tilawah tidak menyediakan endpoint hapus. Halaqah dan akun murid yang salah
+                terkirim hanya dapat dibereskan manual dari dalam CMS — nyalakan setelah satu
+                halaqah uji terbukti benar.
+              </p>
+              <label style={{ display: 'flex', flexDirection: 'column', gap: 2, maxWidth: 360 }}>
+                <span className="t-small" style={{ color: 'var(--muted-2)' }}>
+                  Ketik nama periode <strong>{periode.nama}</strong> untuk menyalakan
+                </span>
+                <input
+                  id="kirim-nyata-konfirmasi"
+                  className="input"
+                  value={ketikNama}
+                  onChange={(e) => setKetikNama(e.target.value)}
+                  autoComplete="off"
+                />
+              </label>
+              <button
+                className="btn btn-sm"
+                style={{ marginTop: 8 }}
+                disabled={pending || !namaCocok}
+                onClick={() =>
+                  jalan(
+                    () => nyalakanKirimNyata({ periodeId: periode.id, nyala: true, konfirmasiNama: ketikNama }),
+                    () => setKetikNama('')
+                  )
+                }
+              >
+                Nyalakan pengiriman nyata
+              </button>
+            </>
           )}
         </>
       ) : (

@@ -149,7 +149,7 @@ function KartuSumber({
             color: sumber.terakhir_status === 'gagal' ? 'var(--merah-ink)' : 'var(--muted-2)',
           }}
         >
-          Tarikan terakhir {new Date(sumber.terakhir_tarik).toLocaleString('id-ID')} —{' '}
+          Tarikan terakhir {new Date(sumber.terakhir_tarik).toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' })} WIB —{' '}
           {sumber.terakhir_status === 'gagal' ? 'GAGAL: ' : ''}
           {sumber.terakhir_pesan ?? '—'}
         </p>

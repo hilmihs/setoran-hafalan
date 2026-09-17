@@ -6,15 +6,17 @@ import { requirePengajar } from '@/lib/session';
 import { getSessionWa } from '@/lib/program-kelas';
 import { catatKs } from '@/lib/ketersediaan-log';
 import { jagaFiturKetersediaan } from '@/lib/ketersediaan-akses';
-import { formTerbuka, getPeriodeAktif, listSlot } from '@/lib/ketersediaan-periode';
+import { formTerbuka, getPeriode, listSlot, periodeTerbukaUntukPengajar } from '@/lib/ketersediaan-periode';
 import { jadwalTerpakaiPengajar, kunciSlot } from '@/lib/ketersediaan-bentrok';
-import type { KsCekButir, KsKetersediaanStatus, KsModePengajar } from '@/types/db';
+import type { KsCekButir, KsKetersediaanStatus, KsModePengajar, KsPeriode } from '@/types/db';
 
 export type Hasil = { ok: true; pesan: string } | { ok: false; error: string };
 
 const MODE_SAH: KsModePengajar[] = ['online', 'offline', 'keduanya'];
 
 interface MasukanSimpan {
+  /** Periode yang sedang diisi. Tanpa ini: periode terbuka yang mulai paling awal. */
+  periodeId?: string;
   slotIds: string[];
   mode: KsModePengajar;
   lokasi: string;
@@ -30,16 +32,31 @@ interface MasukanSimpan {
  * yang berlaku. Ini sekaligus menghapus masalah "pengisian ganda, ambil timestamp
  * terakhir" yang di alur lama harus dibersihkan manual setelah unduh responses.
  */
+/**
+ * Periode tujuan sebuah aksi pengajar: yang dipilihnya, asalkan aktif dan
+ * formnya terbuka. Beberapa tahap (mis. mulai 5 dan 21 Oktober) bisa terbuka
+ * bersamaan, jadi "periode aktif terbaru" saja tidak cukup.
+ */
+async function periodeTujuan(periodeId: string | undefined): Promise<KsPeriode | { galat: string }> {
+  const sekarang = new Date();
+  if (!periodeId) {
+    const terbuka = await periodeTerbukaUntukPengajar(sekarang);
+    return terbuka[0] ?? { galat: 'Belum ada periode penarikan yang dibuka.' };
+  }
+  const periode = await getPeriode(periodeId);
+  if (!periode || !periode.aktif) return { galat: 'Periode tidak dikenali atau sudah tidak aktif. Muat ulang halaman.' };
+  if (!formTerbuka(periode, sekarang)) return { galat: 'Form ketersediaan periode ini sedang tidak dibuka.' };
+  return periode;
+}
+
 export async function simpanKetersediaan(input: MasukanSimpan): Promise<Hasil> {
   const sesi = await requirePengajar();
   await jagaFiturKetersediaan();
   const wa = await getSessionWa();
 
-  const periode = await getPeriodeAktif();
-  if (!periode) return { ok: false, error: 'Belum ada periode penarikan yang dibuka.' };
-  if (!formTerbuka(periode, new Date())) {
-    return { ok: false, error: 'Form ketersediaan sedang tidak dibuka.' };
-  }
+  const tujuan = await periodeTujuan(input.periodeId);
+  if ('galat' in tujuan) return { ok: false, error: tujuan.galat };
+  const periode = tujuan;
   if (!MODE_SAH.includes(input.mode)) return { ok: false, error: 'Mode mengajar tidak dikenal.' };
   if (!input.komitmen) {
     return { ok: false, error: 'Pernyataan komitmen harus dicentang sebelum mengirim.' };
@@ -77,10 +94,13 @@ export async function simpanKetersediaan(input: MasukanSimpan): Promise<Hasil> {
   // kecuali sanggahannya sudah diterima koordinator.
   const terpakai = await jadwalTerpakaiPengajar(sesi.pengajar_id, { acuan: periode.mulai });
   const terkunci = kunciSlot(slotMilikKelompok, terpakai);
-  const { data: sanggahDiterima } = await supabaseAdmin
-    .from('ks_ketersediaan')
-    .select('slot_id, sanggahan_status, pengisian:pengisian_id(pengajar_id)')
-    .eq('sanggahan_status', 'diterima');
+  const { data: sanggahDiterima } = sahIds.size
+    ? await supabaseAdmin
+        .from('ks_ketersediaan')
+        .select('slot_id, sanggahan_status, pengisian:pengisian_id(pengajar_id)')
+        .in('slot_id', [...sahIds])
+        .eq('sanggahan_status', 'diterima')
+    : { data: [] };
   const dibuka = new Set(
     ((sanggahDiterima ?? []) as { slot_id: string; pengisian?: { pengajar_id: string } | null }[])
       .filter((r) => r.pengisian?.pengajar_id === sesi.pengajar_id)
@@ -115,6 +135,9 @@ export async function simpanKetersediaan(input: MasukanSimpan): Promise<Hasil> {
     submitted_at: adaPengisian ? undefined : sekarang,
     disegarkan_pada: sekarang,
     status: 'aktif' as const,
+    // Isian yang disentuh pengajar sendiri tidak boleh ditimpa impor xlsx
+    // berikutnya — impor hanya memperbarui baris bersumber 'impor'.
+    sumber: 'form' as const,
     updated_at: sekarang,
   };
 
@@ -205,7 +228,7 @@ export async function simpanKetersediaan(input: MasukanSimpan): Promise<Hasil> {
  * bila barisnya masih tercantum di sheet. Tanpa sanggahan, satu baris basi
  * mengunci pengajar dari slot favoritnya tanpa siapa pun mengetahuinya.
  */
-export async function sanggahBentrok(input: { slotId: string; alasan: string }): Promise<Hasil> {
+export async function sanggahBentrok(input: { slotId: string; alasan: string; periodeId?: string }): Promise<Hasil> {
   const sesi = await requirePengajar();
   await jagaFiturKetersediaan();
   const wa = await getSessionWa();
@@ -214,8 +237,9 @@ export async function sanggahBentrok(input: { slotId: string; alasan: string }):
     return { ok: false, error: 'Tuliskan alasannya lebih jelas (minimal 10 karakter).' };
   }
 
-  const periode = await getPeriodeAktif();
-  if (!periode) return { ok: false, error: 'Belum ada periode penarikan yang dibuka.' };
+  const tujuan = await periodeTujuan(input.periodeId);
+  if ('galat' in tujuan) return { ok: false, error: tujuan.galat };
+  const periode = tujuan;
 
   const { data: slot } = await supabaseAdmin
     .from('ks_slot')

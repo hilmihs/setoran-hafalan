@@ -1129,6 +1129,8 @@ dialog[open] {
 .ks-peta-legenda { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; margin-top: 10px; font-size: 12px; color: var(--muted); }
 .ks-peta-legenda span { display: inline-flex; align-items: center; gap: 6px; }
 .ks-peta-legenda i { display: inline-block; width: 14px; height: 14px; border-radius: 3px; }
+.ks-peta-gender + .ks-peta-gender { margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--line); }
+.ks-peta-judul { margin: 0 0 8px; font-size: 13px; font-weight: 700; color: var(--ink-2); }
 
 /* Impor */
 .ks-unggah { display: flex; flex-wrap: wrap; align-items: center; gap: 14px; padding: 14px 16px; background: var(--surface-2); border: 1px dashed var(--line-2); border-radius: var(--r-md); }

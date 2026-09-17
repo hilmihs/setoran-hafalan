@@ -13,6 +13,7 @@ import { Bagian, useAksi } from './ui';
 
 export interface BarisAntrean {
   id: string;
+  gender: 'ikhwan' | 'akhwat' | null;
   pengajar: string;
   slot: string;
   status: string;
@@ -35,23 +36,43 @@ export interface KartuUsulan {
   tenggat: string | null;
   tilawah_halaqah_id: number | null;
   grup_wa_link: string | null;
+  /** Gender slot — dipakai menyaring papan sesuai pilihan gender dashboard. */
+  gender: 'ikhwan' | 'akhwat' | null;
+  alasan_tolak: string | null;
+  /** Tautan wa.me konfirmasi; hanya ada untuk status 'menunggu'. */
+  wa_url: string | null;
 }
 
 interface Props {
   periodeId: string;
   antrean: BarisAntrean[];
   usulan: KartuUsulan[];
+  /** Daftar usulan dipotong di batas baris terbaru. */
+  terpotong?: boolean;
+  batas?: number;
   preset: { id: string; nama: string; gender: string; tipe: string }[];
 }
 
-export function PanelKerja({ periodeId, antrean, usulan, preset }: Props) {
+const STATUS_RIWAYAT = ['ditolak', 'kedaluwarsa', 'batal', 'gagal'];
+
+export function PanelKerja({ periodeId, antrean, usulan, terpotong, batas, preset }: Props) {
   return (
     <>
       <Alokasi periodeId={periodeId} preset={preset} />
-      <PapanUsulan usulan={usulan} />
+      <PapanUsulan usulan={usulan.filter((u) => !STATUS_RIWAYAT.includes(u.status))} terpotong={terpotong} batas={batas} />
+      <Riwayat usulan={usulan.filter((u) => STATUS_RIWAYAT.includes(u.status))} />
       <Antrean baris={antrean} />
     </>
   );
+}
+
+const waktuWib = (iso: string) => new Date(iso).toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' });
+
+/** "2026-10-21" → "Rab, 21 Okt 2026". Tanggal murni, jadi dibaca sebagai UTC. */
+function tanggalTampil(t: string): string {
+  const d = new Date(`${t.slice(0, 10)}T00:00:00Z`);
+  if (Number.isNaN(d.getTime())) return t;
+  return d.toLocaleDateString('id-ID', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' });
 }
 
 function Alokasi({ periodeId, preset }: { periodeId: string; preset: Props['preset'] }) {
@@ -117,16 +138,16 @@ function Alokasi({ periodeId, preset }: { periodeId: string; preset: Props['pres
   );
 }
 
-function PapanUsulan({ usulan }: { usulan: KartuUsulan[] }) {
+function PapanUsulan({ usulan, terpotong, batas }: { usulan: KartuUsulan[]; terpotong?: boolean; batas?: number }) {
   const { pending, jalan, tampilan } = useAksi();
-  const [waUrl, setWaUrl] = useState<string | null>(null);
+  const [waBaru, setWaBaru] = useState<{ url: string; pengajar: string } | null>(null);
 
   const perStatus = new Map<string, KartuUsulan[]>();
   for (const u of usulan) {
     if (!perStatus.has(u.status)) perStatus.set(u.status, []);
     perStatus.get(u.status)!.push(u);
   }
-  const urutStatus = ['usulan', 'menunggu', 'dikonfirmasi', 'dikirim', 'kedaluwarsa', 'gagal', 'disetujui'];
+  const urutStatus = ['usulan', 'menunggu', 'dikonfirmasi', 'dikirim', 'disetujui'];
 
   return (
     <Bagian
@@ -138,11 +159,16 @@ function PapanUsulan({ usulan }: { usulan: KartuUsulan[] }) {
           Belum ada usulan. Jalankan alokasi setelah pendaftar dan ketersediaan masuk.
         </p>
       )}
+      {terpotong && (
+        <p className="t-small" style={{ color: 'var(--muted-2)' }}>
+          Menampilkan {batas ?? 200} terbaru per bagian.
+        </p>
+      )}
       {tampilan}
-      {waUrl && (
+      {waBaru && (
         <p className="t-small" style={{ marginBottom: 10 }}>
-          <a className="btn btn-sm" href={waUrl} target="_blank" rel="noopener noreferrer">
-            Buka WhatsApp untuk mengirim tautan konfirmasi
+          <a className="btn btn-sm" href={waBaru.url} target="_blank" rel="noopener noreferrer">
+            Buka WhatsApp untuk mengirim tautan ke {waBaru.pengajar}
           </a>
         </p>
       )}
@@ -157,15 +183,10 @@ function PapanUsulan({ usulan }: { usulan: KartuUsulan[] }) {
             <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
               {perStatus.get(s)!.map((u) => (
                 <div key={u.id} className="card-flat" style={{ padding: '8px 10px' }}>
-                  <div className="t-small">
-                    <strong>{u.slot}</strong> · {u.pengajar} · {u.level} · {u.pita} ·{' '}
-                    {u.peserta} murid · putaran {u.putaran}
-                  </div>
+                  <KepalaKartu u={u} />
                   <div className="t-small" style={{ color: 'var(--muted-2)' }}>
-                    {u.tanggal_mulai ? `Mulai ${u.tanggal_mulai}` : 'Tanggal mulai belum ditetapkan'}
-                    {u.tenggat && s === 'menunggu'
-                      ? ` · tenggat ${new Date(u.tenggat).toLocaleString('id-ID')}`
-                      : ''}
+                    {u.tanggal_mulai ? `Mulai ${tanggalTampil(u.tanggal_mulai)}` : 'Tanggal mulai belum ditetapkan'}
+                    {u.tenggat && s === 'menunggu' ? ` · tenggat ${waktuWib(u.tenggat)} WIB` : ''}
                     {u.tilawah_halaqah_id ? ` · tilawah #${u.tilawah_halaqah_id}` : ''}
                     {u.terenrol > 0 ? ` · ${u.terenrol}/${u.peserta} terenrol` : ''}
                     {u.grup_wa_link ? ' · grup siap' : ''}
@@ -179,8 +200,8 @@ function PapanUsulan({ usulan }: { usulan: KartuUsulan[] }) {
                           jalan(
                             () => setujuiUsulan({ usulanId: u.id }),
                             (data) => {
-                              const d = data as { waUrl?: string } | undefined;
-                              if (d?.waUrl) setWaUrl(d.waUrl);
+                              const d = data as { waUrl?: string; pengajar?: string } | undefined;
+                              if (d?.waUrl) setWaBaru({ url: d.waUrl, pengajar: d.pengajar ?? u.pengajar });
                             }
                           )
                         }
@@ -188,7 +209,12 @@ function PapanUsulan({ usulan }: { usulan: KartuUsulan[] }) {
                         Deklarasikan penuh
                       </button>
                     )}
-                    {s !== 'dikirim' && <TombolBatal usulanId={u.id} />}
+                    {s === 'menunggu' && u.wa_url && (
+                      <a className="btn btn-sm" href={u.wa_url} target="_blank" rel="noopener noreferrer">
+                        Kirim WA ke {u.pengajar}
+                      </a>
+                    )}
+                    {s !== 'dikirim' && !u.tilawah_halaqah_id && <TombolBatal usulanId={u.id} />}
                   </div>
                 </div>
               ))}
@@ -199,7 +225,67 @@ function PapanUsulan({ usulan }: { usulan: KartuUsulan[] }) {
   );
 }
 
-function TombolBatal({ usulanId }: { usulanId: string }) {
+function KepalaKartu({ u }: { u: KartuUsulan }) {
+  return (
+    <div className="t-small">
+      <strong>{u.slot}</strong> · {u.pengajar} · {u.level} · {u.pita} · {u.peserta} murid · putaran {u.putaran}
+    </div>
+  );
+}
+
+/**
+ * Usulan yang ditolak, lewat tenggat, dibatalkan, atau gagal dikirim.
+ *
+ * Dulu hilang begitu saja dari papan — padahal koordinator perlu tahu siapa yang
+ * menolak dan kenapa, dan usulan yang masih memegang peserta harus bisa dilepas
+ * supaya muridnya kembali antre.
+ */
+function Riwayat({ usulan }: { usulan: KartuUsulan[] }) {
+  const [buka, setBuka] = useState(false);
+  if (usulan.length === 0) return null;
+  const masihMemegang = usulan.filter(
+    (u) => (u.status === 'ditolak' || u.status === 'kedaluwarsa') && u.peserta > 0
+  ).length;
+
+  return (
+    <Bagian
+      judul={`Riwayat usulan (${usulan.length})`}
+      keterangan="Ditolak pengajar, lewat tenggat, dibatalkan, atau gagal dikirim ke CMS tilawah."
+    >
+      {masihMemegang > 0 && (
+        <p className="t-small" style={{ color: 'var(--merah-ink)', marginBottom: 6 }}>
+          {masihMemegang} usulan masih memegang peserta. Batalkan supaya pesertanya kembali ke antrean.
+        </p>
+      )}
+      <button className="btn btn-sm btn-ghost" onClick={() => setBuka((v) => !v)} aria-expanded={buka}>
+        {buka ? 'Sembunyikan riwayat' : `Tampilkan riwayat (${usulan.length})`}
+      </button>
+      {buka && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 8 }}>
+          {usulan.map((u) => (
+            <div key={u.id} className="card-flat" style={{ padding: '8px 10px' }}>
+              <KepalaKartu u={u} />
+              <div className="t-small" style={{ color: 'var(--muted-2)' }}>
+                <strong style={{ color: u.status === 'gagal' || u.status === 'ditolak' ? 'var(--merah-ink)' : undefined }}>
+                  {labelStatus(u.status)}
+                </strong>
+                {u.alasan_tolak ? ` — ${u.alasan_tolak}` : ''}
+                {u.tilawah_halaqah_id ? ` · tilawah #${u.tilawah_halaqah_id}` : ''}
+              </div>
+              {(u.status === 'ditolak' || u.status === 'kedaluwarsa') && u.peserta > 0 && !u.tilawah_halaqah_id && (
+                <div style={{ display: 'flex', gap: 6, marginTop: 6, flexWrap: 'wrap' }}>
+                  <TombolBatal usulanId={u.id} label="Batalkan & kembalikan peserta" />
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </Bagian>
+  );
+}
+
+function TombolBatal({ usulanId, label = 'Batalkan' }: { usulanId: string; label?: string }) {
   const { pending, jalan, tampilan } = useAksi();
   const [buka, setBuka] = useState(false);
   const [alasan, setAlasan] = useState('');
@@ -207,7 +293,7 @@ function TombolBatal({ usulanId }: { usulanId: string }) {
   if (!buka) {
     return (
       <button className="btn btn-sm btn-ghost" onClick={() => setBuka(true)}>
-        Batalkan
+        {label}
       </button>
     );
   }
@@ -342,6 +428,8 @@ function labelStatus(s: string): string {
     dikonfirmasi: 'Dikonfirmasi pengajar',
     dikirim: 'Terkirim ke CMS tilawah',
     kedaluwarsa: 'Lewat tenggat',
+    ditolak: 'Ditolak pengajar',
+    batal: 'Dibatalkan',
     gagal: 'Gagal dikirim',
   };
   return peta[s] ?? s;

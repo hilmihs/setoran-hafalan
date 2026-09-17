@@ -46,7 +46,7 @@ function kunciAlasan(a: string): string {
 
 export async function ringkasDitahan(
   periodeId: string,
-  opts: { batas?: number } = {}
+  opts: { batas?: number; gender?: Gender } = {}
 ): Promise<RingkasDitahan> {
   const batas = opts.batas ?? 300;
 
@@ -72,7 +72,10 @@ export async function ringkasDitahan(
     rekaman_url: r.rekaman_url,
     didaftar_pada: r.didaftar_pada,
     alasan: r.alasan_ditahan ?? [],
-  }));
+  }))
+    // Disaring sebelum dijumlah, supaya angka per alasan cocok dengan lencana
+    // tab yang menghitung satu gender. Baris tanpa gender hanya tampil di "Semua".
+    .filter((r) => !opts.gender || r.gender === opts.gender);
 
   const perAlasan = new Map<string, number>();
   const slotAsing = new Map<string, number>();
