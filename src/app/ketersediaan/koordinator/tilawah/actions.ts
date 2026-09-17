@@ -17,7 +17,7 @@ import {
   ujiKoneksi,
 } from '@/lib/tilawah/client';
 import { usulkanHari, usulkanLevel, usulkanSesi } from '@/lib/tilawah/map';
-import { prosesOutbox } from '@/lib/tilawah/push';
+import { prosesOutbox, pulihkanOutboxGagal } from '@/lib/tilawah/push';
 
 export type Hasil = { ok: true; pesan: string; data?: unknown } | { ok: false; error: string };
 
@@ -242,17 +242,74 @@ export async function sahkanPemetaan(input: {
  * dan menyimpan payload — tidak ada panggilan keluar sama sekali.
  */
 export async function jalankanOutbox(input: { periodeId: string }): Promise<Hasil> {
-  await requireOneOfRoles(['koordinator']);
+  const sesi = await requireOneOfRoles(['koordinator']);
   await jagaFiturKetersediaan();
+  const wa = await getSessionWa();
   const periode = await getPeriode(input.periodeId);
   if (!periode) return { ok: false, error: 'Periode tidak ditemukan.' };
 
   try {
     const h = await prosesOutbox(periode);
+    await catatKs({
+      periode_id: periode.id,
+      entitas: 'ks_outbox',
+      aksi: 'jalankan_outbox',
+      sesudah: {
+        percobaan: h.percobaan,
+        diproses: h.diproses,
+        terkirim: h.terkirim,
+        gagal: h.gagal,
+        ditahan: h.ditahan,
+      },
+      aktor_wa: wa,
+      aktor_nama: sesi.name,
+    });
     const kepala = h.percobaan
-      ? `Mode percobaan: ${h.diproses} baris disusun payload-nya, tidak ada yang dikirim.`
-      : `${h.terkirim} terkirim, ${h.gagal} gagal dari ${h.diproses} baris.`;
+      ? `Mode percobaan: ${h.diproses} baris disusun payload-nya (${h.ditahan} tertahan), tidak ada yang dikirim.`
+      : `${h.terkirim} terkirim, ${h.gagal} gagal, ${h.ditahan} tertahan dari ${h.diproses} baris.`;
+    revalidatePath('/ketersediaan/koordinator/tilawah');
     return { ok: true, pesan: [kepala, ...h.pesan].join('\n') };
+  } catch (e) {
+    return { ok: false, error: (e as Error).message };
+  }
+}
+
+/**
+ * Kembalikan baris antrean yang `gagal` ke antrean dengan jatah percobaan baru.
+ *
+ * Baris PERLU CEK (pertemuan yang mungkin sudah sampai ke CMS) hanya ikut bila
+ * `termasukPerluCek` — koordinator menyatakan sudah memeriksa CMS dan pertemuan
+ * itu belum ada. Salah menyatakannya berarti pertemuan kembar di CMS.
+ */
+export async function ulangiOutboxGagal(input: {
+  periodeId: string;
+  termasukPerluCek?: boolean;
+}): Promise<Hasil> {
+  const sesi = await requireOneOfRoles(['koordinator']);
+  await jagaFiturKetersediaan();
+  const wa = await getSessionWa();
+  const periode = await getPeriode(input.periodeId);
+  if (!periode) return { ok: false, error: 'Periode tidak ditemukan.' };
+
+  try {
+    const h = await pulihkanOutboxGagal(periode.id, { termasukPerluCek: Boolean(input.termasukPerluCek) });
+    await catatKs({
+      periode_id: periode.id,
+      entitas: 'ks_outbox',
+      aksi: 'ulangi_outbox_gagal',
+      sesudah: { ...h, termasuk_perlu_cek: Boolean(input.termasukPerluCek) },
+      aktor_wa: wa,
+      aktor_nama: sesi.name,
+    });
+    revalidatePath('/ketersediaan/koordinator/tilawah');
+    return {
+      ok: true,
+      pesan:
+        `${h.dipulihkan} baris dikembalikan ke antrean.`
+        + (h.perluCekDilewati > 0
+          ? ` ${h.perluCekDilewati} baris PERLU CEK tidak disentuh — periksa CMS dulu, lalu centang pilihan perlu-cek.`
+          : ''),
+    };
   } catch (e) {
     return { ok: false, error: (e as Error).message };
   }

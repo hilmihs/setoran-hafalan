@@ -22,7 +22,9 @@ export async function catatKs(entri: {
   aktor_nama?: string | null;
 }): Promise<void> {
   try {
-    await supabaseAdmin.from('ks_log').insert({
+    // Shim mengembalikan `{ error }`, bukan melempar — galat seperti itu dulu
+    // tertelan tanpa jejak sama sekali.
+    const { error } = await supabaseAdmin.from('ks_log').insert({
       periode_id: entri.periode_id ?? null,
       entitas: entri.entitas,
       entitas_id: entri.entitas_id ?? null,
@@ -33,6 +35,7 @@ export async function catatKs(entri: {
       aktor_wa: entri.aktor_wa ?? null,
       aktor_nama: entri.aktor_nama ?? null,
     });
+    if (error) console.error('[ks_log] gagal mencatat', entri.entitas, entri.aksi, error.message ?? error);
   } catch (e) {
     console.error('[ks_log] gagal mencatat', entri.entitas, entri.aksi, e);
   }

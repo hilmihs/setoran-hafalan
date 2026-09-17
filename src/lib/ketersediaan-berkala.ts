@@ -1,7 +1,6 @@
 import 'server-only';
 import { supabaseAdmin } from '@/lib/supabase-admin';
 import type { KsPendaftarSumber, KsPeriode } from '@/types/db';
-import { getPeriodeAktif } from '@/lib/ketersediaan-periode';
 import { tarikSumber } from '@/lib/ketersediaan-pendaftar';
 import { geserYangKedaluwarsa } from '@/lib/ketersediaan-konfirmasi';
 import { catatKs } from '@/lib/ketersediaan-log';
@@ -19,7 +18,23 @@ import { catatRiwayatPeriode } from '@/lib/ketersediaan-ditahan';
  * data yang belum sempat dibersihkan tidak dapat ditarik kembali dari CMS tilawah.
  */
 
+export interface HasilBerkalaPeriode {
+  periode: string;
+  periode_id: string;
+  pendaftar: string[];
+  digeser: number;
+  tanpaPengganti: number;
+  ditandaiBasi: number;
+  dinonaktifkan: number;
+  perluDiingatkan: number;
+  /** Slot yang statistiknya direkam ke riwayat; 0 bila periode belum berakhir. */
+  riwayatDirekam: number;
+  /** Diisi bila periode ini gagal diproses; periode lain tetap berjalan. */
+  galat?: string;
+}
+
 export interface HasilBerkala {
+  /** Nama periode yang diproses, dipisah koma. null bila tidak ada periode aktif. */
   periode: string | null;
   pendaftar: string[];
   digeser: number;
@@ -29,8 +44,15 @@ export interface HasilBerkala {
   perluDiingatkan: number;
   /** Slot yang statistiknya direkam ke riwayat; 0 bila periode belum berakhir. */
   riwayatDirekam: number;
+  /** Rincian per periode. Angka di atas adalah jumlahnya. */
+  perPeriode: HasilBerkalaPeriode[];
 }
 
+/**
+ * Proses SEMUA periode aktif, bukan hanya yang terbaru. Periode bergulir bisa
+ * tumpang tindih — mis. periode lama masih menunggu konfirmasi pengajar saat
+ * periode baru sudah membuka form — dan tenggat di periode lama tetap harus lewat.
+ */
 export async function jalankanBerkala(sekarang = new Date()): Promise<HasilBerkala> {
   const hasil: HasilBerkala = {
     periode: null,
@@ -41,11 +63,62 @@ export async function jalankanBerkala(sekarang = new Date()): Promise<HasilBerka
     dinonaktifkan: 0,
     perluDiingatkan: 0,
     riwayatDirekam: 0,
+    perPeriode: [],
   };
 
-  const periode = await getPeriodeAktif();
-  if (!periode) return hasil;
-  hasil.periode = periode.nama;
+  const { data } = await supabaseAdmin
+    .from('ks_periode')
+    .select('*')
+    .eq('aktif', true)
+    .order('mulai', { ascending: false });
+  const periodeAktif = (data ?? []) as KsPeriode[];
+  if (periodeAktif.length === 0) return hasil;
+
+  for (const periode of periodeAktif) {
+    let r: HasilBerkalaPeriode;
+    try {
+      r = await jalankanBerkalaPeriode(periode, sekarang);
+    } catch (e) {
+      // Satu periode yang rusak tidak boleh menghentikan periode lain.
+      console.error('[ks berkala] periode gagal', periode.id, e);
+      r = {
+        periode: periode.nama,
+        periode_id: periode.id,
+        pendaftar: [],
+        digeser: 0,
+        tanpaPengganti: 0,
+        ditandaiBasi: 0,
+        dinonaktifkan: 0,
+        perluDiingatkan: 0,
+        riwayatDirekam: 0,
+        galat: 'Gagal diproses — rincian di log server.',
+      };
+    }
+    hasil.perPeriode.push(r);
+    hasil.pendaftar.push(...(periodeAktif.length > 1 ? r.pendaftar.map((x) => `[${periode.nama}] ${x}`) : r.pendaftar));
+    hasil.digeser += r.digeser;
+    hasil.tanpaPengganti += r.tanpaPengganti;
+    hasil.ditandaiBasi += r.ditandaiBasi;
+    hasil.dinonaktifkan += r.dinonaktifkan;
+    hasil.perluDiingatkan += r.perluDiingatkan;
+    hasil.riwayatDirekam += r.riwayatDirekam;
+  }
+  hasil.periode = periodeAktif.map((p) => p.nama).join(', ');
+  return hasil;
+}
+
+async function jalankanBerkalaPeriode(periode: KsPeriode, sekarang: Date): Promise<HasilBerkalaPeriode> {
+  const hasil: HasilBerkalaPeriode = {
+    periode: periode.nama,
+    periode_id: periode.id,
+    pendaftar: [],
+    digeser: 0,
+    tanpaPengganti: 0,
+    ditandaiBasi: 0,
+    dinonaktifkan: 0,
+    perluDiingatkan: 0,
+    riwayatDirekam: 0,
+  };
 
   // 1. Tarik pendaftar terbaru.
   const { data: sumberRows } = await supabaseAdmin
@@ -100,6 +173,7 @@ export async function jalankanBerkala(sekarang = new Date()): Promise<HasilBerka
     sesudah: {
       pendaftar: hasil.pendaftar,
       digeser: hasil.digeser,
+      tanpa_pengganti: hasil.tanpaPengganti,
       basi: hasil.ditandaiBasi,
       nonaktif: hasil.dinonaktifkan,
       riwayat: hasil.riwayatDirekam,

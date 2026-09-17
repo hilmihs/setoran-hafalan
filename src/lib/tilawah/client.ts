@@ -106,26 +106,75 @@ function xsrf(): string {
 const tunggu = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 /**
+ * Kode galat yang PASTI terjadi sebelum satu bait permintaan pun terkirim:
+ * nama host tak terselesaikan, koneksi ditolak, atau jabat tangan TCP tidak
+ * pernah selesai. Hanya pada galat seperti ini sebuah POST aman diulang.
+ */
+const GALAT_SEBELUM_KIRIM = new Set([
+  'ENOTFOUND',
+  'EAI_AGAIN',
+  'ECONNREFUSED',
+  'UND_ERR_CONNECT_TIMEOUT',
+]);
+
+function kodeGalat(e: unknown): string | null {
+  const cause = (e as { cause?: { code?: unknown } } | null)?.cause;
+  const kode = cause?.code ?? (e as { code?: unknown } | null)?.code;
+  return typeof kode === 'string' ? kode : null;
+}
+
+/** Apakah galat jaringan ini pasti terjadi sebelum permintaan terkirim. */
+export function galatSebelumKirim(e: unknown): boolean {
+  const kode = kodeGalat(e);
+  return kode !== null && GALAT_SEBELUM_KIRIM.has(kode);
+}
+
+/**
+ * Bolehkah sebuah `fetch` yang gagal diulang.
+ *
+ * GET/HEAD selalu boleh. POST/PUT TIDAK, kecuali galatnya terbukti terjadi
+ * sebelum permintaan terkirim: `fetch failed` sesudah koneksi terbuka bisa
+ * berarti CMS sudah menerima dan memproses mutasinya, lalu jawabannya yang
+ * hilang. Mengulangnya membuat akun murid ganda — dan akun murid tidak dapat
+ * dihapus lewat API (lihat docs/API-TILAWAH.md §5).
+ */
+export function bolehUlangFetch(method: string | undefined, e: unknown): boolean {
+  const m = (method ?? 'GET').toUpperCase();
+  if (m === 'GET' || m === 'HEAD') return true;
+  return galatSebelumKirim(e);
+}
+
+/**
  * Galat jaringan sesaat terjadi cukup sering pada CMS ini — server kecil, dan
  * domainnya menyelesaikan ke NAT64 selain IPv4 sehingga sebagian percobaan
- * menggantung lalu putus. `fetch failed` semacam itu bukan penolakan CMS dan
- * tidak berarti mutasinya ditolak; mengulangnya aman karena setiap langkah
- * outbox memastikan hasilnya lewat pembacaan ulang.
+ * menggantung lalu putus. Pembacaan diulang; tulisan hanya diulang bila
+ * galatnya pasti terjadi sebelum terkirim (`bolehUlangFetch`).
  */
-async function fetchUlet(url: string, init: RequestInit, percobaan = 3): Promise<Response> {
+async function fetchUlet(
+  url: string,
+  init: RequestInit,
+  percobaan = 3,
+  opts: { ulangTulis?: boolean } = {}
+): Promise<Response> {
   let terakhir: unknown;
   for (let i = 0; i < percobaan; i++) {
     try {
       return await fetch(url, init);
     } catch (e) {
       terakhir = e;
+      const boleh = opts.ulangTulis || bolehUlangFetch(init.method, e);
+      if (!boleh) break;
       if (i < percobaan - 1) await tunggu(400 * (i + 1));
     }
   }
   throw terakhir;
 }
 
-async function mentah(path: string, init: RequestInit = {}): Promise<Response> {
+async function mentah(
+  path: string,
+  init: RequestInit = {},
+  opts: { ulangTulis?: boolean } = {}
+): Promise<Response> {
   const { base } = konfigurasi();
   const res = await fetchUlet(`${base}${path}`, {
     ...init,
@@ -138,7 +187,7 @@ async function mentah(path: string, init: RequestInit = {}): Promise<Response> {
       Cookie: headerCookie(),
       ...(init.headers as Record<string, string> | undefined),
     },
-  });
+  }, 3, opts);
   serapCookie(res);
   return res;
 }
@@ -147,11 +196,16 @@ async function masuk(): Promise<void> {
   const { email, password } = konfigurasi();
   jar.cookies.clear();
   await mentah('/sanctum/csrf-cookie');
-  const res = await mentah('/login', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ email, password, remember: false }),
-  });
+  // Login boleh diulang walau POST: mengulangnya tidak membuat apa pun di CMS.
+  const res = await mentah(
+    '/login',
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password, remember: false }),
+    },
+    { ulangTulis: true }
+  );
   if (res.status !== 200 && res.status !== 204 && res.status !== 302) {
     const teks = await res.text();
     throw new TilawahError(`login CMS tilawah gagal (${res.status})`, res.status, teks.slice(0, 300));
@@ -279,6 +333,25 @@ export async function cariMurid(batchId: number, keyword: string): Promise<Tilaw
   return daftar<TilawahUser>(j, 'users');
 }
 
+/**
+ * Cari murid TANPA saringan batch.
+ *
+ * Murid yang kembali ikut HITS sudah punya akun dari batch sebelumnya, dengan
+ * email palsu `<nomor>@murid.hits` yang sama. Mencari hanya di batch tujuan
+ * membuatnya tampak belum terdaftar, dan pembuatan akun keduanya ditolak (email
+ * kembar) atau — lebih buruk — berhasil sebagai akun ganda yang tak bisa dihapus.
+ *
+ * ASUMSI: `filters[batch_id]` pada daftar users bersifat opsional; tanpa itu CMS
+ * mengembalikan murid lintas batch. Belum diverifikasi langsung — bila ternyata
+ * wajib, pemanggil tetap jatuh ke `cariMurid` per batch.
+ */
+export async function cariMuridSemuaBatch(keyword: string): Promise<TilawahUser[]> {
+  const j = await panggil<TilawahEnvelope<Record<string, unknown>>>(
+    `/api/users?filters[role]=murid&page=1&per_page=50&sort_by=name&sort=asc&keyword=${encodeURIComponent(keyword)}`
+  );
+  return daftar<TilawahUser>(j, 'users');
+}
+
 /** Penanda bahwa CMS membalas redirect, bukan JSON. Lihat catatan di `panggil`. */
 export interface ResponsRedirect {
   __redirect: string;
@@ -331,10 +404,25 @@ export async function cariHalaqah(batchId: number, keyword: string): Promise<Til
   return [];
 }
 
-/** Detail satu halaqah, termasuk `users[]` — dipakai memverifikasi enrolment. */
+/** Pertemuan milik sebuah halaqah, bila detail halaqah memuatnya. */
+export interface TilawahPertemuanRingkas {
+  id: number;
+  name: string | null;
+  order: number | null;
+}
+
+/**
+ * Detail satu halaqah, termasuk `users[]` — dipakai memverifikasi enrolment.
+ *
+ * `pertemuan` berisi daftar pertemuan bila detailnya memuat larik itu (dicari di
+ * kunci `pertemuans`/`pertemuan`/`meetings`), dan `null` bila tidak ada sama
+ * sekali. Tidak ada endpoint daftar pertemuan per halaqah yang terdokumentasi,
+ * jadi `null` berarti "tidak dapat dipastikan", BUKAN "belum ada pertemuan".
+ */
 export async function ambilHalaqahDetail(id: number): Promise<{
   id: number;
   users: { id: number; pivot?: { type?: string } }[];
+  pertemuan: TilawahPertemuanRingkas[] | null;
 } | null> {
   const j = await panggil<TilawahEnvelope<Record<string, unknown>>>(`/api/halaqah/${id}`);
   const data = j.data ?? (j as unknown as Record<string, unknown>);
@@ -345,10 +433,47 @@ export async function ambilHalaqahDetail(id: number): Promise<{
         id: number;
         pivot?: { type?: string };
       }[];
-      return { id: (h as { id: number }).id, users };
+      return { id: (h as { id: number }).id, users, pertemuan: bacaPertemuan(h as Record<string, unknown>) };
     }
   }
   return null;
+}
+
+function bacaPertemuan(h: Record<string, unknown>): TilawahPertemuanRingkas[] | null {
+  for (const kunci of ['pertemuans', 'pertemuan', 'meetings']) {
+    const d = h[kunci];
+    if (!Array.isArray(d)) continue;
+    return d
+      .filter((x): x is Record<string, unknown> => Boolean(x) && typeof x === 'object')
+      .filter((x) => typeof x.id === 'number')
+      .map((x) => ({
+        id: x.id as number,
+        name: typeof x.name === 'string' ? x.name : null,
+        order: typeof x.order === 'number' ? x.order : Number.isFinite(Number(x.order)) ? Number(x.order) : null,
+      }));
+  }
+  return null;
+}
+
+/**
+ * Apakah kegagalan sebuah tulisan PASTI berarti CMS tidak menerimanya.
+ *
+ *  · Galat konfigurasi (status 0) dan galat jaringan sebelum kirim: permintaan
+ *    tidak pernah sampai.
+ *  · 4xx: CMS menolak (validasi, 405, 404). 401/419 sudah ditangani `panggil`
+ *    dengan login ulang.
+ *
+ * Selain itu — 5xx, jawaban bukan JSON, koneksi putus di tengah — mutasinya
+ * MUNGKIN sudah terjadi. `DELETE /api/halaqah` misalnya menghapus lalu membalas
+ * 500. Pemanggil wajib memastikan lewat pembacaan ulang sebelum mengulang.
+ */
+export function pastiTidakDiterima(e: unknown): boolean {
+  if (e instanceof TilawahError) {
+    if (e.status === 0) return true;
+    // Jawaban bukan JSON berstatus 2xx/3xx tetap meragukan; 4xx tetap penolakan.
+    return e.status >= 400 && e.status < 500;
+  }
+  return galatSebelumKirim(e);
 }
 
 /** POST JSON umum. Dipakai push.ts; dipisah supaya semua tulis lewat satu pintu. */

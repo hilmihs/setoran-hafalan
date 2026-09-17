@@ -6,6 +6,7 @@ import {
   muatUsulanPemetaan,
   sahkanPemetaan,
   ujiKoneksiTilawah,
+  ulangiOutboxGagal,
 } from './actions';
 
 export interface BarisOutbox {
@@ -57,6 +58,7 @@ interface Props {
 
 export function PanelTilawah(props: Props) {
   const [pending, mulai] = useTransition();
+  const [termasukPerluCek, setTermasukPerluCek] = useState(false);
   const [pesan, setPesan] = useState<string | null>(null);
   const [galat, setGalat] = useState<string | null>(null);
 
@@ -279,6 +281,27 @@ export function PanelTilawah(props: Props) {
       <h2 className="t-h2" style={{ fontSize: 16, marginTop: 24, marginBottom: 8 }}>
         Antrean pengiriman ({props.outbox.length})
       </h2>
+      {props.outbox.some((b) => b.status === 'gagal') && (
+        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center', marginBottom: 8 }}>
+          <button
+            className="btn btn-sm btn-ghost"
+            disabled={pending}
+            onClick={() =>
+              jalan(() => ulangiOutboxGagal({ periodeId: props.periodeId, termasukPerluCek }))
+            }
+          >
+            Ulangi yang gagal
+          </button>
+          <label className="t-small" style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+            <input
+              type="checkbox"
+              checked={termasukPerluCek}
+              onChange={(e) => setTermasukPerluCek(e.target.checked)}
+            />
+            termasuk PERLU CEK — sudah saya pastikan pertemuannya belum ada di CMS
+          </label>
+        </div>
+      )}
       {props.outbox.length === 0 ? (
         <p className="t-small" style={{ color: 'var(--muted-2)' }}>
           Belum ada antrean. Antrean terbentuk setelah pengajar mengonfirmasi kesediaannya.

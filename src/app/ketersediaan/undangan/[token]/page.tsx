@@ -1,4 +1,5 @@
 import { supabaseAdmin } from '@/lib/supabase-admin';
+import { aksesTokenBerakhir } from '@/lib/ketersediaan-konfirmasi';
 
 export const dynamic = 'force-dynamic';
 
@@ -20,7 +21,7 @@ export default async function UndanganPage({ params }: { params: Promise<{ token
   const { data } = await supabaseAdmin
     .from('ks_usulan_peserta')
     .select(
-      'id, status, undangan_dibuka_pada, pendaftar:pendaftar_id(nama), usulan:usulan_id(nama_halaqah, tanggal_mulai, grup_wa_link, status, slot:slot_id(label, mode, lokasi), pengajar:pengajar_id(name))'
+      'id, status, undangan_dibuka_pada, pendaftar:pendaftar_id(nama), usulan:usulan_id(nama_halaqah, tanggal_mulai, dikonfirmasi_pada, grup_wa_link, status, slot:slot_id(label, mode, lokasi), pengajar:pengajar_id(name))'
     )
     .eq('undangan_token', token)
     .maybeSingle();
@@ -40,11 +41,26 @@ export default async function UndanganPage({ params }: { params: Promise<{ token
   const usulan = data.usulan as {
     nama_halaqah: string | null;
     tanggal_mulai: string | null;
+    dikonfirmasi_pada: string | null;
     grup_wa_link: string | null;
     status: string;
     slot?: { label: string; mode: string; lokasi: string | null } | null;
     pengajar?: { name: string } | null;
   } | null;
+
+  // Undangan mengikuti masa berlaku tautan konfirmasi: lewat 30 hari setelah
+  // halaqah mulai, nama peserta dan tautan grup tidak lagi ditampilkan.
+  if (!usulan || aksesTokenBerakhir(usulan, new Date())) {
+    return (
+      <Bingkai>
+        <h1 className="t-h1">Undangan sudah tidak berlaku</h1>
+        <p className="t-small" style={{ color: 'var(--muted-2)' }}>
+          Masa berlaku tautan ini sudah habis. Hubungi pengajar atau koordinator HITS bila Anda
+          belum bergabung ke grup kelas.
+        </p>
+      </Bingkai>
+    );
+  }
 
   // Catat pembukaan sekali saja. Kegagalan pencatatan tidak boleh menghalangi
   // peserta bergabung, jadi tidak ada penanganan galat yang menggagalkan render.

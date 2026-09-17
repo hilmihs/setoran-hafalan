@@ -1,3 +1,4 @@
+import { timingSafeEqual } from 'node:crypto';
 import { NextRequest, NextResponse } from 'next/server';
 import { apiEnv } from '@/lib/api-public/env';
 import { jalankanBerkala } from '@/lib/ketersediaan-berkala';
@@ -19,8 +20,10 @@ export const maxDuration = 300;
 function authorized(req: NextRequest): boolean {
   const secret = apiEnv('CRON_SECRET');
   if (!secret || secret.length < 16) return false;
-  const h = req.headers.get('authorization') ?? '';
-  return h === `Bearer ${secret}`;
+  const h = Buffer.from(req.headers.get('authorization') ?? '');
+  const harap = Buffer.from(`Bearer ${secret}`);
+  // Perbandingan waktu-konstan; timingSafeEqual mensyaratkan panjang sama.
+  return h.length === harap.length && timingSafeEqual(h, harap);
 }
 
 export async function POST(req: NextRequest) {
@@ -31,9 +34,8 @@ export async function POST(req: NextRequest) {
     const hasil = await jalankanBerkala();
     return NextResponse.json({ ok: true, ...hasil });
   } catch (e) {
-    return NextResponse.json(
-      { error: e instanceof Error ? e.message : 'Internal error' },
-      { status: 500 }
-    );
+    // Rincian galat hanya ke log server — pesannya bisa memuat isi kueri atau data.
+    console.error('[ks berkala] gagal', e);
+    return NextResponse.json({ error: 'Internal error' }, { status: 500 });
   }
 }

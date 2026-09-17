@@ -342,8 +342,13 @@ async function main() {
 
   // ── Susun payload ────────────────────────────────────────────────────────
   console.log(`\n# proses outbox (${KIRIM ? 'PENGIRIMAN NYATA' : 'kirim-percobaan'})`);
-  const hasil = await prosesOutbox(periode);
-  console.log(`     diproses=${hasil.diproses} terkirim=${hasil.terkirim} gagal=${hasil.gagal}`);
+  // `bacaCms`: mode percobaan biasanya tidak menyentuh CMS sama sekali (guru
+  // diisi 0). Skrip uji justru ingin memastikan pencocokan guru lewat nomor,
+  // jadi pembacaan (GET) diizinkan — tetap nol tulisan.
+  const hasil = await prosesOutbox(periode, { bacaCms: true });
+  console.log(
+    `     diproses=${hasil.diproses} terkirim=${hasil.terkirim} gagal=${hasil.gagal} ditahan=${hasil.ditahan}`
+  );
   for (const p of hasil.pesan) console.log(`     · ${p}`);
 
   const { data: sesudah } = await supabaseAdmin

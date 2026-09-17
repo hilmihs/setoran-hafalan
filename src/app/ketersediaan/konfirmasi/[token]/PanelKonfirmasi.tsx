@@ -28,7 +28,9 @@ export function PanelKonfirmasi(props: Props) {
   const [bukaTolak, setBukaTolak] = useState(false);
   const [alasan, setAlasan] = useState('');
   const [link, setLink] = useState(props.grupLink ?? '');
-  const [setuju, setSetuju] = useState(props.status === 'dikonfirmasi' || props.status === 'dikirim');
+  const [setuju, setSetuju] = useState(
+    props.status === 'dikonfirmasi' || props.status === 'dikirim' || props.status === 'gagal'
+  );
 
   function jalan(fn: () => Promise<{ ok: true; pesan: string } | { ok: false; error: string }>, sesudah?: () => void) {
     setPesan(null);

@@ -1,6 +1,7 @@
 import { supabaseAdmin } from '@/lib/supabase-admin';
 import { absUrl } from '@/lib/url';
 import { buildWaMeUrl, tplUndanganPeserta } from '@/lib/whatsapp';
+import { aksesTokenBerakhir, MASA_AKSES_SETELAH_MULAI_HARI } from '@/lib/ketersediaan-konfirmasi';
 import type { Gender } from '@/types/db';
 import { PanelKonfirmasi, type PesertaTampil } from './PanelKonfirmasi';
 
@@ -24,7 +25,7 @@ export default async function KonfirmasiPage({
   const { data } = await supabaseAdmin
     .from('ks_usulan')
     .select(
-      'id, status, level, pita_umur, pita_digabung, tanggal_mulai, token_kedaluwarsa, nama_halaqah, grup_wa_link, alasan_tolak, slot:slot_id(label, mode, lokasi, kelompok), pengajar:pengajar_id(name, gender), periode:periode_id(nama)'
+      'id, status, level, pita_umur, pita_digabung, tanggal_mulai, dikonfirmasi_pada, token_kedaluwarsa, nama_halaqah, grup_wa_link, alasan_tolak, slot:slot_id(label, mode, lokasi, kelompok), pengajar:pengajar_id(name, gender), periode:periode_id(nama)'
     )
     .eq('akses_token', token)
     .maybeSingle();
@@ -40,6 +41,29 @@ export default async function KonfirmasiPage({
     );
   }
 
+  // Tautan yang sudah lama dikonfirmasi berhenti membuka data peserta: tautan
+  // bisa diteruskan, dan pemegangnya tidak perlu lagi melihat nama & nomor murid.
+  if (
+    aksesTokenBerakhir(
+      {
+        status: data.status as string,
+        tanggal_mulai: (data.tanggal_mulai as string | null) ?? null,
+        dikonfirmasi_pada: (data.dikonfirmasi_pada as string | null) ?? null,
+      },
+      new Date()
+    )
+  ) {
+    return (
+      <Bingkai>
+        <h1 className="t-h1">Masa berlaku tautan sudah habis</h1>
+        <p className="t-small" style={{ color: 'var(--muted-2)' }}>
+          Tautan konfirmasi hanya berlaku sampai {MASA_AKSES_SETELAH_MULAI_HARI} hari setelah halaqah
+          dimulai. Untuk data peserta atau penggantian grup, hubungi koordinator HITS.
+        </p>
+      </Bingkai>
+    );
+  }
+
   const slot = data.slot as { label: string; mode: string; lokasi: string | null; kelompok: Gender } | null;
   const pengajar = data.pengajar as { name: string; gender: Gender } | null;
   const periode = data.periode as { nama: string } | null;
@@ -49,7 +73,8 @@ export default async function KonfirmasiPage({
     .select('id, status, undangan_token, pendaftar:pendaftar_id(nama, wa_normal, umur, pita_umur)')
     .eq('usulan_id', data.id);
 
-  const sudahSetuju = data.status === 'dikonfirmasi' || data.status === 'dikirim';
+  // `gagal` = pengiriman ke CMS bermasalah; bagi pengajar halaqahnya tetap jalan.
+  const sudahSetuju = ['dikonfirmasi', 'dikirim', 'gagal'].includes(data.status as string);
   const namaHalaqah = (data.nama_halaqah as string | null) ?? 'Halaqah HITS baru';
 
   const peserta: PesertaTampil[] = sudahSetuju

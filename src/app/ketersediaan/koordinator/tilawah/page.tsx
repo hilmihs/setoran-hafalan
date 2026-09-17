@@ -89,9 +89,12 @@ async function muatOutbox(periodeId: string): Promise<BarisOutbox[]> {
   );
   if (info.size === 0) return [];
 
+  // Disaring per usulan periode ini di dalam kueri; tanpa itu 300 baris pertama
+  // bisa seluruhnya milik periode lain.
   const { data } = await supabaseAdmin
     .from('ks_outbox')
     .select('id, usulan_id, aksi, status, percobaan, error_terakhir, payload, terkirim_pada')
+    .in('usulan_id', [...info.keys()])
     .order('urutan', { ascending: true })
     .limit(300);
 
