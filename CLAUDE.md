@@ -145,11 +145,25 @@ CMS contract: `docs/API-TILAWAH.md`.
 - **No WhatsApp gateway exists anywhere in this repo.** All notification is `wa.me`
   deep-links a human clicks. WhatsApp Cloud API has no group endpoints at all, so
   group creation is done by the teacher pasting an invite link.
-- Tests: `npm run test-ketersediaan` (pure), `test-ketersediaan-e2e` (dev DB, self-cleaning),
-  `test-tilawah-staging` (staging CMS; `KIRIM_NYATA=1` to actually write).
+- **Still hidden** behind `bolehLihatFiturTersembunyi()`. Server actions are public POST
+  endpoints, so every action re-checks via `aktor()` / `jagaFiturKetersediaan()`
+  (`src/lib/ketersediaan-akses.ts`) — a page guard alone is not enough.
+- Registrant CSVs: only `https://docs.google.com/spreadsheets/…` links are fetched
+  (`ketersediaan-csv-url.ts`, SSRF guard). Several CSVs may feed one period; one person
+  (normalized WA + name) = one queue entry, older submissions become `diganti`.
+- Several periods can share one form (e.g. two tahap of one batch); the coordinator
+  dashboard has a virtual `?periode=gabungan` view whose capacity numbers come from
+  running the allocation engine in memory (`ketersediaan-gabungan.ts`), not estimates.
+- Concurrency: allocation and outbox take Postgres advisory locks and claim rows
+  conditionally; `0079` adds partial unique indexes as a backstop.
+- Tests: `npm run test-ketersediaan` (pure), `test-ketersediaan-impor` and
+  `test-ketersediaan-koordinator` (PGlite with real migrations — add new migration
+  files to their `MIGRASI` lists), `test-ketersediaan-alur` (pure flow),
+  `test-ketersediaan-e2e` (dev DB), `test-tilawah-staging` (staging CMS; `KIRIM_NYATA=1` writes).
 - Periodic work: `POST /api/ketersediaan/berkala` (Bearer `CRON_SECRET`) pulls
-  registrants, shifts expired confirmations, ages out stale availability. It
-  deliberately does **not** run allocation — halaqah still wait for a coordinator.
+  registrants, shifts expired confirmations, ages out stale availability for **every
+  active period**. It deliberately does **not** run allocation — halaqah still wait
+  for a coordinator. No scheduler calls it yet.
 
 ### Matrix Skill Guru — one route, two views
 
