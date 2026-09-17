@@ -4,6 +4,7 @@ import { absUrl } from '@/lib/url';
 import { buildWaMeUrl, tplKonfirmasiHalaqahPenuh } from '@/lib/whatsapp';
 import type { Gender, KsHariIdx, KsLibur, KsMode, KsPendaftarSumber, KsPengisianSumber } from '@/types/db';
 import { perkiraanSelesaiHalaqah } from '@/lib/ketersediaan-pertemuan';
+import type { PendaftarLevel } from '@/lib/ketersediaan-dasbor';
 import type { BarisAntrean, KartuUsulan } from './PanelKerja';
 import type { BarisGrup } from './PanelGrupPool';
 
@@ -424,4 +425,14 @@ export async function muatPendaftarRingkas(periodeId: string): Promise<Pendaftar
     .select('didaftar_pada, gender, status')
     .eq('periode_id', periodeId);
   return ((data ?? []) as PendaftarRingkas[]).filter((p) => p.status !== 'diganti' && p.status !== 'batal');
+}
+
+/** Pendaftar sah per jam dengan level dan kelompok umur — bahan rincian jam offline. */
+export async function muatPendaftarLevel(periodeId: string): Promise<PendaftarLevel[]> {
+  const { data } = await supabaseAdmin
+    .from('ks_pendaftar')
+    .select('id, slot_id, level_pilihan, pita_umur, didaftar_pada')
+    .eq('periode_id', periodeId)
+    .eq('status', 'valid');
+  return (data ?? []) as PendaftarLevel[];
 }

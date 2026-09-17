@@ -12,7 +12,7 @@ import { readFileSync } from 'node:fs';
 import { PGlite } from '@electric-sql/pglite';
 import { PGLiteSocketServer } from '@electric-sql/pglite-socket';
 import { alokasikan, type GrupUsulan, type SlotAlokasi } from '../src/lib/ketersediaan-alokasi';
-import { terapkanSimulasi, type BarisJam } from '../src/lib/ketersediaan-dasbor';
+import { susunRincianLevel, terapkanSimulasi, type BarisJam, type PendaftarLevel } from '../src/lib/ketersediaan-dasbor';
 import type { KsHariIdx, KsPeriode } from '../src/types/db';
 
 const PORT = Number(process.env.PG_TEST_PORT ?? 54335);
@@ -96,6 +96,34 @@ function uraiMurni() {
       peringkat: () => 1,
     });
     check('satu pengajar satu slot: sekali tempat, putaran 1', dua.penempatan.length === 1 && dua.putaranTerpakai === 1, JSON.stringify(dua));
+  }
+
+  console.log('\n# rincian jam offline per level & umur');
+  {
+    const buat = (n: number, level: string, pita: '<=45' | '46+', awal: string): PendaftarLevel[] =>
+      Array.from({ length: n }, (_, i) => ({ id: `${awal}-${level}-${pita}-${i}`, slot_id: 'S1', level_pilihan: level, pita_umur: pita, didaftar_pada: '2026-09-09T03:00:00Z' }));
+    const pendaftar = [
+      ...buat(16, 'HITS Dasar', '<=45', 'a'),
+      ...buat(7, 'HITS Dasar', '46+', 'b'),
+      ...buat(7, 'HITS Lanjutan', '<=45', 'c'),
+    ];
+    const aturan = { kapasitas_halaqah: 12, ambang_bawah: 8, usia_antrean_maks_hari: 21 };
+    const slots = [
+      { id: 'S1', kelompok: 'akhwat' as const, lokasi: 'Masjid Al-Kautsar Matraman', label: 'Selasa & Jumat 07:30 - 09:00 WIB' },
+      { id: 'S2', kelompok: 'ikhwan' as const, lokasi: 'Masjid Al-Kautsar Matraman', label: 'Sabtu 06:00 - 07:30 & Ahad 18:00 - 19:30 WIB' },
+      { id: 'S3', kelompok: 'akhwat' as const, lokasi: 'Masjid Al-Kautsar Matraman', label: 'Selasa & Rabu 09:30 - 11:00 WIB' },
+    ];
+    const s3 = buat(19, 'HITS Dasar', '<=45', 'd').map((p) => ({ ...p, slot_id: 'S3' }));
+    const [r1, r2, r3] = susunRincianLevel(slots, [...pendaftar, ...s3], new Map([['S1', 1], ['S2', 1]]), aturan, new Date('2026-09-17T05:00:00Z'));
+    check('pecahan level × umur', r1.dasar.muda === 16 && r1.dasar.tua === 7 && r1.lanjutan.muda === 7 && r1.lanjutan.tua === 0, JSON.stringify(r1));
+    check('sekarang: hanya kelompok penuh', r1.kelompokSekarang === 1, String(r1.kelompokSekarang));
+    check('tanggal gabung = antrean tertua + 21 hari', r1.tanggalGabung === '2026-09-30', String(r1.tanggalGabung));
+    check('setelah gabung: sisa Dasar 11 jadi kelompok kedua', r1.kelompokSetelahGabung === 2 && r1.sisaMenunggu === 7, JSON.stringify(r1));
+    check('kekurangan pengajar ditandai merah', r1.nada === 'merah' && r1.kendala.includes('butuh 1 pengajar lagi'), r1.kendala);
+    check('jam tanpa pendaftar tapi ada pengajar', r2.total === 0 && r2.nada === 'kuning', r2.kendala);
+    check('jam tanpa pengajar', r3.pengajar === 0 && r3.nada === 'merah' && r3.kendala.startsWith('Belum ada pengajar'), r3.kendala);
+    const lewat = susunRincianLevel(slots.slice(0, 1), pendaftar, new Map([['S1', 2]]), aturan, new Date('2026-10-01T00:00:00Z'));
+    check('setelah tanggal gabung: tidak ada tanggal lagi, cukup pengajar', lewat[0].tanggalGabung === null && lewat[0].kelompokSekarang === 2 && lewat[0].nada === 'hijau', JSON.stringify(lewat[0]));
   }
 
   console.log('\n# daya tampung dari simulasi');

@@ -1,5 +1,7 @@
 import type { Gender, KsHariIdx, KsMode, KsSlot } from '@/types/db';
 import type { RingkasSlot } from '@/lib/ketersediaan-permintaan';
+import type { KsPeriode, KsPitaUmur } from '@/types/db';
+import { kelompokkanPendaftar, type PendaftarAlokasi } from '@/lib/ketersediaan-alokasi';
 
 /**
  * Hitungan dashboard koordinator ketersediaan — murni, tanpa basis data.
@@ -226,4 +228,121 @@ export function susunArus(pendaftar: readonly { didaftar_pada: string | null; ge
 export function tanggalBatasAntrean(pertama: string | null, usiaMaksHari: number): string | null {
   if (!pertama) return null;
   return new Date(new Date(`${pertama}T00:00:00Z`).getTime() + usiaMaksHari * HARI_MS).toISOString().slice(0, 10);
+}
+
+// ── Rincian level × kelompok umur per jam ─────────────────────────────────
+
+export interface PendaftarLevel {
+  id: string;
+  slot_id: string | null;
+  level_pilihan: string | null;
+  pita_umur: KsPitaUmur | null;
+  didaftar_pada: string | null;
+}
+
+export interface RincianLevelJam {
+  slot_id: string;
+  kelompok: Gender;
+  lokasi: string | null;
+  label: string;
+  dasar: { muda: number; tua: number };
+  lanjutan: { muda: number; tua: number };
+  total: number;
+  /** Pengajar yang masih bebas di jam ini. */
+  pengajar: number;
+  /** Kelompok yang siap dibentuk hari ini (penuh per level & umur, atau gabungan umur yang sudah boleh). */
+  kelompokSekarang: number;
+  /** Tanggal sisa lintas kelompok umur mulai boleh digabung; null bila sudah boleh atau tidak ada antrean. */
+  tanggalGabung: string | null;
+  /** Kelompok yang siap setelah tanggal gabung (sama dengan sekarang bila tak ada tanggal gabung). */
+  kelompokSetelahGabung: number;
+  /** Pendaftar yang tetap menunggu setelah semua kelompok terbentuk (tanpa batas pengajar). */
+  sisaMenunggu: number;
+  kendala: string;
+  nada: 'merah' | 'kuning' | 'hijau' | 'netral';
+}
+
+/**
+ * Rincian satu jam: berapa pendaftar per level (Dasar/Lanjutan) dan kelompok umur
+ * (≤45 / 46+), berapa kelompok yang benar-benar bisa jadi halaqah, dan kendalanya.
+ *
+ * Angka "antre" per jam menyesatkan untuk jam kecil (offline): 19 pendaftar belum
+ * tentu satu halaqah bila terbelah Dasar/Lanjutan dan dua kelompok umur. Kelompok
+ * dihitung dengan fungsi yang SAMA dengan mesin alokasi (`kelompokkanPendaftar`),
+ * dua kali: hari ini, dan pada tanggal sisa lintas umur mulai boleh digabung.
+ */
+export function susunRincianLevel(
+  slots: readonly Pick<KsSlot, 'id' | 'kelompok' | 'lokasi' | 'label'>[],
+  pendaftar: readonly PendaftarLevel[],
+  pengajarBebas: ReadonlyMap<string, number>,
+  aturan: Pick<KsPeriode, 'kapasitas_halaqah' | 'ambang_bawah' | 'usia_antrean_maks_hari'>,
+  sekarang: Date
+): RincianLevelJam[] {
+  return slots.map((slot) => {
+    const milik = pendaftar.filter((p) => p.slot_id === slot.id);
+    const lanjut = (p: PendaftarLevel) => /lanjut/i.test(p.level_pilihan ?? '');
+    const tua = (p: PendaftarLevel) => p.pita_umur === '46+';
+    const dasar = { muda: milik.filter((p) => !lanjut(p) && !tua(p)).length, tua: milik.filter((p) => !lanjut(p) && tua(p)).length };
+    const lanjutan = { muda: milik.filter((p) => lanjut(p) && !tua(p)).length, tua: milik.filter((p) => lanjut(p) && tua(p)).length };
+
+    const alokasi: PendaftarAlokasi[] = milik.map((p) => ({
+      id: p.id,
+      slot_id: slot.id,
+      level: p.level_pilihan ?? 'HITS Dasar',
+      pita_umur: p.pita_umur,
+      didaftar_pada: p.didaftar_pada,
+    }));
+    const kelompokSekarang = kelompokkanPendaftar(slot.id, alokasi, aturan, sekarang);
+
+    const tertua = milik
+      .map((p) => (p.didaftar_pada ? Date.parse(p.didaftar_pada) : NaN))
+      .filter((t) => !Number.isNaN(t))
+      .sort((a, b) => a - b)[0];
+    const saatGabung = tertua !== undefined ? tertua + aturan.usia_antrean_maks_hari * HARI_MS : null;
+    const nanti = saatGabung !== null && saatGabung > sekarang.getTime() ? new Date(saatGabung) : null;
+    const kelompokNanti = nanti ? kelompokkanPendaftar(slot.id, alokasi, aturan, nanti) : kelompokSekarang;
+    const terkelompok = kelompokNanti.reduce((n, k) => n + k.pendaftar_ids.length, 0);
+
+    const pengajar = pengajarBebas.get(slot.id) ?? 0;
+    const k = kelompokNanti.length;
+    const sisa = milik.length - terkelompok;
+    const tglGabung = nanti ? nanti.toISOString().slice(0, 10) : null;
+
+    let kendala: string;
+    let nada: RincianLevelJam['nada'];
+    if (milik.length === 0) {
+      kendala = pengajar > 0 ? 'Tidak ada pendaftar — pengajar di jam ini belum terpakai' : 'Jam kosong';
+      nada = pengajar > 0 ? 'kuning' : 'netral';
+    } else if (pengajar === 0) {
+      kendala = `Belum ada pengajar untuk ${milik.length} pendaftar`;
+      nada = 'merah';
+    } else if (k === 0) {
+      kendala = 'Belum genap: butuh 12 orang per level & kelompok umur, atau ≥' + aturan.ambang_bawah + ' setelah antrean ' + aturan.usia_antrean_maks_hari + ' hari';
+      nada = 'kuning';
+    } else if (k > pengajar) {
+      kendala = `${k} kelompok siap, pengajar ${pengajar} — butuh ${k - pengajar} pengajar lagi`;
+      nada = 'merah';
+    } else {
+      kendala = k < pengajar ? `Cukup — ${pengajar - k} pengajar belum terpakai` : 'Cukup';
+      nada = 'hijau';
+    }
+    if (milik.length > 0 && sisa > 0) kendala += ` · ${sisa} pendaftar menunggu genap`;
+
+    return {
+      slot_id: slot.id,
+      kelompok: slot.kelompok,
+      lokasi: slot.lokasi,
+      label: slot.label.replace(/\s*WIB$/, ''),
+      dasar,
+      lanjutan,
+      total: milik.length,
+      pengajar,
+      kelompokSekarang: kelompokSekarang.length,
+      tanggalGabung: tglGabung,
+      kelompokSetelahGabung: k,
+      sisaMenunggu: sisa,
+      kendala,
+      nada,
+    };
+  });
 }

@@ -13,6 +13,7 @@ import {
   susunArus,
   susunBarisJam,
   susunPeta,
+  susunRincianLevel,
   tanggalBatasAntrean,
   terapkanSimulasi,
   type BarisJam,
@@ -30,6 +31,7 @@ import {
   hitungPengajarTersedia,
   muatAntrean,
   muatGrupPool,
+  muatPendaftarLevel,
   muatPendaftarRingkas,
   muatPengajarDasbor,
   muatSumber,
@@ -43,6 +45,7 @@ import { KepalaDasbor, PERIODE_GABUNGAN } from './dasbor/KepalaDasbor';
 import { susunGabungan } from '@/lib/ketersediaan-gabungan';
 import { TabRingkasan, type ButirTugas, type PetaBerjudul } from './dasbor/TabRingkasan';
 import { TabJam } from './dasbor/TabJam';
+import { RincianOffline } from './dasbor/RincianOffline';
 import { DaftarPengajar } from './dasbor/DaftarPengajar';
 import { ArusPendaftarChart } from './dasbor/ArusPendaftarChart';
 
@@ -263,7 +266,23 @@ export default async function KetersediaanKoordinatorPage({
       />
     );
   } else if (tab === 'jam') {
-    isi = <TabJam baris={jam} tampilGender={g === 'semua'} />;
+    const pendaftarLevel = await muatPendaftarLevel(periode.id);
+    const bebas = new Map(
+      [...ringkas.values()].map((r) => [r.slot_id, Math.max(0, r.pengajar_tersedia - r.pengajar_terpakai)])
+    );
+    const offline = saring(
+      slotAktif.filter((s) => s.mode === 'offline'),
+      (s) => s.kelompok
+    ).sort((a, b) => (a.lokasi ?? '').localeCompare(b.lokasi ?? '') || a.label.localeCompare(b.label));
+    const rincian = susunRincianLevel(offline, pendaftarLevel, bebas, periode, sekarang);
+    isi = (
+      <>
+        <TabJam baris={jam} tampilGender={g === 'semua'} />
+        <div className="ks-isi" style={{ marginTop: 16 }}>
+          <RincianOffline baris={rincian} tampilGender={g === 'semua'} />
+        </div>
+      </>
+    );
   } else if (tab === 'pengajar') {
     isi = <DaftarPengajar baris={pengajar} tampilGender={g === 'semua'} />;
   } else if (tab === 'pendaftar') {
