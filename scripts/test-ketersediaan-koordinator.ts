@@ -122,6 +122,13 @@ function uraiMurni() {
     check('kekurangan pengajar ditandai merah', r1.nada === 'merah' && r1.kendala.includes('butuh 1 pengajar lagi'), r1.kendala);
     check('jam tanpa pendaftar tapi ada pengajar', r2.total === 0 && r2.nada === 'kuning', r2.kendala);
     check('jam tanpa pengajar', r3.pengajar === 0 && r3.nada === 'merah' && r3.kendala.startsWith('Belum ada pengajar'), r3.kendala);
+    // Pendaftar tertua di jam adalah Lanjutan; sisa Dasar baru mendaftar 12 Sep → gabung 3 Okt, bukan 30 Sep.
+    const campur = [
+      { id: 'L1', slot_id: 'S4', level_pilihan: 'HITS Lanjutan', pita_umur: '<=45' as const, didaftar_pada: '2026-09-09T03:00:00Z' },
+      ...Array.from({ length: 8 }, (_, i) => ({ id: `D${i}`, slot_id: 'S4', level_pilihan: 'HITS Dasar', pita_umur: (i < 6 ? '<=45' : '46+') as '<=45' | '46+', didaftar_pada: '2026-09-12T03:00:00Z' })),
+    ];
+    const [r4] = susunRincianLevel([{ id: 'S4', kelompok: 'akhwat', lokasi: 'Pejaten', label: 'Senin & Rabu 16:30 - 18:00 WIB' }], campur, new Map([['S4', 1]]), aturan, new Date('2026-09-17T05:00:00Z'));
+    check('tanggal gabung dari sisa level, bukan pendaftar tertua di jam', r4.kelompokSetelahGabung === 1 && r4.tanggalGabung === '2026-10-03', JSON.stringify(r4));
     const lewat = susunRincianLevel(slots.slice(0, 1), pendaftar, new Map([['S1', 2]]), aturan, new Date('2026-10-01T00:00:00Z'));
     check('setelah tanggal gabung: tidak ada tanggal lagi, cukup pengajar', lewat[0].tanggalGabung === null && lewat[0].kelompokSekarang === 2 && lewat[0].nada === 'hijau', JSON.stringify(lewat[0]));
   }

@@ -294,13 +294,32 @@ export function susunRincianLevel(
     }));
     const kelompokSekarang = kelompokkanPendaftar(slot.id, alokasi, aturan, sekarang);
 
-    const tertua = milik
-      .map((p) => (p.didaftar_pada ? Date.parse(p.didaftar_pada) : NaN))
-      .filter((t) => !Number.isNaN(t))
-      .sort((a, b) => a - b)[0];
-    const saatGabung = tertua !== undefined ? tertua + aturan.usia_antrean_maks_hari * HARI_MS : null;
-    const nanti = saatGabung !== null && saatGabung > sekarang.getTime() ? new Date(saatGabung) : null;
-    const kelompokNanti = nanti ? kelompokkanPendaftar(slot.id, alokasi, aturan, nanti) : kelompokSekarang;
+    // Syarat gabung dinilai dari pendaftar tertua DI SISA LEVEL itu, yang bisa jauh
+    // lebih baru daripada pendaftar tertua di jam. Karena itu tanggalnya dicari:
+    // hitung kelompok maksimum (saat semua sisa sudah cukup umur), lalu ambil
+    // tanggal kandidat paling awal yang sudah mencapainya.
+    const kandidat = [
+      ...new Set(
+        milik
+          .map((p) => (p.didaftar_pada ? Date.parse(p.didaftar_pada) + aturan.usia_antrean_maks_hari * HARI_MS : NaN))
+          .filter((t) => !Number.isNaN(t) && t > sekarang.getTime())
+      ),
+    ].sort((a, b) => a - b);
+    let nanti: Date | null = null;
+    let kelompokNanti = kelompokSekarang;
+    if (kandidat.length > 0) {
+      const maks = kelompokkanPendaftar(slot.id, alokasi, aturan, new Date(kandidat[kandidat.length - 1])).length;
+      if (maks > kelompokSekarang.length) {
+        for (const t of kandidat) {
+          const k = kelompokkanPendaftar(slot.id, alokasi, aturan, new Date(t));
+          if (k.length === maks) {
+            nanti = new Date(t);
+            kelompokNanti = k;
+            break;
+          }
+        }
+      }
+    }
     const terkelompok = kelompokNanti.reduce((n, k) => n + k.pendaftar_ids.length, 0);
 
     const pengajar = pengajarBebas.get(slot.id) ?? 0;
