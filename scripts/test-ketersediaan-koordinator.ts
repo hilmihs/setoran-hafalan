@@ -291,6 +291,32 @@ async function uraiIntegrasi() {
     const sesudahPeriode = await bentrok.jadwalTerpakaiPengajar(ID.ahmad, { acuan: '2027-05-01' });
     check('usulan periode yang sudah berakhir tidak mengunci', !sesudahPeriode.some((t) => t.sumber === 'usulan'));
 
+    console.log('\n# lama jam terkunci mengikuti level halaqah');
+    // Tahap 1 mulai Senin 5 Okt 2026, Senin & Rabu, tanpa libur: Dasar P50 = Rabu 24 Mar 2027, Lanjutan P26 = Rabu 30 Des 2026.
+    const pertemuanLib = await import('../src/lib/ketersediaan-pertemuan');
+    check('Dasar P50 tanpa libur', pertemuanLib.perkiraanSelesaiHalaqah({ mulai: null, hari_idx: [0, 2], level: 'HITS Dasar', periode: tahap1 }) === '2027-03-24');
+    check('Lanjutan P26 tanpa libur', pertemuanLib.perkiraanSelesaiHalaqah({ mulai: null, hari_idx: [0, 2], level: 'HITS Lanjutan', periode: tahap1 }) === '2026-12-30');
+    check(
+      'libur memundurkan tanggal selesai',
+      pertemuanLib.perkiraanSelesaiHalaqah({
+        mulai: null,
+        hari_idx: [0, 2],
+        level: 'HITS Lanjutan',
+        periode: { ...tahap1, libur: [{ mulai: '2026-12-21', selesai: '2027-01-03', keterangan: 'libur akhir tahun' }] },
+      }) === '2027-01-13'
+    );
+    check('jumlah pertemuan 0 → akhir periode', pertemuanLib.perkiraanSelesaiHalaqah({ mulai: null, hari_idx: [0, 2], level: 'HITS Dasar', periode: { ...tahap1, jumlah_pertemuan_dasar: 0 } }) === tahap1.selesai);
+
+    const jamPadaFeb = async () => (await bentrok.jadwalTerpakaiPengajar(ID.ahmad, { acuan: '2027-02-01' })).filter((t) => t.sumber === 'usulan');
+    let feb = await jamPadaFeb();
+    check('halaqah Dasar masih mengunci jam pada Februari', feb.length > 0 && feb[0].selesai === '2027-03-24', JSON.stringify(feb));
+    await q(`update ks_usulan set level = 'HITS Lanjutan' where periode_id = $1`, [ID.tahap1]);
+    feb = await jamPadaFeb();
+    check('halaqah Lanjutan sudah membebaskan jam pada Februari', feb.length === 0, JSON.stringify(feb));
+    const desember = (await bentrok.jadwalTerpakaiPengajar(ID.ahmad, { acuan: '2026-12-01' })).filter((t) => t.sumber === 'usulan');
+    check('halaqah Lanjutan tetap mengunci sebelum selesai', desember.length > 0 && desember[0].selesai === '2026-12-30' && desember[0].level === 'HITS Lanjutan', JSON.stringify(desember));
+    await q(`update ks_usulan set level = 'HITS Dasar' where periode_id = $1`, [ID.tahap1]);
+
     const h2 = await jalankanAlokasi(tahap2, { sekarang });
     check('tahap 2: Ahmad tidak dijatah dua kali di jam yang sama', h2.usulanBaru === 0, JSON.stringify(h2));
     check('tahap 2: kelompoknya tercatat butuh pengajar', h2.tanpaPengajar === 1);

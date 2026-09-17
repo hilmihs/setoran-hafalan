@@ -1,6 +1,7 @@
 import 'server-only';
+import { perkiraanSelesaiHalaqah } from '@/lib/ketersediaan-pertemuan';
 import { supabaseAdmin } from '@/lib/supabase-admin';
-import type { KsHariIdx, KsSlot } from '@/types/db';
+import type { KsLibur, KsHariIdx, KsSlot } from '@/types/db';
 import {
   bentrok,
   masihBerjalanPada,
@@ -43,6 +44,8 @@ export interface JadwalTerpakai {
   label: string;
   /** Tanggal pertemuan terakhir menurut kaldik; null bila tak diketahui atau bukan halaqah HITS. */
   selesai: string | null;
+  /** Hanya untuk sumber 'usulan': level halaqahnya (menentukan lama jam terkunci). */
+  level?: string | null;
   /** Hanya untuk sumber 'usulan': status usulannya. */
   status_usulan?: string;
   /** Hanya untuk sumber 'usulan': slot dan periode asalnya. */
@@ -67,7 +70,15 @@ interface UsulanRow {
   status: string;
   slot_id: string;
   periode_id: string;
-  periode?: { selesai: string } | null;
+  level: string | null;
+  tanggal_mulai: string | null;
+  periode?: {
+    mulai: string;
+    selesai: string;
+    libur: KsLibur[] | null;
+    jumlah_pertemuan_dasar: number;
+    jumlah_pertemuan_lanjutan: number;
+  } | null;
   slot?: {
     label: string;
     hari_idx: KsHariIdx[];
@@ -168,7 +179,7 @@ export async function jadwalTerpakaiPengajar(
     supabaseAdmin
       .from('ks_usulan')
       .select(
-        'id, nama_halaqah, status, slot_id, periode_id, periode:periode_id(selesai), slot:slot_id(label, hari_idx, waktu_mulai, waktu_selesai)'
+        'id, nama_halaqah, status, slot_id, periode_id, level, tanggal_mulai, periode:periode_id(mulai, selesai, libur, jumlah_pertemuan_dasar, jumlah_pertemuan_lanjutan), slot:slot_id(label, hari_idx, waktu_mulai, waktu_selesai)'
       )
       .eq('pengajar_id', pengajarId)
       .in('status', [...STATUS_USULAN_HIDUP]),
@@ -220,8 +231,17 @@ export async function jadwalTerpakaiPengajar(
 
   for (const u of (usulan ?? []) as UsulanRow[]) {
     if (!u.slot) continue;
-    // Usulan milik periode yang sudah berakhir sebelum acuan tidak mengunci.
-    const selesaiPeriode = u.periode?.selesai ?? null;
+    // Jam terkunci sampai pertemuan terakhir SESUAI LEVEL, bukan sampai akhir
+    // periode: Lanjutan (26 pertemuan) membebaskan jam pengajar berbulan-bulan
+    // sebelum Dasar (50 pertemuan) di periode yang sama.
+    const selesaiPeriode = u.periode
+      ? perkiraanSelesaiHalaqah({
+          mulai: u.tanggal_mulai,
+          hari_idx: u.slot.hari_idx,
+          level: u.level,
+          periode: u.periode,
+        })
+      : null;
     if (opts.acuan && !masihBerjalanPada(selesaiPeriode, opts.acuan)) continue;
     // rentangDariSlot memecah jam per hari, jadi slot dua waktu terbaca utuh.
     for (const rentang of rentangDariSlot(u.slot)) {
@@ -233,6 +253,7 @@ export async function jadwalTerpakaiPengajar(
         label: u.slot.label,
         selesai: selesaiPeriode,
         status_usulan: u.status,
+        level: u.level,
         slot_id: u.slot_id,
         periode_id: u.periode_id,
       });

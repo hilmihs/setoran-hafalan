@@ -27,7 +27,8 @@ export function DaftarPengajar({ baris, tampilGender }: { baris: BarisPengajarDa
         <div className="ks-kartu-isi">
           <p className="t-small" style={{ marginTop: 0 }}>
             {baris.length} pengajar · {belum} belum mendapat halaqah. Angka setelah jam adalah urutan prioritas di jam
-            itu. Kuning: bertabrakan dengan halaqah yang masih berjalan — dicatat, tidak dikunci.
+            itu. Kuning: bertabrakan dengan halaqah yang masih berjalan — dicatat, tidak dikunci. Jam halaqah terpakai
+            sampai pertemuan terakhirnya: HITS Dasar 50 pertemuan, HITS Lanjutan 26 — Lanjutan membebaskan jam lebih awal.
           </p>
           {tampil.length === 0 ? (
             <p className="t-small" style={{ margin: 0 }}>
@@ -67,6 +68,13 @@ export function DaftarPengajar({ baris, tampilGender }: { baris: BarisPengajarDa
                       </td>
                       <td style={{ textAlign: 'right' }}>
                         {b.halaqah > 0 ? b.halaqah : <span className="badge badge-neutral">belum</span>}
+                        {b.halaqahRinci.map((h, i) => (
+                          <div key={i} className="sub" style={{ whiteSpace: 'nowrap' }}>
+                            {h.level?.replace('HITS ', '') ?? '—'} · {h.label}
+                            {h.status === 'usulan' ? ' · usulan' : ''}
+                            {h.selesai ? ` · bebas setelah ${tanggalPendek(h.selesai)}` : ''}
+                          </div>
+                        ))}
                       </td>
                       <td style={{ textAlign: 'right' }}>
                         <span className="badge badge-neutral">{b.sumber === 'impor' ? 'impor xlsx' : 'isi sendiri'}</span>
@@ -81,4 +89,13 @@ export function DaftarPengajar({ baris, tampilGender }: { baris: BarisPengajarDa
       </div>
     </div>
   );
+}
+
+function tanggalPendek(t: string): string {
+  return new Date(`${t.slice(0, 10)}T00:00:00Z`).toLocaleDateString('id-ID', {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+    timeZone: 'UTC',
+  });
 }

@@ -2,7 +2,8 @@ import 'server-only';
 import { supabaseAdmin } from '@/lib/supabase-admin';
 import { absUrl } from '@/lib/url';
 import { buildWaMeUrl, tplKonfirmasiHalaqahPenuh } from '@/lib/whatsapp';
-import type { Gender, KsMode, KsPendaftarSumber, KsPengisianSumber } from '@/types/db';
+import type { Gender, KsHariIdx, KsLibur, KsMode, KsPendaftarSumber, KsPengisianSumber } from '@/types/db';
+import { perkiraanSelesaiHalaqah } from '@/lib/ketersediaan-pertemuan';
 import type { BarisAntrean, KartuUsulan } from './PanelKerja';
 import type { BarisGrup } from './PanelGrupPool';
 
@@ -248,6 +249,8 @@ export interface BarisPengajarDasbor {
   sumber: KsPengisianSumber;
   status: string;
   halaqah: number;
+  /** Halaqah hidup yang dipegang: level dan sampai kapan jamnya terpakai. */
+  halaqahRinci: { label: string; level: string | null; status: string; selesai: string | null }[];
   jam: JamPengajar[];
 }
 
@@ -273,7 +276,13 @@ export async function muatPengajarDasbor(periodeId: string): Promise<BarisPengaj
         'pengisian_id',
         baris.map((b) => b.id)
       ),
-    supabaseAdmin.from('ks_usulan').select('pengajar_id').eq('periode_id', periodeId).in('status', STATUS_HIDUP),
+    supabaseAdmin
+      .from('ks_usulan')
+      .select(
+        'pengajar_id, status, level, tanggal_mulai, slot:slot_id(label, hari_idx), periode:periode_id(mulai, selesai, libur, jumlah_pertemuan_dasar, jumlah_pertemuan_lanjutan)'
+      )
+      .eq('periode_id', periodeId)
+      .in('status', ['usulan', ...STATUS_HIDUP]),
   ]);
 
   const jamPer = new Map<string, JamPengajar[]>();
@@ -296,8 +305,35 @@ export async function muatPengajarDasbor(periodeId: string): Promise<BarisPengaj
   }
 
   const halaqah = new Map<string, number>();
-  for (const u of (usulan ?? []) as { pengajar_id: string | null }[]) {
-    if (u.pengajar_id) halaqah.set(u.pengajar_id, (halaqah.get(u.pengajar_id) ?? 0) + 1);
+  const rinci = new Map<string, BarisPengajarDasbor['halaqahRinci']>();
+  for (const u of (usulan ?? []) as {
+    pengajar_id: string | null;
+    status: string;
+    level: string | null;
+    tanggal_mulai: string | null;
+    slot?: { label: string; hari_idx: KsHariIdx[] } | null;
+    periode?: {
+      mulai: string;
+      selesai: string;
+      libur: KsLibur[] | null;
+      jumlah_pertemuan_dasar: number;
+      jumlah_pertemuan_lanjutan: number;
+    } | null;
+  }[]) {
+    if (!u.pengajar_id) continue;
+    // Usulan yang belum dilepas belum dihitung sebagai halaqah, tetapi tetap tampil.
+    if (u.status !== 'usulan') halaqah.set(u.pengajar_id, (halaqah.get(u.pengajar_id) ?? 0) + 1);
+    const daftar = rinci.get(u.pengajar_id) ?? [];
+    daftar.push({
+      label: (u.slot?.label ?? '').replace(/\s*WIB$/, ''),
+      level: u.level,
+      status: u.status,
+      selesai:
+        u.slot && u.periode
+          ? perkiraanSelesaiHalaqah({ mulai: u.tanggal_mulai, hari_idx: u.slot.hari_idx, level: u.level, periode: u.periode })
+          : null,
+    });
+    rinci.set(u.pengajar_id, daftar);
   }
 
   return baris
@@ -309,6 +345,7 @@ export async function muatPengajarDasbor(periodeId: string): Promise<BarisPengaj
       sumber: b.sumber,
       status: b.status,
       halaqah: halaqah.get(b.pengajar_id) ?? 0,
+      halaqahRinci: (rinci.get(b.pengajar_id) ?? []).sort((x, y) => (x.selesai ?? '').localeCompare(y.selesai ?? '')),
       jam: (jamPer.get(b.id) ?? []).sort(
         (x, y) => (x.prioritas ?? 99) - (y.prioritas ?? 99) || x.label.localeCompare(y.label)
       ),

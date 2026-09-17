@@ -132,7 +132,9 @@ export default async function KetersediaanPengajarPage({
     batch: t.batch,
     label: t.label,
     sumber: t.sumber,
-  }));
+    level: t.level ?? null,
+    selesai: t.selesai,
+  })).filter((j, i, semua) => semua.findIndex((x) => x.nama === j.nama && x.label === j.label) === i);
 
   return (
     <Bingkai>
@@ -177,12 +179,14 @@ export default async function KetersediaanPengajarPage({
                 <strong>{j.nama}</strong>
                 {j.batch ? ` · ${j.batch}` : ''} — {j.label || 'jadwal tidak tercatat'}
                 {j.sumber === 'maahir' ? ' (kelas Maahir)' : ''}
-                {j.sumber === 'usulan' ? ' (halaqah baru)' : ''}
+                {j.sumber === 'usulan' ? ` (halaqah baru${j.level ? `, ${j.level}` : ''})` : ''}
+                {j.selesai ? ` · jam ini terpakai s.d. ${tanggalPendek(j.selesai)}` : ''}
               </li>
             ))}
           </ul>
           <p className="t-small" style={{ color: 'var(--muted-2)', marginTop: 8, marginBottom: 0 }}>
-            Slot pada jam yang sama dengan daftar di atas tampil terkunci di bawah.
+            Slot pada jam yang sama dengan daftar di atas tampil terkunci di bawah — hanya untuk periode yang mulai
+            sebelum halaqah itu selesai. HITS Dasar memakai jam lebih lama (50 pertemuan) daripada HITS Lanjutan (26).
           </p>
         </section>
       )}

@@ -172,3 +172,30 @@ export function jumlahPertemuanUntuk(
 ): number {
   return /lanjut/i.test(level) ? periode.jumlah_pertemuan_lanjutan : periode.jumlah_pertemuan_dasar;
 }
+
+/**
+ * Tanggal pertemuan terakhir sebuah halaqah menurut levelnya — sampai kapan jam
+ * pengajarnya benar-benar terpakai.
+ *
+ * HITS Dasar (50 pertemuan) dan HITS Lanjutan (26 pertemuan) dalam satu periode
+ * mulai bersamaan tetapi selesai terpaut berbulan-bulan: dengan libur Ramadhan,
+ * Dasar yang mulai 19 Okt 2026 selesai ±Juni, Lanjutan ±Januari. Mengunci jam
+ * pengajar Lanjutan sampai akhir periode membuang jamnya selama lima bulan.
+ *
+ * Jatuh ke `periode.selesai` bila jumlah pertemuan 0 (dibuat manual di CMS) atau
+ * tanggal tidak dapat dihitung — lebih baik mengunci terlalu lama daripada membuka
+ * jam yang ternyata masih terisi.
+ */
+export function perkiraanSelesaiHalaqah(args: {
+  mulai: string | null;
+  hari_idx: readonly KsHariIdx[];
+  level: string | null;
+  periode: Pick<KsPeriode, 'mulai' | 'selesai' | 'jumlah_pertemuan_dasar' | 'jumlah_pertemuan_lanjutan'> & {
+    libur?: readonly KsLibur[] | null;
+  };
+}): string {
+  const jumlah = jumlahPertemuanUntuk(args.periode, args.level ?? '');
+  if (jumlah <= 0) return args.periode.selesai;
+  const tanggal = tanggalPertemuan(args.mulai ?? args.periode.mulai, args.hari_idx, jumlah, args.periode.libur ?? []);
+  return tanggal.length === jumlah ? tanggal[tanggal.length - 1] : args.periode.selesai;
+}
