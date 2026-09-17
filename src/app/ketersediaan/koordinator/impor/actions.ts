@@ -5,6 +5,7 @@ import { requireOneOfRoles } from '@/lib/session';
 import { bolehLihatFiturTersembunyi } from '@/lib/admin-guard';
 import { getSessionWa } from '@/lib/program-kelas';
 import { simpanImpor, susunPratinjau, type PilihanImpor, type Pratinjau } from '@/lib/ketersediaan-impor';
+import { cekZipAman } from '@/lib/zip-aman';
 
 export type HasilPratinjau = { ok: true; pratinjau: Pratinjau } | { ok: false; error: string };
 export type HasilSimpanImpor = { ok: true; pesan: string } | { ok: false; error: string };
@@ -38,7 +39,10 @@ async function bacaForm(fd: FormData): Promise<{ data: ArrayBuffer; nama: string
       return 'Pilihan tidak terbaca. Muat ulang halaman.';
     }
   }
-  return { data: await b.arrayBuffer(), nama: b.name ?? 'ketersediaan.xlsx', pilihan };
+  const data = await b.arrayBuffer();
+  const zip = cekZipAman(data);
+  if (!zip.ok) return zip.alasan ?? 'Berkas xlsx tidak dapat diterima.';
+  return { data, nama: b.name ?? 'ketersediaan.xlsx', pilihan };
 }
 
 export async function pratinjauImporXlsx(fd: FormData): Promise<HasilPratinjau> {
@@ -67,6 +71,7 @@ export async function simpanImporXlsx(fd: FormData): Promise<HasilSimpanImpor> {
       if (p.dihapus) bagian.push(`${p.dihapus} jam lama dihapus`);
       if (p.pengajarDihapus) bagian.push(`${p.pengajarDihapus} pengajar tak lagi di berkas`);
       if (p.dilindungi) bagian.push(`${p.dilindungi} dilewati karena mengisi sendiri`);
+      if (p.catatan) bagian.push(p.catatan);
       return `${p.nama}: ${bagian.join(', ')}`;
     });
     return { ok: true, pesan: `Tersimpan. ${perPeriode.join(' · ')}. ${h.dilewati} baris tidak diimpor.` };
