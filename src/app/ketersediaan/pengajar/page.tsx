@@ -13,6 +13,30 @@ import {
 } from '@/lib/ketersediaan-bentrok';
 import { ringkasSlot, teksPeluang } from '@/lib/ketersediaan-permintaan';
 import { FormKetersediaan, type SlotTampil } from './FormKetersediaan';
+import { unstable_cache } from 'next/cache';
+import { susunGabungan } from '@/lib/ketersediaan-gabungan';
+import type { KsPeriode } from '@/types/db';
+
+/**
+ * Halaqah yang dibutuhkan per slot: kelompok pendaftar yang sudah genap tetapi
+ * belum kebagian pengajar, menurut simulasi mesin alokasi pada tanggal mulai KBM
+ * (sisa kelompok umur sudah boleh digabung). Definisi yang sama dengan dashboard
+ * koordinator dan deck pertemuan pengajar.
+ *
+ * Simulasinya mahal (cek bentrok semua pengajar), sedangkan halaman ini dibuka
+ * banyak pengajar — hasil disimpan 10 menit per periode.
+ */
+function butuhHalaqahPerSlot(periode: KsPeriode): Promise<Record<string, number>> {
+  return unstable_cache(
+    async () => {
+      const acuan = new Date(Math.max(Date.now(), Date.parse(`${periode.mulai}T00:00:00Z`)));
+      const hasil = await susunGabungan([periode], acuan);
+      return Object.fromEntries(hasil.butuhHalaqah);
+    },
+    ['ks-butuh-halaqah', periode.id, periode.mulai],
+    { revalidate: 600 }
+  )();
+}
 
 export const dynamic = 'force-dynamic';
 
@@ -70,9 +94,10 @@ export default async function KetersediaanPengajarPage({
   const semuaSlot = await listSlot(periode.id, { hanyaAktif: true });
   const slot = semuaSlot.filter((s) => s.kelompok === sesi.gender);
 
-  const [terpakai, ringkas] = await Promise.all([
+  const [terpakai, ringkas, butuh] = await Promise.all([
     jadwalTerpakaiPengajar(sesi.pengajar_id, { acuan: periode.mulai }),
     ringkasSlot(periode, slot, sekarang),
+    butuhHalaqahPerSlot(periode),
   ]);
   const terkunci = kunciSlot(slot, terpakai);
 
@@ -118,8 +143,9 @@ export default async function KetersediaanPengajarPage({
       alasan_kunci: kunci ? alasanTerkunci(kunci) : null,
       sanggahan_status: statusSanggahan,
       antre: r?.antre ?? 0,
-      belum_tertampung: r?.belum_tertampung ?? 0,
-      butuh_pengajar: r?.butuh_pengajar ?? false,
+      butuh_halaqah: butuh[s.id] ?? 0,
+      // "Butuh pengajar" = ada kelompok genap yang belum kebagian pengajar.
+      butuh_pengajar: (butuh[s.id] ?? 0) > 0,
       pengajar_tersedia: r?.pengajar_tersedia ?? 0,
       peluang: teksPeluang(r?.riwayat ?? null),
     };

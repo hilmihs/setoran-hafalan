@@ -48,6 +48,8 @@ export interface HasilGabungan {
   simulasi: Record<Gender, { halaqah: number; peserta: number; antre: number; pengajarDapat: number }>;
   /** Peserta tertampung per slot wakil menurut simulasi. */
   tampungSim: Map<string, number>;
+  /** Kelompok yang sudah genap tetapi tidak mendapat pengajar, per slot wakil — "butuh N halaqah". */
+  butuhHalaqah: Map<string, number>;
   /**
    * Pengajar unik per gender dan per tahap: punya jam, tidak nonaktif, dan masih
    * tersedia di sekurangnya satu jam setelah jam yang bentrok dengan jadwal
@@ -255,6 +257,8 @@ export async function susunGabungan(daftarPeriode: readonly KsPeriode[], sekaran
     tampungSim.set(pn.slot_id, (tampungSim.get(pn.slot_id) ?? 0) + pn.grup.pendaftar_ids.length);
   }
   for (const s of slotsWakil) simulasi[s.kelompok].antre += antre.get(s.id) ?? 0;
+  const butuhHalaqah = new Map<string, number>();
+  for (const g of hasil.tanpaPengajar) butuhHalaqah.set(g.slot_id, (butuhHalaqah.get(g.slot_id) ?? 0) + 1);
   simulasi.ikhwan.pengajarDapat = dapat.ikhwan.size;
   simulasi.akhwat.pengajarDapat = dapat.akhwat.size;
 
@@ -326,6 +330,7 @@ export async function susunGabungan(daftarPeriode: readonly KsPeriode[], sekaran
     jam,
     simulasi,
     tampungSim,
+    butuhHalaqah,
     pengajar,
     tertahan,
   };

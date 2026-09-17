@@ -12,7 +12,8 @@ export interface SlotTampil {
   alasan_kunci: string | null;
   sanggahan_status: string | null;
   antre: number;
-  belum_tertampung: number;
+  /** Kelompok yang sudah genap tetapi belum ada pengajarnya. */
+  butuh_halaqah: number;
   butuh_pengajar: boolean;
   pengajar_tersedia: number;
   peluang: string | null;
@@ -50,6 +51,7 @@ export function FormKetersediaan(props: Props) {
     return [...props.slots].sort((a, b) => {
       if (a.butuh_pengajar !== b.butuh_pengajar) return a.butuh_pengajar ? -1 : 1;
       if (a.terkunci !== b.terkunci) return a.terkunci ? 1 : -1;
+      if (b.butuh_halaqah !== a.butuh_halaqah) return b.butuh_halaqah - a.butuh_halaqah;
       if (b.antre !== a.antre) return b.antre - a.antre;
       return a.label.localeCompare(b.label);
     });
@@ -271,7 +273,12 @@ function KartuSlot({
               <strong style={{ color: 'var(--accent)' }}>Butuh pengajar · </strong>
             )}
             {slot.antre} pendaftar menunggu · {slot.pengajar_tersedia} pengajar tersedia
-            {slot.belum_tertampung > 0 ? ` · ${slot.belum_tertampung} belum tertampung` : ''}
+            {slot.butuh_halaqah > 0 ? (
+              <>
+                {' · '}
+                <strong style={{ color: 'var(--ink)' }}>butuh {slot.butuh_halaqah} halaqah</strong>
+              </>
+            ) : null}
           </span>
 
           {slot.peluang && (

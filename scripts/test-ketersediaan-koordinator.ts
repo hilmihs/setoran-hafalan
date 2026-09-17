@@ -355,6 +355,11 @@ async function uraiIntegrasi() {
     const h2 = await jalankanAlokasi(tahap2, { sekarang });
     check('tahap 2: Ahmad tidak dijatah dua kali di jam yang sama', h2.usulanBaru === 0, JSON.stringify(h2));
     check('tahap 2: kelompoknya tercatat butuh pengajar', h2.tanpaPengajar === 1);
+    {
+      const { susunGabungan } = await import('../src/lib/ketersediaan-gabungan');
+      const g2 = await susunGabungan([tahap2], sekarang);
+      check('gabungan: butuh 1 halaqah di jam tahap 2 yang pengajarnya terpakai', g2.butuhHalaqah.get(ID.slot2) === 1, JSON.stringify([...g2.butuhHalaqah]));
+    }
     const antreTahap2 = await q<{ n: number }>(`select count(*)::int n from ks_pendaftar where periode_id = $1 and status = 'valid'`, [ID.tahap2]);
     check('tahap 2: pendaftar tetap antre', antreTahap2[0].n === 3);
 
