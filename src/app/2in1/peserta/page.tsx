@@ -13,6 +13,7 @@ import {
   type RiwayatCycle,
 } from '@/components/RiwayatPenilaian';
 import { LogoutButton } from '@/components/LogoutButton';
+import { UjianKartuPeserta } from '@/components/ujian/UjianKartu';
 import {
   CYCLE_ANCHOR,
   allCyclesSinceAnchor,
@@ -269,6 +270,8 @@ export default async function PesertaPage() {
               </div>
             </Link>
           )}
+
+          <UjianKartuPeserta pesertaId={session.peserta_id} />
 
           <h1 className="t-h1" style={{ marginBottom: 2 }}>
             Setoran cycle ini

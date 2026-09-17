@@ -64,6 +64,33 @@ export async function uploadAudioMusyrif(args: {
   return path;
 }
 
+// Rekaman ujian dipisah dari setoran cycle: `ujian/<periode>/<peserta>/<jenis>.webm`.
+export function audioObjectPathUjian(args: {
+  periodeId: string;
+  pesertaId: string;
+  jenis: JenisRekaman;
+}): string {
+  return `ujian/${args.periodeId}/${args.pesertaId}/${args.jenis}.webm`;
+}
+
+export async function uploadAudioUjian(args: {
+  periodeId: string;
+  pesertaId: string;
+  jenis: JenisRekaman;
+  blob: Blob | Buffer;
+  contentType?: string;
+}): Promise<string> {
+  const path = audioObjectPathUjian(args);
+  const { error } = await supabaseAdmin.storage
+    .from(AUDIO_BUCKET)
+    .upload(path, args.blob as Blob, {
+      upsert: true,
+      contentType: args.contentType ?? 'audio/webm',
+    });
+  if (error) throw error;
+  return path;
+}
+
 export async function ensureAudioBucket(): Promise<void> {
   const { data, error } = await supabaseAdmin.storage.getBucket(AUDIO_BUCKET);
   if (data) return;

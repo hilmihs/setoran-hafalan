@@ -25,10 +25,20 @@ import { KoordinatorFilterBar } from '@/components/KoordinatorFilterBar';
 import { MonitoringTable, type MonitoringRow } from '@/components/MonitoringTable';
 import { RankingTable, type RankingRow } from '@/components/RankingTable';
 import type { Gender, NilaiRekaman, StatusSetoran } from '@/types/db';
+import { UjianMonitoring } from './UjianMonitoring';
 
 export const dynamic = 'force-dynamic';
 
-type SP = { week?: string; gender?: string; kelas?: string; status?: string; q?: string; month?: string };
+type SP = {
+  week?: string;
+  gender?: string;
+  kelas?: string;
+  status?: string;
+  q?: string;
+  month?: string;
+  ujian?: string;
+  ujian_status?: string;
+};
 
 export default async function KoordinatorDashboard({
   searchParams,
@@ -469,6 +479,13 @@ export default async function KoordinatorDashboard({
             </div>
             <span style={{ fontSize: 13, fontWeight: 600 }}>{koor.name}</span>
           </div>
+          <a
+            href="#ujian"
+            className="btn btn-sm btn-ghost"
+            style={{ height: 30, padding: '0 12px', textDecoration: 'none' }}
+          >
+            Ujian
+          </a>
           <Link
             href="/2in1/koordinator/kehadiran"
             className="btn btn-sm btn-ghost"
@@ -654,6 +671,33 @@ export default async function KoordinatorDashboard({
           currentMonth={rankYearMonth}
           h1Label={h1Week.slice(5)}
           h2Label={h2Week.slice(5)}
+        />
+
+        {/* Ujian hafalan peserta (±3 bulan sekali) */}
+        <UjianMonitoring
+          pesertaList={pesertaList as Array<{ id: string; name: string; gender: Gender; kelas_id: string }>}
+          kelasById={
+            new Map(
+              (allKelas ?? []).map((k) => [
+                k.id as string,
+                {
+                  name: k.name as string,
+                  musyrifName: (k.musyrif as unknown as { name: string } | null)?.name ?? null,
+                },
+              ])
+            )
+          }
+          periodeParam={searchParams.ujian}
+          statusParam={searchParams.ujian_status}
+          query={{
+            week: searchParams.week,
+            gender: searchParams.gender,
+            kelas: searchParams.kelas,
+            status: searchParams.status,
+            q: searchParams.q,
+            month: searchParams.month,
+            ujian: searchParams.ujian,
+          }}
         />
 
         {/* Status setoran musyrif → syaikh (2 periode/bulan) */}

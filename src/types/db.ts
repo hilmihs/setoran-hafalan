@@ -138,6 +138,49 @@ export interface RekamanMusyrif {
   updated_at: string;
 }
 
+// ========== Ujian 2in1 (0080) ==========
+
+// Predikat ujian 4 tingkat. Warna: mumtaz hijau, jayyid kuning, maqbul & dhaif
+// sama-sama merah — tetap disimpan terpisah.
+export type PredikatUjian = 'mumtaz' | 'jayyid' | 'maqbul' | 'dhaif';
+
+export interface UjianPeriode {
+  id: string;
+  nama: string;
+  mulai: string; // YYYY-MM-DD
+  selesai: string; // YYYY-MM-DD, inklusif
+  created_at: string;
+  updated_at: string;
+}
+
+export interface Ujian {
+  id: string;
+  periode_id: string;
+  peserta_id: string;
+  status: StatusSetoran;
+  submitted_at: string | null;
+  checked_at: string | null;
+  checked_by_musyrif_id: string | null;
+  alasan_belum: string | null;
+  alasan_updated_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface RekamanUjian {
+  id: string;
+  ujian_id: string;
+  jenis: JenisRekaman;
+  audio_url: string | null;
+  duration_seconds: number | null;
+  recorded_at: string | null;
+  predikat: PredikatUjian | null;
+  masukan: string | null;
+  checked_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
 // Composite types untuk query dengan JOIN
 export interface SetoranWithRekaman extends Setoran {
   rekaman: Rekaman[];

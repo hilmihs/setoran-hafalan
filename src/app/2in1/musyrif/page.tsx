@@ -16,6 +16,7 @@ import { FeatureNav } from '@/components/FeatureNav';
 import { StatCard } from '@/components/ui/StatCard';
 import { SectionHeader } from '@/components/ui/SectionHeader';
 import { Podium } from '@/components/ui/Podium';
+import { UjianKartuMusyrif } from '@/components/ujian/UjianKartu';
 import {
   buildWaMeUrl,
   salutation,
@@ -248,6 +249,9 @@ export default async function MusyrifDashboard() {
               Periode {formatCycleRangeShort(cycle)}
             </span>
           </div>
+
+          {/* Ujian hafalan peserta (±3 bulan sekali) */}
+          <UjianKartuMusyrif pesertaIds={pesertaIds} />
 
           {/* Setoran musyrif → syaikh */}
           <div className="section-row">

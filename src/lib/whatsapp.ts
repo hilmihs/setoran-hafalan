@@ -108,6 +108,73 @@ export function tplReminderPesertaBelumSetor(args: {
   ].join('\n');
 }
 
+// ===== Ujian 2in1 =====
+
+export function tplPesertaUjianToMusyrif(args: {
+  pesertaName: string;
+  pesertaGender: Gender;
+  kelasName: string;
+  musyrifGender: Gender;
+  periodeNama: string;
+  nilaiUrl: string;
+}): string {
+  const sapaan = salutation(args.musyrifGender);
+  const ana = args.pesertaGender === 'ikhwan' ? 'Ana' : 'Ana (akhwat)';
+  return [
+    `Assalamu'alaikum ${sapaan},`,
+    ``,
+    `${ana} ${args.pesertaName} (kelas ${args.kelasName}) telah mengirim rekaman ${args.periodeNama}.`,
+    ``,
+    `Mohon kesediaan ${sapaan.toLowerCase()} untuk menilai rekaman pada tautan berikut:`,
+    args.nilaiUrl,
+    ``,
+    `Jazakumullahu khairan.`,
+  ].join('\n');
+}
+
+export function tplMusyrifHasilUjianToPeserta(args: {
+  pesertaName: string;
+  pesertaGender: Gender;
+  periodeNama: string;
+  nilaiSummary: string;
+  masukanGabungan: string;
+  lihatUrl: string;
+}): string {
+  const sapaan = salutation(args.pesertaGender);
+  return [
+    `Assalamu'alaikum ${sapaan} ${args.pesertaName},`,
+    ``,
+    `Berikut hasil ${args.periodeNama} antum:`,
+    ``,
+    args.nilaiSummary,
+    ``,
+    `Catatan & masukan:`,
+    args.masukanGabungan,
+    ``,
+    `Detail nilai: ${args.lihatUrl}`,
+    ``,
+    `Semoga istiqamah, baarakallaahu fiik.`,
+  ].join('\n');
+}
+
+export function tplReminderPesertaBelumUjian(args: {
+  pesertaName: string;
+  pesertaGender: Gender;
+  periodeNama: string;
+  rentangLabel: string;
+  ujianUrl: string;
+}): string {
+  const sapaan = salutation(args.pesertaGender);
+  return [
+    `Assalamu'alaikum ${sapaan} ${args.pesertaName},`,
+    ``,
+    `Pengingat — antum belum mengirim rekaman ${args.periodeNama} (${args.rentangLabel}). Mohon segera rekam dan kirim melalui tautan berikut:`,
+    args.ujianUrl,
+    ``,
+    `Jazakumullahu khairan.`,
+  ].join('\n');
+}
+
 export function tplReminderKetuaIsiPresensi(args: {
   ketuaName: string;
   gender: Gender;

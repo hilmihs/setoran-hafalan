@@ -56,6 +56,9 @@ export function PesertaSetoranForm({
   pesertaName,
   pesertaId,
   kelasName,
+  extraFields,
+  singleOnly = false,
+  nounLabel = 'setoran',
 }: {
   musyrifName: string;
   musyrifInitials: string;
@@ -72,6 +75,12 @@ export function PesertaSetoranForm({
   kelasName?: string;
   // Rekaman yang sudah tersimpan di server → dipulihkan untuk diputar.
   restored?: Partial<Record<JenisRekaman, { audioUrl: string; durationSec: number }>>;
+  // Field tambahan tiap kiriman (mis. `periode_id` untuk ujian).
+  extraFields?: Record<string, string>;
+  // Sembunyikan tombol kirim-3-sekaligus; hanya mode satu-satu yang dipakai.
+  singleOnly?: boolean;
+  // Kata benda di teks tombol & laporan: "setoran" / "ujian".
+  nounLabel?: string;
 }) {
   const [recordings, setRecordings] = useState<Recordings>(EMPTY);
   const [initialRecordings, setInitialRecordings] = useState<Partial<Recordings>>({});
@@ -109,7 +118,7 @@ export function PesertaSetoranForm({
     const now =
       typeof Date !== 'undefined' ? new Date().toLocaleString('id-ID') : '-';
     const msg = [
-      '*LAPORAN GAGAL UPLOAD SETORAN*',
+      `*LAPORAN GAGAL UPLOAD ${nounLabel.toUpperCase()}*`,
       `Peserta: ${pesertaName ?? '-'}${pesertaId ? ` (${pesertaId})` : ''}`,
       `Kelas: ${kelasName ?? '-'} → ${musyrifName}`,
       `Rekaman: ${ctx.jenisLabel}`,
@@ -181,6 +190,7 @@ export function PesertaSetoranForm({
       fd.append('audio_file', rec.blob, `${jenis}.webm`);
       fd.append('duration_sec', String(rec.durationSec));
       if (periodWeekStart) fd.append('week_start', periodWeekStart);
+      for (const [k, v] of Object.entries(extraFields ?? {})) fd.append(k, v);
       const res = await fetch(singleSubmitEndpoint, { method: 'POST', body: fd });
       httpStatus = res.status;
       let json: { error?: string; wa_url?: string } = {};
@@ -232,6 +242,7 @@ export function PesertaSetoranForm({
         fd.append(`duration_${j}`, String(r.durationSec));
       }
       if (periodWeekStart) fd.append('week_start', periodWeekStart);
+      for (const [k, v] of Object.entries(extraFields ?? {})) fd.append(k, v);
       const res = await fetch(endpoint, { method: 'POST', body: fd });
       httpStatus = res.status;
       let json: { error?: string; wa_url?: string } = {};
@@ -371,7 +382,7 @@ export function PesertaSetoranForm({
   return (
     <div>
       <p className="t-small" style={{ marginBottom: 14 }}>
-        {hasSingleMode ? 'Rekam dan kirim satu per satu, atau langsung 3 sekaligus.' : '3 rekaman · maks 30 menit (Al-Jazariyyah 45) per rekaman'}
+        {singleOnly ? 'Rekam tiap matan — rekaman langsung terkirim begitu selesai.' : hasSingleMode ? 'Rekam dan kirim satu per satu, atau langsung 3 sekaligus.' : '3 rekaman · maks 30 menit (Al-Jazariyyah 45) per rekaman'}
       </p>
 
       <div className="section-row">
@@ -477,7 +488,7 @@ export function PesertaSetoranForm({
         </div>
       )}
 
-      {!allSingleSubmitted && (
+      {!allSingleSubmitted && !singleOnly && (
         <button
           type="button"
           onClick={onSubmit}
@@ -485,7 +496,7 @@ export function PesertaSetoranForm({
           className={`btn btn-block ${allRecorded && !submitting ? 'btn-primary' : 'btn-soft'}`}
           style={{ marginTop: 20 }}
         >
-          {submitting ? 'Mengirim…' : anySubmitted ? 'Kirim sisa rekaman' : 'Kirim setoran'}
+          {submitting ? 'Mengirim…' : anySubmitted ? 'Kirim sisa rekaman' : `Kirim ${nounLabel}`}
           {allRecorded && !submitting && Icon.arrow(14)}
         </button>
       )}
