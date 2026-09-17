@@ -29,7 +29,9 @@ function check(name: string, cond: boolean, extra = '') {
  * sheet online bertumpuk dua batch, sheet offline tanpa WA, Matraman bertumpuk
  * ikhwan lalu akhwat, dan satu kelas dengan dua waktu berbeda.
  */
-async function xlsxTiruan(opsi: { tanpaBaris?: 'bilal-sabtu' } = {}): Promise<ArrayBuffer> {
+async function xlsxTiruan(
+  opsi: { tanpaBaris?: 'bilal-sabtu'; hanyaOnline?: boolean; tanpaAisyah?: boolean; matratenSamaJam?: boolean } = {}
+): Promise<ArrayBuffer> {
   const ExcelJS = (await import('exceljs')).default;
   const wb = new ExcelJS.Workbook();
 
@@ -49,6 +51,7 @@ async function xlsxTiruan(opsi: { tanpaBaris?: 'bilal-sabtu' } = {}): Promise<Ar
   on.addRow(['No', 'Nama', 'WA', 'Online/Offline', 'Waktu', 'Prioritas']);
   on.addRow([1, 'Bilal Hakim', '081222222222', 'Online', 'Senin & Rabu 20:00 - 21:30 WIB', 1]);
   on.addRow([2, 'Ahmad Fauzan', '081111111111', 'Online', 'Senin & Rabu 20:00 - 21:30 WIB', 2]);
+  if (opsi.hanyaOnline) return (await wb.xlsx.writeBuffer()) as ArrayBuffer;
 
   const pj = wb.addWorksheet('Offline - Pejaten Akhwat');
   pj.addRow(['JADWAL KBM HITS OFFLINE — Lokasi Pejaten AKHWAT (Batch September 2026)']);
@@ -67,7 +70,9 @@ async function xlsxTiruan(opsi: { tanpaBaris?: 'bilal-sabtu' } = {}): Promise<Ar
   mt.addRow([]);
   mt.addRow(['Akhwat']);
   mt.addRow(['No', 'Nama', 'Online/Offline', 'Waktu', 'Kelas']);
-  mt.addRow([1, 'Aisyah Rahma', 'Offline', 'Rabu 16.00 - 17.30 dan Sabtu 13.00 - 14.30']);
+  if (!opsi.tanpaAisyah) mt.addRow([1, 'Aisyah Rahma', 'Offline', 'Rabu 16.00 - 17.30 dan Sabtu 13.00 - 14.30']);
+  // Hari & jam sama persis dengan kelas Khadijah di Pejaten — harus jadi jam master sendiri.
+  if (opsi.matratenSamaJam) mt.addRow([2, 'Aisyah Rahma', 'Offline', 'Selasa & Jum\u2019at, 09.00 - 10.30']);
 
   return (await wb.xlsx.writeBuffer()) as ArrayBuffer;
 }
@@ -117,6 +122,7 @@ const MIGRASI = [
   '0072_ketersediaan_pertemuan',
   '0077_ketersediaan_impor_aturan',
   '0078_ketersediaan_libur_periode',
+  '0079_ketersediaan_integritas',
 ];
 
 const ID = {
@@ -236,8 +242,33 @@ async function main() {
     check('WA milik akun bergender lain', cocokkanPengajar({ nama: 'x', wa: '81500000002', gender: 'ikhwan' }, daftar).status === 'gender_beda');
     check('nama persis setelah gelar dibuang', cocokkanPengajar({ nama: 'Ustadzah Khadijah Maryam', wa: null, gender: 'akhwat' }, daftar).pengajar_id === 'p-khad');
     const panjang = cocokkanPengajar({ nama: 'Adam Malik Nurzuhdi Al Suyudi', wa: null, gender: 'ikhwan' }, daftar);
-    check('nama panjang cocok lewat dua kata', panjang.pengajar_id === 'p-adam' && panjang.cara === 'nama', JSON.stringify(panjang));
-    check('dua kandidat → nama_ganda', cocokkanPengajar({ nama: 'Fauzi Muhammad', wa: null, gender: 'ikhwan' }, daftar).status === 'nama_ganda');
+    check(
+      'nama xlsx berkata lebih yang tak ada di akun → dipilih manual, akun jadi kandidat',
+      panjang.pengajar_id === null && panjang.status === 'nama_tak_ketemu' && panjang.kandidat.some((k) => k.id === 'p-adam'),
+      JSON.stringify(panjang)
+    );
+    const dibalik = cocokkanPengajar({ nama: 'Fauzi Muhammad', wa: null, gender: 'ikhwan' }, daftar);
+    check('urutan kata dibalik, nama setara utuh → cocok', dibalik.pengajar_id === 'p-mf1', JSON.stringify(dibalik));
+    {
+      const longgar = [
+        { id: 'l-ahmad', name: 'Ahmad Fauzan', gender: 'ikhwan' as const, whatsapp_number: '6281600000001', active: true },
+        { id: 'l-hasan', name: 'Rahmatullah Hasan', gender: 'ikhwan' as const, whatsapp_number: '6281600000002', active: true },
+        { id: 'l-aziz', name: 'Muhammad Abdul Aziz', gender: 'ikhwan' as const, whatsapp_number: '6281600000003', active: true },
+        { id: 'l-hb1', name: 'Hasan Basri Lubis', gender: 'ikhwan' as const, whatsapp_number: '6281600000004', active: true },
+        { id: 'l-hb2', name: 'Hasan Basri Nasution', gender: 'ikhwan' as const, whatsapp_number: '6281600000005', active: true },
+      ];
+      const c = (nama: string) => cocokkanPengajar({ nama, wa: null, gender: 'ikhwan' }, longgar);
+      const manual = (nama: string, id: string) => {
+        const h = c(nama);
+        check(`"${nama}" tidak dipasang otomatis`, h.pengajar_id === null && h.status !== 'cocok', JSON.stringify(h));
+        check(`"${nama}" menawarkan akunnya sebagai kandidat`, h.kandidat.some((k) => k.id === id), JSON.stringify(h));
+      };
+      manual('Ust. Ahmad', 'l-ahmad');
+      manual('Hasan', 'l-hasan');
+      manual('Abdullah Muhammad', 'l-aziz');
+      const ganda = c('Hasan Basri');
+      check('dua akun sama-sama cocok → nama_ganda', ganda.status === 'nama_ganda' && ganda.kandidat.length === 2, JSON.stringify(ganda));
+    }
     check('akun nonaktif tidak dipakai', cocokkanPengajar({ nama: 'Umar Said', wa: null, gender: 'ikhwan' }, daftar).status === 'nama_tak_ketemu');
     {
       const nyata = [
@@ -247,11 +278,19 @@ async function main() {
         { id: 'a4', name: 'Sri Wulan Aprilia', gender: 'akhwat', whatsapp_number: '6284', active: true },
         { id: 'a5', name: 'Nur Latifah Anshoriah', gender: 'akhwat', whatsapp_number: '6285', active: true },
         { id: 'a6', name: 'Salma Suhailah Nizzati', gender: 'akhwat', whatsapp_number: '6286', active: true },
+        { id: 'a7', name: 'Siti Aisyah', gender: 'akhwat', whatsapp_number: '6287', active: true },
       ] as const;
       const c = (nama: string, wa: string | null = null) => cocokkanPengajar({ nama, wa, gender: 'akhwat' }, nyata as never);
       check('ejaan huruf ganda: Salma Khoiriyyah', c('Salma Khoiriyyah').pengajar_id === 'a1', JSON.stringify(c('Salma Khoiriyyah')));
       check('ejaan huruf ganda: Durrotussyifa', c('Durrotussyifa').pengajar_id === 'a2');
       check('awalan kata: Rinnie Chandra', c('Rinnie Chandra').pengajar_id === 'a3', JSON.stringify(c('Rinnie Chandra')));
+      check('nama persis berkata umum: Siti Aisyah', c('Siti Aisyah').pengajar_id === 'a7', JSON.stringify(c('Siti Aisyah')));
+      const lathifah = c('Lathifah');
+      check(
+        'satu kata vs akun tiga kata: Lathifah → manual, akun jadi kandidat',
+        lathifah.pengajar_id === null && lathifah.kandidat.some((k) => k.id === 'a5'),
+        JSON.stringify(lathifah)
+      );
       const wulan = c('Sri Wulan', '89999999999');
       check('WA beda: tetap tanpa_akun, akun senama ditawarkan', wulan.status === 'tanpa_akun' && wulan.kandidat[0]?.id === 'a4', JSON.stringify(wulan));
       const asing = c('Fauzia Rahmani');
@@ -409,6 +448,50 @@ async function main() {
 
       const log = await q<{ n: string }>(`select count(*)::text n from ks_log where aksi = 'impor_ketersediaan'`);
       check('setiap impor tercatat per periode', log[0].n === '6', log[0].n);
+
+      // Kunci baris = sheet#nomor baris, jadi berubah bila baris di atasnya hilang.
+      const kunciTanpaAkun = async (berkasIni: ArrayBuffer) =>
+        (await impor.susunPratinjau(berkasIni, { tujuan: {}, manual: {} })).baris.find((b) => b.nama === 'Tanpa Akun')!.kunci;
+      const tanpaAkun = { kunci: await kunciTanpaAkun(await xlsxTiruan({ tanpaBaris: 'bilal-sabtu' })) };
+      check('baris belum siap menahan penghapusan pengajar', Boolean(h3.periode.find((p) => p.id === ID.sep)?.catatan), JSON.stringify(h3.periode));
+
+      // Berkas hanya sheet online: hasil impor offline tidak boleh terhapus.
+      pilihan.manual[tanpaAkun.kunci] = 'lewati';
+      const jumlahKet = async (nama: string) =>
+        (await q<{ n: string }>(
+          `select count(*)::text n from ks_ketersediaan k join ks_pengisian i on i.id = k.pengisian_id
+             join pengajar p on p.id = i.pengajar_id where i.periode_id = $1 and p.name = $2`,
+          [ID.sep, nama]
+        ))[0].n;
+      const h4 = await impor.simpanImpor(await xlsxTiruan({ tanpaBaris: 'bilal-sabtu', hanyaOnline: true }), pilihan, aktor, 'online.xlsx');
+      const sep4 = h4.periode.find((p) => p.id === ID.sep)!;
+      check('berkas online saja: tak ada jam/pengajar offline yang terhapus', sep4.dihapus === 0 && sep4.pengajarDihapus === 0 && !sep4.catatan, JSON.stringify(sep4));
+      check('berkas online saja: Khadijah & Aisyah (offline) utuh', (await jumlahKet('Khadijah Maryam')) === '1' && (await jumlahKet('Aisyah Rahma')) === '1');
+      const bilalMode = await q<{ mode: string }>(
+        `select i.mode from ks_pengisian i where i.periode_id = $1 and i.pengajar_id = $2`, [ID.sep, ID.bilal]
+      );
+      check('berkas online saja: jam offline Bilal utuh, mode tetap keduanya', (await jumlahKet('Bilal Hakim')) === '2' && bilalMode[0]?.mode === 'keduanya', JSON.stringify(bilalMode));
+
+      // Aisyah hilang dari berkas, tetapi ada baris belum siap → tidak dihapus.
+      delete pilihan.manual[tanpaAkun.kunci];
+      const h5 = await impor.simpanImpor(await xlsxTiruan({ tanpaBaris: 'bilal-sabtu', tanpaAisyah: true }), pilihan, aktor, 'uji.xlsx');
+      const sep5 = h5.periode.find((p) => p.id === ID.sep)!;
+      check('baris belum siap: Aisyah tidak dihapus', sep5.pengajarDihapus === 0 && Boolean(sep5.catatan) && (await jumlahKet('Aisyah Rahma')) === '1', JSON.stringify(sep5));
+
+      // Semua baris sudah diputuskan → Aisyah yang tak ada lagi di berkas dihapus.
+      pilihan.manual[tanpaAkun.kunci] = 'lewati';
+      const h6 = await impor.simpanImpor(await xlsxTiruan({ tanpaBaris: 'bilal-sabtu', tanpaAisyah: true }), pilihan, aktor, 'uji.xlsx');
+      const sep6 = h6.periode.find((p) => p.id === ID.sep)!;
+      check('semua baris siap/dilewati: pengajar yang hilang dihapus', sep6.pengajarDihapus === 1 && (await jumlahKet('Aisyah Rahma')) === '0', JSON.stringify(sep6));
+
+      // Matraman di hari & jam yang sama dengan Pejaten (apostrof lengkung pula) → jam master sendiri.
+      const h7 = await impor.simpanImpor(await xlsxTiruan({ tanpaBaris: 'bilal-sabtu', matratenSamaJam: true }), pilihan, aktor, 'uji.xlsx');
+      const sep7 = h7.periode.find((p) => p.id === ID.sep)!;
+      check('Matraman berjam sama dengan Pejaten: jam master baru, tidak melebur', sep7.slotBaru === 1, JSON.stringify(sep7));
+      const jamSelasaJumat = await q<{ lokasi: string }>(
+        `select lokasi from ks_slot where periode_id = $1 and label = 'Selasa & Jum''at 09:00 - 10:30 WIB' order by lokasi`, [ID.sep]
+      );
+      check('dua jam Selasa & Jumat 09:00 berlokasi berbeda', jamSelasaJumat.map((x) => x.lokasi).join() === 'Masjid Al-Kautsar Matraman,Pejaten', JSON.stringify(jamSelasaJumat));
     }
 
     console.log('\n# banyak CSV pendaftar dalam satu periode');
@@ -475,6 +558,77 @@ async function main() {
       check('tarik ulang CSV lama: tetap satu antrean, tanpa jam baru', h3.jamBaru === 0 && f[0].status === 'diganti' && f[1].status === 'valid', JSON.stringify({ h3, f }));
       const valid = await q<{ n: string }>(`SELECT count(*)::text n FROM ks_pendaftar WHERE periode_id = $1 AND status = 'valid'`, [idPeriode]);
       check('antrean periode: 2 orang, bukan 3 baris', valid[0].n === '2', valid[0].n);
+      check('tarik ulang tanpa perubahan: tak ada baris ditulis ulang', h3.diperbarui === 0 && h3.baru === 0, JSON.stringify(h3));
+
+      const barisMaryam = async () =>
+        q<{ sumber_row_key: string; status: string; nama: string; slot_label_raw: string; ditarik_pada: string }>(
+          `SELECT sumber_row_key, status, nama, slot_label_raw, ditarik_pada FROM ks_pendaftar
+            WHERE periode_id = $1 AND wa_normal = '81299990002' ORDER BY didaftar_pada`,
+          [idPeriode]
+        );
+      const baris = (...isi: string[]) => [kepala, ...isi].join('\n');
+      const fatimahLama = '13/09/2026 10.00.00,Fatimah Zahra,081299990001,Perempuan,30,HITS Dasar,Online Senin & Rabu 20:00 - 21:30 WIB';
+
+      // Maryam menyunting jawabannya: Google memperbarui timestamp → kunci baris baru.
+      const maryamSunting = '14/09/2026 08.00.00,Maryam Ulfa,081299990002,Perempuan,50,HITS Dasar,Online Senin & Rabu 20:00 - 21:30 WIB';
+      const h4 = await pendaftarLib.terapkanCsvSumber(sumberA, periode, baris(fatimahLama, maryamSunting), sekarang);
+      let m = await barisMaryam();
+      check(
+        'jawaban disunting: baris lama CSV ini diganti, yang baru valid — satu antrean',
+        m.length === 2 && m[0].status === 'diganti' && m[1].status === 'valid' && h4.peringatan.length === 0,
+        JSON.stringify({ m, h4 })
+      );
+
+      // Google mengirim sheet kosong: tidak ada yang diturunkan, ada peringatan.
+      const h5 = await pendaftarLib.terapkanCsvSumber(sumberA, periode, kepala, sekarang);
+      m = await barisMaryam();
+      const pesanA = await q<{ terakhir_pesan: string }>(`SELECT terakhir_pesan FROM ks_pendaftar_sumber WHERE id = $1`, [sumberA.id]);
+      check(
+        'CSV terpotong/kosong: baris lama tidak diturunkan, peringatan tercatat',
+        m[1].status === 'valid' && h5.peringatan.length === 1 && pesanA[0].terakhir_pesan.includes('PERINGATAN'),
+        JSON.stringify({ m, h5, pesanA })
+      );
+
+      // Judul kolom diubah di Google Form: diperingatkan, dan tidak ada yang diturunkan.
+      const kepalaRusak = kepala.replace('Jadwal', 'Pilihan Jadwal Baru');
+      const maryamSunting2 = '15/09/2026 08.00.00,Maryam Ulfa,081299990002,Perempuan,50,HITS Dasar,Online Senin & Rabu 20:00 - 21:30 WIB';
+      const h6 = await pendaftarLib.terapkanCsvSumber(sumberA, periode, [kepalaRusak, fatimahLama, maryamSunting2].join('\n'), sekarang);
+      m = await barisMaryam();
+      check(
+        'kolom terpetakan hilang: diperingatkan, baris lama tidak diturunkan',
+        h6.peringatan.some((x) => x.includes('slot ("Jadwal")')) && m.length === 3 && m[1].status === 'valid',
+        JSON.stringify({ h6, m })
+      );
+      await q(`DELETE FROM ks_pendaftar WHERE periode_id = $1 AND didaftar_pada >= '2026-09-15T00:00:00Z' AND wa_normal = '81299990002'`, [idPeriode]);
+
+      // Baris yang sudah dialokasikan dibekukan: suntingan sheet tak mengubah datanya.
+      m = await barisMaryam();
+      await q(`UPDATE ks_pendaftar SET status = 'dialokasikan' WHERE sumber_row_key = $1`, [m[1].sumber_row_key]);
+      const maryamGantiNama = '14/09/2026 08.00.00,Maryam Ulfah Binti Umar,081299990002,Perempuan,50,HITS Dasar,Online Senin & Rabu 20:00 - 21:30 WIB';
+      const kemudian = new Date('2026-09-17T05:00:00Z');
+      await pendaftarLib.terapkanCsvSumber(sumberA, periode, baris(fatimahLama, maryamGantiNama), kemudian);
+      m = await barisMaryam();
+      const beku = m.find((x) => x.sumber_row_key === m[1].sumber_row_key)!;
+      check(
+        'baris dialokasikan: nama tidak ditimpa, hanya ditarik_pada',
+        beku.status === 'dialokasikan' && beku.nama === 'Maryam Ulfa' && new Date(beku.ditarik_pada).getTime() === kemudian.getTime(),
+        JSON.stringify(m)
+      );
+
+      // Dua baris berkunci sama dalam satu CSV: yang terakhir yang tersimpan.
+      const kembar = baris(
+        fatimahLama,
+        maryamGantiNama,
+        '16/09/2026 09.00.00,Zainab Lama,081299990003,Perempuan,25,HITS Dasar,Online Senin & Rabu 20:00 - 21:30 WIB',
+        '16/09/2026 09.00.00,Zainab Baru,081299990003,Perempuan,25,HITS Dasar,Online Senin & Rabu 20:00 - 21:30 WIB'
+      );
+      const h7 = await pendaftarLib.terapkanCsvSumber(sumberA, periode, kembar, kemudian);
+      const zainab = await q<{ nama: string }>(`SELECT nama FROM ks_pendaftar WHERE periode_id = $1 AND wa_normal = '81299990003'`, [idPeriode]);
+      check(
+        'kunci baris kembar: kiriman terakhir tersimpan, diperingatkan',
+        zainab.length === 1 && zainab[0].nama === 'Zainab Baru' && h7.peringatan.some((x) => x.includes('kembar')),
+        JSON.stringify({ zainab, h7 })
+      );
     }
 
     console.log('\n# gabungan dua tahap');
@@ -502,6 +656,40 @@ async function main() {
       const perTahap = [...h.pengajar.ikhwan.perTahap, ...h.pengajar.akhwat.perTahap].reduce((n, t) => n + t.n, 0);
       check('pengajar gabungan tidak lebih dari jumlah per tahap', tot > 0 && tot <= perTahap, JSON.stringify(h.pengajar));
       check('simulasi tidak menulis usulan', (await q<{ n: string }>('select count(*)::text n from ks_usulan'))[0].n === '0');
+
+      // Pengajar yang seluruh jamnya bentrok tidak dihitung tersedia.
+      const sebelum = h.pengajar.ikhwan;
+      const sabtu = (
+        await q<{ id: string }>(
+          `select id from ks_slot where periode_id = $1 and kelompok = 'ikhwan' and mode = 'online' and label like 'Sabtu & Ahad 13:00%'`,
+          [ID.sep]
+        )
+      )[0];
+      const tambahPengajar = async (id: string, nama: string, wa: string) => {
+        await q(`INSERT INTO pengajar (id, name, gender, whatsapp_number) VALUES ($1, $2, 'ikhwan', $3)`, [id, nama, wa]);
+        const [pg] = await q<{ id: string }>(
+          `INSERT INTO ks_pengisian (periode_id, pengajar_id, komitmen) VALUES ($1, $2, true) RETURNING id`,
+          [ID.sep, id]
+        );
+        await q(`INSERT INTO ks_ketersediaan (pengisian_id, slot_id, status) VALUES ($1, $2, 'terverifikasi')`, [pg.id, sabtu.id]);
+      };
+      const umar = 'a0000000-0000-4000-8000-000000000011';
+      await tambahPengajar(umar, 'Umar Bentrok', '6281777777771');
+      await q(
+        `INSERT INTO hits_halaqah (batch_id, name, jadwal_raw, jadwal_hari, waktu_mulai, waktu_selesai, pengajar_id)
+         VALUES ($1, 'HITS ABK 9', 'Online Sabtu & Ahad 13:00 - 14:30 WIB', ARRAY['Sabtu','Ahad'], '13:00', '14:30', $2)`,
+        [ID.batchBaru, umar]
+      );
+      const hBentrok = await susunGabungan([okt, sep], new Date('2026-09-16T05:00:00Z'));
+      check(
+        'pengajar yang semua jamnya bentrok tidak menambah total',
+        hBentrok.pengajar.ikhwan.total === sebelum.total &&
+          JSON.stringify(hBentrok.pengajar.ikhwan.perTahap) === JSON.stringify(sebelum.perTahap),
+        JSON.stringify({ sebelum, sesudah: hBentrok.pengajar.ikhwan })
+      );
+      await tambahPengajar('a0000000-0000-4000-8000-000000000012', 'Zaid Lowong', '6281777777772');
+      const hLowong = await susunGabungan([okt, sep], new Date('2026-09-16T05:00:00Z'));
+      check('pengajar tanpa bentrok menambah total', hLowong.pengajar.ikhwan.total === sebelum.total + 1, JSON.stringify(hLowong.pengajar.ikhwan));
     }
   } finally {
     await server.stop();

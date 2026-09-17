@@ -2,7 +2,7 @@ import 'server-only';
 import { supabaseAdmin } from '@/lib/supabase-admin';
 import type { Gender, KsPeriode, KsPitaUmur, KsSlot } from '@/types/db';
 import { listSlot } from '@/lib/ketersediaan-periode';
-import { bentrok, kunciJadwal, masihBerjalanPada, rentangDariSlot, sesiDariSlot } from '@/lib/ketersediaan-slot';
+import { bentrok, kunciJamMaster, masihBerjalanPada, rentangDariSlot, sesiDariSlot } from '@/lib/ketersediaan-slot';
 import type { JadwalTerpakai } from '@/lib/ketersediaan-bentrok';
 import { jadwalTerpakaiPengajar } from '@/lib/ketersediaan-bentrok';
 import { alokasikan, kelompokkanPendaftar, type PendaftarAlokasi, type SlotAlokasi } from '@/lib/ketersediaan-alokasi';
@@ -17,10 +17,12 @@ import type { RingkasSlot } from '@/lib/ketersediaan-permintaan';
  * melainkan "berapa dari seluruh pendaftar yang bisa kita tampung dengan semua
  * pengajar kedua tahap". Jawabannya dihitung di sini:
  *
- *  · jam disatukan lewat kunci jadwal (gender, mode, jam per hari), karena tiap
- *    periode punya baris ks_slot sendiri untuk jam yang sama;
+ *  · jam disatukan lewat `kunciJamMaster` (gender, mode, jam per hari, dan lokasi
+ *    untuk offline), karena tiap periode punya baris ks_slot sendiri untuk jam
+ *    yang sama — Pejaten dan Matraman di jam yang sama tetap dua jam;
  *  · pendaftar disatukan per orang (nomor + nama) — orang yang ada di CSV kedua
- *    tahap dihitung sekali;
+ *    tahap dihitung sekali; orang yang sudah dialokasikan di tahap mana pun
+ *    diwakili baris dialokasikannya, jadi tidak ikut antre lagi di tahap lain;
  *  · pengajar di jam yang sama pada dua tahap dihitung sekali: kedua tahap
  *    berjalan bersamaan, jadi ia tetap hanya bisa memegang satu kelas di jam itu;
  *  · daya tampung TIDAK diperkirakan dari jumlah pengajar per jam — pengajar yang
@@ -46,7 +48,11 @@ export interface HasilGabungan {
   simulasi: Record<Gender, { halaqah: number; peserta: number; antre: number; pengajarDapat: number }>;
   /** Peserta tertampung per slot wakil menurut simulasi. */
   tampungSim: Map<string, number>;
-  /** Pengajar unik (punya jam, tidak nonaktif) per gender dan per tahap. */
+  /**
+   * Pengajar unik per gender dan per tahap: punya jam, tidak nonaktif, dan masih
+   * tersedia di sekurangnya satu jam setelah jam yang bentrok dengan jadwal
+   * lamanya dikeluarkan.
+   */
   pengajar: Record<Gender, { total: number; perTahap: { periode: string; n: number }[] }>;
   tertahan: Record<Gender, number>;
 }
@@ -64,7 +70,7 @@ export async function susunGabungan(daftarPeriode: readonly KsPeriode[], sekaran
   const kunciSlot = new Map<string, string>(); // slot_id → kunci
   const wakil = new Map<string, KsSlot>(); // kunci → slot wakil
   slotPer.flat().forEach((s) => {
-    const k = `${s.kelompok}|${s.mode}|${kunciJadwal(sesiDariSlot(s))}`;
+    const k = kunciJamMaster(s.kelompok, s.mode, sesiDariSlot(s), s.lokasi);
     kunciSlot.set(s.id, k);
     if (!wakil.has(k)) wakil.set(k, s);
   });
@@ -153,7 +159,6 @@ export async function susunGabungan(daftarPeriode: readonly KsPeriode[], sekaran
   /** `${slot wakil}|${pengajar}` → tanggal mulai tahap paling akhir tempat ia menawarkan jam itu. */
   const acuanJam = new Map<string, string>();
   const pengajarGender = new Map<string, Gender>();
-  const pengajarTahap = new Map<string, Set<string>>(); // periode → pengajar
   for (const k of (ketRows ?? []) as {
     slot_id: string;
     prioritas: number | null;
@@ -169,8 +174,6 @@ export async function susunGabungan(daftarPeriode: readonly KsPeriode[], sekaran
     const pt = perTahapJam.get(sid)!;
     if (!pt.has(p.periode_id)) pt.set(p.periode_id, new Set());
     pt.get(p.periode_id)!.add(p.pengajar_id);
-    if (!pengajarTahap.has(p.periode_id)) pengajarTahap.set(p.periode_id, new Set());
-    pengajarTahap.get(p.periode_id)!.add(p.pengajar_id);
     pengajarGender.set(p.pengajar_id, wakil.get(kunciSlot.get(k.slot_id)!)!.kelompok);
     const kp = `${sid}|${p.pengajar_id}`;
     const mulai = mulaiPeriode.get(p.periode_id)!;
@@ -290,15 +293,29 @@ export async function susunGabungan(daftarPeriode: readonly KsPeriode[], sekaran
     });
   }
 
+  // Pengajar yang seluruh jamnya bentrok tidak bisa memegang kelas apa pun —
+  // menghitungnya membuat "pengajar tersedia" lebih besar dari kenyataan.
+  const masihTersedia = new Set<string>();
+  for (const orang of tersedia.values()) for (const pid of orang) masihTersedia.add(pid);
+  const tersediaTahap = new Map<string, Set<string>>(); // periode → pengajar yang masih tersedia di jam tahap itu
+  for (const [sid, pt] of perTahapJam) {
+    const orang = tersedia.get(sid);
+    if (!orang) continue;
+    for (const [periodeId, set] of pt) {
+      if (!tersediaTahap.has(periodeId)) tersediaTahap.set(periodeId, new Set());
+      for (const id of set) if (orang.has(id)) tersediaTahap.get(periodeId)!.add(id);
+    }
+  }
+
   const pengajar: HasilGabungan['pengajar'] = {
     ikhwan: { total: 0, perTahap: [] },
     akhwat: { total: 0, perTahap: [] },
   };
   for (const g of ['ikhwan', 'akhwat'] as const) {
-    pengajar[g].total = semuaPengajar.filter((id) => pengajarGender.get(id) === g).length;
+    pengajar[g].total = semuaPengajar.filter((id) => pengajarGender.get(id) === g && masihTersedia.has(id)).length;
     pengajar[g].perTahap = periode.map((p) => ({
       periode: p.nama,
-      n: [...(pengajarTahap.get(p.id) ?? [])].filter((id) => pengajarGender.get(id) === g).length,
+      n: [...(tersediaTahap.get(p.id) ?? [])].filter((id) => pengajarGender.get(id) === g).length,
     }));
   }
 

@@ -11,6 +11,7 @@ import {
   hariKeIdx,
   hariKeIdxSet,
   hitungUmur,
+  kunciJamMaster,
   jamKeMenit,
   masihBerjalanPada,
   pitaUmur,
@@ -27,8 +28,11 @@ import {
 } from '@/lib/ketersediaan-alokasi';
 import { usulkanHari, usulkanSesi, hariTidakKonsisten } from '@/lib/tilawah/map';
 import {
+  bacaCsv,
   bacaTanggal,
   deteksiFormatTanggal,
+  samaIsi,
+  satuPerKunci,
   identitasPendaftar,
   jamBaruDariFormulir,
   lebihBaru,
@@ -684,7 +688,8 @@ eq(tanggalBatasAntrean('2026-09-09', 21), '2026-09-30', 'hari antrean tertua gen
 console.log('\n# jam formulir yang belum ada di master');
 
 const pilihan = (gender: 'ikhwan' | 'akhwat' | null, slot: string, kunci: string): BarisMentah => ({
-  nama: 'Uji',
+  // Nama berbeda per kunci: orang yang sama dengan kiriman ulang tidak melahirkan jam.
+  nama: `Uji ${kunci}`,
   wa: '081200000000',
   tanggal_lahir: null,
   umur_isian: 30,
@@ -758,6 +763,115 @@ eq(lokasiBaku('Offline'), 'Pejaten', 'offline tanpa tempat = Pejaten');
 eq(lokasiBaku(null), 'Pejaten', 'kosong = Pejaten');
 eq(lokasiBaku('Pejaten Akhwat'), 'Pejaten', 'Pejaten dengan embel-embel');
 eq(lokasiBaku('Bekasi'), 'Bekasi', 'lokasi lain dibiarkan');
+
+console.log('\n# apostrof lengkung');
+eq(hariKeIdx('Jum\u2019at'), 4, 'Jum’at (U+2019) = 4');
+eq(uraikanSlot('Offline di Pejaten Selasa & Jum\u2019at, 16.30 - 18.00')?.hari_idx, [1, 4], 'U+2019: Jumat tidak hilang');
+eq(uraikanSlot('Selasa & Jum\u2018at 16.30 - 18.00')?.hari_idx, [1, 4], 'U+2018: Jumat tidak hilang');
+eq(uraikanSlot('Selasa & Jum\u02BCat 16.30 - 18.00')?.hari_idx, [1, 4], 'U+02BC: Jumat tidak hilang');
+eq(uraikanSlot('Offline di Pejaten Selasa & Jum\u2019at, 16.30 - 18.00')?.lokasi, 'Pejaten', 'U+2019: lokasi tetap terbaca');
+
+console.log('\n# format Timestamp Google Form');
+eq(deteksiFormatTanggal(['9/5/2026 10:00:00', '9/6/2026 11:00:00'], 'mdy'), 'mdy', 'timestamp ambigu → M/D (locale sheet)');
+eq(deteksiFormatTanggal(['5/6/2003'], 'dmy'), 'dmy', 'tanggal lahir ambigu tetap D/M');
+eq(deteksiFormatTanggal(['13/9/2026 10:00:00'], 'mdy'), 'dmy', 'bagian pertama >12 menang atas bawaan');
+{
+  const csv = [
+    'Timestamp,Nama,WA,Tanggal Lahir',
+    '9/5/2026 10:00:00,Siti Aminah,081234567890,5/6/2003',
+    '9/6/2026 11:30:00,Rahma,081234567891,7/8/1990',
+  ].join('\n');
+  const { baris } = bacaCsv(csv, { timestamp: 'Timestamp', nama: 'Nama', wa: 'WA', tanggal_lahir: 'Tanggal Lahir' });
+  eq(baris[0].didaftar_pada, '2026-09-05T03:00:00.000Z', 'Timestamp awal bulan dibaca 5 September, bukan 9 Mei');
+  eq(baris[0].tanggal_lahir, '2003-06-05', 'tanggal lahir ambigu tetap D/M');
+}
+
+console.log('\n# normalisasi WA awalan 00');
+eq(normalWa('0062812345678901'), '812345678901', '0062… sama dengan 0812…');
+eq(normalWa('+62 812-3456-7890'), normalWa('0062 812 3456 7890'), '+62 dan 0062 setara');
+
+console.log('\n# kunci jam master berlokasi');
+{
+  const sesi = uraikanSlot('Selasa & Kamis 16.00 - 17.30')!.sesi;
+  eq(kunciJamMaster('akhwat', 'online', sesi, 'apa saja'), 'akhwat|online|1@16:00,3@16:00', 'online: tanpa lokasi (kunci lama)');
+  eq(
+    kunciJamMaster('akhwat', 'offline', sesi, 'Masjid Al Kautsar Matraman Jakarta Timur') ===
+      kunciJamMaster('akhwat', 'offline', sesi, 'Masjid Al-Kautsar Matraman'),
+    true,
+    'offline: ejaan Matraman berbeda tetap satu kunci'
+  );
+  eq(
+    kunciJamMaster('akhwat', 'offline', sesi, 'Pejaten') === kunciJamMaster('akhwat', 'offline', sesi, 'Matraman'),
+    false,
+    'offline: Pejaten dan Matraman di jam sama = dua kunci'
+  );
+  eq(kunciJamMaster('akhwat', 'offline', sesi, null), kunciJamMaster('akhwat', 'offline', sesi, 'Pejaten'), 'offline tanpa tempat = Pejaten');
+
+  const offline = (id: string, lokasi: string) =>
+    ({
+      ...slotUji,
+      id,
+      mode: 'offline',
+      label: 'Selasa & Kamis 16:00 - 17:30 WIB',
+      hari: ['Selasa', 'Kamis'],
+      hari_idx: [1, 3],
+      waktu_mulai: '16:00:00',
+      waktu_selesai: '17:30:00',
+      lokasi,
+    }) as KsSlot;
+  const duaLokasi = [offline('PJ', 'Pejaten'), offline('MT', 'Masjid Al-Kautsar Matraman')];
+  const hasilLokasi = saring(
+    [
+      { ...pilihan('akhwat', 'Offline di Pejaten Selasa & Kamis, 16.00 - 17.30', 'l1'), wa: '081200000001' },
+      { ...pilihan('akhwat', 'Offline di Masjid Al Kautsar Matraman Jakarta Timur Selasa & Kamis 16.00 - 17.30 WIB', 'l2'), wa: '081200000002' },
+      { ...pilihan('akhwat', 'Offline Selasa & Kamis 16.00 - 17.30', 'l3'), wa: '081200000003' },
+    ],
+    duaLokasi,
+    new Date('2026-09-16T05:00:00Z')
+  );
+  eq(hasilLokasi.map((h) => h.slot_id), ['PJ', 'MT', 'PJ'], 'saring: pilihan offline mendarat di lokasinya');
+  eq(
+    jamBaruDariFormulir(
+      [pilihan('akhwat', 'Offline di Masjid Al Kautsar Matraman Jakarta Timur Selasa & Kamis 16.00 - 17.30 WIB', 'l4')],
+      [offline('PJ', 'Pejaten')]
+    ).map((j) => j.lokasi),
+    ['Masjid Al-Kautsar Matraman'],
+    'jam Matraman dibuat walau Pejaten di jam sama sudah ada'
+  );
+}
+
+console.log('\n# jam dari kiriman yang sudah diganti');
+{
+  const lama = { ...pilihan('akhwat', 'Online Sabtu & Ahad 06:00 - 07:30 WIB', 'g1'), nama: 'Dewi', didaftar_pada: '2026-09-09T03:00:00.000Z' };
+  const baru = { ...pilihan('akhwat', 'Online Senin & Rabu 20:00 - 21:30 WIB', 'g2'), nama: 'Dewi', didaftar_pada: '2026-09-10T03:00:00.000Z' };
+  eq(jamBaruDariFormulir([lama, baru], [slotUji]).length, 0, 'pilihan lama yang diganti tidak melahirkan jam');
+  const idDewi = identitasPendaftar(lama.wa, lama.nama)!;
+  eq(
+    jamBaruDariFormulir([lama], [slotUji], {
+      terbaruLain: new Map([[idDewi, { didaftar_pada: '2026-09-12T00:00:00.000Z', kunci: 'x' }]]),
+    }).length,
+    0,
+    'kiriman yang kalah baru oleh CSV lain tidak melahirkan jam'
+  );
+  eq(jamBaruDariFormulir([lama], [slotUji]).length, 1, 'kiriman yang masih berlaku tetap melahirkan jam');
+}
+
+console.log('\n# kunci baris kembar & perubahan isi');
+{
+  const a = { ...pilihan('akhwat', 'x', 'sama'), nama: 'Lama', didaftar_pada: '2026-09-10T03:00:00.000Z' };
+  const b = { ...pilihan('akhwat', 'x', 'sama'), nama: 'Baru', didaftar_pada: '2026-09-10T03:00:00.000Z' };
+  const c = { ...pilihan('akhwat', 'x', 'lain'), nama: 'Lain' };
+  eq(satuPerKunci([a, c, b]).map((x) => x.nama), ['Lain', 'Baru'], 'kunci kembar: yang terbaru/terbawah dipertahankan');
+  eq(satuPerKunci([{ ...b, didaftar_pada: '2026-09-09T00:00:00.000Z' }, a]).map((x) => x.nama), ['Lama'], 'kunci kembar: waktu kirim lebih baru menang');
+  const isi = {
+    status: 'valid', alasan_ditahan: [], nama: 'Siti', wa: '0812', wa_normal: '812', tanggal_lahir: '2000-01-02',
+    umur: 26, pita_umur: '<=45', gender: 'akhwat', level_pilihan: 'HITS Dasar', slot_label_raw: 'x', slot_id: 's',
+    rekaman_url: null, didaftar_pada: '2026-09-10T03:00:00.000Z',
+  };
+  eq(samaIsi({ ...isi, didaftar_pada: '2026-09-10T10:00:00+07:00' }, isi), true, 'samaIsi: instan sama beda ejaan = sama');
+  eq(samaIsi(isi, { ...isi, slot_id: 't' }), false, 'samaIsi: slot berubah terdeteksi');
+  eq(samaIsi(isi, { ...isi, alasan_ditahan: ['x'] }), false, 'samaIsi: alasan berubah terdeteksi');
+}
 
 console.log(failed === 0 ? '\nSEMUA LULUS' : `\n${failed} GAGAL`);
 process.exit(failed === 0 ? 0 : 1);

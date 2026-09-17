@@ -32,11 +32,21 @@ const HARI_ALIAS: Record<string, KsHariIdx> = {
   minggu: 6,
 };
 
+/**
+ * Apostrof lengkung → apostrof lurus. Google Form dan ponsel mengganti "'"
+ * dengan ’ (U+2019), ‘ (U+2018), atau ʼ (U+02BC) secara otomatis; tanpa
+ * penyeragaman ini "Jum’at" tidak dikenali pemindai hari dan Jumat hilang
+ * diam-diam dari slot.
+ */
+export function apostrofLurus(s: string): string {
+  return s.replace(/[\u2019\u2018\u02BC`´]/g, "'");
+}
+
 /** Buang apostrof/titik/tanda baca, rapatkan spasi, huruf kecil. */
 function bersih(s: string): string {
-  return s
+  return apostrofLurus(s)
     .normalize('NFKD')
-    .replace(/[''`´]/g, '')
+    .replace(/'/g, '')
     .replace(/[^a-zA-Z]+/g, '')
     .toLowerCase();
 }
@@ -132,7 +142,8 @@ const POLA_RENTANG = /(\d{1,2}\s*[.:]\s*\d{2})\s*[-–—]\s*(\d{1,2}\s*[.:]\s*\
  * tak dikenali, sehingga Selasa hilang dan slotnya terbaca Kamis saja.
  */
 function pindaiHari(teks: string): { idx: KsHariIdx[]; posisiAwal: number } {
-  const pola = /\b(senin|selasa|rabu|kamis|jum[''`´]?\s?at|jumat|sabtu|ahad|minggu)\b/gi;
+  const pola = /\b(senin|selasa|rabu|kamis|jum'?\s?at|jumat|sabtu|ahad|minggu)\b/gi;
+  teks = apostrofLurus(teks);
   const out: KsHariIdx[] = [];
   let posisiAwal = -1;
   for (const m of teks.matchAll(pola)) {
@@ -164,7 +175,7 @@ function pindaiHari(teks: string): { idx: KsHariIdx[]; posisiAwal: number } {
  */
 export function uraikanSlot(teks: string): SlotTerurai | null {
   if (!teks) return null;
-  let sisa = teks.trim();
+  let sisa = apostrofLurus(teks).trim();
 
   let mode: KsMode | null = null;
   const modeMatch = sisa.match(/^\s*(online|offline|hybrid)\b/i);
@@ -277,6 +288,26 @@ export function kunciJadwal(sesi: readonly SesiSlot[]): string {
     .sort((a, b) => a.hari_idx - b.hari_idx)
     .map((x) => `${x.hari_idx}@${x.mulai.slice(0, 5)}`)
     .join(',');
+}
+
+/**
+ * Kunci satu jam master periode: kelompok, mode, jam per hari — dan untuk kelas
+ * OFFLINE juga lokasinya. Tanpa lokasi, kelas Pejaten dan Matraman pada hari dan
+ * jam yang sama melebur jadi satu jam: pendaftar Matraman diantrekan ke kelas
+ * Pejaten dan pengajarnya dihitung bersama. Lokasi dilewatkan `lokasiBaku`
+ * supaya ejaan formulir dan xlsx yang berbeda tetap satu kunci.
+ *
+ * Satu-satunya pembentuk kunci ini — dipakai penambah jam dari formulir,
+ * impor xlsx, dan pandangan gabungan, sehingga ketiganya tidak bisa berbeda.
+ */
+export function kunciJamMaster(
+  kelompok: string,
+  mode: string,
+  sesi: readonly SesiSlot[],
+  lokasi: string | null | undefined
+): string {
+  const dasar = `${kelompok}|${mode}|${kunciJadwal(sesi)}`;
+  return mode === 'offline' ? `${dasar}|${lokasiBaku(lokasi)}` : dasar;
 }
 
 /**

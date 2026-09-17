@@ -2,7 +2,7 @@ import 'server-only';
 import { getPool } from '@/lib/pg-core';
 import { supabaseAdmin } from '@/lib/supabase-admin';
 import type { Gender, KsHariIdx, KsModePengajar, KsPeriode } from '@/types/db';
-import { kunciJadwal, lokasiBaku, sesiDariSlot, type SesiSlot } from '@/lib/ketersediaan-slot';
+import { kunciJamMaster, lokasiBaku, sesiDariSlot, type SesiSlot } from '@/lib/ketersediaan-slot';
 import { listPeriode } from '@/lib/ketersediaan-periode';
 import { alasanTerkunci, jadwalTerpakaiPengajar, kunciSlot, type JadwalTerpakai } from '@/lib/ketersediaan-bentrok';
 import { bacaKetersediaanXlsx, type BarisImpor } from '@/lib/ketersediaan-impor-xlsx';
@@ -16,7 +16,12 @@ import { cocokkanPengajar, type HasilCocok, type PengajarRingkas } from '@/lib/k
  *  · satu ks_ketersediaan per jam, 'terverifikasi', membawa prioritas per jam;
  *  · jam yang belum ada di master periode dibuatkan;
  *  · impor ulang MENGGANTIKAN hasil impor sebelumnya — jam dan pengajar yang tak
- *    ada lagi di berkas dihapus. Isian bersumber 'form' tidak pernah disentuh;
+ *    ada lagi di berkas dihapus, tetapi HANYA dalam mode (online/offline) yang
+ *    bagiannya ada di berkas untuk periode itu: berkas berisi sheet online saja
+ *    tidak menghapus hasil impor offline. Isian bersumber 'form' tidak pernah disentuh;
+ *  · pengajar tidak dihapus sama sekali bila bagian periode itu masih memuat
+ *    baris yang belum siap (jam tak terbaca, nama/WA belum dipasangkan): baris
+ *    itu bisa jadi milik pengajar yang akan terhapus;
  *  · bentrok jadwal hanya DICATAT, tidak mengunci: koordinator yang menyusun xlsx
  *    sudah menyaring jadwal;
  *  · satu transaksi per periode — gagal di tengah, tak ada yang tersimpan.
@@ -65,6 +70,8 @@ export interface HasilPeriode {
   pengajarDihapus: number;
   /** Pengajar yang dilewati karena sudah mengisi sendiri. */
   dilindungi: number;
+  /** Alasan penghapusan pengajar dilewati, bila ada — tampilkan ke koordinator. */
+  catatan?: string;
 }
 
 export interface HasilSimpan {
@@ -155,26 +162,33 @@ export async function simpanImpor(
   for (const [periodeId, rows] of perPeriode) {
     const periode = periodeById.get(periodeId);
     if (!periode) throw new Error('Periode tujuan tidak ditemukan. Muat ulang halaman.');
-    hasil.periode.push(await simpanSatuPeriode(periode, rows, aktor, namaBerkas));
+    // Seluruh baris berkas yang diarahkan ke periode ini, siap atau tidak.
+    const milikPeriode = pratinjau.baris.filter((r) => tujuanBagian.get(r.bagian) === periodeId);
+    const cakupan = {
+      modes: [...new Set(milikPeriode.map((r) => r.mode))],
+      // Baris yang sengaja dilewati koordinator sudah diputuskan, jadi tidak menahan.
+      belumSiap: milikPeriode.filter((r) => !r.siap && r.cocok.status !== 'dilewati').length,
+    };
+    hasil.periode.push(await simpanSatuPeriode(periode, rows, cakupan, aktor, namaBerkas));
   }
   return hasil;
 }
 
 /**
- * Kunci satu jam master: gender, mode, hari, jam mulai. Lokasi sengaja TIDAK ikut —
- * kunci ini harus sama dengan yang dipakai penyaring pendaftar dan penambah jam
- * dari formulir (`jamBaruDariFormulir`). Bila lokasi ikut, teks lokasi yang
- * berbeda ejaan ("Masjid Al-Kautsar Matraman" di xlsx, "Masjid Al Kautsar Matraman
- * Jakarta Timur" di formulir) melahirkan dua jam kembar, dan setiap pendaftar di
- * jam itu tertahan sebagai "cocok ke lebih dari satu baris master".
+ * Kunci satu jam master — `kunciJamMaster`, sama dengan penyaring pendaftar dan
+ * penambah jam dari formulir. Lokasi hanya ikut untuk offline dan selalu lewat
+ * `lokasiBaku`, sehingga ejaan xlsx ("Masjid Al-Kautsar Matraman") dan formulir
+ * ("Masjid Al Kautsar Matraman Jakarta Timur") tetap satu jam, sementara Pejaten
+ * dan Matraman di jam yang sama tetap dua jam.
  */
-function kunciJam(g: Gender, mode: string, sesi: readonly SesiSlot[]): string {
-  return `${g}|${mode}|${kunciJadwal(sesi)}`;
+function kunciJam(g: Gender, mode: string, sesi: readonly SesiSlot[], lokasi: string | null): string {
+  return kunciJamMaster(g, mode, sesi, lokasi);
 }
 
 async function simpanSatuPeriode(
   periode: KsPeriode,
   rows: readonly BarisPratinjau[],
+  cakupan: { modes: readonly string[]; belumSiap: number },
   aktor: { wa: string | null; nama: string },
   namaBerkas: string
 ): Promise<HasilPeriode> {
@@ -182,7 +196,7 @@ async function simpanSatuPeriode(
   const perPengajar = new Map<string, Map<string, BarisPratinjau>>();
   for (const r of rows) {
     const pid = r.cocok.pengajar_id!;
-    const k = kunciJam(r.gender, r.mode, r.slot!.sesi);
+    const k = kunciJam(r.gender, r.mode, r.slot!.sesi, r.lokasi);
     if (!perPengajar.has(pid)) perPengajar.set(pid, new Map());
     const jam = perPengajar.get(pid)!;
     const lama = jam.get(k);
@@ -219,7 +233,7 @@ async function simpanSatuPeriode(
          from ks_slot where periode_id = $1`,
       [periode.id]
     );
-    const slotId = new Map(slotRows.map((s) => [kunciJam(s.kelompok, s.mode, sesiDariSlot(s)), s.id]));
+    const slotId = new Map(slotRows.map((s) => [kunciJam(s.kelompok, s.mode, sesiDariSlot(s), s.lokasi), s.id]));
     let urutan = slotRows.reduce((m, s) => Math.max(m, s.urutan), 0);
 
     let slotBaru = 0;
@@ -296,33 +310,69 @@ async function simpanSatuPeriode(
         jam++;
       }
 
+      // Hanya jam bermode yang bagiannya ada di berkas: impor sheet online tidak
+      // menghapus jam offline orang yang sama dari impor sebelumnya.
       const hapusJam = await client.query(
-        'delete from ks_ketersediaan where pengisian_id = $1 and not (slot_id = any($2::uuid[]))',
-        [pengisianId, slotMilik]
+        `delete from ks_ketersediaan k
+          using ks_slot s
+          where s.id = k.slot_id and k.pengisian_id = $1
+            and not (k.slot_id = any($2::uuid[])) and s.mode = any($3::text[])`,
+        [pengisianId, slotMilik, cakupan.modes]
       );
       dihapus += hapusJam.rowCount ?? 0;
+
+      // Mode & lokasi pengisian mengikuti jam yang tersisa, termasuk jam mode lain
+      // yang tidak disentuh berkas ini.
+      const { rows: sisa } = await client.query<{ mode: string; lokasi: string | null }>(
+        `select distinct s.mode, s.lokasi from ks_ketersediaan k join ks_slot s on s.id = k.slot_id
+          where k.pengisian_id = $1`,
+        [pengisianId]
+      );
+      const modeSisa = new Set(sisa.map((x) => x.mode));
+      if (modeSisa.size > 1 && mode !== 'keduanya') {
+        const lokasiSisa = sisa.find((x) => x.mode === 'offline')?.lokasi ?? null;
+        await client.query(`update ks_pengisian set mode = 'keduanya', lokasi = $2, updated_at = now() where id = $1`, [
+          pengisianId,
+          lokasi ?? lokasiBaku(lokasiSisa),
+        ]);
+      }
     }
 
-    const hapusPengajar = await client.query(
-      `delete from ks_pengisian
-        where periode_id = $1 and sumber = 'impor' and not (pengajar_id = any($2::uuid[]))`,
-      [periode.id, [...perPengajar.keys()]]
-    );
-    const pengajarDihapus = hapusPengajar.rowCount ?? 0;
+    // Pengajar hasil impor lama yang tak ada lagi di berkas. Dua pengaman:
+    //  · hanya pengisian yang seluruh jamnya bermode yang ada di berkas ini;
+    //  · tidak sama sekali bila bagian periode ini masih punya baris belum siap —
+    //    baris "nama tak ketemu" bisa jadi justru milik pengajar yang akan dihapus.
+    let pengajarDihapus = 0;
+    let catatan: string | undefined;
+    if (cakupan.belumSiap > 0) {
+      catatan = `Pengajar lama tidak dihapus: ${cakupan.belumSiap} baris berkas untuk periode ini belum siap (belum dipasangkan atau jamnya tak terbaca).`;
+    } else {
+      const hapusPengajar = await client.query(
+        `delete from ks_pengisian i
+          where i.periode_id = $1 and i.sumber = 'impor' and not (i.pengajar_id = any($2::uuid[]))
+            and (i.mode = any($3::text[]) or (i.mode = 'keduanya' and cardinality($3::text[]) >= 2))
+            and not exists (
+              select 1 from ks_ketersediaan k join ks_slot s on s.id = k.slot_id
+               where k.pengisian_id = i.id and not (s.mode = any($3::text[]))
+            )`,
+        [periode.id, [...perPengajar.keys()], cakupan.modes]
+      );
+      pengajarDihapus = hapusPengajar.rowCount ?? 0;
+    }
 
     await client.query(
       `insert into ks_log (periode_id, entitas, aksi, sesudah, aktor_wa, aktor_nama)
        values ($1, 'ks_pengisian', 'impor_ketersediaan', $2::jsonb, $3, $4)`,
       [
         periode.id,
-        JSON.stringify({ berkas: namaBerkas, pengajar: tersimpan.length, jam, slot_baru: slotBaru, dihapus, pengajar_dihapus: pengajarDihapus, dilindungi }),
+        JSON.stringify({ berkas: namaBerkas, pengajar: tersimpan.length, jam, slot_baru: slotBaru, dihapus, pengajar_dihapus: pengajarDihapus, dilindungi, catatan: catatan ?? null }),
         aktor.wa,
         aktor.nama,
       ]
     );
 
     await client.query('COMMIT');
-    return { id: periode.id, nama: periode.nama, pengajar: tersimpan.length, jam, slotBaru, dihapus, pengajarDihapus, dilindungi };
+    return { id: periode.id, nama: periode.nama, pengajar: tersimpan.length, jam, slotBaru, dihapus, pengajarDihapus, dilindungi, ...(catatan ? { catatan } : {}) };
   } catch (e) {
     await client.query('ROLLBACK').catch(() => {});
     throw e;

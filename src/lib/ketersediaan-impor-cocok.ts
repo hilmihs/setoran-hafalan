@@ -10,9 +10,16 @@ import { normalWa } from '@/lib/ketersediaan-pendaftar';
  * sama, dan memasangkannya diam-diam lebih berbahaya daripada melewatinya.
  *
  * Sheet offline tidak punya kolom WA, jadi dicocokkan lewat nama pada pengajar
- * aktif segender: persis setelah gelar dibuang, lalu sekurangnya dua kata sama.
- * Diuji 16 Sep 2026 terhadap 20 pengajar offline: 16 cocok tunggal, 5 tidak
- * ditemukan, 0 ganda. Yang tidak tunggal dipilihkan koordinator.
+ * aktif segender. Pemasangan OTOMATIS sengaja ketat, karena salah pasang berarti
+ * jam seseorang tercatat atas nama orang lain tanpa ada yang sadar:
+ *  · nama persis setelah gelar dibuang; atau
+ *  · setiap kata bermakna di xlsx cocok dengan kata akun, DAN (setiap kata akun
+ *    cocok balik, ATAU nama xlsx punya ≥ 2 kata bermakna);
+ *  · nama xlsx satu kata bermakna hanya dipasang bila akunnya juga nama yang
+ *    setara utuh ("Durrotussyifa" ~ "Durrotusyifa").
+ * Kata umum (Muhammad, Abdul, Siti, Nur, Ahmad, …) tidak dihitung bermakna:
+ * "Ust. Ahmad" bukan bukti orangnya "Ahmad Fauzan". Selebihnya menjadi kandidat
+ * yang dipilih koordinator.
  */
 
 export interface PengajarRingkas {
@@ -66,15 +73,47 @@ function kata(nama: string): string[] {
   return [...new Set(namaPengajarNormal(nama).split(' ').filter((t) => t.length > 2).map(ejaan))];
 }
 
-/** Dua kata dianggap sama bila ejaannya sama, atau salah satu awalan yang lain (≥ 5 huruf): "Chandra" ~ "Chandrawatty". */
+/**
+ * Kata nama yang dipakai begitu banyak orang sehingga tidak membedakan siapa pun.
+ * Disimpan dalam bentuk `ejaan` supaya "Muhammad"/"Muhamad" sama-sama tertangkap.
+ */
+const KATA_UMUM = new Set(
+  ['muhammad', 'muhamad', 'moh', 'mohammad', 'mohamad', 'abdul', 'abd', 'siti', 'nur', 'nurul', 'ahmad', 'al', 'bin', 'binti', 'ummu', 'abu'].map(ejaan)
+);
+
+function bermakna(k: readonly string[]): string[] {
+  return k.filter((t) => !KATA_UMUM.has(t));
+}
+
+/**
+ * Dua kata dianggap sama bila ejaannya sama, atau yang pendek awalan yang panjang
+ * (≥ 5 huruf): "Chandra" ~ "Chandrawatty". Awalan tidak berlaku bila kata pendeknya
+ * kata umum — "Abdul" bukan "Abdullah".
+ */
 function kataSama(a: string, b: string): boolean {
   if (a === b) return true;
   const [pendek, panjang] = a.length <= b.length ? [a, b] : [b, a];
-  return pendek.length >= 5 && panjang.startsWith(pendek);
+  return pendek.length >= 5 && !KATA_UMUM.has(pendek) && panjang.startsWith(pendek);
 }
 
 function jumlahSama(a: readonly string[], b: readonly string[]): number {
   return a.filter((x) => b.some((y) => kataSama(x, y))).length;
+}
+
+function semuaCocok(a: readonly string[], b: readonly string[]): boolean {
+  return a.every((x) => b.some((y) => kataSama(x, y)));
+}
+
+/** Aturan pemasangan otomatis lewat nama (lihat kepala berkas). */
+function namaCukupCocok(namaXlsx: string, namaAkun: string): boolean {
+  const semuaX = kata(namaXlsx);
+  const semuaA = kata(namaAkun);
+  const x = bermakna(semuaX);
+  const a = bermakna(semuaA);
+  if (x.length === 0 || !semuaCocok(x, a)) return false;
+  if (x.length >= 2) return true;
+  // Satu kata bermakna: seluruh nama — termasuk kata umumnya — harus setara dua arah.
+  return semuaCocok(a, x) && semuaCocok(semuaX, semuaA) && semuaCocok(semuaA, semuaX);
 }
 
 /** Akun bernama mirip — hanya usulan untuk dipilih koordinator, tidak pernah dipasang otomatis. */
@@ -130,11 +169,7 @@ export function cocokkanPengajar(
   const segender = aktif.filter((p) => p.gender === baris.gender);
   const sasaran = namaPengajarNormal(baris.nama);
   let cocok = segender.filter((p) => namaPengajarNormal(p.name) === sasaran);
-  if (cocok.length === 0) {
-    const k = kata(baris.nama);
-    const syarat = Math.min(2, k.length);
-    cocok = syarat === 0 ? [] : segender.filter((p) => jumlahSama(k, kata(p.name)) >= syarat);
-  }
+  if (cocok.length === 0) cocok = segender.filter((p) => namaCukupCocok(baris.nama, p.name));
 
   if (cocok.length === 1) {
     return hasil({ status: 'cocok', cara: 'nama', pengajar_id: cocok[0].id, nama_akun: cocok[0].name });

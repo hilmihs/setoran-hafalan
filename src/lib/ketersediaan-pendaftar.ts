@@ -12,7 +12,7 @@ import type {
   KsPitaUmur,
   KsSlot,
 } from '@/types/db';
-import { hitungUmur, kunciJadwal, lokasiBaku, pitaUmur, sesiDariSlot, uraikanSlot } from '@/lib/ketersediaan-slot';
+import { hitungUmur, kunciJadwal, kunciJamMaster, lokasiBaku, pitaUmur, sesiDariSlot, uraikanSlot } from '@/lib/ketersediaan-slot';
 import { listSlot } from '@/lib/ketersediaan-periode';
 import { ambilCsvTerbit } from '@/lib/ketersediaan-csv-url';
 
@@ -85,7 +85,11 @@ export function normalWa(mentah: string | null | undefined): string | null {
   if (!mentah) return null;
   let d = String(mentah).replace(/\D/g, '');
   if (!d) return null;
-  if (d.startsWith('62')) d = d.slice(2);
+  // Awalan panggilan internasional "00" ("0062812…") harus dibuang bersama
+  // 62-nya; kalau tidak, nol depan dibuang di bawah dan "62812…" tersisa utuh
+  // sebagai nomor yang berbeda dari "0812…".
+  if (d.startsWith('0062')) d = d.slice(4);
+  else if (d.startsWith('62')) d = d.slice(2);
   // Nol depan dibuang juga SETELAH kode negara: pendaftar sering menulis
   // "62 0812…" atau "+62 (0)812…". Tanpa ini nomor yang sama menghasilkan dua
   // bentuk, dan kiriman ulang orang yang sama lolos sebagai dua pendaftar.
@@ -129,9 +133,17 @@ export type FormatTanggal = 'dmy' | 'mdy';
  * lain di kolom yang sama: bila ada bagian pertama > 12, kolomnya D/M; bila ada
  * bagian kedua > 12, kolomnya M/D.
  *
- * Bila kolomnya tidak menentukan apa-apa, jatuh ke D/M — kebiasaan setempat.
+ * Bila kolomnya tidak menentukan apa-apa, jatuh ke `bawaan`: D/M untuk isian
+ * orang (tanggal lahir — kebiasaan setempat), tetapi M/D untuk kolom Timestamp.
+ * Timestamp ditulis Google sendiri menurut locale sheet, bukan diketik pendaftar,
+ * dan sheet HITS ber-locale AS; pada awal bulan (tanggal ≤ 12) semua barisnya
+ * ambigu, dan jatuh ke D/M menukar bulan dengan tanggal — usia antrean melenceng
+ * berbulan-bulan dan urutan "kiriman terbaru" terbalik.
  */
-export function deteksiFormatTanggal(nilai: readonly (string | null | undefined)[]): FormatTanggal {
+export function deteksiFormatTanggal(
+  nilai: readonly (string | null | undefined)[],
+  bawaan: FormatTanggal = 'dmy'
+): FormatTanggal {
   let pertamaLebih12 = false;
   let keduaLebih12 = false;
   for (const v of nilai) {
@@ -141,7 +153,8 @@ export function deteksiFormatTanggal(nilai: readonly (string | null | undefined)
     if (Number(m[2]) > 12) keduaLebih12 = true;
   }
   if (keduaLebih12 && !pertamaLebih12) return 'mdy';
-  return 'dmy';
+  if (pertamaLebih12 && !keduaLebih12) return 'dmy';
+  return bawaan;
 }
 
 /** Tanggal dari bentuk yang lazim keluar Google Form. */
@@ -247,7 +260,8 @@ export function bacaCsv(csv: string, petakan: KsPemetaanKolom): { baris: BarisMe
     iLahir >= 0 ? tabel.slice(1).map((b) => b[iLahir]) : []
   );
   const formatWaktu = deteksiFormatTanggal(
-    iWaktu >= 0 ? tabel.slice(1).map((b) => b[iWaktu]) : []
+    iWaktu >= 0 ? tabel.slice(1).map((b) => b[iWaktu]) : [],
+    'mdy'
   );
 
   const baris: BarisMentah[] = [];
@@ -314,55 +328,22 @@ export interface JamBaruFormulir {
 }
 
 /**
- * Jam yang dipilih pendaftar tetapi belum ada di master periode.
- *
- * Keputusan 16 Sep 2026: master jam = gabungan jam dari xlsx pengajar DAN jam dari
- * formulir pendaftar. Tanpa ini, pendaftar yang memilih jam tanpa pengajar
- * tertahan sebagai "slot tidak ada di master" — padahal justru merekalah bukti
- * jam itu butuh pengajar, dan dashboard harus menghitungnya begitu.
- *
- * Kuncinya sama dengan `saring` (jam mulai tiap hari, mode, kelompok), jadi jam yang
- * ditambahkan di sini pasti dipakai saringan. Jam yang sudah ada — termasuk yang
- * DINONAKTIFKAN koordinator — tidak dibuat lagi.
+ * Satu baris per kunci baris sheet. Kunci = timestamp + WA, jadi dua baris
+ * berkunci sama bisa muncul (baris tersalin di sheet, dua kiriman di detik yang
+ * sama). Tanpa penyaringan ini keduanya ditulis ke baris DB yang sama berurutan
+ * dan yang menang ditentukan urutan tulis, bukan waktu kirim. Yang dipertahankan:
+ * `didaftar_pada` terbaru; bila sama, yang lebih bawah di sheet (ditulis kemudian).
  */
-export function jamBaruDariFormulir(
-  baris: readonly BarisMentah[],
-  slots: readonly KsSlot[]
-): JamBaruFormulir[] {
-  const kunci = (g: Gender, mode: KsMode, jadwal: string) =>
-    `${g}|${mode}|${jadwal}`;
-  const ada = new Set(slots.map((s) => kunci(s.kelompok, s.mode, kunciJadwal(sesiDariSlot(s)))));
-
-  const baru = new Map<string, JamBaruFormulir>();
-  for (const b of baris) {
-    if (!b.gender || !b.slot_label_raw) continue;
-    const u = uraikanSlot(b.slot_label_raw);
-    if (!u) continue;
-    const mode: KsMode = u.mode ?? 'online';
-    const k = kunci(b.gender, mode, kunciJadwal(u.sesi));
-    if (ada.has(k) || baru.has(k)) continue;
-    baru.set(k, {
-      kelompok: b.gender,
-      mode,
-      label: u.label,
-      hari: u.hari,
-      hari_idx: u.hari_idx,
-      waktu_mulai: u.waktu_mulai,
-      waktu_selesai: u.waktu_selesai,
-      lokasi: mode === 'offline' ? lokasiBaku(u.lokasi) : null,
-    });
-  }
-  return [...baru.values()];
+export function satuPerKunci<T extends { kunci: string; didaftar_pada: string | null }>(baris: readonly T[]): T[] {
+  const pilih = new Map<string, number>();
+  baris.forEach((b, i) => {
+    const j = pilih.get(b.kunci);
+    if (j === undefined || (b.didaftar_pada ?? '') >= (baris[j].didaftar_pada ?? '')) pilih.set(b.kunci, i);
+  });
+  const dipakai = new Set(pilih.values());
+  return baris.filter((_, i) => dipakai.has(i));
 }
 
-/**
- * Saringan mutu data.
- *
- * MENAHAN, bukan membuang: baris bermasalah tetap tersimpan dan tampil di layar
- * koordinator lengkap dengan alasannya, hanya tidak ikut dihitung sampai
- * dibereskan. Ini penting karena nomor WA menjadi email palsu akun murid di CMS
- * tilawah — satu nomor kotor merusak akun yang dibuat atas nama orang itu.
- */
 export interface KirimanLain {
   didaftar_pada: string | null;
   kunci: string;
@@ -379,20 +360,106 @@ export function lebihBaru(a: KirimanLain, b: KirimanLain): boolean {
   return a.kunci > b.kunci;
 }
 
+export interface OpsiKiriman {
+  /** Identitas yang barisnya sudah dialokasikan — semua kiriman lainnya diganti. */
+  identitasDialokasikan?: ReadonlySet<string>;
+  /**
+   * Kiriman terbaru tiap identitas di CSV LAIN pada periode yang sama. Satu
+   * periode boleh punya banyak formulir; orang yang mengisi dua formulir tetap
+   * satu antrean, diwakili kiriman terbarunya.
+   */
+  terbaruLain?: ReadonlyMap<string, KirimanLain>;
+}
+
+/**
+ * Per baris: apakah kiriman ini sudah digantikan kiriman lain dari orang yang
+ * sama. Satu orang yang mengisi formulir berkali-kali hanya diwakili kiriman
+ * TERBARU — aturan yang sama dengan formulir pengajar. Nomor yang sama dengan
+ * nama berbeda (sekeluarga) bukan kiriman ulang. Baris tanpa identitas tidak
+ * pernah dianggap diganti.
+ */
+function tandaiDiganti(baris: readonly BarisMentah[], opts: OpsiKiriman): boolean[] {
+  const terbaru = new Map<string, number>();
+  for (let i = 0; i < baris.length; i++) {
+    const id = identitasPendaftar(baris[i].wa, baris[i].nama);
+    if (!id) continue;
+    const j = terbaru.get(id);
+    if (j === undefined || (baris[i].didaftar_pada ?? '') >= (baris[j].didaftar_pada ?? '')) {
+      terbaru.set(id, i);
+    }
+  }
+  return baris.map((b, i) => {
+    const id = identitasPendaftar(b.wa, b.nama);
+    if (id === null) return false;
+    const lain = opts.terbaruLain?.get(id);
+    return (
+      Boolean(opts.identitasDialokasikan?.has(id)) ||
+      terbaru.get(id) !== i ||
+      (lain !== undefined && lebihBaru(lain, { didaftar_pada: b.didaftar_pada, kunci: b.kunci }))
+    );
+  });
+}
+
+/**
+ * Jam yang dipilih pendaftar tetapi belum ada di master periode.
+ *
+ * Keputusan 16 Sep 2026: master jam = gabungan jam dari xlsx pengajar DAN jam dari
+ * formulir pendaftar. Tanpa ini, pendaftar yang memilih jam tanpa pengajar
+ * tertahan sebagai "slot tidak ada di master" — padahal justru merekalah bukti
+ * jam itu butuh pengajar, dan dashboard harus menghitungnya begitu.
+ *
+ * Kuncinya `kunciJamMaster` — sama dengan `saring` dan impor xlsx — jadi jam yang
+ * ditambahkan di sini pasti dipakai saringan. Jam yang sudah ada — termasuk yang
+ * DINONAKTIFKAN koordinator — tidak dibuat lagi.
+ *
+ * Hanya kiriman yang masih berlaku yang melahirkan jam: orang yang mengganti
+ * pilihannya lewat kiriman ulang tidak boleh meninggalkan jam yatim dari
+ * pilihan lamanya di master.
+ */
+export function jamBaruDariFormulir(
+  baris: readonly BarisMentah[],
+  slots: readonly KsSlot[],
+  opts: OpsiKiriman = {}
+): JamBaruFormulir[] {
+  const ada = new Set(slots.map((s) => kunciJamMaster(s.kelompok, s.mode, sesiDariSlot(s), s.lokasi)));
+  const diganti = tandaiDiganti(baris, opts);
+
+  const baru = new Map<string, JamBaruFormulir>();
+  baris.forEach((b, i) => {
+    if (diganti[i] || !b.gender || !b.slot_label_raw) return;
+    const u = uraikanSlot(b.slot_label_raw);
+    if (!u) return;
+    const mode: KsMode = u.mode ?? 'online';
+    const lokasi = mode === 'offline' ? lokasiBaku(u.lokasi) : null;
+    const k = kunciJamMaster(b.gender, mode, u.sesi, lokasi);
+    if (ada.has(k) || baru.has(k)) return;
+    baru.set(k, {
+      kelompok: b.gender,
+      mode,
+      label: u.label,
+      hari: u.hari,
+      hari_idx: u.hari_idx,
+      waktu_mulai: u.waktu_mulai,
+      waktu_selesai: u.waktu_selesai,
+      lokasi,
+    });
+  });
+  return [...baru.values()];
+}
+
+/**
+ * Saringan mutu data.
+ *
+ * MENAHAN, bukan membuang: baris bermasalah tetap tersimpan dan tampil di layar
+ * koordinator lengkap dengan alasannya, hanya tidak ikut dihitung sampai
+ * dibereskan. Ini penting karena nomor WA menjadi email palsu akun murid di CMS
+ * tilawah — satu nomor kotor merusak akun yang dibuat atas nama orang itu.
+ */
 export function saring(
   baris: readonly BarisMentah[],
   slots: readonly KsSlot[],
   sekarang: Date,
-  opts: {
-    /** Identitas yang barisnya sudah dialokasikan — semua kiriman lainnya diganti. */
-    identitasDialokasikan?: ReadonlySet<string>;
-    /**
-     * Kiriman terbaru tiap identitas di CSV LAIN pada periode yang sama. Satu
-     * periode boleh punya banyak formulir; orang yang mengisi dua formulir tetap
-     * satu antrean, diwakili kiriman terbarunya.
-     */
-    terbaruLain?: ReadonlyMap<string, KirimanLain>;
-  } = {}
+  opts: OpsiKiriman = {}
 ): BarisSiap[] {
   const slotAktif = slots.filter((s) => s.aktif);
   const perLabel = new Map<string, KsSlot[]>();
@@ -403,31 +470,13 @@ export function saring(
     perLabel.get(k)!.push(s);
   }
 
-  // Kiriman ulang: satu orang yang mengisi formulir berkali-kali hanya diwakili
-  // kiriman TERBARU — aturan yang sama dengan formulir pengajar. Nomor yang sama
-  // dengan nama berbeda (sekeluarga) bukan kiriman ulang.
-  const terbaru = new Map<string, number>();
-  for (let i = 0; i < baris.length; i++) {
-    const id = identitasPendaftar(baris[i].wa, baris[i].nama);
-    if (!id) continue;
-    const j = terbaru.get(id);
-    if (j === undefined || (baris[i].didaftar_pada ?? '') >= (baris[j].didaftar_pada ?? '')) {
-      terbaru.set(id, i);
-    }
-  }
+  const digantiPer = tandaiDiganti(baris, opts);
 
   const out: BarisSiap[] = [];
   for (let i = 0; i < baris.length; i++) {
     const b = baris[i];
     const alasan: string[] = [];
-
-    const identitas = identitasPendaftar(b.wa, b.nama);
-    const lain = identitas !== null ? opts.terbaruLain?.get(identitas) : undefined;
-    const diganti =
-      identitas !== null &&
-      (Boolean(opts.identitasDialokasikan?.has(identitas)) ||
-        terbaru.get(identitas) !== i ||
-        (lain !== undefined && lebihBaru(lain, { didaftar_pada: b.didaftar_pada, kunci: b.kunci })));
+    const diganti = digantiPer[i];
 
     const wa = normalWa(b.wa);
     if (!wa) alasan.push('Nomor WhatsApp kosong atau tidak sah');
@@ -463,7 +512,15 @@ export function saring(
       // Mode ikut menyaring bila teks pilihannya menyebutkannya. Tanpa ini
       // pendaftar "Offline … Selasa & Kamis 16.00" mendarat di slot ONLINE
       // berjam sama — kelasnya benar jamnya, salah tempatnya.
-      const cocokMode = u?.mode ? kandidat.filter((s) => s.mode === u.mode) : kandidat;
+      const cocokModeSaja = u?.mode ? kandidat.filter((s) => s.mode === u.mode) : kandidat;
+      // Lokasi ikut menyaring pilihan offline: Pejaten dan Matraman boleh punya
+      // kelas di hari & jam yang sama. Offline tanpa tempat dibaca Pejaten oleh
+      // `lokasiBaku` — sama dengan kunci jam yang dibuat `jamBaruDariFormulir`,
+      // jadi jam yang baru ditambahkan untuk pilihan ini pasti ketemu di sini.
+      const cocokMode =
+        u?.mode === 'offline'
+          ? cocokModeSaja.filter((s) => lokasiBaku(s.lokasi) === lokasiBaku(u.lokasi))
+          : cocokModeSaja;
       const cocokGender = b.gender ? cocokMode.filter((s) => s.kelompok === b.gender) : cocokMode;
       const dipakai = cocokGender.length > 0 ? cocokGender : cocokMode;
       if (dipakai.length === 1) slotId = dipakai[0].id;
@@ -537,8 +594,8 @@ export async function terapkanCsvSumber(
     peringatan: [],
   };
 
-  const { baris, kepala } = bacaCsv(teks, sumber.pemetaan_kolom);
-  hasil.dibaca = baris.length;
+  const { baris: barisMentah, kepala } = bacaCsv(teks, sumber.pemetaan_kolom);
+  hasil.dibaca = barisMentah.length;
   if (Object.keys(sumber.pemetaan_kolom).length === 0) {
     hasil.peringatan.push(
       `Pemetaan kolom belum diisi. Kolom terbaca: ${kepala.slice(0, 12).join(' | ')}`
@@ -546,19 +603,31 @@ export async function terapkanCsvSumber(
     return hasil;
   }
 
-  const { data: adaRows } = await supabaseAdmin
+  // Judul kolom yang dipetakan tetapi tidak ada di CSV: Google Form diubah
+  // (pertanyaan diganti judulnya) atau sheet yang salah. Kolom itu terbaca kosong
+  // untuk semua baris — harus terlihat, bukan diam-diam menahan semua orang.
+  const kolomHilang = Object.entries(sumber.pemetaan_kolom)
+    .filter(([, judul]) => typeof judul === 'string' && judul.trim() !== '' && !kepala.includes(judul.trim()))
+    .map(([kunci, judul]) => `${kunci} ("${judul}")`);
+  if (kolomHilang.length > 0) {
+    hasil.peringatan.push(`Kolom yang dipetakan tidak ada di CSV: ${kolomHilang.join(', ')}. Periksa pemetaan kolom.`);
+  }
+
+  const baris = satuPerKunci(barisMentah);
+  if (baris.length < barisMentah.length) {
+    hasil.peringatan.push(
+      `${barisMentah.length - baris.length} baris berkunci kembar (timestamp + WA sama) — hanya yang terbaru disimpan.`
+    );
+  }
+
+  const { data: adaRows, error: galatAda } = await supabaseAdmin
     .from('ks_pendaftar')
-    .select('id, sumber_id, sumber_row_key, status, wa_normal, nama, didaftar_pada')
+    .select(
+      'id, sumber_id, sumber_row_key, status, alasan_ditahan, nama, wa, wa_normal, tanggal_lahir, umur, pita_umur, gender, level_pilihan, slot_label_raw, slot_id, rekaman_url, didaftar_pada'
+    )
     .eq('periode_id', periode.id);
-  const adaList = (adaRows ?? []) as {
-    id: string;
-    sumber_id: string | null;
-    sumber_row_key: string;
-    status: string;
-    wa_normal: string | null;
-    nama: string;
-    didaftar_pada: string | null;
-  }[];
+  if (galatAda) throw new Error(`Gagal membaca pendaftar periode: ${galatAda.message}`);
+  const adaList = (adaRows ?? []) as (BarisTersimpan & { id: string; sumber_id: string | null; sumber_row_key: string })[];
   const ada = new Map(adaList.map((r) => [r.sumber_row_key, r]));
   // Orang yang sudah masuk usulan: baris itulah kebenarannya (dibekukan di bawah),
   // semua kirimannya yang lain berstatus diganti.
@@ -583,7 +652,7 @@ export async function terapkanCsvSumber(
 
   const slots = await listSlot(periode.id);
   let urutan = slots.reduce((m, s) => Math.max(m, s.urutan), 0);
-  for (const j of jamBaruDariFormulir(baris, slots)) {
+  for (const j of jamBaruDariFormulir(baris, slots, { identitasDialokasikan, terbaruLain })) {
     const { data: slotBaru, error } = await supabaseAdmin
       .from('ks_slot')
       .insert({ periode_id: periode.id, ...j, urutan: ++urutan })
@@ -600,56 +669,103 @@ export async function terapkanCsvSumber(
 
   const stempel = sekarang.toISOString();
   for (const b of siap) {
+    const lama = ada.get(b.sumber_row_key);
+    // Baris yang sudah dialokasikan atau dibatalkan dibekukan seluruhnya: kiriman
+    // ke CMS tilawah memakai nama, gender, dan nomornya. Suntingan di sheet
+    // sesudah itu tidak boleh mengubah akun yang sudah (atau akan) dibuat.
+    if (lama && (lama.status === 'dialokasikan' || lama.status === 'batal')) {
+      await tulis(
+        supabaseAdmin.from('ks_pendaftar').update({ ditarik_pada: stempel }).eq('id', lama.id),
+        `menandai tarikan "${lama.nama}"`
+      );
+      continue;
+    }
+
     if (b.status === 'valid') hasil.valid++;
     else if (b.status === 'diganti') hasil.diganti++;
     else hasil.ditahan++;
 
-    const lama = ada.get(b.sumber_row_key);
+    const data = {
+      nama: b.nama,
+      wa: b.wa,
+      wa_normal: b.wa_normal,
+      tanggal_lahir: b.tanggal_lahir,
+      umur: b.umur,
+      pita_umur: b.pita_umur,
+      gender: b.gender,
+      level_pilihan: b.level_pilihan,
+      slot_label_raw: b.slot_label_raw,
+      slot_id: b.slot_id,
+      rekaman_url: b.rekaman_url,
+      didaftar_pada: b.didaftar_pada,
+      status: b.status,
+      alasan_ditahan: b.alasan_ditahan,
+    };
+
     if (lama) {
-      const beku = lama.status === 'dialokasikan' || lama.status === 'batal';
-      await supabaseAdmin
-        .from('ks_pendaftar')
-        .update({
-          nama: b.nama,
-          wa: b.wa,
-          wa_normal: b.wa_normal,
-          tanggal_lahir: b.tanggal_lahir,
-          umur: b.umur,
-          pita_umur: b.pita_umur,
-          gender: b.gender,
-          level_pilihan: b.level_pilihan,
-          slot_label_raw: b.slot_label_raw,
-          slot_id: b.slot_id,
-          rekaman_url: b.rekaman_url,
-          didaftar_pada: b.didaftar_pada,
-          ...(beku ? {} : { status: b.status, alasan_ditahan: b.alasan_ditahan }),
-          ditarik_pada: stempel,
-          updated_at: stempel,
-        })
-        .eq('id', lama.id);
+      // Hanya baris yang isinya berubah yang ditulis. Tarikan berkala membaca
+      // ribuan baris yang hampir semuanya sama; menulis ulang semuanya membuat
+      // updated_at tak bermakna dan tarikan lambat.
+      if (samaIsi(lama, data)) continue;
+      await tulis(
+        supabaseAdmin
+          .from('ks_pendaftar')
+          .update({ ...data, ditarik_pada: stempel, updated_at: stempel })
+          .eq('id', lama.id),
+        `memperbarui "${b.nama}"`
+      );
       hasil.diperbarui++;
     } else {
-      await supabaseAdmin.from('ks_pendaftar').insert({
-        periode_id: periode.id,
-        sumber_id: sumber.id,
-        sumber_row_key: b.sumber_row_key,
-        nama: b.nama,
-        wa: b.wa,
-        wa_normal: b.wa_normal,
-        tanggal_lahir: b.tanggal_lahir,
-        umur: b.umur,
-        pita_umur: b.pita_umur,
-        gender: b.gender,
-        level_pilihan: b.level_pilihan,
-        slot_label_raw: b.slot_label_raw,
-        slot_id: b.slot_id,
-        rekaman_url: b.rekaman_url,
-        didaftar_pada: b.didaftar_pada,
-        status: b.status,
-        alasan_ditahan: b.alasan_ditahan,
-        ditarik_pada: stempel,
-      });
+      await tulis(
+        supabaseAdmin.from('ks_pendaftar').insert({
+          periode_id: periode.id,
+          sumber_id: sumber.id,
+          sumber_row_key: b.sumber_row_key,
+          ...data,
+          ditarik_pada: stempel,
+        }),
+        `menyimpan "${b.nama}"`
+      );
       hasil.baru++;
+    }
+  }
+
+  // Baris CSV INI yang tak muncul lagi di tarikan ini. Kunci baris = timestamp +
+  // WA, jadi kunci lama hilang bila pendaftar menyunting jawabannya, baris sheet
+  // dibetulkan/dihapus, atau pemetaan kolom diubah. Dibiarkan, baris lama dan
+  // baru sama-sama valid — satu orang terhitung dan dialokasikan dua kali.
+  //
+  // Pengaman: CSV yang tiba-tiba jauh lebih pendek (Google mengirim sheet
+  // terpotong atau kosong, sheet yang salah) atau kehilangan kolom yang
+  // dipetakan lebih mungkin salah tarik daripada perubahan sungguhan. Saat itu
+  // tidak ada yang diturunkan, dan koordinator diberi tahu.
+  const kunciIni = new Set(baris.map((b) => b.kunci));
+  const milikSumber = adaList.filter((r) => r.sumber_id === sumber.id);
+  const hidupSumber = milikSumber.filter((r) => r.status !== 'diganti').length;
+  const basi = milikSumber.filter(
+    (r) => (r.status === 'valid' || r.status === 'ditahan') && !kunciIni.has(r.sumber_row_key)
+  );
+  if (basi.length > 0) {
+    if (baris.length < hidupSumber * 0.5) {
+      hasil.peringatan.push(
+        `CSV hanya berisi ${baris.length} baris, padahal sumber ini punya ${hidupSumber} pendaftar tersimpan. ` +
+          `${basi.length} baris yang tak muncul TIDAK diturunkan — periksa tautan dan isi sheet.`
+      );
+    } else if (kolomHilang.length > 0) {
+      hasil.peringatan.push(
+        `${basi.length} baris yang tak muncul TIDAK diturunkan karena ada kolom yang hilang dari CSV.`
+      );
+    } else {
+      for (const r of basi) {
+        await tulis(
+          supabaseAdmin
+            .from('ks_pendaftar')
+            .update({ status: 'diganti', alasan_ditahan: [], updated_at: stempel })
+            .eq('id', r.id),
+          `menurunkan baris lama "${r.nama}"`
+        );
+        hasil.diganti++;
+      }
     }
   }
 
@@ -659,6 +775,8 @@ export async function terapkanCsvSumber(
   const pemenangIni = new Map<string, KirimanLain>();
   for (const b of siap) {
     if (b.status === 'diganti') continue;
+    const lama = ada.get(b.sumber_row_key);
+    if (lama && (lama.status === 'dialokasikan' || lama.status === 'batal')) continue;
     const id = identitasPendaftar(b.wa_normal, b.nama);
     if (id) pemenangIni.set(id, { didaftar_pada: b.didaftar_pada, kunci: b.sumber_row_key });
   }
@@ -667,22 +785,90 @@ export async function terapkanCsvSumber(
     const id = identitasPendaftar(r.wa_normal, r.nama);
     const menang = id ? pemenangIni.get(id) : undefined;
     if (!menang || !lebihBaru(menang, { didaftar_pada: r.didaftar_pada, kunci: r.sumber_row_key })) continue;
-    await supabaseAdmin
-      .from('ks_pendaftar')
-      .update({ status: 'diganti', alasan_ditahan: [], updated_at: stempel })
-      .eq('id', r.id);
+    await tulis(
+      supabaseAdmin
+        .from('ks_pendaftar')
+        .update({ status: 'diganti', alasan_ditahan: [], updated_at: stempel })
+        .eq('id', r.id),
+      `menurunkan kiriman lama "${r.nama}" di CSV lain`
+    );
     hasil.diganti++;
   }
 
-  await supabaseAdmin
-    .from('ks_pendaftar_sumber')
-    .update({
-      terakhir_tarik: stempel,
-      terakhir_status: 'ok',
-      terakhir_pesan: `${hasil.baru} baru, ${hasil.diperbarui} diperbarui, ${hasil.ditahan} ditahan, ${hasil.diganti} diganti kiriman baru, ${hasil.jamBaru} jam baru di master`,
-      updated_at: stempel,
-    })
-    .eq('id', sumber.id);
+  const ringkasan = `${hasil.baru} baru, ${hasil.diperbarui} diperbarui, ${hasil.ditahan} ditahan, ${hasil.diganti} diganti kiriman baru, ${hasil.jamBaru} jam baru di master`;
+  await tulis(
+    supabaseAdmin
+      .from('ks_pendaftar_sumber')
+      .update({
+        terakhir_tarik: stempel,
+        terakhir_status: 'ok',
+        terakhir_pesan: hasil.peringatan.length > 0 ? `${ringkasan}. PERINGATAN: ${hasil.peringatan.join(' ')}` : ringkasan,
+        updated_at: stempel,
+      })
+      .eq('id', sumber.id),
+    'mencatat hasil tarikan'
+  );
 
   return hasil;
+}
+
+/** Kolom ks_pendaftar yang ditulis tarikan CSV, sebagaimana dibaca kembali dari DB. */
+interface BarisTersimpan {
+  status: string;
+  alasan_ditahan: string[] | null;
+  nama: string;
+  wa: string | null;
+  wa_normal: string | null;
+  tanggal_lahir: string | null;
+  umur: number | null;
+  pita_umur: string | null;
+  gender: string | null;
+  level_pilihan: string | null;
+  slot_label_raw: string | null;
+  slot_id: string | null;
+  rekaman_url: string | null;
+  didaftar_pada: string | null;
+}
+
+/**
+ * Apakah isi baris DB sudah sama dengan hasil saringan. Waktu dibandingkan
+ * sebagai instan (DB mengembalikan ISO yang bisa berbeda ejaan), tanggal lahir
+ * sebagai 10 karakter pertama.
+ */
+export function samaIsi(lama: BarisTersimpan, baru: BarisTersimpan): boolean {
+  const waktu = (v: string | null) => (v ? new Date(v).getTime() : null);
+  const tanggal = (v: string | null) => (v ? String(v).slice(0, 10) : null);
+  const teks = (v: unknown) => (v === undefined || v === null ? null : v);
+  const kolom: (keyof BarisTersimpan)[] = [
+    'status',
+    'nama',
+    'wa',
+    'wa_normal',
+    'umur',
+    'pita_umur',
+    'gender',
+    'level_pilihan',
+    'slot_label_raw',
+    'slot_id',
+    'rekaman_url',
+  ];
+  return (
+    kolom.every((k) => teks(lama[k]) === teks(baru[k])) &&
+    waktu(lama.didaftar_pada) === waktu(baru.didaftar_pada) &&
+    tanggal(lama.tanggal_lahir) === tanggal(baru.tanggal_lahir) &&
+    JSON.stringify(lama.alasan_ditahan ?? []) === JSON.stringify(baru.alasan_ditahan ?? [])
+  );
+}
+
+/**
+ * Jalankan satu tulisan dan lempar galat yang jelas bila gagal. Pemanggil
+ * (`tarikBerkala`, aksi koordinator) menandai sumber 'gagal' dari galat ini;
+ * tanpa pemeriksaan, tulisan yang gagal tetap dihitung berhasil.
+ */
+async function tulis(
+  kueri: PromiseLike<{ error: { message: string } | null }>,
+  apa: string
+): Promise<void> {
+  const { error } = await kueri;
+  if (error) throw new Error(`Gagal ${apa}: ${error.message}`);
 }
