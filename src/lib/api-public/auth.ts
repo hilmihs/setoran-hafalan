@@ -1,5 +1,6 @@
 // auth.ts — verifikasi Bearer key, cache 30s, akrual pemakaian flush 60s.
 import { createHash, randomBytes } from 'node:crypto';
+import { flushEndpoint } from '@/lib/api-public/pemakaian';
 import { supabaseAdmin } from '@/lib/supabase-admin';
 import { apiEnv } from './env';
 import type { AuthResult, ScopeName } from './types';
@@ -74,6 +75,7 @@ export function __drainUsage(): { id: string; count: number }[] {
   return out;
 }
 export async function flushUsage(): Promise<void> {
+  await flushEndpoint();
   const drained = __drainUsage();
   for (const { id, count } of drained) {
     const { data } = await supabaseAdmin.from('api_client').select('request_count').eq('id', id).maybeSingle();

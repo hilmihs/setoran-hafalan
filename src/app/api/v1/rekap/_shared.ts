@@ -2,6 +2,7 @@
 // rate-limit, plus pembungkus baca/tulis cache. Validasi param tetap per-route.
 import { NextRequest, NextResponse } from 'next/server';
 import { verifyBearer, recordUsage, flushUsage } from '@/lib/api-public/auth';
+import { catatEndpoint } from '@/lib/api-public/pemakaian';
 import { scopeAllows } from '@/lib/api-public/query';
 import { ok, fail } from '@/lib/api-public/respond';
 import { getCached, setCached, checkRateLimit, acquireInflight } from '@/lib/api-public/cache';
@@ -46,7 +47,10 @@ export async function rekapPreamble(
   if (!publicApiOn()) return fail('not_found', 'Tidak ditemukan.', 404);
   const auth = await verifyBearer(req.headers.get('authorization'));
   if (!auth.ok) return fail(auth.code, auth.message, auth.status);
+  // Nama endpoint dari path: "/api/v1/rekap/matrix-guru" → "rekap/matrix-guru".
+  const endpoint = req.nextUrl.pathname.replace(/^\/api\/v1\//, '').replace(/\/+$/, '');
   if (!scopeAllows(auth.client.scopes, scope)) {
+    catatEndpoint(auth.client.id, endpoint, false);
     return fail('forbidden_scope', `Key tidak punya scope '${scope}'.`, 403);
   }
   if (!checkRateLimit(auth.client.id, REKAP_PER_MIN)) {
@@ -55,6 +59,7 @@ export async function rekapPreamble(
     return r;
   }
   recordUsage(auth.client.id);
+  catatEndpoint(auth.client.id, endpoint, true);
   return {
     scopeKey: [...auth.client.scopes].sort().join(','),
     ifNoneMatch: req.headers.get('if-none-match'),

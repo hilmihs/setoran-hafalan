@@ -187,6 +187,12 @@ module load and throws if any entity exposes secrets (WA numbers, hashes, tokens
 audio URLs, free-text notes) — when adding an entity/column, respect this. Docs:
 `docs/API-PUBLIC.md`.
 
+Usage tracking has two layers: `api_client.request_count`/`last_used_at` (per key)
+and `api_pemakaian_endpoint` (`0081`) — one row per key + endpoint + day, accrued in
+memory and flushed with `flushUsage()` every 60s, shown on `/admin/api-keys`.
+Rejected calls (missing scope, unknown entity, bad params) are counted in
+`jumlah_gagal`. Query params are deliberately NOT stored (they carry person ids).
+
 ### HITS Google Sheets sync (`src/lib/hits-sync.ts`, `hits-sheets.ts`)
 
 HITS halaqah/kaldik/peserta data is pulled from **published-to-web Google Sheets** as

@@ -1,5 +1,6 @@
 import { NextRequest } from 'next/server';
 import { verifyBearer, recordUsage, flushUsage } from '@/lib/api-public/auth';
+import { catatEndpoint } from '@/lib/api-public/pemakaian';
 import { getEntity } from '@/lib/api-public/registry';
 import { parseRequest, runEntity, scopeAllows, resolveKajianPresensi } from '@/lib/api-public/query';
 import { sanitize } from '@/lib/api-public/sanitize';
@@ -43,15 +44,26 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ path: strin
     const { path } = await ctx.params;
     const route = path.join('/');
     const def = getEntity(route);
-    if (!def) return fail('unknown_entity', `Entitas '${route}' tidak ada.`, 404);
-    if (!def.refShared && !scopeAllows(auth.client.scopes, def.scope))
+    // Pemakaian per endpoint dicatat juga saat ditolak: "key X mencoba entitas Y
+    // tapi scope-nya kurang" adalah keterangan yang dibutuhkan saat menelusuri.
+    if (!def) {
+      catatEndpoint(auth.client.id, route, false);
+      return fail('unknown_entity', `Entitas '${route}' tidak ada.`, 404);
+    }
+    if (!def.refShared && !scopeAllows(auth.client.scopes, def.scope)) {
+      catatEndpoint(auth.client.id, def.route, false);
       return fail('forbidden_scope', `Key tidak punya scope '${def.scope}'.`, 403);
+    }
 
     const params = req.nextUrl.searchParams;
     const parsed = parseRequest(params, def);
-    if (!parsed.ok) return fail(parsed.code, parsed.message, 400);
+    if (!parsed.ok) {
+      catatEndpoint(auth.client.id, def.route, false);
+      return fail(parsed.code, parsed.message, 400);
+    }
 
     recordUsage(auth.client.id);
+    catatEndpoint(auth.client.id, def.route, true);
 
     const cacheKey = `${route}?${params.toString()}|${[...auth.client.scopes].sort().join(',')}`;
     const ifNoneMatch = req.headers.get('if-none-match');

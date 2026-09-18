@@ -7,6 +7,7 @@ import { getCached, setCached, __resetCache, checkRateLimit, __resetRate, checkB
 import { etagOf, fail, ok } from '../src/lib/api-public/respond';
 import { FORBIDDEN_COLUMNS, auditEntities, ENTITIES, getEntity } from '../src/lib/api-public/registry';
 import { parseRequest, scopeAllows } from '../src/lib/api-public/query';
+import { catatEndpoint, __tiriskanEndpoint } from '../src/lib/api-public/pemakaian';
 import type { EntityDef } from '../src/lib/api-public/types';
 
 let passed = 0, failed = 0;
@@ -95,6 +96,22 @@ function testUsageAccrual() {
   check('idA counted 2', drained.find(d => d.id === 'idA')?.count === 2);
   check('idB counted 1', drained.find(d => d.id === 'idB')?.count === 1);
   check('drain resets', __drainUsage().length === 0);
+}
+
+function testEndpointAccrual() {
+  console.log('akrual pemakaian per endpoint:');
+  __tiriskanEndpoint();
+  catatEndpoint('k1', 'matrix-rekap', true);
+  catatEndpoint('k1', 'matrix-rekap', true);
+  catatEndpoint('k1', 'matrix-rekap', false);
+  catatEndpoint('k1', 'rekap/matrix-guru', true);
+  catatEndpoint('k2', 'matrix-rekap', true);
+  const baris = __tiriskanEndpoint();
+  check('satu baris per key+endpoint+hari', baris.length === 3, JSON.stringify(baris.map((b) => `${b.clientId}|${b.endpoint}`)));
+  const m = baris.find((b) => b.clientId === 'k1' && b.endpoint === 'matrix-rekap');
+  check('jumlah & gagal terakru', m?.nilai.jumlah === 3 && m?.nilai.gagal === 1, JSON.stringify(m));
+  check('tanggal terisi', /^\d{4}-\d{2}-\d{2}$/.test(m?.tanggal ?? ''), m?.tanggal ?? '');
+  check('tiris mengosongkan akru', __tiriskanEndpoint().length === 0);
 }
 
 function testCache() {
@@ -309,6 +326,7 @@ async function main() {
   testKeyGen();
   testVerifyRow();
   testUsageAccrual();
+  testEndpointAccrual();
   testCache();
   testRate();
   testBurst();
