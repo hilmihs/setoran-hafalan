@@ -128,10 +128,12 @@ beririsan dengan halaqah, At-Tibyan mereka tetap lewat ketua masing-masing.
 
 ## Urutan rilis
 
-1. Merge + deploy kode (default `true` → tanpa perubahan perilaku sampai data
+1. DDL `0082` **lebih dulu** lewat `/api/admin/db` (`npm run db -- --confirm`,
+   dijalankan pemilik; asisten menyiapkan perintah + jumlah baris yang
+   diharapkan). Kolom ber-default aman untuk kode lama; sebaliknya kode baru
+   men-`select ikut_tibyan` dan akan gagal bila kolomnya belum ada.
+2. Merge + deploy kode (default `true` → tanpa perubahan perilaku sampai data
    diubah).
-2. DDL `0082` lewat `/api/admin/db` (`npm run db -- --confirm`, dijalankan
-   pemilik; asisten menyiapkan perintah + jumlah baris yang diharapkan).
 3. DML Bagian 1 (8 update anggota, 10 rename), lalu Bagian 2 (11 update
    `ikut_tibyan`, 1 insert kelas, 28 insert anggota). Verifikasi dengan
    `SELECT` sebelum Sabtu 19 Sep.
