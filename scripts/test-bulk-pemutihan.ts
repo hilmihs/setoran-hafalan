@@ -28,7 +28,8 @@ CREATE TABLE program_kelas (
   created_at timestamptz NOT NULL DEFAULT now(),
   self_attendance boolean NOT NULL DEFAULT false,
   presensi_sifat text NOT NULL DEFAULT 'harian',
-  mulai_tanggal date
+  mulai_tanggal date,
+  ikut_tibyan boolean NOT NULL DEFAULT true
 );
 CREATE TABLE program_kelas_anggota (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
