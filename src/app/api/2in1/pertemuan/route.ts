@@ -34,11 +34,20 @@ export async function POST(req: NextRequest) {
     // Verify caller is ketua/wakil of this program_kelas
     const { data: kelas } = await supabaseAdmin
       .from('program_kelas')
-      .select('id, ketua_wa, wakil_wa')
+      .select('id, ketua_wa, wakil_wa, ikut_tibyan')
       .eq('id', program_kelas_id)
       .maybeSingle();
     if (!kelas || (kelas.ketua_wa !== wa && kelas.wakil_wa !== wa)) {
       return NextResponse.json({ error: 'Hanya ketua/wakil kelas yang bisa membuat pertemuan.' }, { status: 403 });
+    }
+    // Kelas ber-ikut_tibyan=false (halaqah per-hari akhwat) mencatat At-Tibyan
+    // lewat kelas gabungan; membuatnya manual di sini menghidupkan lagi tagihan
+    // ganda yang sengaja dihapus expectedDaysForKelas.
+    if (program === 'at_tibyan' && kelas.ikut_tibyan === false) {
+      return NextResponse.json(
+        { error: 'Kelas ini tidak mencatat At-Tibyan; presensi At-Tibyan diisi lewat kelas At-Tibyan gabungan.' },
+        { status: 400 }
+      );
     }
     // Tak boleh membuat pertemuan di periode yang sudah ditutup — kalau boleh,
     // kunci pengisian kehadiran gampang ditembus lewat pintu ini.
