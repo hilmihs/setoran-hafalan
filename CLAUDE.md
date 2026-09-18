@@ -170,12 +170,24 @@ CMS contract: `docs/API-TILAWAH.md`.
 `/matrix/koordinator?tampilan=blok|tabel` is the **only** matrix page (koordinator
 + syaikh). `tabel` = 14 indicators, teguran, risk, finalized status, print, XLSX
 export; `blok` = ranking split by the Maahir class type the teacher *attends*
-(`matrix-blok.ts`: Takhassus → Tahfizh → Talaqqi → lintas → tanpa kelas), with
+(`matrix-blok.ts`; ikhwan: Takhassus → Tahfizh → Talaqqi → lintas → tanpa kelas), with
 podium and month-over-month deltas. Landing view is per role — koordinator gets
 `tabel`, syaikh gets `blok`. Both views are built from the same row set, and
 there is **one** detail page (`pengajar/[id]`); koordinator notes are hidden from
 syaikh. `/2in1/koordinator/matrix{,/[pengajar_id]}` are redirect stubs only —
-don't add features there. Blocks are ikhwan-only so far; akhwat render flat.
+don't add features there.
+
+**Two taxonomies, two sources.** Ikhwan blocks are *derived* from
+`program_kelas_anggota`. Akhwat blocks are *stored* in `pengajar.matrix_blok`
+(`0082`), order Takhashush → Koordinator → Tahfidz → Alumni/Talaqqi → Maahir 6
+→ belum dikelompokkan, seeded from the koordinator's own subjective list
+(`scripts/sql/0082-seed-matrix-blok-akhwat.sql`). Deriving them was tried and
+does not work: akhwat class names mix "Halaqah Pagi/Siang" with "Talaqqi" so
+Tahfidz can't be told apart from Alumni/Talaqqi, and Takhashush/Koordinator have
+no class at all. `getBlokMatrix()` is the single entry point for both; NULL =
+"Belum dikelompokkan", and ~16 active akhwat accounts sit there on purpose
+(absent from the list). Changing someone's block is an UPDATE on that column —
+there is no UI for it yet.
 
 ### Public read-only API (`/api/v1/[...path]`)
 
@@ -252,7 +264,9 @@ Apply order among same-numbered files isn't guaranteed, so never rely on it — 
 `ls supabase/migrations/ | tail -1` before picking the next number — and check
 unmerged branches too. It has already bitten twice on this branch: `0069` and
 `0070` were both taken by `main` while Ketersediaan was in flight. Ketersediaan owns `0063`–`0067`, `0071`, `0072`; `0069` `program_kelas_anggota`;
-`0070` setoran target; `0073`–`0074` evaluasi (next free: `0075`).
+`0070` setoran target; `0073`–`0075` evaluasi; `0076` check-in Maahir;
+`0077`–`0079` ketersediaan; `0080` ujian 2in1; `0081` api pemakaian;
+`0082` matrix blok akhwat (next free: `0083`).
 
 unmerged branches too. Ketersediaan (`docs/ketersediaan-mengajar-hits`) holds
 `0063`–`0067`, `0071`, `0072` — applied to prod but not yet on `main`.
