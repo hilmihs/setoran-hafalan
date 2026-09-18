@@ -56,7 +56,7 @@ Tidak ada kode lain yang mencocokkan nama `Halaqah Pagi/Siang`.
 
 ## Bagian 2 — Kolom `ikut_tibyan` + kelas At-Tibyan gabungan
 
-### Skema — migrasi `0082_program_kelas_ikut_tibyan.sql`
+### Skema — migrasi `0083_program_kelas_ikut_tibyan.sql`
 
 ```sql
 alter table program_kelas
@@ -66,7 +66,7 @@ comment on column program_kelas.ikut_tibyan is
 ```
 
 Default `true` → semua kelas lama berperilaku persis seperti sekarang. Nomor
-`0082`: `0077`–`0081` sudah terpakai di cabang lain (cek `git log --all`).
+`0083`: `0077`–`0082` sudah terpakai di cabang lain (`0082` = matrix-blok-akhwat) (cek `git log --all`).
 
 ### Kode
 
@@ -128,7 +128,7 @@ beririsan dengan halaqah, At-Tibyan mereka tetap lewat ketua masing-masing.
 
 ## Urutan rilis
 
-1. DDL `0082` **lebih dulu** lewat `/api/admin/db` (`npm run db -- --confirm`,
+1. DDL `0083` **lebih dulu** lewat `/api/admin/db` (`npm run db -- --confirm`,
    dijalankan pemilik; asisten menyiapkan perintah + jumlah baris yang
    diharapkan). Kolom ber-default aman untuk kode lama; sebaliknya kode baru
    men-`select ikut_tibyan` dan akan gagal bila kolomnya belum ada.

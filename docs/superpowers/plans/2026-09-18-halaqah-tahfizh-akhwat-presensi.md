@@ -12,15 +12,15 @@
 
 ---
 
-### Task 1: Migrasi `0082_program_kelas_ikut_tibyan.sql`
+### Task 1: Migrasi `0083_program_kelas_ikut_tibyan.sql`
 
 **Files:**
-- Create: `supabase/migrations/0082_program_kelas_ikut_tibyan.sql`
+- Create: `supabase/migrations/0083_program_kelas_ikut_tibyan.sql`
 
-- [ ] **Step 1: Pastikan nomor 0082 masih bebas di semua cabang**
+- [ ] **Step 1: Pastikan nomor 0083 masih bebas di semua cabang**
 
 Run: `git log --all --name-only --format= -- supabase/migrations | grep -oE '^supabase/migrations/008[0-9]_[^ ]+' | sort -u`
-Expected: hanya `0080_ujian_2in1.sql` dan `0081_api_pemakaian_endpoint.sql`. Bila `0082_*` sudah muncul, pakai nomor berikutnya yang bebas dan ganti semua sebutan `0082` di plan ini.
+Expected: hanya `0080`, `0081`, `0082_matrix_blok_akhwat.sql`. Bila `0083_*` sudah muncul, pakai nomor berikutnya yang bebas dan ganti semua sebutan `0083` di plan ini.
 
 - [ ] **Step 2: Tulis berkas migrasi**
 
@@ -47,8 +47,8 @@ commit;
 - [ ] **Step 3: Commit**
 
 ```bash
-git add supabase/migrations/0082_program_kelas_ikut_tibyan.sql
-git commit -m "feat(presensi): kolom program_kelas.ikut_tibyan (migrasi 0082)
+git add supabase/migrations/0083_program_kelas_ikut_tibyan.sql
+git commit -m "feat(presensi): kolom program_kelas.ikut_tibyan (migrasi 0083)
 
 Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
 ```
@@ -345,7 +345,7 @@ Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
 Perubahan data prod ditulis sebagai satu berkas berisi langkah bernomor. Setiap langkah dijalankan pemilik lewat `npm run db -- "<SQL>" -- --confirm` (asisten diblokir menjalankan `--confirm`). Endpoint admin membungkus tx sendiri, jadi **tanpa** `begin;`/`commit;`. Jangan pakai `WITH` di awal statement tulis (dipaksa READ ONLY).
 
 **Files:**
-- Create: `scripts/sql/0082-rilis-halaqah-tahfizh-akhwat.sql`
+- Create: `scripts/sql/0083-rilis-halaqah-tahfizh-akhwat.sql`
 
 - [ ] **Step 1: Pastikan folder ada**
 
@@ -358,13 +358,13 @@ Expected: ada berkas `0076-rilis-*` (pola yang diikuti). Bila folder tak ada, bu
 -- Rilis prod: Halaqah Tahfizh akhwat — cabut takhassus, rename, At-Tibyan gabungan.
 -- Spec: docs/superpowers/specs/2026-09-18-halaqah-tahfizh-akhwat-presensi-design.md
 --
--- Urutan WAJIB: [A] DDL 0082 → deploy kode → [B] cabut takhassus → [C] rename
+-- Urutan WAJIB: [A] DDL 0083 → deploy kode → [B] cabut takhassus → [C] rename
 -- → [D] ikut_tibyan=false → [E] kelas At-Tibyan → [F] anggota → [G] verifikasi.
 -- Tiap langkah = satu pemanggilan:  npm run db -- "<SQL>" -- --confirm
 -- (preview dulu tanpa --confirm; cocokkan wouldAffect dengan angka di komentar).
 
 -- ============================================================
--- [A] DDL 0082 — SEBELUM deploy kode. wouldAffect: 0 (DDL).
+-- [A] DDL 0083 — SEBELUM deploy kode. wouldAffect: 0 (DDL).
 -- ============================================================
 alter table program_kelas add column if not exists ikut_tibyan boolean not null default true;
 
@@ -462,7 +462,7 @@ select name from program_kelas where name like 'Maahir Halaqah Pagi (%' or name 
 
 Buat skrip sekali pakai di scratchpad (bukan di repo) yang: memuat PGlite, membuat tabel `program_kelas` + `program_kelas_anggota` dengan kolom seperti di `scripts/test-setoran-target.ts` (termasuk `ikut_tibyan`, `active boolean default true`, `mulai_tanggal`, `peserta_id uuid`), menyisipkan 3 kelas contoh (`Maahir Halaqah Pagi (Selasa)`, `Maahir Halaqah Siang (Senin)`, `Maahir Takhassus Akhwat`) dan beberapa anggota termasuk Salma (`6282136573097`) di Pagi Selasa & Takhassus, Annida di Siang Senin & Takhassus, dan satu anggota ber-WA null; lalu menjalankan langkah [B]–[F] berurutan dan mencetak hasil [G]. Harapan: [B] menonaktifkan 2 baris, [C] 2 baris, [D] 3 baris, [E] 1, [F] = jumlah orang unik; tak ada galat sintaks.
 
-Simpan sebagai `/tmp/claude-1000/-data-Downloads-04-Dev-Projects-setoran-hafalan-skeleton-setoran-hafalan/04d1a9dc-fd50-4ab6-8ff3-67334cd0cd81/scratchpad/uji-0082.ts` (impor `@electric-sql/pglite` dari `node_modules` worktree; jalankan dari worktree agar resolusi modul jalan).
+Simpan sebagai `/tmp/claude-1000/-data-Downloads-04-Dev-Projects-setoran-hafalan-skeleton-setoran-hafalan/04d1a9dc-fd50-4ab6-8ff3-67334cd0cd81/scratchpad/uji-0083.ts` (impor `@electric-sql/pglite` dari `node_modules` worktree; jalankan dari worktree agar resolusi modul jalan).
 
 Run: `npx tsx <path skrip di atas>`
 Expected: semua angka sesuai; skrip ini tidak di-commit.
@@ -470,7 +470,7 @@ Expected: semua angka sesuai; skrip ini tidak di-commit.
 - [ ] **Step 4: Commit**
 
 ```bash
-git add scripts/sql/0082-rilis-halaqah-tahfizh-akhwat.sql
+git add scripts/sql/0083-rilis-halaqah-tahfizh-akhwat.sql
 git commit -m "chore(sql): rilis prod Halaqah Tahfizh akhwat — takhassus, rename, At-Tibyan gabungan
 
 Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
