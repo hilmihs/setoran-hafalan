@@ -29,7 +29,7 @@ import type {
 } from '@/types/db';
 
 const PK_COLS =
-  'id, name, gender, jadwal_hari, waktu_mulai, waktu_selesai, ketua_wa, wakil_wa, self_attendance, presensi_sifat, mulai_tanggal';
+  'id, name, gender, jadwal_hari, waktu_mulai, waktu_selesai, ketua_wa, wakil_wa, self_attendance, presensi_sifat, mulai_tanggal, ikut_tibyan';
 
 export const STATUS_CHECKIN_MAAHIR: readonly StatusCheckinMaahir[] = ['hadir', 'izin', 'sakit'];
 
