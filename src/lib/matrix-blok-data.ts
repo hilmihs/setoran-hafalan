@@ -5,10 +5,12 @@ import { supabaseAdmin } from '@/lib/supabase-admin';
 import { anggotaAktifPada, todayJakarta } from '@/lib/anggota-periode';
 import {
   blokDariJenis,
+  isMatrixBlok,
   jenisKelasMaahir,
   type JenisKelasMaahir,
   type MatrixBlok,
 } from '@/lib/matrix-blok';
+import type { Gender } from '@/types/db';
 
 /**
  * Tanggal acuan keanggotaan untuk satu bulan matrix: akhir bulan itu, tapi tak
@@ -63,4 +65,51 @@ export async function getBlokPengajar(
     hasil.set(pg.id, blokDariJenis(set ?? kosong));
   }
   return hasil;
+}
+
+/**
+ * Blok akhwat — DIBACA dari `pengajar.matrix_blok`, bukan diturunkan dari
+ * kelas. Alasannya di `matrix-blok.ts`: nama kelas akhwat tak memisahkan
+ * Tahfidz dari Alumni/Talaqqi, dan kategori Takhashush & Koordinator tak punya
+ * padanan kelas. Nilai yang tak dikenal (atau NULL) tak dimasukkan ke peta,
+ * jadi orangnya jatuh ke blok 'tanpa_kelas' di tampilan.
+ */
+export async function getBlokTersimpan(
+  pengajarIds: readonly string[]
+): Promise<Map<string, MatrixBlok>> {
+  const hasil = new Map<string, MatrixBlok>();
+  if (!pengajarIds.length) return hasil;
+
+  const { data } = await supabaseAdmin
+    .from('pengajar')
+    .select('id, matrix_blok')
+    .in('id', [...pengajarIds]);
+
+  for (const row of data ?? []) {
+    const b = row.matrix_blok;
+    if (isMatrixBlok(b)) hasil.set(row.id as string, b);
+  }
+  return hasil;
+}
+
+/**
+ * Satu pintu untuk kedua gender: ikhwan diturunkan dari kelas, akhwat dibaca
+ * dari kolom. Dipakai halaman matrix & unduhan XLSX supaya keduanya tak pernah
+ * memakai aturan yang berbeda.
+ */
+export async function getBlokMatrix(
+  pengajar: ReadonlyArray<{ id: string; gender: Gender; whatsapp_number: string | null }>,
+  yearMonth: string
+): Promise<Map<string, MatrixBlok>> {
+  const ikhwan = pengajar.filter((p) => p.gender === 'ikhwan');
+  const akhwat = pengajar.filter((p) => p.gender === 'akhwat');
+
+  const [dariKelas, tersimpan] = await Promise.all([
+    ikhwan.length
+      ? getBlokPengajar(ikhwan, acuanTanggalBlok(yearMonth))
+      : new Map<string, MatrixBlok>(),
+    getBlokTersimpan(akhwat.map((p) => p.id)),
+  ]);
+
+  return new Map([...dariKelas, ...tersimpan]);
 }

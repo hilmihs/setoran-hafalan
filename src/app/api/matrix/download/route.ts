@@ -3,8 +3,9 @@ import ExcelJS from 'exceljs';
 import { getSession } from '@/lib/session';
 import { supabaseAdmin } from '@/lib/supabase-admin';
 import { INDIKATOR } from '@/lib/matrix-indicators';
-import { acuanTanggalBlok, getBlokPengajar } from '@/lib/matrix-blok-data';
-import { MATRIX_BLOK_LABEL, MATRIX_BLOK_ORDER } from '@/lib/matrix-blok';
+import { getBlokMatrix } from '@/lib/matrix-blok-data';
+import { labelBlok, urutanBlok } from '@/lib/matrix-blok';
+import type { Gender } from '@/types/db';
 
 const KAT_SHORT: Record<string, string> = { hard: 'Hard Skill', inspeksi: 'Inspeksi', soft: 'Soft Skill' };
 const XLSX_MIME = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
@@ -66,18 +67,30 @@ export async function GET(req: NextRequest) {
 
   const matrixByPengajar = new Map((matrixData ?? []).map((m) => [m.pengajar_id, m]));
 
-  // Blok ranking — sama persis dgn tampilan blok di /matrix/koordinator,
-  // dan seperti di sana baru dipasang untuk ikhwan.
-  const blokMap = await getBlokPengajar(
-    (pengajarList ?? [])
-      .filter((p) => p.gender === 'ikhwan')
-      .map((p) => ({ id: p.id as string, whatsapp_number: (p.whatsapp_number as string | null) ?? null })),
-    acuanTanggalBlok(bulan)
+  // Blok ranking — sama persis dgn tampilan blok di /matrix/koordinator:
+  // ikhwan diturunkan dari kelas, akhwat dibaca dari `pengajar.matrix_blok`.
+  const blokMap = await getBlokMatrix(
+    (pengajarList ?? []).map((p) => ({
+      id: p.id as string,
+      gender: p.gender as Gender,
+      whatsapp_number: (p.whatsapp_number as string | null) ?? null,
+    })),
+    bulan
   );
-  const urutanBlok = new Map(MATRIX_BLOK_ORDER.map((b, i) => [b, i]));
+  // Urutan blok beda per gender, jadi indeksnya dihitung di dalam taksonomi
+  // gender orangnya sendiri. Yang belum diblok jatuh paling bawah.
+  const posisiBlok = new Map(
+    (['ikhwan', 'akhwat'] as Gender[]).flatMap((g) =>
+      urutanBlok(g).map((b, i) => [`${g}:${b}`, i] as const)
+    )
+  );
+  const genderDari = new Map(
+    (pengajarList ?? []).map((p) => [p.id as string, p.gender as Gender])
+  );
   const blokIndex = (id: string) => {
     const b = blokMap.get(id);
-    return b ? urutanBlok.get(b) ?? 99 : 99; // akhwat / belum diblok → paling bawah
+    if (!b) return 99;
+    return posisiBlok.get(`${genderDari.get(id) ?? 'ikhwan'}:${b}`) ?? 99;
   };
 
   // ── Mode "belum lengkap" (?incomplete=1): hanya pengajar dgn ≥1 indikator kosong,
@@ -247,7 +260,7 @@ export async function GET(req: NextRequest) {
     // Kolom gender selalu ada: saat unduhan mencakup kedua gender (mode 'all'),
     // tanpa ini baris ikhwan dan akhwat tak bisa dibedakan.
     { header: 'Gender', key: 'gender', width: 10 },
-    // Blok ranking (ikhwan). Kosong utk akhwat selama pemblokan belum dipasang.
+    // Blok ranking. Kosong utk yang belum masuk blok mana pun.
     { header: 'Blok', key: 'blok', width: 26 },
     { header: 'Kelompok', key: 'kelompok', width: 18 },
     { header: 'Aktif', key: 'active', width: 8 },
@@ -303,7 +316,7 @@ export async function GET(req: NextRequest) {
       gender: p.gender === 'ikhwan' ? 'Ikhwan' : 'Akhwat',
       blok: (() => {
         const b = blokMap.get(p.id);
-        return b ? MATRIX_BLOK_LABEL[b] : '';
+        return b ? labelBlok(b, p.gender as Gender) : '';
       })(),
       kelompok: kelompokMap.get(p.kelompok_id ?? '') ?? '',
       active: p.active ? 'Ya' : 'Tidak',

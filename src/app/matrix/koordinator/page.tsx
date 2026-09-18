@@ -11,7 +11,7 @@ import { MatrixDashboard, type MatrixListItem } from '@/components/matrix/Matrix
 import Link from 'next/link';
 import { computeRiskPengajar, levelColor, levelLabel, type RiskResult } from '@/lib/risk';
 import { syncMatrixIfStale, isLiveMatrixMonth } from '@/lib/matrix-compute';
-import { acuanTanggalBlok, getBlokPengajar } from '@/lib/matrix-blok-data';
+import { getBlokMatrix } from '@/lib/matrix-blok-data';
 import type { MatrixBlok } from '@/lib/matrix-blok';
 import { INDIKATOR, scoreColor, KATEGORI_BOBOT, type IndikatorKey } from '@/lib/matrix-indicators';
 import type { Gender } from '@/types/db';
@@ -130,18 +130,16 @@ export default async function MatrixKoordinatorPage({
     new Set([currentYearMonth(), ...(availableMonths ?? []).map((m) => m.year_month)])
   ).sort().reverse();
 
-  // Blok jenis kelas — baru dipasang untuk ikhwan (akhwat menyusul). Untuk
-  // akhwat peta ini kosong dan daftar blok tampil rata seperti biasa.
-  const blokMap: Map<string, MatrixBlok> =
-    gender === 'ikhwan'
-      ? await getBlokPengajar(
-          (pengajarList ?? []).map((p) => ({
-            id: p.id as string,
-            whatsapp_number: (p.whatsapp_number as string | null) ?? null,
-          })),
-          acuanTanggalBlok(selectedMonth)
-        )
-      : new Map();
+  // Blok ranking. Ikhwan diturunkan dari kelas Maahir yang diikuti, akhwat
+  // dibaca dari `pengajar.matrix_blok` — lihat alasannya di `matrix-blok.ts`.
+  const blokMap: Map<string, MatrixBlok> = await getBlokMatrix(
+    (pengajarList ?? []).map((p) => ({
+      id: p.id as string,
+      gender,
+      whatsapp_number: (p.whatsapp_number as string | null) ?? null,
+    })),
+    selectedMonth
+  );
 
   // Snapshot bulan lalu untuk panah naik/turun di tampilan blok — read-only,
   // JANGAN recompute bulan lampau.

@@ -237,6 +237,10 @@ export interface Pengajar {
   // Override id eval_pengajar (mirror hilmihs, 'wa:<nomor>'). null = cocokkan
   // otomatis lewat whatsapp_number — lihat evaluasi-pengajar.ts.
   eval_pengajar_id: string | null;
+  // Blok ranking Matrix Skill Guru yang DISIMPAN (dipakai akhwat; ikhwan
+  // diturunkan otomatis dari kelas Maahir). Nilai: lihat MATRIX_BLOK_TERSIMPAN
+  // di lib/matrix-blok.ts. null = belum dikelompokkan.
+  matrix_blok: string | null;
   active: boolean;
   last_login_at: string | null;
   created_at: string;

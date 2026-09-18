@@ -4,11 +4,12 @@ import { useMemo, useState } from 'react';
 import Link from 'next/link';
 import { Initials } from '@/components/icons';
 import {
-  MATRIX_BLOK_KETERANGAN,
-  MATRIX_BLOK_LABEL,
-  MATRIX_BLOK_ORDER,
+  keteranganBlok,
+  labelBlok,
+  urutanBlok,
   type MatrixBlok,
 } from '@/lib/matrix-blok';
+import type { Gender } from '@/types/db';
 
 export type MatrixListItem = {
   id: string;
@@ -21,7 +22,7 @@ export type MatrixListItem = {
   ranking: number | null;
   deltaTotal: number | null;
   deltaRank: number | null;
-  /** null = belum diblok (akhwat). Daftar tampil rata seperti sebelumnya. */
+  /** null = belum diblok. Daftar tampil rata seperti sebelumnya. */
   blok: MatrixBlok | null;
 };
 
@@ -216,7 +217,7 @@ function Podium({
 }: {
   top3: MatrixListItem[];
   ym: string;
-  gender: string;
+  gender: Gender;
 }) {
   if (top3.length === 0) return null;
 
@@ -338,7 +339,7 @@ function RankedRow({
    */
   highlightRank?: number | null;
   ym: string;
-  gender: string;
+  gender: Gender;
 }) {
   const sorot = highlightRank !== undefined ? highlightRank : rank;
   const isTop3 = sorot !== null && sorot <= 3;
@@ -446,7 +447,15 @@ function RankedRow({
 }
 
 /* ─── BlokHeader ─────────────────────────────────────────── */
-function BlokHeader({ blok, count }: { blok: MatrixBlok; count: number }) {
+function BlokHeader({
+  blok,
+  count,
+  gender,
+}: {
+  blok: MatrixBlok;
+  count: number;
+  gender: Gender;
+}) {
   return (
     <div
       style={{
@@ -461,13 +470,13 @@ function BlokHeader({ blok, count }: { blok: MatrixBlok; count: number }) {
       }}
     >
       <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--ink)' }}>
-        {MATRIX_BLOK_LABEL[blok]}
+        {labelBlok(blok, gender)}
       </span>
       <span className="t-mono" style={{ fontSize: 11, color: 'var(--muted-2)' }}>
         {count} pengajar
       </span>
       <span style={{ fontSize: 10, color: 'var(--muted-2)', marginLeft: 'auto' }}>
-        {MATRIX_BLOK_KETERANGAN[blok]}
+        {keteranganBlok(blok, gender)}
       </span>
     </div>
   );
@@ -533,7 +542,7 @@ export function MatrixDashboard({
   /** Sudah tersaring di server: gender, kelompok, dan pencarian nama. */
   items: MatrixListItem[];
   ym: string;
-  gender: string;
+  gender: Gender;
 }) {
   const [sortKey, setSortKey] = useState<SortKey>('total');
 
@@ -566,9 +575,9 @@ export function MatrixDashboard({
   // peringkat resmi — peringkat itu ditampilkan terpisah supaya tak rancu.
   const showGlobalCaption = sortKey !== 'total';
 
-  // Blok baru dipasang untuk ikhwan (akhwat menyusul; server mengisi `blok`
-  // null untuk mereka). Nomor di badge = urutan baca dari atas ke bawah dan
-  // BERJALAN lintas blok: Takhassus 1..9, blok Tahfizh lanjut dari 10, dst.
+  // Nomor di badge = urutan baca dari atas ke bawah dan BERJALAN lintas blok:
+  // blok teratas 1..9, blok berikutnya lanjut dari 10, dst. Taksonomi bloknya
+  // beda per gender (lihat `matrix-blok.ts`), jadi urutannya pun ikut gender.
   // Peringkat skor global tetap ditampilkan di baris kedua ('global #N')
   // karena keduanya beda arti.
   const blocked = filtered.some((it) => it.blok !== null);
@@ -576,7 +585,7 @@ export function MatrixDashboard({
   const groups = useMemo(() => {
     if (!blocked) return null;
     let no = 0;
-    return MATRIX_BLOK_ORDER.map((blok) => ({
+    return urutanBlok(gender).map((blok) => ({
       blok,
       // Yang belum punya skor sama sekali tak diberi nomor (tampil '—') supaya
       // tak ikut menggeser hitungan orang-orang yang sudah dinilai.
@@ -584,7 +593,7 @@ export function MatrixDashboard({
         .filter((it) => (it.blok ?? 'tanpa_kelas') === blok)
         .map((it) => ({ it, no: it.total === null ? null : ++no })),
     })).filter((g) => g.items.length > 0);
-  }, [blocked, sorted]);
+  }, [blocked, gender, sorted]);
 
   return (
     // Lebar & padding luar diatur halaman pembungkus, jangan digandakan di sini.
@@ -641,12 +650,12 @@ export function MatrixDashboard({
       ) : groups ? (
         <>
           <p className="t-tiny" style={{ color: 'var(--muted-2)', paddingLeft: 4, marginBottom: 4 }}>
-            Nomor urut berjalan lintas blok: Takhassus dulu, lalu Tahfizh, baru
-            sisanya. Angka dalam kurung = peringkat skor se-gender.
+            Nomor urut berjalan lintas blok, mengikuti urutan blok dari atas ke
+            bawah. Angka dalam kurung = peringkat skor se-gender.
           </p>
           {groups.map((g) => (
             <div key={g.blok}>
-              <BlokHeader blok={g.blok} count={g.items.length} />
+              <BlokHeader blok={g.blok} count={g.items.length} gender={gender} />
               {g.items.map(({ it, no }) => (
                 <RankedRow
                   key={it.id}

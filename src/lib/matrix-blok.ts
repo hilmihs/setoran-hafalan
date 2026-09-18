@@ -1,41 +1,109 @@
-// Pemecahan ranking Matrix Skill Guru jadi blok menurut kelas Maahir yang
-// DIIKUTI pengajar (bukan halaqah yang ia ajar). Rata-rata hard skill sebagian
-// besar berasal dari kehadiran + setoran di kelas itu, jadi mengadu pengajar
-// Takhassus (hadir tiap hari, ada nilai tajwid) dengan pengajar Talaqqi (1x
-// sepekan, tak menyetor) menghasilkan peringkat yang tak sebanding.
+// Pemecahan ranking Matrix Skill Guru jadi blok. Rata-rata hard skill sebagian
+// besar berasal dari kehadiran + setoran di kelas Maahir yang DIIKUTI pengajar,
+// jadi mengadu pengajar Takhassus (hadir tiap hari, ada nilai tajwid) dengan
+// pengajar Talaqqi (1x sepekan, tak menyetor) menghasilkan peringkat yang tak
+// sebanding.
+//
+// Dua gender memakai taksonomi yang BERBEDA, dan itu disengaja:
+//
+// - Ikhwan: blok diturunkan otomatis dari keanggotaan `program_kelas_anggota`
+//   (lihat `matrix-blok-data.ts`), karena nama kelasnya memang memisahkan
+//   Takhassus / Tahfizh / sisanya.
+// - Akhwat: nama kelas TAK bisa memisahkan Tahfidz dari Alumni/Talaqqi (semua
+//   varian "Halaqah Pagi/Siang" + "Talaqqi" bercampur), dan dua kategori yang
+//   dipakai koordinator — Takhashush & Koordinator — tak punya padanan kelas
+//   sama sekali. Karena itu bloknya DISIMPAN, di kolom `pengajar.matrix_blok`,
+//   mengikuti list subjektif koordinator akhwat.
 //
 // Sengaja BEBAS import server (supabaseAdmin) supaya bisa dipakai komponen
 // client. Query-nya ada di `matrix-blok-data.ts`.
 
-export type MatrixBlok = 'takhassus' | 'tahfizh' | 'talaqqi' | 'lintas' | 'tanpa_kelas';
+import type { Gender } from '@/types/db';
 
-/** Urutan tampil blok, atas ke bawah. */
-export const MATRIX_BLOK_ORDER: readonly MatrixBlok[] = [
+export type MatrixBlok =
+  | 'takhassus'
+  | 'koordinator'
+  | 'tahfizh'
+  | 'talaqqi'
+  | 'maahir6'
+  | 'lintas'
+  | 'tanpa_kelas';
+
+/** Urutan tampil blok, atas ke bawah — beda per gender. */
+const ORDER: Record<Gender, readonly MatrixBlok[]> = {
+  ikhwan: ['takhassus', 'tahfizh', 'talaqqi', 'lintas', 'tanpa_kelas'],
+  akhwat: ['takhassus', 'koordinator', 'tahfizh', 'talaqqi', 'maahir6', 'tanpa_kelas'],
+};
+
+export function urutanBlok(gender: Gender): readonly MatrixBlok[] {
+  return ORDER[gender];
+}
+
+/** Semua blok yang sah disimpan di `pengajar.matrix_blok` (akhwat). */
+export const MATRIX_BLOK_TERSIMPAN: readonly MatrixBlok[] = [
   'takhassus',
+  'koordinator',
   'tahfizh',
   'talaqqi',
-  'lintas',
-  'tanpa_kelas',
+  'maahir6',
 ];
 
-export const MATRIX_BLOK_LABEL: Record<MatrixBlok, string> = {
-  takhassus: 'Peserta Takhassus',
-  tahfizh: "Peserta Tahfidzul Qur'an",
-  talaqqi: 'Peserta Talaqqi / Alumni / lainnya',
-  lintas: 'Lintas jenis (anggota ≥2 blok)',
-  tanpa_kelas: 'Tanpa kelas Maahir',
+export function isMatrixBlok(v: unknown): v is MatrixBlok {
+  return typeof v === 'string' && (MATRIX_BLOK_TERSIMPAN as readonly string[]).includes(v);
+}
+
+const LABEL: Record<Gender, Record<MatrixBlok, string>> = {
+  ikhwan: {
+    takhassus: 'Peserta Takhassus',
+    koordinator: 'Koordinator',
+    tahfizh: "Peserta Tahfidzul Qur'an",
+    talaqqi: 'Peserta Talaqqi / Alumni / lainnya',
+    maahir6: 'Peserta Maahir 6',
+    lintas: 'Lintas jenis (anggota ≥2 blok)',
+    tanpa_kelas: 'Tanpa kelas Maahir',
+  },
+  akhwat: {
+    takhassus: 'Takhashush',
+    koordinator: 'Koordinator',
+    tahfizh: 'Tahfidz',
+    talaqqi: 'Alumni / Talaqqi',
+    maahir6: 'Maahir 6A–6D',
+    lintas: 'Lintas jenis (anggota ≥2 blok)',
+    tanpa_kelas: 'Belum dikelompokkan',
+  },
 };
 
-export const MATRIX_BLOK_KETERANGAN: Record<MatrixBlok, string> = {
-  takhassus: 'Anggota kelas Maahir Takhassus.',
-  tahfizh: "Anggota kelas Maahir Tahfidzul Qur'an 1 & 2.",
-  talaqqi:
-    'Anggota kelas Maahir selain Takhassus & Tahfidz (Talaqqi, Alumni, Maahir 6A/6B, Intensif, dll).',
-  lintas: 'Terdaftar di lebih dari satu jenis kelas — tak bisa dimasukkan satu blok.',
-  tanpa_kelas: 'Tak punya keanggotaan kelas Maahir yang aktif pada bulan ini.',
+const KETERANGAN: Record<Gender, Record<MatrixBlok, string>> = {
+  ikhwan: {
+    takhassus: 'Anggota kelas Maahir Takhassus.',
+    koordinator: 'Koordinator halaqah.',
+    tahfizh: "Anggota kelas Maahir Tahfidzul Qur'an 1 & 2.",
+    talaqqi:
+      'Anggota kelas Maahir selain Takhassus & Tahfidz (Talaqqi, Alumni, Maahir 6A/6B, Intensif, dll).',
+    maahir6: 'Anggota kelas Maahir 6.',
+    lintas: 'Terdaftar di lebih dari satu jenis kelas — tak bisa dimasukkan satu blok.',
+    tanpa_kelas: 'Tak punya keanggotaan kelas Maahir yang aktif pada bulan ini.',
+  },
+  akhwat: {
+    takhassus: 'Pengajar Takhashush.',
+    koordinator: 'Koordinator halaqah akhwat.',
+    tahfizh: 'Pengajar Tahfidz.',
+    talaqqi: 'Pengajar Alumni / Talaqqi.',
+    maahir6: 'Pengajar kelas Maahir 6A, 6B, 6C, & 6D.',
+    lintas: 'Terdaftar di lebih dari satu jenis kelas — tak bisa dimasukkan satu blok.',
+    tanpa_kelas: 'Belum dimasukkan ke blok mana pun oleh koordinator.',
+  },
 };
 
-/** Jenis kelas yang bisa jadi blok tunggal. */
+export function labelBlok(blok: MatrixBlok, gender: Gender): string {
+  return LABEL[gender][blok];
+}
+
+export function keteranganBlok(blok: MatrixBlok, gender: Gender): string {
+  return KETERANGAN[gender][blok];
+}
+
+/** Jenis kelas yang bisa jadi blok tunggal (jalur otomatis ikhwan). */
 export type JenisKelasMaahir = 'takhassus' | 'tahfizh' | 'talaqqi';
 
 function normal(name: string): string {
