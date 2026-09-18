@@ -158,7 +158,7 @@ filter".
 
 | Path `/api/v1/…` | Filter |
 |---|---|
-| `program-kelas` | `gender`, `self_attendance`, `presensi_sifat` |
+| `program-kelas` | `gender`, `self_attendance`, `presensi_sifat`, `ikut_tibyan` |
 | `anggota` | `program_kelas_id`, `is_ketua`, `is_wakil` |
 | `pertemuan` | `program_kelas_id`, `program`, `tanggal_dari`, `tanggal_sampai` |
 | `kehadiran` | `pertemuan_id`, `anggota_id`, `status`, `mode`, `sejak` |
@@ -175,7 +175,7 @@ filter".
 
 Kolom yang keluar per entitas:
 
-- **`program-kelas`**: `id`, `name`, `gender`, `jadwal_hari`, `waktu_mulai`, `waktu_selesai`, `self_attendance`, `presensi_sifat`, `created_at`
+- **`program-kelas`**: `id`, `name`, `gender`, `jadwal_hari`, `waktu_mulai`, `waktu_selesai`, `self_attendance`, `presensi_sifat`, `ikut_tibyan`, `created_at`
 - **`anggota`**: `id`, `program_kelas_id`, `peserta_id`, `name`, `is_ketua`, `is_wakil`, `mulai_tanggal`, `created_at`
 - **`pertemuan`**: `id`, `program_kelas_id`, `kelas_id`, `program`, `tanggal`, `nama_kegiatan`, `waktu_mulai`, `waktu_selesai`, `keterangan`, `created_at`
 - **`kehadiran`**: `id`, `pertemuan_id`, `anggota_id`, `peserta_id`, `status`, `mode`, `setoran_halaman`, `catatan`, `diisi_at`, `updated_at`, `created_at` *(kolom `catatan` sensitif — lihat §7)*

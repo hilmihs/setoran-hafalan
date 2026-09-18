@@ -110,7 +110,7 @@ export async function getMaahirRekap(
   // 1. Kelas
   let q = supabaseAdmin
     .from('program_kelas')
-    .select('id, name, gender, jadwal_hari, waktu_mulai, waktu_selesai, ketua_wa, wakil_wa, self_attendance, presensi_sifat, mulai_tanggal')
+    .select('id, name, gender, jadwal_hari, waktu_mulai, waktu_selesai, ketua_wa, wakil_wa, self_attendance, presensi_sifat, mulai_tanggal, ikut_tibyan')
     .order('gender')
     .order('name');
   if (opts?.kelasIds && opts.kelasIds.length > 0) q = q.in('id', opts.kelasIds);

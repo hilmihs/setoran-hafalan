@@ -229,7 +229,7 @@ export async function getLaporanMaahir(month: string): Promise<LaporanMaahir> {
   const { data: kelasRows } = await supabaseAdmin
     .from('program_kelas')
     .select(
-      'id, name, gender, jadwal_hari, waktu_mulai, waktu_selesai, ketua_wa, wakil_wa, self_attendance, presensi_sifat, mulai_tanggal'
+      'id, name, gender, jadwal_hari, waktu_mulai, waktu_selesai, ketua_wa, wakil_wa, self_attendance, presensi_sifat, mulai_tanggal, ikut_tibyan'
     )
     .order('gender')
     .order('name');

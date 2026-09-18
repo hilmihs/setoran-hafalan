@@ -36,11 +36,12 @@ export function auditEntities(entities: Record<string, EntityDef>): void {
 export const ENTITIES: Record<string, EntityDef> = {
   'program-kelas': {
     route: 'program-kelas', table: 'program_kelas', scope: 'maahir',
-    columns: ['id', 'name', 'gender', 'jadwal_hari', 'waktu_mulai', 'waktu_selesai', 'self_attendance', 'presensi_sifat', 'created_at'],
+    columns: ['id', 'name', 'gender', 'jadwal_hari', 'waktu_mulai', 'waktu_selesai', 'self_attendance', 'presensi_sifat', 'ikut_tibyan', 'created_at'],
     filters: [
       { param: 'gender', column: 'gender', kind: 'eq' },
       { param: 'self_attendance', column: 'self_attendance', kind: 'bool' },
       { param: 'presensi_sifat', column: 'presensi_sifat', kind: 'eq' },
+      { param: 'ikut_tibyan', column: 'ikut_tibyan', kind: 'bool' },
     ],
     order: { column: 'created_at', dir: 'desc' },
   },

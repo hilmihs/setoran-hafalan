@@ -60,9 +60,14 @@ export type ProgramKelasRow = {
   presensi_sifat: 'harian' | 'mingguan';
   /** Kelas mulai berjalan; presensi sebelum tanggal ini tak diminta. */
   mulai_tanggal: string | null;
+  /**
+   * false = kelas tidak ditagih sesi At-Tibyan Sabtu. Dipakai kelas halaqah
+   * per-hari akhwat yang At-Tibyan-nya dicatat lewat satu kelas gabungan.
+   */
+  ikut_tibyan: boolean;
 };
 
-const PK_COLS = 'id, name, gender, jadwal_hari, waktu_mulai, waktu_selesai, ketua_wa, wakil_wa, self_attendance, presensi_sifat, mulai_tanggal';
+const PK_COLS = 'id, name, gender, jadwal_hari, waktu_mulai, waktu_selesai, ketua_wa, wakil_wa, self_attendance, presensi_sifat, mulai_tanggal, ikut_tibyan';
 
 /**
  * Buang kelas yang sudah pensiun dari daftar milik ketua/wakil.
