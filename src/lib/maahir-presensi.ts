@@ -204,7 +204,7 @@ function expectedDaysForKelas(
     return out;
   }
 
-  // Harian: tiap hari jadwal + At-Tibyan tiap Sabtu, kecuali tanggal libur.
+  // Harian: tiap hari jadwal + At-Tibyan tiap Sabtu (bila ikut_tibyan), kecuali tanggal libur.
   const jadwal = new Set(k.jadwal_hari ?? []);
   for (const tanggal of dates) {
     if (libur?.has(tanggal)) continue;
@@ -223,7 +223,10 @@ function expectedDaysForKelas(
         mingguan: false,
       });
     }
-    if (hari === TIBYAN_HARI) {
+    // Kelas ber-ikut_tibyan=false (halaqah per-hari akhwat) tak menagih Sabtu;
+    // At-Tibyan mereka dicatat lewat satu kelas gabungan supaya orang yang ada
+    // di beberapa kelas tak tertagih dan terhitung berulang.
+    if (hari === TIBYAN_HARI && k.ikut_tibyan !== false) {
       out.push({
         program_kelas_id: k.id,
         kelasName: k.name,
