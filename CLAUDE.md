@@ -266,7 +266,7 @@ unmerged branches too. It has already bitten twice on this branch: `0069` and
 `0070` were both taken by `main` while Ketersediaan was in flight. Ketersediaan owns `0063`–`0067`, `0071`, `0072`; `0069` `program_kelas_anggota`;
 `0070` setoran target; `0073`–`0075` evaluasi; `0076` check-in Maahir;
 `0077`–`0079` ketersediaan; `0080` ujian 2in1; `0081` api pemakaian;
-`0082` matrix blok akhwat (next free: `0083`).
+`0082` matrix blok akhwat; `0083` program_kelas.ikut_tibyan (next free: `0084`).
 
 unmerged branches too. Ketersediaan (`docs/ketersediaan-mengajar-hits`) holds
 `0063`–`0067`, `0071`, `0072` — applied to prod but not yet on `main`.

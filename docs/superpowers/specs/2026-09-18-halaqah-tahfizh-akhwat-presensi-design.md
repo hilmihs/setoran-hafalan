@@ -49,10 +49,10 @@ nonaktif).
 `Maahir Halaqah Pagi (X)` → `Maahir Halaqah Tahfizh Pagi (X)`,
 `Maahir Halaqah Siang (X)` → `Maahir Halaqah Tahfizh Siang (X)`.
 
-Efek samping yang disengaja: `jenisKelasMaahir()` (`matrix-blok.ts`) mencocokkan
-prefiks `tahfi`, sehingga peserta kelas ini masuk blok **Tahfizh** di Matrix
-(relevan saat `feat/matrix-blok-akhwat` masuk). Secara makna memang tahfizh.
-Tidak ada kode lain yang mencocokkan nama `Halaqah Pagi/Siang`.
+Tak ada efek samping di Matrix: sejak `0082` (matrix blok akhwat) blok akhwat
+disimpan di `pengajar.matrix_blok`, bukan diturunkan dari nama kelas;
+`jenisKelasMaahir()` (prefiks `tahfi`) hanya dipakai untuk ikhwan. Tidak ada
+kode lain yang mencocokkan nama `Halaqah Pagi/Siang`.
 
 ## Bagian 2 — Kolom `ikut_tibyan` + kelas At-Tibyan gabungan
 
