@@ -342,7 +342,7 @@ Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
 
 ### Task 5: Berkas SQL rilis prod
 
-Perubahan data prod ditulis sebagai satu berkas berisi langkah bernomor. Setiap langkah dijalankan pemilik lewat `npm run db -- "<SQL>" -- --confirm` (asisten diblokir menjalankan `--confirm`). Endpoint admin membungkus tx sendiri, jadi **tanpa** `begin;`/`commit;`. Jangan pakai `WITH` di awal statement tulis (dipaksa READ ONLY).
+Perubahan data prod ditulis sebagai satu berkas berisi langkah bernomor. Setiap langkah dijalankan pemilik lewat `npm run db -- --confirm "<SQL>"` (asisten diblokir menjalankan `--confirm`). Endpoint admin membungkus tx sendiri, jadi **tanpa** `begin;`/`commit;`. Jangan pakai `WITH` di awal statement tulis (dipaksa READ ONLY).
 
 **Files:**
 - Create: `scripts/sql/0083-rilis-halaqah-tahfizh-akhwat.sql`
@@ -360,7 +360,7 @@ Expected: ada berkas `0076-rilis-*` (pola yang diikuti). Bila folder tak ada, bu
 --
 -- Urutan WAJIB: [A] DDL 0083 → deploy kode → [B] cabut takhassus → [C] rename
 -- → [D] ikut_tibyan=false → [E] kelas At-Tibyan → [F] anggota → [G] verifikasi.
--- Tiap langkah = satu pemanggilan:  npm run db -- "<SQL>" -- --confirm
+-- Tiap langkah = satu pemanggilan:  npm run db -- --confirm "<SQL>"
 -- (preview dulu tanpa --confirm; cocokkan wouldAffect dengan angka di komentar).
 
 -- ============================================================
@@ -487,7 +487,7 @@ Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
 Pemilik menjalankan (prefiks `!` di prompt):
 
 ```bash
-npm run db -- "alter table program_kelas add column if not exists ikut_tibyan boolean not null default true" -- --confirm
+npm run db -- --confirm "alter table program_kelas add column if not exists ikut_tibyan boolean not null default true"
 ```
 
 Verifikasi (asisten boleh): `npm run db -- "select column_name, column_default from information_schema.columns where table_name='program_kelas' and column_name='ikut_tibyan'"` → 1 baris, default `true`.

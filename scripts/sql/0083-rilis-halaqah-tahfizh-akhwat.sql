@@ -2,9 +2,14 @@
 -- Spec: docs/superpowers/specs/2026-09-18-halaqah-tahfizh-akhwat-presensi-design.md
 --
 -- Urutan WAJIB: [A] DDL 0083 → deploy kode → [B] cabut takhassus → [C] rename
--- → [D] ikut_tibyan=false → [E] kelas At-Tibyan → [F] anggota → [G] verifikasi.
--- Tiap langkah = satu pemanggilan:  npm run db -- "<SQL>" -- --confirm
--- (preview dulu tanpa --confirm; cocokkan wouldAffect dengan angka di komentar).
+-- → [D] ikut_tibyan=false → [E] kelas At-Tibyan → [F] anggota → [G] verifikasi
+-- → [H] bersihkan pertemuan At-Tibyan basi (bila [G5] tidak kosong).
+-- Tiap statement = satu pemanggilan (termasuk tiap SELECT di [G]; endpoint
+-- hanya mengembalikan hasil statement terakhir):
+--   npm run db -- --confirm "<SQL>"
+-- Preview dulu tanpa --confirm; cocokkan wouldAffect dengan angka di komentar.
+-- Angka lebih besar dari harapan = ada baris yang tak diduga (mis. satu orang
+-- dengan dua ejaan WA) — BERHENTI, jangan --confirm.
 
 -- ============================================================
 -- [A] DDL 0083 — SEBELUM deploy kode. wouldAffect: 0 (DDL).
@@ -25,7 +30,7 @@ update program_kelas_anggota a
   from program_kelas k
  where k.id = a.program_kelas_id
    and k.gender = 'akhwat'
-   and k.name like 'Maahir Halaqah %'
+   and (k.name like 'Maahir Halaqah Pagi (%' or k.name like 'Maahir Halaqah Siang (%')
    and a.active
    and a.whatsapp_number in ('6282136573097', '6281261306563', '6285788064547');
 
@@ -62,7 +67,8 @@ values
 -- ============================================================
 -- [F] Anggota kelas At-Tibyan: 24 unik dari 10 halaqah (sesudah [B]) + 4
 --     takhassus. Harapan: 28 baris. Kunci unik = WA, atau nama bila WA null
---     (Khoirun Nisa). Annida is_ketua.
+--     (Khoirun Nisa). Annida is_ketua. Idempoten: orang yang sudah ada di
+--     kelas At-Tibyan dilewati (UNIQUE tabel tak menjaga WA null).
 -- ============================================================
 insert into program_kelas_anggota
   (program_kelas_id, peserta_id, name, whatsapp_number, is_ketua, is_wakil, active, mulai_tanggal)
@@ -82,7 +88,13 @@ from (
           or k.name like 'Maahir Halaqah Tahfizh Siang (%'
           or k.name = 'Maahir Takhassus Akhwat')
    order by coalesce(a.whatsapp_number, 'nama:' || a.name), a.created_at
-) s;
+) s
+where not exists (
+  select 1 from program_kelas_anggota x
+   join program_kelas kx on kx.id = x.program_kelas_id
+  where kx.name = 'Maahir Halaqah Tahfizh (At-Tibyan)'
+    and coalesce(x.whatsapp_number, 'nama:' || x.name) = coalesce(s.whatsapp_number, 'nama:' || s.name)
+);
 
 -- ============================================================
 -- [G] Verifikasi (READ, tanpa --confirm)
@@ -99,3 +111,21 @@ select k.name, a.name from program_kelas_anggota a join program_kelas k on k.id 
    and a.active and a.whatsapp_number in ('6282136573097','6281261306563','6285788064547');
 -- 0 baris: tak ada nama halaqah lama tersisa:
 select name from program_kelas where name like 'Maahir Halaqah Pagi (%' or name like 'Maahir Halaqah Siang (%';
+-- [G5] 0 baris: tak ada pertemuan At-Tibyan yang sudah telanjur dibuat oleh
+--      kelas ber-ikut_tibyan=false. SP & rekap menghitung baris pertemuan nyata,
+--      bukan expectedDaysInRange, jadi baris basi tetap terhitung ganda.
+select k.name, p.tanggal, p.id
+  from pertemuan_program p join program_kelas k on k.id = p.program_kelas_id
+ where p.program = 'at_tibyan' and k.ikut_tibyan = false and p.tanggal >= '2026-09-15';
+
+-- ============================================================
+-- [H] Hanya bila [G5] tidak kosong: hapus pertemuan At-Tibyan basi tersebut.
+--     Harapan: sama dengan jumlah baris [G5]. kehadiran_peserta ikut terhapus
+--     (ON DELETE CASCADE). Baris sebelum 2026-09-15 milik kelas lama, biarkan.
+-- ============================================================
+delete from pertemuan_program p
+ using program_kelas k
+ where k.id = p.program_kelas_id
+   and p.program = 'at_tibyan'
+   and k.ikut_tibyan = false
+   and p.tanggal >= '2026-09-15';
