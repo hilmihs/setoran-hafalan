@@ -5,7 +5,7 @@ import { supabaseAdmin } from '@/lib/supabase-admin';
 import { requireOneOfRoles } from '@/lib/session';
 import { getSessionWa } from '@/lib/program-kelas';
 import { catatKs } from '@/lib/ketersediaan-log';
-import { jagaFiturKetersediaan } from '@/lib/ketersediaan-akses';
+import { jagaKirimTilawah } from '@/lib/ketersediaan-akses';
 import { getPeriode, listSlot } from '@/lib/ketersediaan-periode';
 import {
   ambilBatches,
@@ -25,7 +25,7 @@ const LEVEL_DIPAKAI = ['HITS Dasar', 'HITS Lanjutan'];
 
 export async function ujiKoneksiTilawah(): Promise<Hasil> {
   await requireOneOfRoles(['koordinator']);
-  await jagaFiturKetersediaan();
+  await jagaKirimTilawah();
   if (!tilawahTerkonfigurasi()) {
     return { ok: false, error: 'TILAWAH_BASE_URL / TILAWAH_EMAIL / TILAWAH_PASSWORD belum diset.' };
   }
@@ -40,7 +40,7 @@ export async function ujiKoneksiTilawah(): Promise<Hasil> {
 /** Daftar program & batch CMS, untuk memilih tujuan. */
 export async function muatProgramBatch(input: { programId?: number }): Promise<Hasil> {
   await requireOneOfRoles(['koordinator']);
-  await jagaFiturKetersediaan();
+  await jagaKirimTilawah();
   try {
     const programs = await ambilPrograms();
     const batches = input.programId ? await ambilBatches(input.programId) : [];
@@ -70,7 +70,7 @@ export async function muatUsulanPemetaan(input: {
   batchId: number;
 }): Promise<Hasil> {
   await requireOneOfRoles(['koordinator']);
-  await jagaFiturKetersediaan();
+  await jagaKirimTilawah();
   try {
     const [slots, days, sessions, levels] = await Promise.all([
       listSlot(input.periodeId, { hanyaAktif: true }),
@@ -160,7 +160,7 @@ export async function sahkanPemetaan(input: {
   level: { level_nama: string; level_id: number | null }[];
 }): Promise<Hasil> {
   const sesi = await requireOneOfRoles(['koordinator']);
-  await jagaFiturKetersediaan();
+  await jagaKirimTilawah();
   const wa = await getSessionWa();
   const sekarang = new Date().toISOString();
 
@@ -243,7 +243,7 @@ export async function sahkanPemetaan(input: {
  */
 export async function jalankanOutbox(input: { periodeId: string }): Promise<Hasil> {
   const sesi = await requireOneOfRoles(['koordinator']);
-  await jagaFiturKetersediaan();
+  await jagaKirimTilawah();
   const wa = await getSessionWa();
   const periode = await getPeriode(input.periodeId);
   if (!periode) return { ok: false, error: 'Periode tidak ditemukan.' };
@@ -286,7 +286,7 @@ export async function ulangiOutboxGagal(input: {
   termasukPerluCek?: boolean;
 }): Promise<Hasil> {
   const sesi = await requireOneOfRoles(['koordinator']);
-  await jagaFiturKetersediaan();
+  await jagaKirimTilawah();
   const wa = await getSessionWa();
   const periode = await getPeriode(input.periodeId);
   if (!periode) return { ok: false, error: 'Periode tidak ditemukan.' };

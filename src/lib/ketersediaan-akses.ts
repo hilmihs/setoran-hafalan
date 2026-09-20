@@ -2,15 +2,17 @@ import 'server-only';
 import { bolehLihatFiturTersembunyi } from '@/lib/admin-guard';
 
 /**
- * Gerbang fitur Ketersediaan Mengajar selama masih disembunyikan.
+ * Gerbang khusus pengiriman ke CMS tilawah.
  *
- * Halaman sudah dijaga, tetapi server action adalah endpoint POST publik: id
- * action ikut terkirim di bundel JS halaman mana pun yang memakainya. Tanpa
- * gerbang di setiap action, koordinator biasa (atau pengajar) bisa memanggilnya
- * langsung walau halamannya 404. Dipanggil SETELAH cek peran.
+ * Fitur Ketersediaan Mengajar sendiri sudah dibuka untuk pengajar dan
+ * koordinator, tetapi pengiriman ke CMS tilawah tidak ikut: CMS itu tidak punya
+ * penghapusan akun yang berfungsi, sehingga satu kiriman salah tidak bisa
+ * ditarik kembali. Karena server action adalah endpoint POST publik — id action
+ * ikut terkirim di bundel JS — penjaga halaman saja tidak cukup; tiap action
+ * pengiriman memanggil ini SETELAH cek peran.
  */
-export async function jagaFiturKetersediaan(): Promise<void> {
+export async function jagaKirimTilawah(): Promise<void> {
   if (!(await bolehLihatFiturTersembunyi())) {
-    throw new Error('Fitur Ketersediaan Mengajar belum dibuka untuk akun ini.');
+    throw new Error('Pengiriman ke CMS tilawah hanya untuk superadmin.');
   }
 }

@@ -38,7 +38,6 @@ export function PeriodeBaru() {
   const [nama, setNama] = useState('');
   const [mulai, setMulai] = useState('');
   const [selesai, setSelesai] = useState('');
-  const [minimalSlot, setMinimalSlot] = useState(3);
   const [kapasitas, setKapasitas] = useState(12);
   // Master bawaan sudah tertinggal dari formulir nyata; jam diisi lewat impor xlsx.
   const [isiBawaan, setIsiBawaan] = useState(false);
@@ -66,7 +65,6 @@ export function PeriodeBaru() {
           <span className="t-small" style={{ color: 'var(--muted-2)' }}>Selesai</span>
           <input className="input" type="date" value={selesai} onChange={(e) => setSelesai(e.target.value)} />
         </label>
-        <Angka label="Minimal slot" nilai={minimalSlot} ubah={setMinimalSlot} min={0} max={50} />
         <Angka label="Kapasitas halaqah" nilai={kapasitas} ubah={setKapasitas} min={1} max={100} />
       </div>
 
@@ -85,7 +83,7 @@ export function PeriodeBaru() {
         disabled={pending}
         onClick={() =>
           jalan(
-            () => buatPeriode({ nama, mulai, selesai, minimalSlot, kapasitas, isiSlotBawaan: isiBawaan }),
+            () => buatPeriode({ nama, mulai, selesai, kapasitas, isiSlotBawaan: isiBawaan }),
             (data) => {
               // Kosongkan form supaya klik kedua tidak membuat periode kembar,
               // lalu pindah ke periode baru — tanpa itu dashboard tetap di periode lama.
@@ -111,7 +109,6 @@ function AturanPeriode({ periode, polaHari }: { periode: KsPeriode; polaHari: Ks
   const [mulai, setMulai] = useState(periode.mulai.slice(0, 10));
   const [selesai, setSelesai] = useState(periode.selesai.slice(0, 10));
   const [liburTeks, setLiburTeks] = useState(teksLibur(periode.libur ?? []));
-  const [minimalSlot, setMinimalSlot] = useState(periode.minimal_slot);
   const [kapasitas, setKapasitas] = useState(periode.kapasitas_halaqah);
   const [ambangBentuk, setAmbangBentuk] = useState(periode.ambang_bentuk);
   const [ambangBawah, setAmbangBawah] = useState(periode.ambang_bawah);
@@ -199,7 +196,6 @@ function AturanPeriode({ periode, polaHari }: { periode: KsPeriode; polaHari: Ks
       )}
 
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10 }}>
-        <Angka label="Minimal slot" nilai={minimalSlot} ubah={setMinimalSlot} min={0} max={50} />
         <Angka label="Kapasitas halaqah" nilai={kapasitas} ubah={setKapasitas} min={1} max={100} />
         <Angka label="Ambang bentuk" nilai={ambangBentuk} ubah={setAmbangBentuk} min={1} max={100} />
         <Angka label="Ambang bawah" nilai={ambangBawah} ubah={setAmbangBawah} min={1} max={100} />
@@ -228,7 +224,6 @@ function AturanPeriode({ periode, polaHari }: { periode: KsPeriode; polaHari: Ks
               mulai,
               selesai,
               liburTeks,
-              minimalSlot,
               kapasitas,
               ambangBentuk,
               ambangBawah,

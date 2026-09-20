@@ -5,7 +5,6 @@ import { supabaseAdmin } from '@/lib/supabase-admin';
 import { requirePengajar } from '@/lib/session';
 import { getSessionWa } from '@/lib/program-kelas';
 import { catatKs } from '@/lib/ketersediaan-log';
-import { jagaFiturKetersediaan } from '@/lib/ketersediaan-akses';
 import { formTerbuka, getPeriode, listSlot, periodeTerbukaUntukPengajar } from '@/lib/ketersediaan-periode';
 import { jadwalTerpakaiPengajar, kunciSlot } from '@/lib/ketersediaan-bentrok';
 import type { KsCekButir, KsKetersediaanStatus, KsModePengajar, KsPeriode } from '@/types/db';
@@ -20,7 +19,6 @@ interface MasukanSimpan {
   slotIds: string[];
   mode: KsModePengajar;
   lokasi: string;
-  alasanKurangSlot: string;
   komitmen: boolean;
 }
 
@@ -51,7 +49,6 @@ async function periodeTujuan(periodeId: string | undefined): Promise<KsPeriode |
 
 export async function simpanKetersediaan(input: MasukanSimpan): Promise<Hasil> {
   const sesi = await requirePengajar();
-  await jagaFiturKetersediaan();
   const wa = await getSessionWa();
 
   const tujuan = await periodeTujuan(input.periodeId);
@@ -84,14 +81,49 @@ export async function simpanKetersediaan(input: MasukanSimpan): Promise<Hasil> {
   const semuaSlot = await listSlot(periode.id, { hanyaAktif: true });
   const slotMilikKelompok = semuaSlot.filter((s) => s.kelompok === sesi.gender);
   const sahIds = new Set(slotMilikKelompok.map((s) => s.id));
+  const slotById = new Map(slotMilikKelompok.map((s) => [s.id, s]));
   const diminta = [...new Set(input.slotIds)].filter((id) => sahIds.has(id));
   if (diminta.length !== new Set(input.slotIds).size) {
     return { ok: false, error: 'Ada slot yang tidak dikenali atau sudah dinonaktifkan. Muat ulang halaman.' };
   }
   if (diminta.length === 0) return { ok: false, error: 'Pilih minimal satu slot.' };
 
-  // Slot yang bertabrakan dengan jadwal mengajar berjalan tidak boleh dipilih,
-  // kecuali sanggahannya sudah diterima koordinator.
+  // Pilihan yang SUDAH tersimpan harus diketahui sebelum aturan penolakan mana pun
+  // dijalankan. Sebagian besar isian periode berjalan lahir dari impor dan memuat
+  // slot yang baru belakangan menjadi terlarang (offline, atau bentrok dengan
+  // halaqah yang masih `active`); bila baris lama ikut menolak kiriman, pengajar
+  // terkunci total — bahkan untuk sekadar melepas slot yang salah.
+  let barisTersimpan: { id: string; slot_id: string }[] = [];
+  if (adaPengisian) {
+    const { data } = await supabaseAdmin
+      .from('ks_ketersediaan')
+      .select('id, slot_id')
+      .eq('pengisian_id', adaPengisian.id as string);
+    barisTersimpan = (data ?? []) as { id: string; slot_id: string }[];
+  }
+  const lamaIds = new Map(barisTersimpan.map((r) => [r.slot_id, r.id]));
+  const tersimpanSebelumnya = new Set<string>(lamaIds.keys());
+  const labelSlot = (ids: string[]) => ids.map((id) => slotById.get(id)?.label ?? id);
+
+  // Slot offline mengikat ruang fisik yang ketersediaannya hanya diketahui
+  // koordinator, jadi menambahkannya bukan hak pengajar. Yang sudah tersimpan
+  // tetap dihormati — termasuk hak melepasnya, karena melepas tidak menuntut
+  // ruang mana pun.
+  const offlineBaru = diminta.filter(
+    (id) => !tersimpanSebelumnya.has(id) && slotById.get(id)?.mode === 'offline'
+  );
+  if (offlineBaru.length > 0) {
+    return {
+      ok: false,
+      error: `Slot offline hanya dapat ditambahkan lewat koordinator: ${labelSlot(offlineBaru).join('; ')}`,
+    };
+  }
+
+  // Slot yang bertabrakan dengan jadwal mengajar berjalan tidak boleh dipilih
+  // BARU, kecuali sanggahannya sudah diterima koordinator. Yang sudah tersimpan
+  // dibiarkan apa adanya: `hits_halaqah` kerap basi (sheet disync manual, dan
+  // `active` bisa hidup lagi sendiri), sehingga bentrok yang baru muncul bukan
+  // perbuatan pengajar dan tidak boleh membatalkan seluruh kirimannya.
   const terpakai = await jadwalTerpakaiPengajar(sesi.pengajar_id, { acuan: periode.mulai });
   const terkunci = kunciSlot(slotMilikKelompok, terpakai);
   const { data: sanggahDiterima } = sahIds.size
@@ -106,21 +138,12 @@ export async function simpanKetersediaan(input: MasukanSimpan): Promise<Hasil> {
       .filter((r) => r.pengisian?.pengajar_id === sesi.pengajar_id)
       .map((r) => r.slot_id)
   );
-  const melanggar = diminta.filter((id) => terkunci.has(id) && !dibuka.has(id));
+  const bentrokTersisa = diminta.filter((id) => terkunci.has(id) && !dibuka.has(id));
+  const melanggar = bentrokTersisa.filter((id) => !tersimpanSebelumnya.has(id));
   if (melanggar.length > 0) {
-    const nama = slotMilikKelompok.filter((s) => melanggar.includes(s.id)).map((s) => s.label);
     return {
       ok: false,
-      error: `Slot berikut bertabrakan dengan jadwal mengajar Anda: ${nama.join('; ')}. Ajukan sanggahan bila jadwal itu sudah selesai.`,
-    };
-  }
-
-  const kurangDariMinimum = diminta.length < periode.minimal_slot;
-  const alasan = input.alasanKurangSlot.trim();
-  if (kurangDariMinimum && !alasan) {
-    return {
-      ok: false,
-      error: `Minimal ${periode.minimal_slot} slot. Bila tidak memungkinkan, tuliskan alasannya — pengisian tetap diterima.`,
+      error: `Slot berikut bertabrakan dengan jadwal mengajar Anda: ${labelSlot(melanggar).join('; ')}. Ajukan sanggahan bila jadwal itu sudah selesai.`,
     };
   }
 
@@ -130,7 +153,6 @@ export async function simpanKetersediaan(input: MasukanSimpan): Promise<Hasil> {
     pengajar_id: sesi.pengajar_id,
     mode: input.mode,
     lokasi: input.mode === 'online' ? null : input.lokasi.trim(),
-    alasan_kurang_slot: alasan || null,
     komitmen: true,
     submitted_at: adaPengisian ? undefined : sekarang,
     disegarkan_pada: sekarang,
@@ -165,19 +187,13 @@ export async function simpanKetersediaan(input: MasukanSimpan): Promise<Hasil> {
     wa_sah: waSah,
     tanpa_bentrok_maahir: true,
     tanpa_bentrok_hits: true,
-    slot_cukup: !kurangDariMinimum,
+    // `slot_cukup` sengaja tidak diisi: tidak ada lagi ambang jumlah slot.
+    // Menyanggupi satu jam saja sudah sah — pengajar yang hanya punya satu jam
+    // bukan kasus yang perlu ditanyai koordinator.
     slot_aktif: true,
   };
   // Butir yang gagal tidak menolak baris; ia menurunkannya ke antrean koordinator.
-  const status: KsKetersediaanStatus = waSah && !kurangDariMinimum ? 'diajukan' : 'perlu_konfirmasi';
-
-  const { data: lama } = await supabaseAdmin
-    .from('ks_ketersediaan')
-    .select('id, slot_id')
-    .eq('pengisian_id', pengisianId);
-  const lamaIds = new Map(
-    ((lama ?? []) as { id: string; slot_id: string }[]).map((r) => [r.slot_id, r.id])
-  );
+  const status: KsKetersediaanStatus = waSah ? 'diajukan' : 'perlu_konfirmasi';
 
   const dibuang = [...lamaIds.entries()].filter(([slotId]) => !diminta.includes(slotId));
   for (const [, id] of dibuang) {
@@ -206,7 +222,14 @@ export async function simpanKetersediaan(input: MasukanSimpan): Promise<Hasil> {
     entitas: 'ks_pengisian',
     entitas_id: pengisianId,
     aksi: adaPengisian ? 'ubah_ketersediaan' : 'kirim_ketersediaan',
-    sesudah: { slot: diminta.length, mode: input.mode, kurang_dari_minimum: kurangDariMinimum },
+    sesudah: {
+      slot: diminta.length,
+      mode: input.mode,
+      // Berapa slot bentrok yang dipertahankan karena sudah tersimpan — angka ini
+      // yang memberi tahu koordinator bahwa ada bentrok tak tersanggah di isian.
+      bentrok_dipertahankan: bentrokTersisa.filter((id) => tersimpanSebelumnya.has(id)).length,
+      sumber: 'form',
+    },
     aktor_wa: wa,
     aktor_nama: sesi.name,
   });
@@ -214,9 +237,7 @@ export async function simpanKetersediaan(input: MasukanSimpan): Promise<Hasil> {
   revalidatePath('/ketersediaan/pengajar');
   return {
     ok: true,
-    pesan: kurangDariMinimum
-      ? `Tersimpan: ${diminta.length} slot. Karena kurang dari ${periode.minimal_slot}, koordinator akan menghubungi Anda.`
-      : `Tersimpan: ${diminta.length} slot.`,
+    pesan: `Tersimpan: ${diminta.length} slot.`,
   };
 }
 
@@ -230,7 +251,6 @@ export async function simpanKetersediaan(input: MasukanSimpan): Promise<Hasil> {
  */
 export async function sanggahBentrok(input: { slotId: string; alasan: string; periodeId?: string }): Promise<Hasil> {
   const sesi = await requirePengajar();
-  await jagaFiturKetersediaan();
   const wa = await getSessionWa();
   const alasan = input.alasan.trim();
   if (alasan.length < 10) {

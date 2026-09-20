@@ -66,6 +66,7 @@
     "test-ketersediaan-impor": "NODE_PATH=./scripts/node-shims tsx scripts/test-ketersediaan-impor.ts",
     "test-ketersediaan-koordinator": "NODE_PATH=./scripts/node-shims tsx scripts/test-ketersediaan-koordinator.ts",
     "test-ketersediaan-alur": "NODE_PATH=./scripts/node-shims tsx scripts/test-ketersediaan-alur.ts",
+    "test-ketersediaan-aturan": "NODE_PATH=./scripts/node-shims tsx scripts/test-ketersediaan-aturan-slot.ts",
     "test-ketersediaan-e2e": "NODE_PATH=./scripts/node-shims tsx --env-file=.env.local scripts/test-ketersediaan-e2e.ts",
     "test-tilawah": "NODE_PATH=./scripts/node-shims tsx --env-file=.env.local scripts/test-tilawah.ts",
     "emit-ketersediaan-sql": "tsx scripts/emit-ketersediaan-sql.ts",

@@ -179,7 +179,6 @@ function tulisPetunjuk(wb: ExcelJS.Workbook, p: KsPeriode, urutan: Record<Gender
   ws.addRow([]);
   ws.addRow(['ATURAN YANG BERLAKU']).font = KOP;
   ws.addRow(['Kapasitas per halaqah', p.kapasitas_halaqah]);
-  ws.addRow(['Minimal slot per pengajar', p.minimal_slot]);
   ws.addRow(['Ambang bentuk halaqah', p.ambang_bentuk]);
   ws.addRow(['Ambang bawah (antrean tua)', p.ambang_bawah]);
   ws.addRow(['Batas usia antrean (hari)', p.usia_antrean_maks_hari]);

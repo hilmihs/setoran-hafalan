@@ -17,6 +17,14 @@ export interface SlotTampil {
   butuh_pengajar: boolean;
   pengajar_tersedia: number;
   peluang: string | null;
+  // Slot ini sudah tercatat di ks_ketersediaan milik pengajar — termasuk baris
+  // hasil impor. Dipakai agar pilihan lama tetap bisa dilepas walau slotnya
+  // sekarang dianggap bentrok.
+  tersimpan: boolean;
+  // Slot ini boleh DICENTANG BARU. False bila terkunci karena bentrok (kecuali
+  // sanggahannya diterima) atau bila slotnya offline — penambahan offline kini
+  // hanya lewat koordinator.
+  boleh_tambah: boolean;
 }
 
 interface Props {
@@ -25,10 +33,12 @@ interface Props {
   awalDipilih: string[];
   awalMode: 'online' | 'offline' | 'keduanya';
   awalLokasi: string;
-  awalAlasan: string;
   sudahKirim: boolean;
+  // Terpisah dari `sudahKirim`: baris hasil impor punya komitmen tercatat padahal
+  // pengajarnya belum pernah membuka form ini. Mencentangnya otomatis =
+  // komitmen palsu, jadi centang awal hanya untuk isian yang benar-benar dari form.
+  komitmenAwal: boolean;
   terkunciIsian: boolean;
-  minimalSlot: number;
   kapasitas: number;
   formTerbuka: boolean;
 }
@@ -37,8 +47,7 @@ export function FormKetersediaan(props: Props) {
   const [dipilih, setDipilih] = useState<Set<string>>(new Set(props.awalDipilih));
   const [mode, setMode] = useState(props.awalMode);
   const [lokasi, setLokasi] = useState(props.awalLokasi);
-  const [alasan, setAlasan] = useState(props.awalAlasan);
-  const [komitmen, setKomitmen] = useState(props.sudahKirim);
+  const [komitmen, setKomitmen] = useState(props.komitmenAwal);
   const [pesan, setPesan] = useState<string | null>(null);
   const [galat, setGalat] = useState<string | null>(null);
   const [pending, mulai] = useTransition();
@@ -58,7 +67,6 @@ export function FormKetersediaan(props: Props) {
   }, [props.slots]);
 
   const jumlah = dipilih.size;
-  const kurang = jumlah > 0 && jumlah < props.minimalSlot;
 
   function alih(id: string) {
     setDipilih((s) => {
@@ -78,7 +86,6 @@ export function FormKetersediaan(props: Props) {
         slotIds: [...dipilih],
         mode,
         lokasi,
-        alasanKurangSlot: alasan,
         komitmen,
       });
       if (r.ok) setPesan(r.pesan);
@@ -103,7 +110,8 @@ export function FormKetersediaan(props: Props) {
 
       <h2 className="t-h2" style={{ marginBottom: 4, fontSize: 16 }}>Pilih slot waktu</h2>
       <p className="t-small" style={{ color: 'var(--muted-2)', marginBottom: 10 }}>
-        Minimal {props.minimalSlot} slot. Satu halaqah berisi maksimal {props.kapasitas} murid.
+        Pilih sebanyak yang benar-benar Anda sanggupi — tidak ada jumlah minimum.
+        Satu halaqah berisi maksimal {props.kapasitas} murid.
       </p>
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -149,26 +157,6 @@ export function FormKetersediaan(props: Props) {
               placeholder="Masjid / lembaga tempat Anda mengajar"
               style={{ width: '100%', marginTop: 4 }}
             />
-          </div>
-        )}
-
-        {kurang && (
-          <div>
-            <label className="t-small" style={{ fontWeight: 600 }}>
-              Alasan memilih kurang dari {props.minimalSlot} slot
-            </label>
-            <textarea
-              className="input"
-              value={alasan}
-              disabled={!bisaDiubah}
-              onChange={(e) => setAlasan(e.target.value)}
-              rows={3}
-              placeholder="Contoh: Senin–Kamis terikat pekerjaan sampai pukul 19.00"
-              style={{ width: '100%', marginTop: 4 }}
-            />
-            <p className="t-small" style={{ color: 'var(--muted-2)', marginTop: 4 }}>
-              Pengisian tetap diterima. Koordinator akan menghubungi untuk menawarkan slot lain.
-            </p>
           </div>
         )}
 
@@ -234,26 +222,37 @@ function KartuSlot({
 
   const menungguSanggahan = slot.sanggahan_status === 'menunggu';
 
+  // Yang sudah tercentang selalu boleh DILEPAS — kalau tidak, slot hasil impor
+  // yang kini dianggap bentrok akan terkunci-tercentang selamanya dan pengajar
+  // tidak bisa menyimpan apa pun.
+  const terkunciCentang = !bisaDiubah || (!dicentang && !slot.boleh_tambah);
+
+  // Dua sebab berbeda, dua nada berbeda: gembok = bentrok jadwal Anda sendiri
+  // (bisa disanggah), sedangkan slot offline hanya dibatasi kebijakan
+  // koordinator — bukan salah pengajar, jadi tidak pakai gembok/sanggahan.
+  const kebijakanOffline = slot.mode === 'offline' && !slot.tersimpan && !slot.terkunci;
+  const redup = !slot.boleh_tambah && !slot.tersimpan;
+
   return (
     <div
       className="card-flat"
       style={{
         padding: '10px 12px',
-        opacity: slot.terkunci ? 0.75 : 1,
+        opacity: redup ? 0.75 : 1,
         borderLeft: slot.butuh_pengajar ? '3px solid var(--accent)' : undefined,
       }}
     >
-      <label style={{ display: 'flex', gap: 10, alignItems: 'flex-start', cursor: slot.terkunci ? 'default' : 'pointer' }}>
+      <label style={{ display: 'flex', gap: 10, alignItems: 'flex-start', cursor: terkunciCentang ? 'default' : 'pointer' }}>
         <input
           type="checkbox"
           checked={dicentang}
-          disabled={slot.terkunci || !bisaDiubah}
+          disabled={terkunciCentang}
           onChange={onAlih}
           style={{ marginTop: 3 }}
         />
         <span style={{ flex: 1 }}>
           <span className="t-body" style={{ fontWeight: 600 }}>
-            {slot.terkunci ? '🔒 ' : ''}
+            {slot.terkunci ? '🔒 ' : kebijakanOffline ? '📍 ' : ''}
             {slot.label}
           </span>
           {slot.mode === 'offline' && (
@@ -265,6 +264,19 @@ function KartuSlot({
           {slot.terkunci && slot.alasan_kunci && (
             <span className="t-small" style={{ display: 'block', color: 'var(--muted-2)', marginTop: 2 }}>
               {slot.alasan_kunci}
+            </span>
+          )}
+
+          {slot.terkunci && slot.tersimpan && (
+            <span className="t-small" style={{ display: 'block', color: 'var(--muted-2)', marginTop: 2 }}>
+              Pilihan lama Anda tetap tersimpan. Lepaskan centang bila jadwal ini memang tidak
+              lagi Anda sanggupi.
+            </span>
+          )}
+
+          {kebijakanOffline && (
+            <span className="t-small" style={{ display: 'block', color: 'var(--muted-2)', marginTop: 2 }}>
+              Slot offline diatur koordinator — hubungi koordinator bila Anda menyanggupi jam ini.
             </span>
           )}
 
@@ -289,6 +301,9 @@ function KartuSlot({
         </span>
       </label>
 
+      {/* Sanggahan hanya relevan untuk kunci karena bentrok (`slot.terkunci`).
+          Slot offline yang tidak bentrok bukan perkara yang bisa disanggah —
+          itu kebijakan, bukan klaim jadwal yang keliru. */}
       {slot.terkunci && bisaDiubah && !menungguSanggahan && !hasil && (
         <div style={{ marginTop: 6 }}>
           {!bukaSanggah ? (

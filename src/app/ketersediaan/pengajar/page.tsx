@@ -1,6 +1,4 @@
-import { notFound } from 'next/navigation';
 import { requirePengajar } from '@/lib/session';
-import { bolehLihatFiturTersembunyi } from '@/lib/admin-guard';
 import { supabaseAdmin } from '@/lib/supabase-admin';
 import { LogoutButton } from '@/components/LogoutButton';
 import { FeatureNav } from '@/components/FeatureNav';
@@ -54,11 +52,6 @@ export default async function KetersediaanPengajarPage({
   searchParams?: { periode?: string };
 }) {
   const sesi = await requirePengajar();
-  // Fitur masih disembunyikan: sudah ter-deploy tetapi belum diumumkan ke
-  // pengajar. Menyembunyikan dari menu saja tidak cukup — URL-nya tetap bisa
-  // diketik. 404, bukan redirect, supaya halamannya tidak terasa "ada tapi
-  // dilarang" bagi yang belum berkepentingan.
-  if (!(await bolehLihatFiturTersembunyi())) notFound();
 
   const sekarang = new Date();
   // Beberapa tahap bisa terbuka bersamaan (mis. mulai 5 dan 21 Oktober). Pengajar
@@ -103,13 +96,17 @@ export default async function KetersediaanPengajarPage({
 
   const { data: pengisian } = await supabaseAdmin
     .from('ks_pengisian')
-    .select('id, mode, lokasi, alasan_kurang_slot, komitmen, terkunci, submitted_at')
+    .select('id, mode, lokasi, komitmen, terkunci, submitted_at, sumber')
     .eq('periode_id', periode.id)
     .eq('pengajar_id', sesi.pengajar_id)
     .maybeSingle();
 
   let dipilih: string[] = [];
   const sanggahan = new Map<string, string>();
+  // Beda dari `dipilih`: ini keberadaan barisnya apa adanya, termasuk baris yang
+  // hanya berisi sanggahan menunggu. Dipakai agar pilihan lama tetap bisa
+  // dilepas walau slotnya sekarang dianggap bentrok.
+  const tersimpan = new Set<string>();
   if (pengisian) {
     const { data: baris } = await supabaseAdmin
       .from('ks_ketersediaan')
@@ -121,6 +118,7 @@ export default async function KetersediaanPengajarPage({
       sanggahan_status: string | null;
     }[]) {
       if (b.sanggahan_status) sanggahan.set(b.slot_id, b.sanggahan_status);
+      tersimpan.add(b.slot_id);
       // Baris yang hanya berisi sanggahan bukan pilihan — jangan dicentang.
       if (b.sanggahan_status === 'menunggu' && b.status === 'perlu_konfirmasi') continue;
       dipilih.push(b.slot_id);
@@ -132,14 +130,15 @@ export default async function KetersediaanPengajarPage({
     const r = ringkas.get(s.id);
     const kunci = terkunci.get(s.id);
     const statusSanggahan = sanggahan.get(s.id) ?? null;
+    // Sanggahan yang sudah diterima membuka kunci — koordinator sudah menyatakan
+    // jadwal lama itu memang sudah selesai.
+    const terkunciFinal = Boolean(kunci) && statusSanggahan !== 'diterima';
     return {
       id: s.id,
       label: s.label,
       mode: s.mode,
       lokasi: s.lokasi,
-      // Sanggahan yang sudah diterima membuka kunci — koordinator sudah menyatakan
-      // jadwal lama itu memang sudah selesai.
-      terkunci: Boolean(kunci) && statusSanggahan !== 'diterima',
+      terkunci: terkunciFinal,
       alasan_kunci: kunci ? alasanTerkunci(kunci) : null,
       sanggahan_status: statusSanggahan,
       antre: r?.antre ?? 0,
@@ -148,6 +147,11 @@ export default async function KetersediaanPengajarPage({
       butuh_pengajar: (butuh[s.id] ?? 0) > 0,
       pengajar_tersedia: r?.pengajar_tersedia ?? 0,
       peluang: teksPeluang(r?.riwayat ?? null),
+      tersimpan: tersimpan.has(s.id),
+      // Penambahan slot offline kini lewat koordinator, jadi slot offline tidak
+      // boleh dicentang baru walau tidak bentrok. Yang sudah tersimpan tetap
+      // bisa dilepas — itu diurus di sisi form.
+      boleh_tambah: !terkunciFinal && s.mode !== 'offline',
     };
   });
 
@@ -185,6 +189,7 @@ export default async function KetersediaanPengajarPage({
       <p className="t-small" style={{ color: 'var(--muted-2)', marginBottom: 16 }}>
         Periode <strong>{periode.nama}</strong>. Nyatakan slot waktu yang Anda sanggupi —
         bukan tanggal. Kelas dibentuk saat murid cukup dan pengajar tersedia.
+        Slot offline diatur koordinator, jadi tidak bisa ditambahkan sendiri dari halaman ini.
       </p>
 
       {jadwalSaya.length > 0 && (
@@ -224,10 +229,11 @@ export default async function KetersediaanPengajarPage({
         awalDipilih={dipilih}
         awalMode={(pengisian?.mode as 'online' | 'offline' | 'keduanya') ?? 'online'}
         awalLokasi={(pengisian?.lokasi as string | null) ?? ''}
-        awalAlasan={(pengisian?.alasan_kurang_slot as string | null) ?? ''}
         sudahKirim={Boolean(pengisian?.submitted_at)}
+        // Baris hasil impor membawa komitmen=true padahal pengajarnya belum
+        // pernah melihat form ini; mencentangnya otomatis = komitmen palsu.
+        komitmenAwal={Boolean(pengisian?.komitmen) && pengisian?.sumber === 'form'}
         terkunciIsian={Boolean(pengisian?.terkunci)}
-        minimalSlot={periode.minimal_slot}
         kapasitas={periode.kapasitas_halaqah}
         formTerbuka={terbuka}
       />

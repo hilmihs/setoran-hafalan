@@ -2,7 +2,6 @@
 
 import { revalidatePath } from 'next/cache';
 import { requireOneOfRoles } from '@/lib/session';
-import { bolehLihatFiturTersembunyi } from '@/lib/admin-guard';
 import { getSessionWa } from '@/lib/program-kelas';
 import { simpanImpor, susunPratinjau, type PilihanImpor, type Pratinjau } from '@/lib/ketersediaan-impor';
 import { cekZipAman } from '@/lib/zip-aman';
@@ -14,7 +13,6 @@ const BATAS_BYTE = 5 * 1024 * 1024;
 
 async function jaga(): Promise<{ wa: string | null; nama: string } | string> {
   const sesi = await requireOneOfRoles(['koordinator']);
-  if (!(await bolehLihatFiturTersembunyi())) return 'Fitur ini belum dibuka.';
   return { wa: await getSessionWa(), nama: sesi.name };
 }
 

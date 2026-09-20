@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server';
 import { requireOneOfRoles } from '@/lib/session';
-import { bolehLihatFiturTersembunyi } from '@/lib/admin-guard';
 import { getPeriode, getPeriodeAktif } from '@/lib/ketersediaan-periode';
 import { bangunWorkbook, namaBerkas } from '@/lib/ketersediaan-export';
 import { supabaseAdmin } from '@/lib/supabase-admin';
@@ -16,11 +15,6 @@ export const dynamic = 'force-dynamic';
  */
 export async function GET(req: Request) {
   await requireOneOfRoles(['koordinator']);
-  // Ikut disembunyikan bersama halamannya — kalau tidak, xlsx-nya masih bisa
-  // diunduh siapa pun yang berperan koordinator hanya dengan menebak URL.
-  if (!(await bolehLihatFiturTersembunyi())) {
-    return NextResponse.json({ error: 'Not found' }, { status: 404 });
-  }
 
   const url = new URL(req.url);
   const periodeId = url.searchParams.get('periode');

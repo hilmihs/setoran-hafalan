@@ -17,7 +17,6 @@ import { susunLabel, uraikanSlot } from '@/lib/ketersediaan-slot';
 import { identitasPendaftar, tarikSumber, tebakPemetaan } from '@/lib/ketersediaan-pendaftar';
 import { identitasTerpakaiLintasPeriode } from '@/lib/ketersediaan-lintas-periode';
 import { parseCsv } from '@/lib/csv';
-import { jagaFiturKetersediaan } from '@/lib/ketersediaan-akses';
 import { ambilCsvTerbit, urlCsvSah } from '@/lib/ketersediaan-csv-url';
 import { uraiLibur } from '@/lib/ketersediaan-pertemuan';
 import { jalankanAlokasi } from '@/lib/ketersediaan-jalankan';
@@ -33,7 +32,6 @@ export type Hasil = { ok: true; pesan: string; data?: unknown } | { ok: false; e
 
 async function aktor(): Promise<{ wa: string | null; nama: string }> {
   const sesi = await requireOneOfRoles(['koordinator']);
-  await jagaFiturKetersediaan();
   return { wa: await getSessionWa(), nama: sesi.name };
 }
 
@@ -48,7 +46,6 @@ export async function buatPeriode(input: {
   nama: string;
   mulai: string;
   selesai: string;
-  minimalSlot: number;
   kapasitas: number;
   isiSlotBawaan: boolean;
 }): Promise<Hasil> {
@@ -63,7 +60,9 @@ export async function buatPeriode(input: {
       nama: input.nama.trim(),
       mulai: input.mulai,
       selesai: input.selesai,
-      minimal_slot: Math.max(0, Math.min(50, input.minimalSlot)),
+      // 0 = tanpa ambang. Ambang jumlah slot dihapus: pengajar yang hanya
+      // sanggup satu jam tetap isian yang sah, bukan kasus untuk koordinator.
+      minimal_slot: 0,
       kapasitas_halaqah: Math.max(1, Math.min(100, input.kapasitas)),
       // Bergulir: form tidak pernah ditutup kecuali koordinator menutupnya sendiri.
       form_tutup: null,
@@ -118,7 +117,6 @@ export async function ubahAturanPeriode(input: {
   selesai: string;
   /** Satu libur per baris, lihat `uraiLibur`. */
   liburTeks: string;
-  minimalSlot: number;
   kapasitas: number;
   ambangBentuk: number;
   ambangBawah: number;
@@ -136,7 +134,6 @@ export async function ubahAturanPeriode(input: {
   // basis data dan, sebelum perbaikan ini, ditelan diam-diam.
   input = {
     ...input,
-    minimalSlot: jepit(input.minimalSlot, 0, 50),
     kapasitas: jepit(input.kapasitas, 1, 100),
     ambangBentuk: jepit(input.ambangBentuk, 1, 100),
     ambangBawah: jepit(input.ambangBawah, 1, 100),
@@ -164,7 +161,6 @@ export async function ubahAturanPeriode(input: {
     mulai: input.mulai,
     selesai: input.selesai,
     libur,
-    minimal_slot: input.minimalSlot,
     kapasitas_halaqah: input.kapasitas,
     ambang_bentuk: input.ambangBentuk,
     ambang_bawah: input.ambangBawah,

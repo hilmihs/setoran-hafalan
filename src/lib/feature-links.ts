@@ -173,7 +173,6 @@ export const FEATURE_LINKS: FeatureLink[] = [
     navLabel: 'Ketersediaan',
     description: 'Nyatakan slot waktu yang Anda sanggupi — lihat jadwal Anda & peminat tiap slot',
     match: (a) => a.role === 'pengajar',
-    superadminOnly: true,
   },
   {
     href: '/ketersediaan/koordinator',
@@ -181,7 +180,6 @@ export const FEATURE_LINKS: FeatureLink[] = [
     navLabel: 'Kelola Ketersediaan',
     description: 'Periode & master slot, verifikasi isian, pasokan vs permintaan per slot',
     match: (a) => a.role === 'koordinator',
-    superadminOnly: true,
   },
   {
     href: '/evaluasi/pengajar',

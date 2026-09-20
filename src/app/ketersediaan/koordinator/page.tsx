@@ -3,7 +3,7 @@ import { notFound } from 'next/navigation';
 import { requireOneOfRoles } from '@/lib/session';
 import { LogoutButton } from '@/components/LogoutButton';
 import { FeatureNav } from '@/components/FeatureNav';
-import { bolehLihatFiturTersembunyi, isSuperadmin } from '@/lib/admin-guard';
+import { isSuperadmin } from '@/lib/admin-guard';
 import { listPeriode, listSlot } from '@/lib/ketersediaan-periode';
 import { ringkasSlot } from '@/lib/ketersediaan-permintaan';
 import { listPreset } from '@/lib/ketersediaan-prioritas';
@@ -71,8 +71,6 @@ export default async function KetersediaanKoordinatorPage({
   searchParams: { periode?: string; tab?: string; g?: string };
 }) {
   const sesi = await requireOneOfRoles(['koordinator']);
-  // Masih disembunyikan: hanya superadmin (dan sesi login-sebagai oleh superadmin).
-  if (!(await bolehLihatFiturTersembunyi())) notFound();
 
   const superadmin = await isSuperadmin();
   const sekarang = new Date();
