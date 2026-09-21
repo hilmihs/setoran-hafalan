@@ -7,6 +7,7 @@ import { isSuperadmin } from '@/lib/admin-guard';
 import { listPeriode, listSlot } from '@/lib/ketersediaan-periode';
 import { ringkasSlot } from '@/lib/ketersediaan-permintaan';
 import { listPreset } from '@/lib/ketersediaan-prioritas';
+import { daftarDipakai, listKelayakan, ringkasKelayakan, urutkanKelayakan } from '@/lib/ketersediaan-kelayakan';
 import { ringkasDitahan } from '@/lib/ketersediaan-ditahan';
 import {
   jumlahkan,
@@ -27,6 +28,7 @@ import { PanelPengingat } from './PanelPengingat';
 import { PanelGrupPool } from './PanelGrupPool';
 import { PanelDitahan } from './PanelDitahan';
 import { PanelImpor } from './PanelImpor';
+import { PanelKelayakan } from './PanelKelayakan';
 import {
   hitungPengajarTersedia,
   muatAntrean,
@@ -331,6 +333,12 @@ export default async function KetersediaanKoordinatorPage({
       </div>
     );
   } else {
+    // Kelayakan hanya dibaca di tab pengaturan: satu query per pengajar aktif,
+    // percuma dijalankan di tab yang tidak menampilkannya.
+    const [kelayakan, daftarKelayakan] = await Promise.all([
+      ringkasKelayakan(periode.id, sesi.gender),
+      listKelayakan(periode.id),
+    ]);
     isi = (
       <div className="ks-isi">
         <PanelImpor />
@@ -341,6 +349,22 @@ export default async function KetersediaanKoordinatorPage({
           periode={periode}
           superadmin={superadmin}
           polaHari={[...new Map(slotAktif.map((s) => [s.hari_idx.join(','), s.hari_idx])).values()].sort((a, b) => a.join().localeCompare(b.join()))}
+        />
+        <PanelKelayakan
+          key={`kelayakan-${periode.id}`}
+          periodeId={periode.id}
+          baris={urutkanKelayakan(kelayakan).map((b) => ({
+            pengajar_id: b.pengajar_id,
+            nama: b.nama,
+            boleh: b.boleh,
+            belumDisetel: b.belumDisetel,
+            belumMengajar: b.belumMengajar,
+            punyaIsian: b.punyaIsian,
+          }))}
+          pakaiDaftar={daftarDipakai(daftarKelayakan)}
+          periodeLain={semuaPeriode
+            .filter((p) => p.id !== periode.id)
+            .map((p) => ({ id: p.id, nama: p.nama }))}
         />
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
           <a className="btn btn-sm btn-ghost" href={`/api/ketersediaan/ekspor?periode=${periode.id}`}>

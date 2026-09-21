@@ -59,6 +59,7 @@ import {
 } from '@/lib/ketersediaan-dasbor';
 import type { RingkasSlot } from '@/lib/ketersediaan-permintaan';
 import type { KsHariIdx, KsSlot } from '@/types/db';
+import { daftarDipakai, layakMenurutDaftar } from '@/lib/ketersediaan-kelayakan-aturan';
 
 let failed = 0;
 function eq(actual: unknown, expected: unknown, label: string) {
@@ -872,6 +873,21 @@ console.log('\n# kunci baris kembar & perubahan isi');
   eq(samaIsi(isi, { ...isi, slot_id: 't' }), false, 'samaIsi: slot berubah terdeteksi');
   eq(samaIsi(isi, { ...isi, alasan_ditahan: ['x'] }), false, 'samaIsi: alasan berubah terdeteksi');
 }
+
+// ── Kelayakan pengajar ─────────────────────────────────────────────────────
+// Periode yang daftarnya belum disetel harus membiarkan semua orang masuk;
+// kalau tidak, periode baru mengunci semua pengajar diam-diam.
+eq(layakMenurutDaftar([], 'p1'), true, 'daftar kosong → semua pengajar layak');
+eq(daftarDipakai([]), false, 'daftar kosong → belum memakai daftar');
+
+const daftarUji = [
+  { pengajar_id: 'p1', boleh: true },
+  { pengajar_id: 'p2', boleh: false },
+];
+eq(daftarDipakai(daftarUji), true, 'ada baris → memakai daftar');
+eq(layakMenurutDaftar(daftarUji, 'p1'), true, 'tercatat boleh → layak');
+eq(layakMenurutDaftar(daftarUji, 'p2'), false, 'tercatat tidak boleh → tak layak');
+eq(layakMenurutDaftar(daftarUji, 'p3'), false, 'tak tercatat padahal daftar dipakai → tak layak');
 
 console.log(failed === 0 ? '\nSEMUA LULUS' : `\n${failed} GAGAL`);
 process.exit(failed === 0 ? 0 : 1);

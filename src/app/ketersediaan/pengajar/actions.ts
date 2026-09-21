@@ -7,6 +7,7 @@ import { getSessionWa } from '@/lib/program-kelas';
 import { catatKs } from '@/lib/ketersediaan-log';
 import { formTerbuka, getPeriode, listSlot, periodeTerbukaUntukPengajar } from '@/lib/ketersediaan-periode';
 import { jadwalTerpakaiPengajar, kunciSlot } from '@/lib/ketersediaan-bentrok';
+import { apakahLayak } from '@/lib/ketersediaan-kelayakan';
 import type { KsCekButir, KsKetersediaanStatus, KsModePengajar, KsPeriode } from '@/types/db';
 
 export type Hasil = { ok: true; pesan: string } | { ok: false; error: string };
@@ -54,6 +55,14 @@ export async function simpanKetersediaan(input: MasukanSimpan): Promise<Hasil> {
   const tujuan = await periodeTujuan(input.periodeId);
   if ('galat' in tujuan) return { ok: false, error: tujuan.galat };
   const periode = tujuan;
+  // Diperiksa lagi di sini, bukan hanya di halaman: kelayakan bisa dicabut
+  // koordinator setelah halamannya terbuka di layar pengajar.
+  if (!(await apakahLayak(periode.id, sesi.pengajar_id))) {
+    return {
+      ok: false,
+      error: 'Anda belum terdaftar sebagai pengajar untuk periode ini. Hubungi koordinator.',
+    };
+  }
   if (!MODE_SAH.includes(input.mode)) return { ok: false, error: 'Mode mengajar tidak dikenal.' };
   if (!input.komitmen) {
     return { ok: false, error: 'Pernyataan komitmen harus dicentang sebelum mengirim.' };
@@ -260,6 +269,14 @@ export async function sanggahBentrok(input: { slotId: string; alasan: string; pe
   const tujuan = await periodeTujuan(input.periodeId);
   if ('galat' in tujuan) return { ok: false, error: tujuan.galat };
   const periode = tujuan;
+  // Diperiksa lagi di sini, bukan hanya di halaman: kelayakan bisa dicabut
+  // koordinator setelah halamannya terbuka di layar pengajar.
+  if (!(await apakahLayak(periode.id, sesi.pengajar_id))) {
+    return {
+      ok: false,
+      error: 'Anda belum terdaftar sebagai pengajar untuk periode ini. Hubungi koordinator.',
+    };
+  }
 
   const { data: slot } = await supabaseAdmin
     .from('ks_slot')

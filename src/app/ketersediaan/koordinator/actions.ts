@@ -7,9 +7,15 @@ import { getAdminActor, requireAdmin } from '@/lib/admin-guard';
 import { getPool } from '@/lib/pg-core';
 import { getSessionWa } from '@/lib/program-kelas';
 import { absUrl } from '@/lib/url';
-import { buildWaMeUrl, tplButuhPengajarSlot, tplSegarkanKetersediaan } from '@/lib/whatsapp';
+import {
+  buildWaMeUrl,
+  tplAnulirKetersediaan,
+  tplButuhPengajarSlot,
+  tplSegarkanKetersediaan,
+} from '@/lib/whatsapp';
 import { tautanWaKonfirmasi } from './data';
 import { catatKs } from '@/lib/ketersediaan-log';
+import { layakMenurutDaftar, listKelayakan } from '@/lib/ketersediaan-kelayakan';
 import { getPeriode, getPeriodeAktif, listSlot, siapkanSlot, SLOT_BAWAAN } from '@/lib/ketersediaan-periode';
 import { ringkasSlot } from '@/lib/ketersediaan-permintaan';
 import { catatRiwayatPeriode } from '@/lib/ketersediaan-ditahan';
@@ -26,7 +32,7 @@ import {
   tenggatDari,
   terbitkanToken,
 } from '@/lib/ketersediaan-konfirmasi';
-import type { KsPemetaanKolom, KsPendaftarSumber, KsPrioritasPreset } from '@/types/db';
+import type { Gender, KsPemetaanKolom, KsPendaftarSumber, KsPrioritasPreset } from '@/types/db';
 
 export type Hasil = { ok: true; pesan: string; data?: unknown } | { ok: false; error: string };
 
@@ -1239,5 +1245,248 @@ export async function rekamRiwayatPeriode(input: { periodeId: string }): Promise
   return {
     ok: true,
     pesan: `${h.slot} slot tercatat — ${h.terbentuk} halaqah terbentuk, ${h.batal} batal.`,
+  };
+}
+
+// ── Kelayakan pengajar ─────────────────────────────────────────────────────
+
+/**
+ * Daftar pengajar batch ini dulu hanya ada di dropdown form Google; sekarang
+ * koordinator yang menyetelnya sendiri. Semua aksi di bawah dikunci ke gender
+ * koordinator — sama seperti modul lain, koordinator ikhwan tidak menyentuh
+ * data akhwat dan sebaliknya.
+ */
+async function pengajarSegender(
+  pengajarId: string,
+  gender: Gender
+): Promise<{ id: string; name: string; gender: Gender; whatsapp_number: string } | null> {
+  const { data } = await supabaseAdmin
+    .from('pengajar')
+    .select('id, name, gender, whatsapp_number')
+    .eq('id', pengajarId)
+    .maybeSingle();
+  const p = data as { id: string; name: string; gender: Gender; whatsapp_number: string } | null;
+  if (!p || p.gender !== gender) return null;
+  return p;
+}
+
+export async function ubahKelayakan(input: {
+  periodeId: string;
+  pengajarId: string;
+  boleh: boolean;
+  alasan?: string;
+}): Promise<Hasil> {
+  const sesi = await requireOneOfRoles(['koordinator']);
+  const a = await aktor();
+  const periode = await getPeriode(input.periodeId);
+  if (!periode) return { ok: false, error: 'Periode tidak ditemukan.' };
+
+  const pengajar = await pengajarSegender(input.pengajarId, sesi.gender);
+  if (!pengajar) return { ok: false, error: 'Pengajar tidak ditemukan pada kelompok Anda.' };
+
+  const { data: lama } = await supabaseAdmin
+    .from('ks_kelayakan')
+    .select('id, boleh')
+    .eq('periode_id', input.periodeId)
+    .eq('pengajar_id', input.pengajarId)
+    .maybeSingle();
+
+  const isi = {
+    boleh: input.boleh,
+    alasan: input.alasan?.trim() || null,
+    diubah_oleh: a.wa,
+    updated_at: new Date().toISOString(),
+  };
+
+  if (lama) {
+    const { error } = await supabaseAdmin.from('ks_kelayakan').update(isi).eq('id', lama.id);
+    if (error) return { ok: false, error: error.message };
+  } else {
+    const { error } = await supabaseAdmin.from('ks_kelayakan').insert({
+      periode_id: input.periodeId,
+      pengajar_id: input.pengajarId,
+      ...isi,
+    });
+    if (error) return { ok: false, error: error.message };
+  }
+
+  await catatKs({
+    periode_id: input.periodeId,
+    entitas: 'ks_kelayakan',
+    entitas_id: input.pengajarId,
+    aksi: input.boleh ? 'izinkan' : 'cabut',
+    sebelum: lama ? { boleh: lama.boleh } : null,
+    sesudah: { boleh: input.boleh, nama: pengajar.name },
+    alasan: input.alasan?.trim() || null,
+    aktor_wa: a.wa,
+    aktor_nama: a.nama,
+  });
+
+  segarkan();
+  return {
+    ok: true,
+    pesan: `${pengajar.name} ${input.boleh ? 'boleh' : 'tidak boleh'} mengisi ketersediaan periode ini.`,
+  };
+}
+
+/**
+ * Menyetel daftar sekaligus: dipakai tombol "semua boleh"/"hanya yang dicentang"
+ * dan penyalinan dari periode sebelumnya. Baris ditulis untuk SETIAP pengajar
+ * segender supaya periode itu jelas berada dalam mode daftar (periode tanpa
+ * baris sama sekali berarti "semua boleh").
+ */
+export async function setelKelayakanMassal(input: {
+  periodeId: string;
+  bolehIds: string[];
+}): Promise<Hasil> {
+  const sesi = await requireOneOfRoles(['koordinator']);
+  const a = await aktor();
+  const periode = await getPeriode(input.periodeId);
+  if (!periode) return { ok: false, error: 'Periode tidak ditemukan.' };
+
+  const { data: daftarPengajar } = await supabaseAdmin
+    .from('pengajar')
+    .select('id')
+    .eq('active', true)
+    .eq('gender', sesi.gender);
+  const semua = ((daftarPengajar ?? []) as { id: string }[]).map((p) => p.id);
+  const boleh = new Set(input.bolehIds.filter((id) => semua.includes(id)));
+
+  const { data: adaBaris } = await supabaseAdmin
+    .from('ks_kelayakan')
+    .select('id, pengajar_id')
+    .eq('periode_id', input.periodeId);
+  const idBaris = new Map(
+    ((adaBaris ?? []) as { id: string; pengajar_id: string }[]).map((r) => [r.pengajar_id, r.id])
+  );
+
+  const sekarang = new Date().toISOString();
+  for (const pengajarId of semua) {
+    const nilai = {
+      boleh: boleh.has(pengajarId),
+      diubah_oleh: a.wa,
+      updated_at: sekarang,
+    };
+    const baris = idBaris.get(pengajarId);
+    if (baris) {
+      await supabaseAdmin.from('ks_kelayakan').update(nilai).eq('id', baris);
+    } else {
+      await supabaseAdmin
+        .from('ks_kelayakan')
+        .insert({ periode_id: input.periodeId, pengajar_id: pengajarId, ...nilai });
+    }
+  }
+
+  await catatKs({
+    periode_id: input.periodeId,
+    entitas: 'ks_kelayakan',
+    aksi: 'setel_massal',
+    sesudah: { gender: sesi.gender, boleh: boleh.size, total: semua.length },
+    aktor_wa: a.wa,
+    aktor_nama: a.nama,
+  });
+
+  segarkan();
+  return { ok: true, pesan: `Daftar disimpan: ${boleh.size} dari ${semua.length} pengajar boleh mengisi.` };
+}
+
+/** Menyalin daftar kelayakan periode lain ke periode ini (gender koordinator). */
+export async function salinKelayakan(input: {
+  periodeId: string;
+  dariPeriodeId: string;
+}): Promise<Hasil> {
+  const sesi = await requireOneOfRoles(['koordinator']);
+  if (input.periodeId === input.dariPeriodeId) {
+    return { ok: false, error: 'Pilih periode asal yang berbeda.' };
+  }
+
+  const { data: asal } = await supabaseAdmin
+    .from('ks_kelayakan')
+    .select('pengajar_id, boleh, pengajar:pengajar_id(gender)')
+    .eq('periode_id', input.dariPeriodeId);
+  const baris = (asal ?? []) as {
+    pengajar_id: string;
+    boleh: boolean;
+    pengajar?: { gender: Gender } | null;
+  }[];
+  const bolehIds = baris
+    .filter((b) => b.boleh && b.pengajar?.gender === sesi.gender)
+    .map((b) => b.pengajar_id);
+  if (baris.length === 0) return { ok: false, error: 'Periode asal belum punya daftar kelayakan.' };
+
+  return setelKelayakanMassal({ periodeId: input.periodeId, bolehIds });
+}
+
+/**
+ * Isian milik pengajar yang tidak layak: dihapus, bukan ditandai.
+ *
+ * `ks_ketersediaan` ikut terhapus lewat cascade, jadi ringkasan slotnya disalin
+ * ke ks_log lebih dulu — kalau ternyata orangnya memang berhak, koordinator
+ * masih bisa melihat apa yang pernah dia isi.
+ */
+export async function hapusIsianTakLayak(input: {
+  periodeId: string;
+  pengajarId: string;
+}): Promise<Hasil> {
+  const sesi = await requireOneOfRoles(['koordinator']);
+  const a = await aktor();
+  const periode = await getPeriode(input.periodeId);
+  if (!periode) return { ok: false, error: 'Periode tidak ditemukan.' };
+
+  const pengajar = await pengajarSegender(input.pengajarId, sesi.gender);
+  if (!pengajar) return { ok: false, error: 'Pengajar tidak ditemukan pada kelompok Anda.' };
+
+  const daftar = await listKelayakan(input.periodeId);
+  if (layakMenurutDaftar(daftar, input.pengajarId)) {
+    return {
+      ok: false,
+      error: `${pengajar.name} masih terdaftar sebagai pengajar periode ini. Cabut kelayakannya dulu bila isiannya memang hendak dihapus.`,
+    };
+  }
+
+  const { data: pengisian } = await supabaseAdmin
+    .from('ks_pengisian')
+    .select('id, mode, lokasi, submitted_at, sumber')
+    .eq('periode_id', input.periodeId)
+    .eq('pengajar_id', input.pengajarId)
+    .maybeSingle();
+  if (!pengisian) return { ok: false, error: 'Tidak ada isian untuk dihapus.' };
+
+  const { data: barisSlot } = await supabaseAdmin
+    .from('ks_ketersediaan')
+    .select('slot_id, status, slot:slot_id(label)')
+    .eq('pengisian_id', pengisian.id as string);
+  const label = ((barisSlot ?? []) as { slot?: { label: string } | null }[])
+    .map((b) => b.slot?.label)
+    .filter((l): l is string => Boolean(l));
+
+  await catatKs({
+    periode_id: input.periodeId,
+    entitas: 'ks_pengisian',
+    entitas_id: pengisian.id as string,
+    aksi: 'hapus_tak_layak',
+    sebelum: { pengajar: pengajar.name, isian: pengisian, slot: label },
+    aktor_wa: a.wa,
+    aktor_nama: a.nama,
+  });
+
+  const { error } = await supabaseAdmin.from('ks_pengisian').delete().eq('id', pengisian.id as string);
+  if (error) return { ok: false, error: error.message };
+
+  segarkan();
+  return {
+    ok: true,
+    pesan: `Isian ${pengajar.name} dihapus (${label.length} slot). Kabari yang bersangkutan lewat tombol WA.`,
+    data: {
+      waUrl: buildWaMeUrl(
+        pengajar.whatsapp_number,
+        tplAnulirKetersediaan({
+          pengajarName: pengajar.name,
+          pengajarGender: pengajar.gender,
+          periodeNama: periode.nama,
+          slotLabel: label,
+        })
+      ),
+    },
   };
 }

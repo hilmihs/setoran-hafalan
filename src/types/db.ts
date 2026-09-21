@@ -1088,6 +1088,22 @@ export interface KsPengisian {
   updated_at: string;
 }
 
+/**
+ * Daftar pengajar yang boleh mengisi ketersediaan pada satu periode (0085).
+ * Periode tanpa satu pun baris = semua pengajar boleh — lihat
+ * `src/lib/ketersediaan-kelayakan.ts`.
+ */
+export interface KsKelayakan {
+  id: string;
+  periode_id: string;
+  pengajar_id: string;
+  boleh: boolean;
+  alasan: string | null;
+  diubah_oleh: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
 export type KsKetersediaanStatus =
   | 'diajukan'
   | 'terverifikasi'

@@ -135,6 +135,12 @@ CMS contract: `docs/API-TILAWAH.md`.
   (that table comes from the manually-synced Google Sheet).
 - **Everything roots on `ks_periode` with cascade delete**, so a trial period can be
   removed whole. (`0067` fixed two `RESTRICT` FKs that silently blocked this.)
+- **Who may fill the form is a per-period list** (`ks_kelayakan`, `0085`), not the
+  `pengajar` role: the official roster is much shorter than the 172 active accounts.
+  Rule (`ketersediaan-kelayakan.ts`): a period with **zero** rows = everyone may fill
+  (old behaviour); with rows = only `boleh=true`. Koordinator edits it per gender in
+  `PanelKelayakan`; an isian from someone off the list is **deleted** (summary copied
+  to `ks_log` first) and the person notified via a `wa.me` link.
 - **Writing to CMS tilawah is off by default** (`ks_periode.kirim_nyata`), unlocked
   per period by superadmin. The CMS has no working delete for user accounts, so a
   wrong write cannot be undone. Outbox is per-step and idempotent.
@@ -266,7 +272,9 @@ unmerged branches too. It has already bitten twice on this branch: `0069` and
 `0070` were both taken by `main` while Ketersediaan was in flight. Ketersediaan owns `0063`–`0067`, `0071`, `0072`; `0069` `program_kelas_anggota`;
 `0070` setoran target; `0073`–`0075` evaluasi; `0076` check-in Maahir;
 `0077`–`0079` ketersediaan; `0080` ujian 2in1; `0081` api pemakaian;
-`0082` matrix blok akhwat; `0083` program_kelas.ikut_tibyan (next free: `0084`).
+`0082` matrix blok akhwat; `0083` program_kelas.ikut_tibyan; `0085` ketersediaan
+kelayakan (next free: `0086` — note `scripts/sql/0084-*.sh` is a data fix, not a
+migration).
 
 unmerged branches too. Ketersediaan (`docs/ketersediaan-mengajar-hits`) holds
 `0063`–`0067`, `0071`, `0072` — applied to prod but not yet on `main`.

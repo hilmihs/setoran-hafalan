@@ -1197,6 +1197,33 @@ export function tplButuhPengajarSlot(args: {
 }
 
 /** Pengingat menyegarkan ketersediaan sebelum statusnya dinonaktifkan. */
+/**
+ * Pemberitahuan saat isian ketersediaan dihapus karena yang bersangkutan tidak
+ * termasuk daftar pengajar batch ini. Nadanya menjelaskan, bukan menuduh —
+ * biasanya orangnya mengisi dengan iktikad baik karena menunya memang terbuka.
+ */
+export function tplAnulirKetersediaan(args: {
+  pengajarName: string;
+  pengajarGender: Gender;
+  periodeNama: string;
+  slotLabel: string[];
+}): string {
+  return [
+    `Assalamu'alaikum ${salutation(args.pengajarGender)} ${args.pengajarName},`,
+    ``,
+    `Mohon maaf, isian ketersediaan mengajar Anda untuk ${args.periodeNama} kami hapus`,
+    `karena nama Anda belum termasuk daftar pengajar batch ini.`,
+    ...(args.slotLabel.length > 0
+      ? [``, `Slot yang sempat terisi:`, ...args.slotLabel.map((l) => `• ${l}`)]
+      : []),
+    ``,
+    `Bila seharusnya ikut mengajar batch ini, silakan kabari kami agar nama Anda dimasukkan`,
+    `ke daftar dan pengisiannya dibuka kembali.`,
+    ``,
+    `Jazakumullahu khairan.`,
+  ].join('\n');
+}
+
 export function tplSegarkanKetersediaan(args: {
   pengajarName: string;
   pengajarGender: Gender;

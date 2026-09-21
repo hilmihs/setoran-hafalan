@@ -10,6 +10,7 @@ import {
   kunciSlot,
 } from '@/lib/ketersediaan-bentrok';
 import { ringkasSlot, teksPeluang } from '@/lib/ketersediaan-permintaan';
+import { apakahLayak } from '@/lib/ketersediaan-kelayakan';
 import { FormKetersediaan, type SlotTampil } from './FormKetersediaan';
 import { unstable_cache } from 'next/cache';
 import { susunGabungan } from '@/lib/ketersediaan-gabungan';
@@ -78,6 +79,23 @@ export default async function KetersediaanPengajarPage({
         <h1 className="t-h1" style={{ marginBottom: 4 }}>Ketersediaan Mengajar HITS</h1>
         <p className="t-small" style={{ color: 'var(--muted-2)' }}>
           Belum ada periode penarikan yang dibuka. Koordinator akan mengumumkan bila sudah siap.
+        </p>
+      </Bingkai>
+    );
+  }
+
+  // Daftar pengajar satu batch ditentukan koordinator; akun ber-role `pengajar`
+  // yang tidak masuk daftar tidak boleh mengisi (lihat ketersediaan-kelayakan.ts).
+  if (!(await apakahLayak(periode.id, sesi.pengajar_id))) {
+    return (
+      <Bingkai>
+        {kop}
+        <FeatureNav current="/ketersediaan/pengajar" />
+        <h1 className="t-h1" style={{ marginBottom: 4 }}>Ketersediaan Mengajar HITS</h1>
+        <p className="t-small" style={{ color: 'var(--muted-2)' }}>
+          Anda belum terdaftar sebagai pengajar untuk periode <strong>{periode.nama}</strong>,
+          jadi pengisian ketersediaan belum terbuka. Bila seharusnya ikut, silakan hubungi
+          koordinator untuk dimasukkan ke daftar.
         </p>
       </Bingkai>
     );
