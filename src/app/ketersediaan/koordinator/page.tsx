@@ -360,6 +360,7 @@ export default async function KetersediaanKoordinatorPage({
             belumDisetel: b.belumDisetel,
             belumMengajar: b.belumMengajar,
             punyaIsian: b.punyaIsian,
+            isianOffline: b.isianOffline,
           }))}
           pakaiDaftar={daftarDipakai(daftarKelayakan)}
           periodeLain={semuaPeriode

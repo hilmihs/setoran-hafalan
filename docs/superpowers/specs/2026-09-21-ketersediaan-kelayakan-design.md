@@ -82,7 +82,17 @@ ganda, apostrof, `bin/binti`. Nama yang tidak cocok atau ambigu dilaporkan, tida
 ditebak. Ikhwan 37 nama; akhwat ±76 nama hasil pembacaan tangkapan layar form.
 
 Keadaan prod saat spesifikasi ini ditulis: 93 isian (27 ikhwan, 66 akhwat).
-Ikhwan yang di luar daftar: **Fauzi Rahman**, **Syamsunnas**.
+Lima di antaranya di luar daftar, tetapi hanya satu yang benar-benar dianulir:
+
+- **Syamsunnas** — 4 slot online → isiannya dihapus.
+- **Fauzi Rahman, Annisa Hasanah, Nur Latifah Anshoriah, Rinny Chandrawatty** —
+  seluruhnya slot **offline** di Masjid Al-Kautsar Matraman. Mereka tetap mengajar
+  offline, hanya tidak ikut halaqah online, jadi `boleh` tetap false (form online
+  tertutup) sementara isian offline-nya dibiarkan utuh.
+
+Karena itu panel tidak menawarkan penghapusan untuk isian yang seluruh slotnya
+offline: slot offline hanya bisa ditambahkan koordinator, jadi isian semacam itu
+tidak mungkin "liar".
 
 ## Yang sengaja tidak dikerjakan
 

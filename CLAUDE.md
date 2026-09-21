@@ -140,7 +140,9 @@ CMS contract: `docs/API-TILAWAH.md`.
   Rule (`ketersediaan-kelayakan.ts`): a period with **zero** rows = everyone may fill
   (old behaviour); with rows = only `boleh=true`. Koordinator edits it per gender in
   `PanelKelayakan`; an isian from someone off the list is **deleted** (summary copied
-  to `ks_log` first) and the person notified via a `wa.me` link.
+  to `ks_log` first) and the person notified via a `wa.me` link — except an isian whose
+  slots are all **offline**, which koordinator assigns anyway (the Masjid Al-Kautsar
+  teachers keep teaching offline while staying out of the online roster).
 - **Writing to CMS tilawah is off by default** (`ks_periode.kirim_nyata`), unlocked
   per period by superadmin. The CMS has no working delete for user accounts, so a
   wrong write cannot be undone. Outbox is per-step and idempotent.

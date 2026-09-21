@@ -11,6 +11,7 @@ export interface BarisKelayakanUI {
   belumDisetel: boolean;
   belumMengajar: boolean;
   punyaIsian: boolean;
+  isianOffline: boolean;
 }
 
 /**
@@ -42,7 +43,10 @@ export function PanelKelayakan({
   }, [baris, cari]);
 
   const jumlahBoleh = baris.filter((b) => b.boleh).length;
-  const perluDibereskan = baris.filter((b) => !b.boleh && b.punyaIsian);
+  // Isian yang seluruhnya slot offline tidak dihitung "liar": slot offline
+  // ditambahkan koordinator sendiri, jadi orang di luar daftar online masih
+  // boleh punya isian offline (mis. pengajar Masjid Al-Kautsar).
+  const perluDibereskan = baris.filter((b) => !b.boleh && b.punyaIsian && !b.isianOffline);
 
   return (
     <Bagian
@@ -150,7 +154,13 @@ export function PanelKelayakan({
                   )}
                 </td>
                 <td style={{ padding: '6px 8px' }}>{b.boleh ? 'Boleh' : 'Tidak'}</td>
-                <td style={{ padding: '6px 8px' }}>{b.punyaIsian ? 'sudah mengisi' : '—'}</td>
+                <td style={{ padding: '6px 8px' }}>
+                  {b.punyaIsian
+                    ? b.isianOffline
+                      ? 'sudah mengisi · offline (diatur koordinator)'
+                      : 'sudah mengisi'
+                    : '—'}
+                </td>
                 <td style={{ padding: '6px 8px', display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                   <button
                     className="btn btn-sm btn-ghost"
@@ -163,7 +173,7 @@ export function PanelKelayakan({
                   >
                     {b.boleh ? 'Cabut' : 'Izinkan'}
                   </button>
-                  {!b.boleh && b.punyaIsian && (
+                  {!b.boleh && b.punyaIsian && !b.isianOffline && (
                     <button
                       className="btn btn-sm btn-ghost"
                       disabled={pending}

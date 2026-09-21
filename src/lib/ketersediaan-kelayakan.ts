@@ -40,7 +40,47 @@ export interface BarisKelayakanPengajar {
   belumMengajar: boolean;
   /** Sudah terlanjur mengisi ketersediaan periode ini. */
   punyaIsian: boolean;
+  /**
+   * Isiannya hanya berisi slot offline. Slot offline tidak bisa ditambahkan
+   * sendiri oleh pengajar — koordinator yang mengaturnya — jadi isian semacam
+   * ini bukan "isian liar" walau orangnya di luar daftar online. Contohnya
+   * pengajar Masjid Al-Kautsar: tetap mengajar offline, tidak ikut online.
+   */
+  isianOffline: boolean;
   alasan: string | null;
+}
+
+/**
+ * Pengajar yang seluruh slot pilihannya offline. Dipakai supaya panel tidak
+ * mendesak koordinator menghapus isian yang justru dia sendiri yang mengatur.
+ */
+async function pengisianHanyaOffline(
+  isian: { id: string; pengajar_id: string; mode: string }[]
+): Promise<Set<string>> {
+  const out = new Set<string>();
+  if (isian.length === 0) return out;
+
+  const { data } = await supabaseAdmin
+    .from('ks_ketersediaan')
+    .select('pengisian_id, slot:slot_id(mode)');
+  const modePerIsian = new Map<string, Set<string>>();
+  for (const b of (data ?? []) as {
+    pengisian_id: string;
+    slot?: { mode: string } | null;
+  }[]) {
+    if (!b.slot) continue;
+    const set = modePerIsian.get(b.pengisian_id) ?? new Set<string>();
+    set.add(b.slot.mode);
+    modePerIsian.set(b.pengisian_id, set);
+  }
+
+  for (const p of isian) {
+    const mode = modePerIsian.get(p.id);
+    // Tanpa baris slot sama sekali, mode di kepala isian yang menentukan.
+    const offlineSaja = mode ? [...mode].every((m) => m === 'offline') : p.mode === 'offline';
+    if (offlineSaja) out.add(p.pengajar_id);
+  }
+  return out;
 }
 
 /**
@@ -64,15 +104,18 @@ export async function ringkasKelayakan(
         .eq('gender', gender)
         .order('name'),
       listKelayakan(periodeId),
-      supabaseAdmin.from('ks_pengisian').select('pengajar_id').eq('periode_id', periodeId),
+      supabaseAdmin
+        .from('ks_pengisian')
+        .select('id, pengajar_id, mode')
+        .eq('periode_id', periodeId),
       supabaseAdmin.from('hits_halaqah').select('pengajar_id').eq('active', true),
       supabaseAdmin.from('kelas_hits').select('pengajar_id'),
     ]);
 
   const status = new Map(daftar.map((d) => [d.pengajar_id, d]));
-  const sudahIsi = new Set(
-    ((pengisian ?? []) as { pengajar_id: string }[]).map((p) => p.pengajar_id)
-  );
+  const isian = (pengisian ?? []) as { id: string; pengajar_id: string; mode: string }[];
+  const sudahIsi = new Set(isian.map((p) => p.pengajar_id));
+  const hanyaOffline = await pengisianHanyaOffline(isian);
   const mengajar = new Set<string>();
   for (const h of (halaqah ?? []) as { pengajar_id: string | null }[]) {
     if (h.pengajar_id) mengajar.add(h.pengajar_id);
@@ -93,6 +136,7 @@ export async function ringkasKelayakan(
       belumDisetel: !baris,
       belumMengajar: !mengajar.has(p.id),
       punyaIsian: sudahIsi.has(p.id),
+      isianOffline: hanyaOffline.has(p.id),
       alasan: baris?.alasan ?? null,
     };
   });
