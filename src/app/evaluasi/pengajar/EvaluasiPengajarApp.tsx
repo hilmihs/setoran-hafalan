@@ -24,6 +24,8 @@ import { Ringkasan } from './screens/Ringkasan';
 import { KelolaPeserta } from './screens/KelolaPeserta';
 import { KelolaHalaqah } from './screens/KelolaHalaqah';
 import { PusatRapot } from './screens/PusatRapot';
+import { RekapSesi, type RekapSesiOpsi } from './screens/RekapSesi';
+import { labelSesi, susunRekapSesi } from '@/lib/evaluasi-rekap-sesi';
 import RapotTrack from './screens/RapotTrack';
 import RapotTrackA4 from './rapot/RapotTrackA4';
 import RapotPrintStyle from './rapot/RapotPrintStyle';
@@ -112,7 +114,8 @@ export type Screen =
   | 'p-rapor'
   | 'p-peserta'
   | 'p-halaqah'
-  | 'p-rapot';
+  | 'p-rapot'
+  | 'p-rekap';
 export type SaveStatus = 'idle' | 'saving' | 'saved' | 'error';
 
 // Tile-color arrays (presentation, ported from mockup).
@@ -200,6 +203,8 @@ export function EvaluasiPengajarApp({ initial }: { initial: EvaluasiInitial }) {
   // Rapot mana yang sedang dibuka di layar 'p-rapor'. Satu rapot = satu track
   // (0062), jadi ini SATU-SATUNYA penentu dokumen — bukan `jenis`/`activeSession`.
   const [rapotTrack, setRapotTrack] = useState<Track>('qn');
+  // Sesi yang sedang dibuka di layar Rekap Sesi; null = sesi pertama yang ada.
+  const [rekapSel, setRekapSel] = useState<{ jenis: Jenis; nomor: number } | null>(null);
   const [terbitStatus, setTerbitStatus] = useState<'idle' | 'saving' | 'done' | 'error'>('idle');
   // Token rapot yang baru terbit — satu-satunya jejaknya di aplikasi, jadi ia
   // harus tampil di layar, bukan cuma dibawa `window.open` yang bisa diblokir.
@@ -999,6 +1004,40 @@ export function EvaluasiPengajarApp({ initial }: { initial: EvaluasiInitial }) {
   // nilai akhir kedua track murni skor ujiannya (`ujianSaja`).
   const terpisah = halaqah.rapotUjianTerpisah;
   const namaTrack = (t: Track): string => (t === 'qn' ? config.nama_qn : config.nama_pb);
+
+  // Rekap Sesi: satu tabel semua peserta untuk satu sesi, dari state `work`
+  // yang hidup (sama sumbernya dengan Ringkasan). Hanya sesi yang sudah ada.
+  const URUT_JENIS: Record<Jenis, number> = { qn: 0, pb: 1, ujian: 2 };
+  const rekapOpsi: RekapSesiOpsi[] = initial.sesiList
+    .filter((s) => !s.dihapus)
+    .sort((a, b) => (a.jenis === b.jenis ? a.nomor_sesi - b.nomor_sesi : URUT_JENIS[a.jenis] - URUT_JENIS[b.jenis]))
+    .map((s) => ({
+      jenis: s.jenis,
+      nomor: s.nomor_sesi,
+      label: labelSesi(s.jenis, s.nomor_sesi, namaTrack),
+      tgl: s.tgl_jadwal,
+      terkirim: !!sentSesi[`${s.jenis}|${s.nomor_sesi}`],
+    }));
+  const rekapAktif =
+    (rekapSel && rekapOpsi.some((o) => o.jenis === rekapSel.jenis && o.nomor === rekapSel.nomor) ? rekapSel : null) ??
+    (rekapOpsi[0] ? { jenis: rekapOpsi[0].jenis, nomor: rekapOpsi[0].nomor } : null);
+  const rekapAmbang = rekapAktif?.jenis === 'ujian' ? halaqah.ambang_ujian : AMBANG;
+  const rekapData = rekapAktif
+    ? susunRekapSesi(
+        peserta,
+        Object.fromEntries(peserta.map((p) => [p.id, getWork(p.id, rekapAktif.jenis, rekapAktif.nomor)])),
+        rekapAmbang
+      )
+    : null;
+  const rekapXlsxUrl = (semua: boolean): string => {
+    const q = new URLSearchParams({ halaqah: halaqah.id });
+    if (semua) q.set('semua', '1');
+    else if (rekapAktif) {
+      q.set('jenis', rekapAktif.jenis);
+      q.set('nomor', String(rekapAktif.nomor));
+    }
+    return `/api/evaluasi/rekap?${q.toString()}`;
+  };
   const trackShort = (t: Track): string => (t === 'qn' ? 'QN' : 'PB');
 
   // Builder murni & murah — dua-duanya dibangun tiap render, yang dipilih saat
@@ -1370,6 +1409,25 @@ export function EvaluasiPengajarApp({ initial }: { initial: EvaluasiInitial }) {
               </div>
             </div>
 
+            {/* Rekap per sesi — satu tabel semua peserta + rincian lahn, cetak/XLSX. */}
+            <div style={{ padding: '20px 16px 0' }}>
+              <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.04em', textTransform: 'uppercase', color: '#7a766f', marginBottom: 10 }}>Rekap nilai</div>
+              <button
+                onClick={() => nav('p-rekap')}
+                className="ev-press"
+                style={{ display: 'flex', alignItems: 'center', gap: 12, width: '100%', textAlign: 'left', padding: 16, borderRadius: 14, border: '1.5px solid #e8e4dc', background: '#ffffff', cursor: 'pointer', font: 'inherit' }}
+              >
+                <div style={{ width: 44, height: 44, borderRadius: 12, background: '#efece5', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20, flexShrink: 0 }}>📊</div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 15, fontWeight: 700, color: '#1b1a17' }}>Rekap nilai per sesi</div>
+                  <div style={{ fontSize: 12, color: '#7a766f', marginTop: 2, lineHeight: 1.45 }}>
+                    Satu tabel semua peserta beserta rincian lahn · cetak PDF atau unduh XLSX
+                  </div>
+                </div>
+                <span style={{ fontSize: 18, color: '#a8a39a' }}>→</span>
+              </button>
+            </div>
+
             <div style={{ padding: '20px 16px 0' }}>
               <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.04em', textTransform: 'uppercase', color: '#7a766f', marginBottom: 10 }}>Riwayat sesi</div>
               {riwayat.length === 0 ? (
@@ -1636,6 +1694,26 @@ export function EvaluasiPengajarApp({ initial }: { initial: EvaluasiInitial }) {
             }
             back={() => nav('p-daftar')}
             onCetak={() => bukaPusatRapot(jenis, activeSession)}
+            onRekap={() => {
+              setRekapSel({ jenis, nomor: activeSession });
+              nav('p-rekap');
+            }}
+          />
+        )}
+
+        {screen === 'p-rekap' && (
+          <RekapSesi
+            halaqahNama={halaqah.nama}
+            halaqahMeta={`${genderLabel(halaqah.gender)} · ${levelLabel} · ${halaqah.pesertaCount} peserta`}
+            pengajarName={initial.pengajarName}
+            batch={halaqah.batch}
+            opsi={rekapOpsi}
+            aktif={rekapAktif}
+            onPilih={(j, n) => setRekapSel({ jenis: j, nomor: n })}
+            rekap={rekapData}
+            ambang={rekapAmbang}
+            xlsxUrl={rekapXlsxUrl}
+            back={() => nav('p-home')}
           />
         )}
 

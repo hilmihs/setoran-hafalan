@@ -26,6 +26,8 @@ interface RingkasanProps {
   back: () => void;
   /** Buka menu cetak rapot A4. Tanpa ini tombol jatuh ke print layar (hasil kurang rapi). */
   onCetak?: () => void;
+  /** Buka Rekap Sesi: satu tabel semua peserta + rincian lahn (cetak/XLSX). */
+  onRekap?: () => void;
 }
 
 export function Ringkasan(props: RingkasanProps) {
@@ -67,6 +69,9 @@ export function Ringkasan(props: RingkasanProps) {
       <div className="no-print" style={{ padding: '18px 16px 0', display: 'flex', flexDirection: 'column', gap: 8 }}>
         <button onClick={props.openWa} style={{ width: '100%', height: 46, borderRadius: 8, border: 'none', background: 'oklch(0.58 0.12 155)', color: '#ffffff', font: 'inherit', fontSize: 14, fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>Rekap teks untuk WhatsApp</button>
         <button onClick={props.onCetak ?? (() => window.print())} className="ev-ghost" style={{ width: '100%', height: 46, borderRadius: 8, border: '1px solid #d8d3c8', background: '#ffffff', font: 'inherit', fontSize: 14, fontWeight: 600, color: '#1b1a17', cursor: 'pointer' }}>🖨 Cetak rapot peserta</button>
+        {props.onRekap && (
+          <button onClick={props.onRekap} className="ev-ghost" style={{ width: '100%', height: 46, borderRadius: 8, border: '1px solid #d8d3c8', background: '#ffffff', font: 'inherit', fontSize: 14, fontWeight: 600, color: '#1b1a17', cursor: 'pointer' }}>📊 Rekap tabel sesi ini (PDF / XLSX)</button>
+        )}
       </div>
 
       <div style={{ flex: 1 }} />
