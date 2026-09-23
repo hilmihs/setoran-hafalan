@@ -3,6 +3,7 @@ import { redirect } from 'next/navigation';
 import { supabaseAdmin } from '@/lib/supabase-admin';
 import { getSessionWa, isTakhassusKelas } from '@/lib/program-kelas';
 import { getUnfilledMaahirDays, PROGRAM_LABEL, weekRangeLabel } from '@/lib/maahir-presensi';
+import { getTakhassusVia, setorViaHalaqah } from '@/lib/takhassus-via-halaqah';
 import { PresensiWizardForm } from './PresensiWizardForm';
 import { LiburButton } from './LiburButton';
 import { LogoutButton } from '@/components/LogoutButton';
@@ -49,7 +50,7 @@ export default async function PresensiWizardPage() {
   // Anggota kelas + status kehadiran existing (kalau pertemuan sudah pernah dibuat tapi belum disubmit).
   const { data: anggotaList } = await supabaseAdmin
     .from('program_kelas_anggota')
-    .select('id, name, is_ketua, is_wakil')
+    .select('id, name, is_ketua, is_wakil, whatsapp_number')
     .eq('program_kelas_id', day.program_kelas_id)
     .eq('active', true)
     // Yang sudah pindah kelas tak lagi dipresensi pada tanggal ini.
@@ -113,6 +114,9 @@ export default async function PresensiWizardPage() {
       ])
   );
 
+  // Peserta Takhassus yang dipresensi di kelas halaqah ini: setorannya diisi di sini.
+  const via = await getTakhassusVia();
+
   type StatusType = 'hadir' | 'izin' | 'terlambat' | 'sakit' | 'tidak_ada_keterangan';
   const pesertaRows = (anggotaList ?? []).map((a) => ({
     id: a.id,
@@ -121,6 +125,13 @@ export default async function PresensiWizardPage() {
     catatan: existingMap.get(a.id)?.catatan ?? '',
     setoran: existingMap.get(a.id)?.setoran != null ? String(existingMap.get(a.id)!.setoran) : '',
     mode: (existingMap.get(a.id)?.mode === 'online' ? 'online' : 'offline') as 'offline' | 'online',
+    takhassus:
+      day.program === 'kelas_maahir' &&
+      setorViaHalaqah(
+        via,
+        { program_kelas_id: day.program_kelas_id, whatsapp_number: a.whatsapp_number },
+        day.tanggal
+      ),
   }));
 
   // Mingguan (mis. Alumni/Talaqqi): tampil sebagai rentang pekan, bukan hari Senin spesifik.

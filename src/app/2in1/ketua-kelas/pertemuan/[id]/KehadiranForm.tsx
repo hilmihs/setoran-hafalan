@@ -20,6 +20,11 @@ type PesertaRow = {
   catatan: string;
   setoran: string; // halaman setoran pertemuan ini (kosong = belum diisi)
   mode: 'offline' | 'online';
+  /**
+   * Peserta Takhassus yang dipresensi di kelas halaqah ini — setorannya diisi
+   * ketua di sini walau kelasnya bukan Takhassus.
+   */
+  takhassus?: boolean;
 };
 
 export function KehadiranForm({
@@ -97,7 +102,9 @@ export function KehadiranForm({
             status: r.status,
             catatan: r.catatan || undefined,
             mode: r.mode,
-            ...(showSetoran ? { setoran_halaman: r.setoran === '' ? null : r.setoran } : {}),
+            ...(showSetoran || r.takhassus
+              ? { setoran_halaman: r.setoran === '' ? null : r.setoran }
+              : {}),
           })),
           ...(showSetoran ? { materi: materiRef.current } : {}),
         }),
@@ -177,7 +184,12 @@ export function KehadiranForm({
         {rows.map((p) => (
           <div key={p.id} className="card" style={{ padding: '10px 12px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-              <div style={{ fontSize: 13, fontWeight: 500 }}>{p.name}</div>
+              <div style={{ fontSize: 13, fontWeight: 500 }}>
+                {p.name}
+                {p.takhassus && (
+                  <span className="badge" style={{ marginLeft: 6, fontSize: 10 }}>Takhassus</span>
+                )}
+              </div>
             </div>
             <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
               {STATUS_OPTIONS.map((o) => (
@@ -227,7 +239,7 @@ export function KehadiranForm({
               </div>
             )}
             {/* Setoran hafalan pertemuan ini — hanya sesi Kelas Maahir & peserta yang hadir. */}
-            {showSetoran && (p.status === 'hadir' || p.status === 'terlambat' || p.setoran) && (
+            {(showSetoran || p.takhassus) && (p.status === 'hadir' || p.status === 'terlambat' || p.setoran) && (
               <div style={{ marginTop: 6, display: 'flex', alignItems: 'center', gap: 6 }}>
                 <span className="t-tiny" style={{ color: 'var(--muted-2)' }}>Setoran</span>
                 <input

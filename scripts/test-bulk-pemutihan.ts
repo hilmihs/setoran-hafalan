@@ -29,7 +29,8 @@ CREATE TABLE program_kelas (
   self_attendance boolean NOT NULL DEFAULT false,
   presensi_sifat text NOT NULL DEFAULT 'harian',
   mulai_tanggal date,
-  ikut_tibyan boolean NOT NULL DEFAULT true
+  ikut_tibyan boolean NOT NULL DEFAULT true,
+  presensi_via_halaqah_mulai date
 );
 CREATE TABLE program_kelas_anggota (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),

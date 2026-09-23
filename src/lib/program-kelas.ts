@@ -65,9 +65,15 @@ export type ProgramKelasRow = {
    * per-hari akhwat yang At-Tibyan-nya dicatat lewat satu kelas gabungan.
    */
   ikut_tibyan: boolean;
+  /**
+   * Mulai tanggal ini sesi kelas_maahir kelas ini tak dipresensi sendiri:
+   * anggotanya dipresensi di kelas halaqah mereka (Takhassus akhwat, 28 Sep
+   * 2026). Opsional karena tak semua select memuatnya — undefined = NULL.
+   */
+  presensi_via_halaqah_mulai?: string | null;
 };
 
-const PK_COLS = 'id, name, gender, jadwal_hari, waktu_mulai, waktu_selesai, ketua_wa, wakil_wa, self_attendance, presensi_sifat, mulai_tanggal, ikut_tibyan';
+const PK_COLS = 'id, name, gender, jadwal_hari, waktu_mulai, waktu_selesai, ketua_wa, wakil_wa, self_attendance, presensi_sifat, mulai_tanggal, ikut_tibyan, presensi_via_halaqah_mulai';
 
 /**
  * Buang kelas yang sudah pensiun dari daftar milik ketua/wakil.

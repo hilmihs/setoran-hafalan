@@ -8,7 +8,13 @@
 import { supabaseAdmin } from '@/lib/supabase-admin';
 import { fetchAllRows } from '@/lib/supabase-page';
 import { getLiburDatesForKelas } from '@/lib/maahir-libur';
-import { anchorKelas, expectedDaysInRange, filledKeyOf, todayJakarta } from '@/lib/maahir-presensi';
+import {
+  anchorKelas,
+  expectedDaysInRange,
+  expectedPresensiInRange,
+  filledKeyOf,
+  todayJakarta,
+} from '@/lib/maahir-presensi';
 import { getMaahirSP, periodeStartDate, type SesiRiwayatSP, type SPRekap } from '@/lib/maahir-sp';
 import { getPemutihan } from '@/lib/maahir-pemutihan';
 import { getSetoranTargets, targetResolver } from '@/lib/setoran-target';
@@ -229,7 +235,7 @@ export async function getLaporanMaahir(month: string): Promise<LaporanMaahir> {
   const { data: kelasRows } = await supabaseAdmin
     .from('program_kelas')
     .select(
-      'id, name, gender, jadwal_hari, waktu_mulai, waktu_selesai, ketua_wa, wakil_wa, self_attendance, presensi_sifat, mulai_tanggal, ikut_tibyan'
+      'id, name, gender, jadwal_hari, waktu_mulai, waktu_selesai, ketua_wa, wakil_wa, self_attendance, presensi_sifat, mulai_tanggal, ikut_tibyan, presensi_via_halaqah_mulai'
     )
     .order('gender')
     .order('name');
@@ -261,7 +267,7 @@ export async function getLaporanMaahir(month: string): Promise<LaporanMaahir> {
   // 3. Anggota
   const { data: anggotaRows } = await supabaseAdmin
     .from('program_kelas_anggota')
-    .select('id, program_kelas_id, name, created_at, mulai_tanggal, selesai_tanggal')
+    .select('id, program_kelas_id, name, whatsapp_number, created_at, mulai_tanggal, selesai_tanggal')
     .in('program_kelas_id', kelasIds)
     .eq('active', true)
     .order('name');
@@ -269,6 +275,7 @@ export async function getLaporanMaahir(month: string): Promise<LaporanMaahir> {
     id: string;
     program_kelas_id: string;
     name: string;
+    whatsapp_number: string | null;
     created_at: string | null;
     mulai_tanggal: string | null;
     selesai_tanggal: string | null;
@@ -278,6 +285,36 @@ export async function getLaporanMaahir(month: string): Promise<LaporanMaahir> {
   // tak dihitung, tapi riwayat di dalam rentang tetap utuh.
   const joinDateOf = (a: (typeof anggotaList)[number]) => mulaiEfektif(a, start, end);
   const periodeByAnggota = new Map(anggotaList.map((a) => [a.id, a]));
+
+  // Takhassus via halaqah (Takhassus akhwat, sejak 28 Sep 2026): sesi
+  // kelas_maahir kelas Takhassus ber-`presensi_via_halaqah_mulai` tak dipresensi
+  // sendiri; anggotanya dipresensi di kelas halaqah mereka (dicocokkan lewat WA).
+  // Baris halaqah itu DISERAP ke baris Takhassus-nya — kehadiran, setoran, dan
+  // sesi target digabung di blok Takhassus — dan tak tampil lagi di blok Halaqah.
+  // Hanya scope kelas_maahir: At-Tibyan mereka tetap di kelas gabungan.
+  type AnggotaRow = (typeof anggotaList)[number];
+  const viaByTakh = new Map<string, { mulai: string; halaqah: AnggotaRow[] }>();
+  const diserap = new Set<string>();
+  {
+    const takhByWa = new Map<string, { a: AnggotaRow; mulai: string }>();
+    for (const a of anggotaList) {
+      const mulai = kelasById.get(a.program_kelas_id)?.presensi_via_halaqah_mulai;
+      if (!mulai) continue;
+      // Semua anggotanya dialihkan, termasuk yang belum ditempatkan di halaqah
+      // mana pun (mis. cuti): sesi Takhassus sesudah `mulai` tak menagih mereka.
+      viaByTakh.set(a.id, { mulai, halaqah: [] });
+      if (a.whatsapp_number) takhByWa.set(a.whatsapp_number, { a, mulai });
+    }
+    for (const a of anggotaList) {
+      const t = a.whatsapp_number ? takhByWa.get(a.whatsapp_number) : undefined;
+      if (!t || t.a.id === a.id) continue;
+      // Kelas tanpa sesi kelas_maahir (mis. kelas At-Tibyan gabungan) tak ikut.
+      const k = kelasById.get(a.program_kelas_id);
+      if (!k || (k.jadwal_hari ?? []).length === 0) continue;
+      viaByTakh.get(t.a.id)!.halaqah.push(a);
+      diserap.add(a.id);
+    }
+  }
 
   // Pemutihan bulan ini (baris presensi tak diubah), dua bentuk:
   // - sebulan penuh → peserta dianggap hadir penuh (persen dipaksa 100);
@@ -291,12 +328,13 @@ export async function getLaporanMaahir(month: string): Promise<LaporanMaahir> {
   );
 
   // 4. Kehadiran terisi
-  type Stat = { H: number; I: number; S: number; A: number; T: number; online: number; catatan: Set<string> };
-  const statByAnggotaScope = new Map<string, Stat>(); // key: anggotaId|program
   const filledByKelasScope = new Map<string, Set<string>>(); // key: kelasId|program → set pertemuanId
   // Baris presensi per anggota+scope, dipetakan per pertemuan — untuk menyusun
   // riwayat tidak hadir (sesi tanpa baris = 'tanpa_keterangan').
-  const rowByAnggotaScope = new Map<string, Map<string, { code: Code; catatan: string | null }>>();
+  const rowByAnggotaScope = new Map<
+    string,
+    Map<string, { code: Code; catatan: string | null; online: boolean }>
+  >(); // key: anggotaId|program
   // Setoran hafalan per anggota (khusus scope kelas_maahir): tanggal → halaman.
   const setoranByAnggota = new Map<string, Array<{ tanggal: string; halaman: number }>>();
 
@@ -343,17 +381,16 @@ export async function getLaporanMaahir(month: string): Promise<LaporanMaahir> {
       // (penyebutnya juga dipotong di studentsFor).
       if (pemutihanTanggal.has(`${k.anggota_id}|${p.tanggal}`)) continue;
 
-      // tally per anggota+scope
+      // baris per anggota+scope (dihitung di studentsFor, per rentang tanggal)
       const sKey = `${k.anggota_id}|${program}`;
-      let st = statByAnggotaScope.get(sKey);
-      if (!st) { st = { H: 0, I: 0, S: 0, A: 0, T: 0, online: 0, catatan: new Set() }; statByAnggotaScope.set(sKey, st); }
       const code = STATUS_TO_CODE[k.status] ?? 'A';
-      st[code]++;
       let rows = rowByAnggotaScope.get(sKey);
       if (!rows) { rows = new Map(); rowByAnggotaScope.set(sKey, rows); }
-      rows.set(k.pertemuan_id, { code, catatan: k.catatan?.trim() ? k.catatan.trim() : null });
-      if (k.mode === 'online' && (code === 'H' || code === 'T')) st.online++;
-      if (k.catatan && typeof k.catatan === 'string' && k.catatan.trim()) st.catatan.add(k.catatan.trim());
+      rows.set(k.pertemuan_id, {
+        code,
+        catatan: typeof k.catatan === 'string' && k.catatan.trim() ? k.catatan.trim() : null,
+        online: k.mode === 'online' && (code === 'H' || code === 'T'),
+      });
 
       // setoran halaman (diisi peserta saat presensi mandiri)
       if (program === 'kelas_maahir' && typeof k.setoran_halaman === 'number') {
@@ -362,6 +399,114 @@ export async function getLaporanMaahir(month: string): Promise<LaporanMaahir> {
         setoranByAnggota.set(k.anggota_id, arr);
       }
     }
+  }
+
+  /** Hitungan mentah satu baris anggota pada satu scope — belum jadi persen. */
+  type Mentah = {
+    counts: PctCounts;
+    terisi: number;
+    riwayat: SesiTakHadir[];
+    online: number;
+    catatan: Set<string>;
+  };
+
+  /**
+   * Hitung mentah satu baris anggota. `rentang` memotong sesi per tanggal
+   * (dari = inklusif, sebelum = eksklusif) — dipakai saat baris Takhassus dan
+   * baris halaqahnya digabung di sekitar tanggal pengalihan.
+   */
+  function mentah(
+    a: AnggotaRow,
+    kelas: ProgramKelasRow,
+    scope: Scope,
+    rentang?: { dari?: string; sebelum?: string }
+  ): Mentah {
+    // Denominator: pertemuan terisi kelas ini — dipotong sejak tanggal gabung
+    // bila peserta baru masuk di tengah periode (pertemuan sebelum ia
+    // terdaftar tak boleh menggerus persentasenya).
+    const fset = filledByKelasScope.get(`${kelas.id}|${scope}`);
+    const pertemuanDitagih = !fset
+      ? []
+      : [...fset].filter((pid) => {
+          const tgl = pertemuanById.get(pid)?.tanggal ?? '';
+          if (rentang?.dari && tgl < rentang.dari) return false;
+          if (rentang?.sebelum && tgl >= rentang.sebelum) return false;
+          if (!dalamPeriode(a, tgl, start, end)) return false;
+          return !pemutihanTanggal.has(`${a.id}|${tgl}`);
+        });
+    // Hitungan & riwayat tidak hadir dari penyebut yang sama — supaya jumlah
+    // baris izin+alpa+tanpa keterangan selalu sama dengan angka `tidakHadir`.
+    const rows = rowByAnggotaScope.get(`${a.id}|${scope}`);
+    const counts: PctCounts = { H: 0, I: 0, S: 0, A: 0, T: 0 };
+    const riwayat: SesiTakHadir[] = [];
+    const catatan = new Set<string>();
+    let online = 0;
+    for (const pid of pertemuanDitagih) {
+      const tgl = pertemuanById.get(pid)?.tanggal ?? '';
+      const row = rows?.get(pid);
+      if (!row) { riwayat.push({ tanggal: tgl, status: 'tanpa_keterangan', catatan: null }); continue; }
+      counts[row.code]++;
+      if (row.online) online++;
+      if (row.catatan) catatan.add(row.catatan);
+      if (row.code === 'H' || row.code === 'T') continue;
+      riwayat.push({
+        tanggal: tgl,
+        status: row.code === 'I' ? 'izin' : row.code === 'S' ? 'sakit' : 'alpa',
+        catatan: row.catatan,
+      });
+    }
+    return { counts, terisi: pertemuanDitagih.length, riwayat, online, catatan };
+  }
+
+  /** Satukan satu/lebih hitungan mentah jadi satu baris StudentAtt. */
+  function rakit(a: AnggotaRow, kelas: ProgramKelasRow, bagian: Mentah[]): StudentAtt {
+    const counts: PctCounts = { H: 0, I: 0, S: 0, A: 0, T: 0 };
+    let terisi = 0;
+    let online = 0;
+    const riwayat: SesiTakHadir[] = [];
+    const catatan = new Set<string>();
+    for (const b of bagian) {
+      for (const c of ['H', 'I', 'S', 'A', 'T'] as const) counts[c] += b.counts[c];
+      terisi += b.terisi;
+      online += b.online;
+      riwayat.push(...b.riwayat);
+      for (const c of b.catatan) catatan.add(c);
+    }
+    riwayat.sort((p, q) => (p.tanggal < q.tanggal ? -1 : p.tanggal > q.tanggal ? 1 : 0));
+    // Sakit = udzur: sesinya dikeluarkan dari penyebut, jadi tak menggerus
+    // persen. Semua sesi sakit → penyebut habis, dianggap hadir penuh.
+    const filled = Math.max(0, terisi - counts.S);
+    const persenAsli =
+      filled > 0
+        ? Math.round(((counts.H + counts.T) / filled) * 100)
+        : terisi > 0
+          ? 100
+          : null;
+    // Tidak hadir = penyebut − (hadir+terlambat). Termasuk sesi yang peserta
+    // tak punya catatan sama sekali (bukan hanya izin/alpa), supaya tak muncul
+    // "0x" padahal di bawah target. Sakit tak masuk hitungan ini.
+    const tidakHadirAsli = Math.max(0, filled - (counts.H + counts.T));
+    // Diputihkan → dianggap hadir penuh untuk periode ini.
+    const diputihkan = pemutihan.has(a.id) ? (pemutihan.get(a.id) ?? '') : null;
+    const persen = diputihkan !== null && terisi > 0 ? 100 : persenAsli;
+    const tidakHadir = diputihkan !== null ? 0 : tidakHadirAsli;
+    return {
+      anggotaId: a.id,
+      name: a.name,
+      kelasName: kelas.name,
+      gender: kelas.gender,
+      counts,
+      filled,
+      terisi,
+      tidakHadir,
+      persen,
+      keterangan: Array.from(catatan).join('; '),
+      // Diputihkan sebulan → dianggap hadir penuh, riwayatnya pun dikosongkan.
+      riwayat: diputihkan !== null ? [] : riwayat,
+      mulaiTanggal: joinDateOf(a),
+      online,
+      diputihkan,
+    };
   }
 
   // Susun StudentAtt untuk kumpulan anggota tertentu pada scope tertentu.
@@ -373,73 +518,17 @@ export async function getLaporanMaahir(month: string): Promise<LaporanMaahir> {
     for (const a of anggotaList) {
       const kelas = kelasById.get(a.program_kelas_id);
       if (!kelas || !filter(kelas.name)) continue;
-      const st = statByAnggotaScope.get(`${a.id}|${scope}`);
-      const counts: PctCounts = st
-        ? { H: st.H, I: st.I, S: st.S, A: st.A, T: st.T }
-        : { H: 0, I: 0, S: 0, A: 0, T: 0 };
-      // Denominator: pertemuan terisi kelas ini — dipotong sejak tanggal gabung
-      // bila peserta baru masuk di tengah periode (pertemuan sebelum ia
-      // terdaftar tak boleh menggerus persentasenya).
-      const mulaiTanggal = joinDateOf(a);
-      const fset = filledByKelasScope.get(`${kelas.id}|${scope}`);
-      const pertemuanDitagih = !fset
-        ? []
-        : [...fset].filter((pid) => {
-            const tgl = pertemuanById.get(pid)?.tanggal ?? '';
-            if (!dalamPeriode(a, tgl, start, end)) return false;
-            return !pemutihanTanggal.has(`${a.id}|${tgl}`);
-          });
-      const terisi = pertemuanDitagih.length;
-      // Riwayat tidak hadir dari penyebut yang sama — supaya jumlah baris
-      // izin+alpa+tanpa keterangan selalu sama dengan angka `tidakHadir`.
-      const rows = rowByAnggotaScope.get(`${a.id}|${scope}`);
-      const riwayat: SesiTakHadir[] = [];
-      for (const pid of pertemuanDitagih) {
-        const tgl = pertemuanById.get(pid)?.tanggal ?? '';
-        const row = rows?.get(pid);
-        if (!row) { riwayat.push({ tanggal: tgl, status: 'tanpa_keterangan', catatan: null }); continue; }
-        if (row.code === 'H' || row.code === 'T') continue;
-        riwayat.push({
-          tanggal: tgl,
-          status: row.code === 'I' ? 'izin' : row.code === 'S' ? 'sakit' : 'alpa',
-          catatan: row.catatan,
-        });
-      }
-      riwayat.sort((p, q) => (p.tanggal < q.tanggal ? -1 : p.tanggal > q.tanggal ? 1 : 0));
-      // Sakit = udzur: sesinya dikeluarkan dari penyebut, jadi tak menggerus
-      // persen. Semua sesi sakit → penyebut habis, dianggap hadir penuh.
-      const filled = Math.max(0, terisi - counts.S);
-      const persenAsli =
-        filled > 0
-          ? Math.round(((counts.H + counts.T) / filled) * 100)
-          : terisi > 0
-            ? 100
-            : null;
-      // Tidak hadir = penyebut − (hadir+terlambat). Termasuk sesi yang peserta
-      // tak punya catatan sama sekali (bukan hanya izin/alpa), supaya tak muncul
-      // "0x" padahal di bawah target. Sakit tak masuk hitungan ini.
-      const tidakHadirAsli = Math.max(0, filled - (counts.H + counts.T));
-      // Diputihkan → dianggap hadir penuh untuk periode ini.
-      const diputihkan = pemutihan.has(a.id) ? (pemutihan.get(a.id) ?? '') : null;
-      const persen = diputihkan !== null && terisi > 0 ? 100 : persenAsli;
-      const tidakHadir = diputihkan !== null ? 0 : tidakHadirAsli;
-      out.push({
-        anggotaId: a.id,
-        name: a.name,
-        kelasName: kelas.name,
-        gender: kelas.gender,
-        counts,
-        filled,
-        terisi,
-        tidakHadir,
-        persen,
-        keterangan: st ? Array.from(st.catatan).join('; ') : '',
-        // Diputihkan sebulan → dianggap hadir penuh, riwayatnya pun dikosongkan.
-        riwayat: diputihkan !== null ? [] : riwayat,
-        mulaiTanggal,
-        online: st?.online ?? 0,
-        diputihkan,
-      });
+      const via = scope === 'kelas_maahir' ? viaByTakh.get(a.id) : undefined;
+      if (scope === 'kelas_maahir' && diserap.has(a.id)) continue;
+      const bagian = via
+        ? [
+            mentah(a, kelas, scope, { sebelum: via.mulai }),
+            ...via.halaqah.map((h) =>
+              mentah(h, kelasById.get(h.program_kelas_id)!, scope, { dari: via.mulai })
+            ),
+          ]
+        : [mentah(a, kelas, scope)];
+      out.push(rakit(a, kelas, bagian));
     }
     return out;
   }
@@ -484,22 +573,38 @@ export async function getLaporanMaahir(month: string): Promise<LaporanMaahir> {
     // mengarang hafalan yang tak pernah disetorkan.
     if (pemutihan.has(a.id)) return { sesiTarget: 0, target: null };
 
-    const mulaiKelas = anchorKelas(kelas);
-    const dari = mulaiKelas > start ? mulaiKelas : start;
-    if (dari > end) return { sesiTarget: 0, target: null };
+    // Sesi yang menagih: sesi kelas Takhassus sendiri, ditambah — bagi peserta
+    // yang dipresensi lewat halaqah — sesi kelas halaqahnya sejak tanggal
+    // pengalihan. Targetnya tetap dicari di kelas & baris Takhassus.
+    const via = viaByTakh.get(a.id);
+    const sumber: Array<{ row: AnggotaRow; k: ProgramKelasRow; dari?: string; sebelum?: string }> = [
+      { row: a, k: kelas, sebelum: via?.mulai },
+      ...(via?.halaqah ?? []).map((h) => ({
+        row: h,
+        k: kelasById.get(h.program_kelas_id)!,
+        dari: via!.mulai,
+      })),
+    ];
 
     let sesiTarget = 0;
     let tanggalTerakhir: string | null = null;
-    for (const d of expectedDaysInRange(kelas, dari, end, liburByKelas.get(kelas.id))) {
-      // WAJIB: kelas takhassus ber-presensi_sifat 'harian', dan
-      // expectedDaysInRange menyelipkan satu sesi at_tibyan tiap Sabtu. Tanpa
-      // saringan ini hitungan sesinya membengkak ~4 sesi/periode.
-      if (d.program !== 'kelas_maahir') continue;
-      if (!dalamPeriode(a, d.tanggal, start, end)) continue;
-      if (pemutihanTanggal.has(`${a.id}|${d.tanggal}`)) continue;
-      if (targetBulananPada(kelas.id, a.id, d.tanggal) === null) continue; // target belum berlaku
-      sesiTarget += 1;
-      tanggalTerakhir = d.tanggal;
+    for (const src of sumber) {
+      const mulaiKelas = anchorKelas(src.k);
+      const dari = mulaiKelas > start ? mulaiKelas : start;
+      if (dari > end) continue;
+      for (const d of expectedDaysInRange(src.k, dari, end, liburByKelas.get(src.k.id))) {
+        // WAJIB: kelas takhassus ber-presensi_sifat 'harian', dan
+        // expectedDaysInRange menyelipkan satu sesi at_tibyan tiap Sabtu. Tanpa
+        // saringan ini hitungan sesinya membengkak ~4 sesi/periode.
+        if (d.program !== 'kelas_maahir') continue;
+        if (src.dari && d.tanggal < src.dari) continue;
+        if (src.sebelum && d.tanggal >= src.sebelum) continue;
+        if (!dalamPeriode(src.row, d.tanggal, start, end)) continue;
+        if (pemutihanTanggal.has(`${src.row.id}|${d.tanggal}`)) continue;
+        if (targetBulananPada(kelas.id, a.id, d.tanggal) === null) continue; // target belum berlaku
+        sesiTarget += 1;
+        if (tanggalTerakhir === null || d.tanggal > tanggalTerakhir) tanggalTerakhir = d.tanggal;
+      }
     }
     // Tak satu pun sesi menagih peserta ini (belum bergabung, kelas belum mulai,
     // atau target belum berlaku sepanjang periode) → '—', bukan 0%.
@@ -517,7 +622,15 @@ export async function getLaporanMaahir(month: string): Promise<LaporanMaahir> {
       return x.a.name.localeCompare(y.a.name);
     })
     .map((x): SetoranPeserta => {
-      const rows = (setoranByAnggota.get(x.a.id) ?? []).sort((p, q) =>
+      // Peserta via halaqah: setoran sebelum pengalihan dari kelas Takhassus,
+      // sesudahnya dari baris-baris halaqahnya.
+      const via = viaByTakh.get(x.a.id);
+      const rows = [
+        ...(setoranByAnggota.get(x.a.id) ?? []).filter((rw) => !via || rw.tanggal < via.mulai),
+        ...(via?.halaqah ?? []).flatMap((h) =>
+          (setoranByAnggota.get(h.id) ?? []).filter((rw) => rw.tanggal >= via!.mulai)
+        ),
+      ].sort((p, q) =>
         p.tanggal < q.tanggal ? -1 : p.tanggal > q.tanggal ? 1 : 0
       );
       const halaman = rows.reduce((s, rw) => s + rw.halaman, 0);
@@ -586,7 +699,7 @@ export async function getLaporanMaahir(month: string): Promise<LaporanMaahir> {
     const mulai = anchorKelas(kelas);
     const dari = mulai > start ? mulai : start;
     if (dari > end) continue;
-    const hilang = expectedDaysInRange(kelas, dari, end, liburByKelas.get(kelas.id))
+    const hilang = expectedPresensiInRange(kelas, dari, end, liburByKelas.get(kelas.id))
       .filter((d) => !terisiKeys.has(`${kelas.id}|${filledKeyOf(kelas, d.program, d.tanggal)}`));
     if (hilang.length === 0) continue;
     presensiTakTerisi.push({

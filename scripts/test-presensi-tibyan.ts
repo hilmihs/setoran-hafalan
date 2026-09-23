@@ -35,7 +35,7 @@ const DARI = '2026-09-14';
 const SAMPAI = '2026-09-27';
 
 async function main() {
-  const { expectedDaysInRange } = await import('@/lib/maahir-presensi');
+  const { expectedDaysInRange, expectedPresensiInRange } = await import('@/lib/maahir-presensi');
 
   console.log('kelas harian default (ikut_tibyan=true)');
   {
@@ -76,6 +76,21 @@ async function main() {
   {
     const d = expectedDaysInRange(kelas({ presensi_sifat: 'mingguan', ikut_tibyan: true }), DARI, SAMPAI);
     check('2 slot pekan, semua kelas_maahir', d.length === 2 && d.every((x) => x.program === 'kelas_maahir' && x.mingguan));
+  }
+
+  console.log('presensi dialihkan ke halaqah (presensi_via_halaqah_mulai)');
+  {
+    // Senin 14 & 21: pengalihan mulai 21 → hanya 14 yang masih dipresensi.
+    const k = kelas({ presensi_via_halaqah_mulai: '2026-09-21' });
+    const terjadwal = expectedDaysInRange(k, DARI, SAMPAI).filter((x) => x.program === 'kelas_maahir');
+    const presensi = expectedPresensiInRange(k, DARI, SAMPAI).filter((x) => x.program === 'kelas_maahir');
+    check('sesi terjadwal tetap 2 (check-in pengajar)', terjadwal.length === 2, String(terjadwal.length));
+    check('sesi dipresensi tinggal 14 Sep', presensi.map((x) => x.tanggal).join(',') === '2026-09-14',
+      presensi.map((x) => x.tanggal).join(','));
+    const tibyan = expectedPresensiInRange(k, DARI, SAMPAI).filter((x) => x.program === 'at_tibyan');
+    check('At-Tibyan tak ikut dialihkan', tibyan.length === 2, String(tibyan.length));
+    const tanpa = expectedPresensiInRange(kelas({}), DARI, SAMPAI);
+    check('NULL = perilaku lama', tanpa.length === expectedDaysInRange(kelas({}), DARI, SAMPAI).length);
   }
 
   console.log(`\n${passed} lulus, ${failed} gagal`);

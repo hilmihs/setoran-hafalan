@@ -6,7 +6,7 @@ import { fetchAllRows } from '@/lib/supabase-page';
 import {
   PROGRAM_LABEL,
   anchorKelas,
-  expectedDaysInRange,
+  expectedPresensiInRange,
   filledKeyOf,
   todayJakarta,
   type MaahirProgram,
@@ -110,7 +110,7 @@ export async function getMaahirRekap(
   // 1. Kelas
   let q = supabaseAdmin
     .from('program_kelas')
-    .select('id, name, gender, jadwal_hari, waktu_mulai, waktu_selesai, ketua_wa, wakil_wa, self_attendance, presensi_sifat, mulai_tanggal, ikut_tibyan')
+    .select('id, name, gender, jadwal_hari, waktu_mulai, waktu_selesai, ketua_wa, wakil_wa, self_attendance, presensi_sifat, mulai_tanggal, ikut_tibyan, presensi_via_halaqah_mulai')
     .order('gender')
     .order('name');
   if (opts?.kelasIds && opts.kelasIds.length > 0) q = q.in('id', opts.kelasIds);
@@ -280,7 +280,7 @@ export async function getMaahirRekap(
     const expectedStart = mulaiKelas > start ? mulaiKelas : start;
     const expectedEnd = akhirKelas && akhirKelas < end ? akhirKelas : end;
     const expectedAll =
-      expectedStart > expectedEnd ? [] : expectedDaysInRange(k, expectedStart, expectedEnd, liburByKelas.get(k.id));
+      expectedStart > expectedEnd ? [] : expectedPresensiInRange(k, expectedStart, expectedEnd, liburByKelas.get(k.id));
     // Filter ke program tertentu (mis. hanya At-Tibyan) bila diminta.
     const expected = opts?.program
       ? expectedAll.filter((e) => e.program === opts.program)

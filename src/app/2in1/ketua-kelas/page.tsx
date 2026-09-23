@@ -3,6 +3,7 @@ import { redirect } from 'next/navigation';
 import { supabaseAdmin } from '@/lib/supabase-admin';
 import { getSessionWa, findKetuaProgramKelas, isTakhassusKelas } from '@/lib/program-kelas';
 import { getUnfilledMaahirDays } from '@/lib/maahir-presensi';
+import { adaTakhassusVia } from '@/lib/takhassus-via-halaqah';
 import { Icon } from '@/components/icons';
 import { SectionHeader } from '@/components/ui/SectionHeader';
 import { FeatureNav } from '@/components/FeatureNav';
@@ -36,6 +37,12 @@ export default async function KetuaKelasPage() {
   const kelasIds = myKelas.map((k) => k.id);
 
   const unfilledCount = (await getUnfilledMaahirDays(wa)).length;
+  // Menu setoran: kelas Takhassus, atau kelas halaqah yang memuat peserta Takhassus.
+  const isiSetoran =
+    myKelas.some((k) => isTakhassusKelas(k.name)) || (await adaTakhassusVia(
+      // Kelas tanpa jadwal (At-Tibyan gabungan) tak punya sesi kelas_maahir.
+      myKelas.filter((k) => (k.jadwal_hari ?? []).length > 0).map((k) => k.id)
+    ));
 
   // Pertemuan bulan ini untuk semua kelas yang dipimpin
   const now = new Date();
@@ -136,7 +143,7 @@ export default async function KetuaKelasPage() {
           </Link>
 
           {/* Setoran hafalan hanya untuk kelas Takhassus. */}
-          {myKelas.some((k) => isTakhassusKelas(k.name)) && (
+          {isiSetoran && (
             <Link
               href="/2in1/ketua-kelas/setoran"
               className="card-flat"

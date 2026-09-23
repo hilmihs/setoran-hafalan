@@ -84,7 +84,8 @@ bertanya "presensi mana yang harus diisi":
 ```ts
 type TakhassusVia = { wa: string; kelasId: string; anggotaId: string; mulai: string };
 getTakhassusVia(): Promise<Map<wa, TakhassusVia>>
-setoranDiterima(tak: Map, wa, tanggal): boolean   // wa ada && tanggal >= mulai
+setorViaHalaqah(via, anggota, tanggal): boolean   // WA ada, kelas ≠ Takhassus-nya, tanggal >= mulai
+adaTakhassusVia(kelasIds): Promise<boolean>        // menu setoran di beranda ketua
 ```
 
 Sumber: anggota aktif (`active=true`) kelas yang `presensi_via_halaqah_mulai`
@@ -94,9 +95,10 @@ tidak NULL. Satu query kecil; dipakai UI ketua, API, dan laporan.
 
 - `presensi/page.tsx` & `pertemuan/[id]/page.tsx`: selain kelas Takhassus
   (perilaku lama), kolom setoran muncul **per baris** untuk anggota yang WA-nya
-  takhassus-via dan tanggal sesi ≥ `mulai`. Prop `showSetoran: boolean` di
-  `PresensiWizardForm`/`KehadiranForm` diganti `setoranAnggotaIds: string[]`
-  (kelas Takhassus = semua anggota). Label kecil "Takhassus" di baris itu.
+  takhassus-via dan tanggal sesi ≥ `mulai`: baris peserta di
+  `PresensiWizardForm`/`KehadiranForm` mendapat flag `takhassus`, di samping
+  `showSetoran` (kelas Takhassus = semua baris) yang tetap. Label kecil
+  "Takhassus" di baris itu.
   Isian `materi` (per pertemuan) tetap hanya untuk kelas Takhassus.
 - `/2in1/ketua-kelas/setoran` (isi susulan): kelas halaqah yang punya anggota
   takhassus-via ikut tampil; gridnya hanya baris anggota itu dan tanggal ≥
@@ -120,14 +122,16 @@ milik WA yang sama:
   `studentsFor` dipecah jadi *hitung mentah per baris anggota* + *finalisasi*
   supaya penggabungan tak menyalin rumus.
 - **Blok Halaqah (Maahir):** baris halaqah milik WA takhassus-via dikeluarkan
-  untuk sesi ≥ `mulai` (tak tampil dua kali).
+  seluruhnya (tak tampil dua kali). Aman karena baris itu dibuat dengan
+  `mulai_tanggal` = tanggal pengalihan; sesi sebelum itu memang tak ada. Kelas
+  tanpa `jadwal_hari` (At-Tibyan gabungan) tak ikut diserap.
 - **Blok Takhassus — setoran:** halaman dari baris halaqah (≥ `mulai`) digabung
   ke peserta. `sesiTarget` menghitung sesi terjadwal kelas Takhassus sebelum
   `mulai` + sesi terjadwal kelas-kelas halaqahnya sejak `mulai` (dalam rentang
   keanggotaan masing-masing). Target tetap dicari di kelas Takhassus
   (`targetBulananPada(kelasTakhassus, anggotaTakhassus, tanggalTerakhir)`).
-- **At-Tibyan:** tak berubah (kelas gabungan At-Tibyan sudah ada, kelas
-  halaqah `ikut_tibyan=false`).
+- **At-Tibyan:** tak berubah — lewat kelas gabungan At-Tibyan, dengan kelas
+  halaqah `ikut_tibyan=false` (lihat prasyarat rilis).
 - **SP:** `maahir-sp.ts` sudah menjumlah per WA lintas kelas; kelas Takhassus
   tak punya sesi lagi setelah `mulai`, jadi tak ada dobel. Tak diubah.
 - **Pemutihan:** berlaku per `anggota_id`. Pemutihan sebulan pada baris
@@ -144,16 +148,26 @@ mengoreksi di `/2in1/koordinator/target-setoran`.
 
 Kode boleh ter-deploy lebih dulu: selama kolom masih NULL, semua jalur lama.
 Tetapi **DDL harus jalan sebelum kode**, karena kode memilih kolom baru.
-Urutan:
 
-1. DDL `0087` (user, lewat `!npm run db -- --confirm`).
+**Prasyarat yang ternyata belum jalan:** per 23 Sep, rilis 0083 di prod baru
+langkah [A] (DDL) dan [B] (cabut takhassus). Rename, `ikut_tibyan=false`, dan
+kelas At-Tibyan gabungan ([C]–[H]) belum — 10 kelas halaqah masih menagih
+At-Tibyan sendiri-sendiri. Rancangan ini bergantung pada [D]–[F]: tanpanya,
+mengaktifkan kembali takhassus di kelas halaqah membuat mereka tertagih
+At-Tibyan di tiap kelas halaqahnya.
+
+Urutan (`scripts/sql/0087-rilis-takhassus-via-halaqah.sql`):
+
+1. [A] DDL `0087` (user, lewat `!npm run db -- --confirm`).
 2. Deploy kode.
-3. `scripts/sql/0087-rilis-takhassus-via-halaqah.sql` pada/ sesudah 28 Sep:
-   [A] aktifkan 8 baris halaqah, `mulai_tanggal='2026-09-28'`;
-   [B] `presensi_via_halaqah_mulai='2026-09-28'` untuk Takhassus Akhwat;
-   [C] target default 80 berlaku 28 Sep;
-   [D] rename 10 kelas ke "Halaqah Tahfizh" (tertinggal dari rilis 0083);
-   [V] SELECT verifikasi. Idempoten.
+3. 0083 [C]–[H] (`scripts/sql/0083-rilis-halaqah-tahfizh-akhwat.sql`).
+4. Pada/sesudah 28 Sep: [B] aktifkan 8 baris halaqah, `mulai_tanggal='2026-09-28'`;
+   [C] `presensi_via_halaqah_mulai='2026-09-28'` untuk Takhassus Akhwat;
+   [D] target default 80 berlaku 28 Sep; [V] SELECT verifikasi. Idempoten.
+
+Peserta Takhassus tanpa baris halaqah (Nur Afifah, cuti) tetap dialihkan:
+sesi Takhassus sesudah tanggal pengalihan tak menagihnya, baik di kehadiran
+maupun di hitungan sesi target.
 
 ## Pengujian
 

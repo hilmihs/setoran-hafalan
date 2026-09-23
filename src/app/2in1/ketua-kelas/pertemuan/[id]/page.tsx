@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { supabaseAdmin } from '@/lib/supabase-admin';
 import { getSessionWa, isTakhassusKelas } from '@/lib/program-kelas';
+import { getTakhassusVia, setorViaHalaqah } from '@/lib/takhassus-via-halaqah';
 import { KehadiranForm } from './KehadiranForm';
 
 export const dynamic = 'force-dynamic';
@@ -31,7 +32,7 @@ export default async function PertemuanDetailPage({ params }: { params: { id: st
   // Semua anggota kelas program ini
   const { data: anggotaList } = await supabaseAdmin
     .from('program_kelas_anggota')
-    .select('id, name, is_ketua, is_wakil')
+    .select('id, name, is_ketua, is_wakil, whatsapp_number')
     .eq('program_kelas_id', kelas.id)
     .eq('active', true)
     // Yang sudah pindah kelas tak lagi dipresensi pada tanggal pertemuan ini.
@@ -62,6 +63,9 @@ export default async function PertemuanDetailPage({ params }: { params: { id: st
       ])
   );
 
+  // Peserta Takhassus yang dipresensi di kelas halaqah ini: setorannya diisi di sini.
+  const via = await getTakhassusVia();
+
   type StatusType = 'hadir' | 'izin' | 'terlambat' | 'sakit' | 'tidak_ada_keterangan';
   const anggotaWithStatus = (anggotaList ?? []).map((a) => ({
     id: a.id,
@@ -71,6 +75,13 @@ export default async function PertemuanDetailPage({ params }: { params: { id: st
     setoran:
       kehadiranMap.get(a.id)?.setoran != null ? String(kehadiranMap.get(a.id)!.setoran) : '',
     mode: (kehadiranMap.get(a.id)?.mode === 'online' ? 'online' : 'offline') as 'offline' | 'online',
+    takhassus:
+      pertemuan.program === 'kelas_maahir' &&
+      setorViaHalaqah(
+        via,
+        { program_kelas_id: kelas.id, whatsapp_number: a.whatsapp_number },
+        pertemuan.tanggal
+      ),
   }));
 
   const tanggalLabel = new Date(pertemuan.tanggal + 'T00:00:00').toLocaleDateString('id-ID', {

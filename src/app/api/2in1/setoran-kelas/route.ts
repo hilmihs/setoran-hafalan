@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase-admin';
-import { getSessionWa } from '@/lib/program-kelas';
+import { getSessionWa, isTakhassusKelas } from '@/lib/program-kelas';
+import { getTakhassusVia, setorViaHalaqah } from '@/lib/takhassus-via-halaqah';
 import { pesanTerkunci, presensiTerbuka } from '@/lib/periode-laporan';
 
 export const runtime = 'nodejs';
@@ -62,7 +63,7 @@ export async function POST(req: NextRequest) {
     const kelasIds = [...new Set((pertemuanRows ?? []).map((p) => p.program_kelas_id as string))];
     const { data: kelasRows } = await supabaseAdmin
       .from('program_kelas')
-      .select('id, ketua_wa, wakil_wa')
+      .select('id, name, ketua_wa, wakil_wa')
       .in('id', kelasIds);
     const bolehKelas = new Set(
       (kelasRows ?? [])
@@ -77,6 +78,39 @@ export async function POST(req: NextRequest) {
     if (pertemuanOk.size !== pertemuanIds.length) {
       return NextResponse.json(
         { error: 'Hanya ketua/wakil kelas yang bisa mengisi setoran sesi Kelas Maahir.' },
+        { status: 403 }
+      );
+    }
+
+    // Yang menyetor hanya peserta Takhassus: anggota kelas Takhassus, atau peserta
+    // Takhassus yang dipresensi di kelas halaqah ini sejak tanggal pengalihannya.
+    const kelasTakhassus = new Set(
+      (kelasRows ?? []).filter((k) => isTakhassusKelas(k.name as string)).map((k) => k.id as string)
+    );
+    const pertemuanById = new Map(
+      (pertemuanRows ?? []).map((p) => [
+        p.id as string,
+        { kelasId: p.program_kelas_id as string, tanggal: p.tanggal as string },
+      ])
+    );
+    const via = await getTakhassusVia();
+    const { data: anggotaRows } = await supabaseAdmin
+      .from('program_kelas_anggota')
+      .select('id, program_kelas_id, whatsapp_number')
+      .in('id', [...new Set(clean.map((i) => i.anggota_id))]);
+    const anggotaById = new Map(
+      ((anggotaRows ?? []) as Array<{ id: string; program_kelas_id: string; whatsapp_number: string | null }>)
+        .map((a) => [a.id, a])
+    );
+    const ditolak = clean.find((it) => {
+      const p = pertemuanById.get(it.pertemuan_id)!;
+      const a = anggotaById.get(it.anggota_id);
+      if (!a || a.program_kelas_id !== p.kelasId) return true;
+      return !kelasTakhassus.has(p.kelasId) && !setorViaHalaqah(via, a, p.tanggal);
+    });
+    if (ditolak) {
+      return NextResponse.json(
+        { error: 'Setoran hanya untuk peserta Takhassus.' },
         { status: 403 }
       );
     }

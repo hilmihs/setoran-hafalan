@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase-admin';
-import { getSessionWa } from '@/lib/program-kelas';
+import { getSessionWa, isTakhassusKelas } from '@/lib/program-kelas';
+import { getTakhassusVia, setorViaHalaqah } from '@/lib/takhassus-via-halaqah';
 import { pesanTerkunci, presensiTerbuka } from '@/lib/periode-laporan';
 import { butuhAlasan, isStatusValid, type StatusKehadiran } from '@/lib/kehadiran-status';
 
@@ -13,6 +14,7 @@ type PertemuanTerotorisasi = {
   program_kelas_id: string;
   program: string;
   tanggal: string;
+  kelasName: string;
 };
 
 /**
@@ -32,13 +34,17 @@ async function otorisasiPertemuan(
   }
   const { data: pertemuan } = await supabaseAdmin
     .from('pertemuan_program')
-    .select('id, program_kelas_id, program, tanggal, program_kelas:program_kelas_id(ketua_wa, wakil_wa)')
+    .select('id, program_kelas_id, program, tanggal, program_kelas:program_kelas_id(name, ketua_wa, wakil_wa)')
     .eq('id', pertemuanId)
     .single();
   if (!pertemuan || !pertemuan.program_kelas_id) {
     return { gagal: NextResponse.json({ error: 'Pertemuan tidak ditemukan.' }, { status: 404 }) };
   }
-  const pk = pertemuan.program_kelas as unknown as { ketua_wa: string | null; wakil_wa: string | null };
+  const pk = pertemuan.program_kelas as unknown as {
+    name: string;
+    ketua_wa: string | null;
+    wakil_wa: string | null;
+  };
   if (pk.ketua_wa !== wa && pk.wakil_wa !== wa) {
     return {
       gagal: NextResponse.json(
@@ -53,6 +59,7 @@ async function otorisasiPertemuan(
       program_kelas_id: pertemuan.program_kelas_id as string,
       program: pertemuan.program as string,
       tanggal: pertemuan.tanggal as string,
+      kelasName: pk.name,
     },
   };
 }
@@ -120,7 +127,7 @@ export async function PUT(
     const anggotaIds = rows.map((r) => r.anggota_id);
     const { data: anggotaList } = await supabaseAdmin
       .from('program_kelas_anggota')
-      .select('id, peserta_id')
+      .select('id, peserta_id, program_kelas_id, whatsapp_number')
       .in('id', anggotaIds);
     const pesertaByAnggota = new Map((anggotaList ?? []).map((a) => [a.id, a.peserta_id]));
 
@@ -128,6 +135,23 @@ export async function PUT(
     // bila klien tak mengirim field-nya (mis. peserta sudah isi via presensi
     // mandiri, lalu ketua menyimpan ulang kehadiran).
     const isKelasMaahir = pertemuan.program === 'kelas_maahir';
+    // Yang menyetor hanya peserta Takhassus: seluruh anggota kelas Takhassus,
+    // atau peserta Takhassus yang dipresensi di kelas halaqah ini (via WA).
+    // Setoran baris lain diabaikan — nilai lamanya dipertahankan.
+    const via = await getTakhassusVia();
+    const anggotaById = new Map((anggotaList ?? []).map((a) => [a.id as string, a]));
+    const bolehSetor = (anggotaId: string): boolean => {
+      if (isTakhassusKelas(pertemuan.kelasName)) return true;
+      const a = anggotaById.get(anggotaId);
+      return (
+        !!a &&
+        setorViaHalaqah(
+          via,
+          { program_kelas_id: a.program_kelas_id as string, whatsapp_number: a.whatsapp_number as string | null },
+          pertemuan.tanggal
+        )
+      );
+    };
     const { data: existingRows } = await supabaseAdmin
       .from('kehadiran_peserta')
       .select('anggota_id, setoran_halaman')
@@ -137,7 +161,9 @@ export async function PUT(
     );
     const parseSetoran = (r: (typeof rows)[number]): number | null => {
       if (!isKelasMaahir) return null;
-      if (r.setoran_halaman === undefined) return setoranLama.get(r.anggota_id) ?? null;
+      if (r.setoran_halaman === undefined || !bolehSetor(r.anggota_id)) {
+        return setoranLama.get(r.anggota_id) ?? null;
+      }
       if (r.setoran_halaman === null || r.setoran_halaman === '') return null;
       const n = Number(r.setoran_halaman);
       return Number.isInteger(n) && n >= 0 ? n : (setoranLama.get(r.anggota_id) ?? null);

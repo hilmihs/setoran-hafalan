@@ -7,6 +7,7 @@ import { monthOptionsSince } from '@/lib/month';
 import { PRESENSI_ANCHOR } from '@/lib/maahir-presensi';
 import { berlakuPeriodeBerjalan, getSetoranTargets, targetResolver } from '@/lib/setoran-target';
 import { todayJakarta } from '@/lib/anggota-periode';
+import { getTakhassusVia } from '@/lib/takhassus-via-halaqah';
 import { Icon } from '@/components/icons';
 import { SetoranGrid, type GridPertemuan, type GridPeserta } from './SetoranGrid';
 import { TargetPesertaPanel, type TargetBaris } from './TargetPesertaPanel';
@@ -59,14 +60,35 @@ export default async function SetoranKetuaPage({
     );
   }
 
-  // Setoran hafalan hanya untuk kelas Takhassus — kelas Maahir lain tak menyetor.
-  const myKelas = semuaKelas.filter((k) => isTakhassusKelas(k.name));
+  // Setoran hafalan hanya untuk peserta Takhassus: kelas Takhassus, plus kelas
+  // halaqah tempat peserta Takhassus dipresensi (sejak tanggal pengalihannya).
+  const kelasTakhassus = semuaKelas.filter((k) => isTakhassusKelas(k.name));
+  const via = await getTakhassusVia();
+  // Kelas tanpa jadwal (At-Tibyan gabungan) tak punya sesi kelas_maahir.
+  const lainIds = semuaKelas
+    .filter((k) => !isTakhassusKelas(k.name) && (k.jadwal_hari ?? []).length > 0)
+    .map((k) => k.id);
+  const { data: viaRows } =
+    via.size > 0 && lainIds.length > 0
+      ? await supabaseAdmin
+          .from('program_kelas_anggota')
+          .select('id, program_kelas_id, name, whatsapp_number')
+          .in('program_kelas_id', lainIds)
+          .in('whatsapp_number', [...via.keys()])
+          .eq('active', true)
+          .order('name')
+      : { data: [] };
+  const anggotaVia = ((viaRows ?? []) as Array<{
+    id: string; program_kelas_id: string; name: string; whatsapp_number: string;
+  }>).map((a) => ({ ...a, mulai: via.get(a.whatsapp_number)!.mulai }));
+  const kelasHalaqah = semuaKelas.filter((k) => anggotaVia.some((a) => a.program_kelas_id === k.id));
+  const myKelas = [...kelasTakhassus, ...kelasHalaqah];
   if (myKelas.length === 0) {
     return (
       <main style={{ padding: 24 }}>
         <p className="t-body" style={{ color: 'var(--muted-2)' }}>
-          Kelas ini tidak mengisi setoran hafalan. Setoran hanya untuk Maahir
-          Takhassus Ikhwan &amp; Akhwat.
+          Kelas ini tidak mengisi setoran hafalan. Setoran hanya untuk peserta
+          Maahir Takhassus Ikhwan &amp; Akhwat.
         </p>
         <Link href="/2in1/ketua-kelas" className="btn btn-ghost" style={{ marginTop: 16 }}>← Kembali</Link>
       </main>
@@ -94,12 +116,17 @@ export default async function SetoranKetuaPage({
   const { data: anggotaRows } = await supabaseAdmin
     .from('program_kelas_anggota')
     .select('id, program_kelas_id, name')
-    .in('program_kelas_id', kelasIds)
+    .in('program_kelas_id', kelasTakhassus.map((k) => k.id))
     .eq('active', true)
     .order('name');
-  const anggotaList = (anggotaRows ?? []) as Array<{
-    id: string; program_kelas_id: string; name: string;
-  }>;
+  // Di kelas halaqah hanya peserta Takhassus-nya yang menyetor, dan hanya sejak
+  // tanggal pengalihan. `mulai` null = kelas Takhassus (semua sesi).
+  const anggotaList = [
+    ...((anggotaRows ?? []) as Array<{ id: string; program_kelas_id: string; name: string }>)
+      .filter((a) => kelasTakhassus.some((k) => k.id === a.program_kelas_id))
+      .map((a) => ({ ...a, mulai: null as string | null })),
+    ...anggotaVia,
+  ];
 
   const pertemuanIds = pertemuanList.map((p) => p.id);
   const { data: kehadiranRows } = await supabaseAdmin
@@ -117,15 +144,20 @@ export default async function SetoranKetuaPage({
 
   const blocks = myKelas
     .map((k) => {
+      const pesKelas = anggotaList.filter((a) => a.program_kelas_id === k.id);
+      // Kelas halaqah: kolom mulai dari tanggal pengalihan paling awal anggotanya.
+      const dari = pesKelas.reduce<string | null>(
+        (m, a) => (a.mulai === null ? m : m === null || a.mulai < m ? a.mulai : m),
+        null
+      );
       const pert: GridPertemuan[] = pertemuanList
-        .filter((p) => p.program_kelas_id === k.id)
+        .filter((p) => p.program_kelas_id === k.id && (dari === null || p.tanggal >= dari))
         .map((p) => ({
           id: p.id,
           tanggal: p.tanggal,
           label: `${p.tanggal.slice(8, 10)}/${p.tanggal.slice(5, 7)}`,
         }));
-      const pes: GridPeserta[] = anggotaList
-        .filter((a) => a.program_kelas_id === k.id)
+      const pes: GridPeserta[] = pesKelas
         .map((a) => ({
           id: a.id,
           name: a.name,
@@ -150,13 +182,14 @@ export default async function SetoranKetuaPage({
   // Target hafalan bulanan per peserta. Dipisah dari `blocks` supaya panelnya
   // tetap muncul pada bulan yang belum punya pertemuan sama sekali — target
   // justru paling perlu dipasang sebelum kelas berjalan.
-  const targetRows = await getSetoranTargets(kelasIds);
+  // Target tetap milik kelas Takhassus; ketua halaqah tak mengaturnya.
+  const targetRows = await getSetoranTargets(kelasTakhassus.map((k) => k.id));
   const hariIni = todayJakarta();
   const berlakuPada = targetResolver(targetRows);
   const berlakuLabel = new Date(berlakuPeriodeBerjalan() + 'T00:00:00').toLocaleDateString('id-ID', {
     day: 'numeric', month: 'long', year: 'numeric',
   });
-  const targetBlocks = myKelas
+  const targetBlocks = kelasTakhassus
     .map((k) => ({
       kelas: k,
       baris: anggotaList

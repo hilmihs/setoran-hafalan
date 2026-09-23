@@ -166,6 +166,37 @@ export function expectedDaysInRange(
   return expectedDaysForKelas(k, datesInRange(start, end), libur);
 }
 
+/**
+ * Sesi kelas_maahir ini dialihkan ke kelas halaqah anggotanya? Kelas ber-
+ * `presensi_via_halaqah_mulai` (Takhassus akhwat) tetap terjadwal — pengajarnya
+ * tetap check-in — tapi mulai tanggal itu tak dipresensi sendiri.
+ */
+export function presensiDialihkan(
+  k: { presensi_via_halaqah_mulai?: string | null },
+  program: string,
+  tanggal: string
+): boolean {
+  const mulai = k.presensi_via_halaqah_mulai;
+  return program === 'kelas_maahir' && !!mulai && tanggal >= mulai;
+}
+
+/**
+ * Sesi yang harus DIPRESENSI satu kelas dalam [start, end]: `expectedDaysInRange`
+ * minus sesi yang dialihkan ke kelas halaqah (`presensiDialihkan`). Dipakai
+ * tagihan ketua, rekap "belum diisi", dan "presensi tak terisi" laporan.
+ * Check-in pengajar & sesi target setoran tetap memakai `expectedDaysInRange`.
+ */
+export function expectedPresensiInRange(
+  k: ProgramKelasRow,
+  start: string,
+  end: string,
+  libur?: Set<string>
+): ExpectedDay[] {
+  return expectedDaysInRange(k, start, end, libur).filter(
+    (d) => !presensiDialihkan(k, d.program, d.tanggal)
+  );
+}
+
 /** Hari program yang diharapkan untuk satu kelas, untuk daftar tanggal yang diberikan. */
 function expectedDaysForKelas(
   k: ProgramKelasRow,
@@ -263,7 +294,7 @@ export async function getUnfilledMaahirDays(wa: string): Promise<UnfilledDay[]> 
   // Kelas self_attendance tak masuk (findKetuaProgramKelas sudah mengecualikan).
   const expected: ExpectedDay[] = [];
   for (const k of myKelas) {
-    expected.push(...expectedDaysInRange(k, awalTagihan(k), today, liburByKelas.get(k.id)));
+    expected.push(...expectedPresensiInRange(k, awalTagihan(k), today, liburByKelas.get(k.id)));
   }
   if (expected.length === 0) return [];
 
