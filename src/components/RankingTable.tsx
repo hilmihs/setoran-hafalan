@@ -6,22 +6,32 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { Initials, Icon } from '@/components/icons';
 import type { Gender, NilaiRekaman } from '@/types/db';
 
+/** Satu kolom periode. `key` = week_start, `label` = teks kepala kolom. */
+export type PeriodeKolom = { key: string; label: string };
+
+export type SelPeriode = {
+  status: 'belum' | 'menunggu' | 'selesai';
+  setoranId: string | null;
+  rekaman: NilaiRekaman[];
+};
+
 export type RankingRow = {
   id: string;
   name: string;
   gender: Gender;
   kelasId: string;
   kelasName: string;
-  h1Status: 'belum' | 'menunggu' | 'selesai';
-  h2Status: 'belum' | 'menunggu' | 'selesai';
-  h1SetoranId: string | null;
-  h2SetoranId: string | null;
-  h1Rekaman: NilaiRekaman[];
-  h2Rekaman: NilaiRekaman[];
+  /** Diindeks week_start. Periode tanpa entri dianggap 'belum'. */
+  periode: Record<string, SelPeriode>;
   rataRata: number | null;
 };
 
-type SortKey = 'name' | 'kelas' | 'h1' | 'h2' | 'rata';
+const SEL_KOSONG: SelPeriode = { status: 'belum', setoranId: null, rekaman: [] };
+
+// Jumlah kolom periode tidak tetap: era 2-pekan memberi dua per bulan, era
+// bulanan satu, dan September 2026 — bulan pergantian aturan — tiga. Karena
+// itu kunci urutnya dinamis (`p:<week_start>`), bukan 'h1'/'h2'.
+type SortKey = 'name' | 'kelas' | 'rata' | `p:${string}`;
 const STATUS_ORD = { belum: 0, menunggu: 1, selesai: 2 } as const;
 
 export function RankingTable({
@@ -29,15 +39,13 @@ export function RankingTable({
   kelasOptions,
   monthOptions,
   currentMonth,
-  h1Label,
-  h2Label,
+  periods,
 }: {
   rows: RankingRow[];
   kelasOptions: Array<{ id: string; name: string; gender: Gender }>;
   monthOptions: Array<{ value: string; label: string }>;
   currentMonth: string;
-  h1Label: string;
-  h2Label: string;
+  periods: PeriodeKolom[];
 }) {
   const router = useRouter();
   const sp = useSearchParams();
@@ -73,8 +81,10 @@ export function RankingTable({
       let c = 0;
       if (sortKey === 'name') c = a.name.localeCompare(b.name, 'id');
       else if (sortKey === 'kelas') c = a.kelasName.localeCompare(b.kelasName, 'id');
-      else if (sortKey === 'h1') c = STATUS_ORD[a.h1Status] - STATUS_ORD[b.h1Status];
-      else if (sortKey === 'h2') c = STATUS_ORD[a.h2Status] - STATUS_ORD[b.h2Status];
+      else if (sortKey.startsWith('p:')) {
+        const k = sortKey.slice(2);
+        c = STATUS_ORD[(a.periode[k] ?? SEL_KOSONG).status] - STATUS_ORD[(b.periode[k] ?? SEL_KOSONG).status];
+      }
       else if (sortKey === 'rata') {
         const av = a.rataRata, bv = b.rataRata;
         if (av === null && bv === null) c = 0;
@@ -135,14 +145,23 @@ export function RankingTable({
                 <th style={{ width: 40 }}>#</th>
                 <SortTh label="Peserta" k="name" sortKey={sortKey} dir={dir} onClick={toggle} style={{ width: '28%' }} />
                 <SortTh label="Kelas" k="kelas" sortKey={sortKey} dir={dir} onClick={toggle} style={{ width: '12%' }} />
-                <SortTh label={`H1 (${h1Label})`} k="h1" sortKey={sortKey} dir={dir} onClick={toggle} style={{ width: '18%', textAlign: 'center' }} />
-                <SortTh label={`H2 (${h2Label})`} k="h2" sortKey={sortKey} dir={dir} onClick={toggle} style={{ width: '18%', textAlign: 'center' }} />
+                {periods.map((p) => (
+                  <SortTh
+                    key={p.key}
+                    label={p.label}
+                    k={`p:${p.key}`}
+                    sortKey={sortKey}
+                    dir={dir}
+                    onClick={toggle}
+                    style={{ width: `${36 / Math.max(periods.length, 1)}%`, textAlign: 'center' }}
+                  />
+                ))}
                 <SortTh label="Rata²" k="rata" sortKey={sortKey} dir={dir} onClick={toggle} style={{ width: '12%', textAlign: 'center' }} />
               </tr>
             </thead>
             <tbody>
               {view.length === 0 && (
-                <tr><td colSpan={6} style={{ textAlign: 'center', padding: 32, color: 'var(--muted)' }}>Tidak ada data sesuai filter.</td></tr>
+                <tr><td colSpan={4 + periods.length} style={{ textAlign: 'center', padding: 32, color: 'var(--muted)' }}>Tidak ada data sesuai filter.</td></tr>
               )}
               {view.map((r, i) => (
                 <tr key={r.id}>
@@ -154,8 +173,14 @@ export function RankingTable({
                     </div>
                   </td>
                   <td style={{ color: 'var(--ink-2)', fontSize: 12 }}>{r.kelasName || '—'}</td>
-                  <td style={{ textAlign: 'center' }}><StatusCell status={r.h1Status} setoranId={r.h1SetoranId} rekaman={r.h1Rekaman} /></td>
-                  <td style={{ textAlign: 'center' }}><StatusCell status={r.h2Status} setoranId={r.h2SetoranId} rekaman={r.h2Rekaman} /></td>
+                  {periods.map((p) => {
+                    const sel = r.periode[p.key] ?? SEL_KOSONG;
+                    return (
+                      <td key={p.key} style={{ textAlign: 'center' }}>
+                        <StatusCell status={sel.status} setoranId={sel.setoranId} rekaman={sel.rekaman} />
+                      </td>
+                    );
+                  })}
                   <td style={{ textAlign: 'center' }}>
                     {r.rataRata !== null ? (
                       <span style={{ fontWeight: 700, fontSize: 14, color: r.rataRata >= 3 ? 'var(--hijau-ink)' : r.rataRata >= 2 ? 'var(--kuning-ink)' : 'var(--merah-ink)' }}>

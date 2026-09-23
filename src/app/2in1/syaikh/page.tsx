@@ -1,8 +1,7 @@
 import Link from 'next/link';
 import { requireSyaikh } from '@/lib/session';
 import { supabaseAdmin } from '@/lib/supabase-admin';
-import { currentCycleStart, formatCycleDeadline, formatCycleRange, cyclesOfMonth, currentYearMonth } from '@/lib/week';
-import { formatCycleRangeShort } from '@/lib/week';
+import { currentCycleStart, formatCycleDeadline, formatCycleRange, formatCycleRangeShort, cyclesInMonth, currentYearMonth } from '@/lib/week';
 import { LogoutButton } from '@/components/LogoutButton';
 import { Icon, Initials } from '@/components/icons';
 import { FeatureNav } from '@/components/FeatureNav';
@@ -46,7 +45,8 @@ export default async function SyaikhDashboard() {
   const cycle = currentCycleStart();
   const deadlineLabel = formatCycleDeadline(cycle);
   const { year: curYear, month: curMonth, label: monthLabel } = currentYearMonth();
-  const [h1Week, h2Week] = cyclesOfMonth(curYear, curMonth);
+  // Jumlah cycle sebulan tidak tetap sejak barnamij jadi bulanan (28 → 27).
+  const monthCycles = cyclesInMonth(curYear, curMonth);
 
   // View cross-gender: tarik semua musyrif aktif. Aksi (cek/ingatkan)
   // tetap di-gating same-gender di UI di bawah.
@@ -153,14 +153,13 @@ export default async function SyaikhDashboard() {
         .from('setoran')
         .select('id, peserta_id, week_start, status')
         .in('peserta_id', allPesertaIds)
-        .in('week_start', [h1Week, h2Week])
+        .in('week_start', monthCycles.length ? monthCycles : ['1970-01-01'])
     : { data: [] as Array<{ id: string; peserta_id: string; week_start: string; status: string }> };
 
-  const pesertaMonthlyMap = new Map<string, { h1?: { id: string; status: string }; h2?: { id: string; status: string } }>();
+  const pesertaMonthlyMap = new Map<string, Record<string, { id: string; status: string }>>();
   for (const st of pesertaMonthlySetoranRaw ?? []) {
     const entry = pesertaMonthlyMap.get(st.peserta_id) ?? {};
-    if (st.week_start === h1Week) entry.h1 = { id: st.id, status: st.status };
-    else if (st.week_start === h2Week) entry.h2 = { id: st.id, status: st.status };
+    entry[st.week_start] = { id: st.id, status: st.status };
     pesertaMonthlyMap.set(st.peserta_id, entry);
   }
 
@@ -190,14 +189,18 @@ export default async function SyaikhDashboard() {
   const pesertaMonthlyRows = (allPesertaRaw ?? [])
     .map((p) => {
       const entry = pesertaMonthlyMap.get(p.id) ?? {};
-      const h1Rek = entry.h1 ? pesertaRekamanMap.get(entry.h1.id) ?? [] : [];
-      const h2Rek = entry.h2 ? pesertaRekamanMap.get(entry.h2.id) ?? [] : [];
-      const allNilai = [...h1Rek, ...h2Rek];
+      const sel = monthCycles.map((c) => {
+        const st = entry[c];
+        const status: 'belum' | 'menunggu' | 'selesai' =
+          !st ? 'belum' : st.status === 'checked' ? 'selesai' : st.status === 'submitted' ? 'menunggu' : 'belum';
+        return { cycle: c, status, rekaman: st ? pesertaRekamanMap.get(st.id) ?? [] : [] };
+      });
+      const allNilai = sel.flatMap((x) => x.rekaman);
       const rataRata =
         allNilai.length > 0
           ? allNilai.reduce((acc, n) => acc + nilaiToSkor(n), 0) / allNilai.length
           : null;
-      return { peserta: p, entry, h1Rek, h2Rek, rataRata };
+      return { peserta: p, sel, rataRata };
     })
     .sort((a, b) => {
       if (a.rataRata === null && b.rataRata === null) return 0;
@@ -417,7 +420,7 @@ export default async function SyaikhDashboard() {
             <div
               style={{
                 display: 'grid',
-                gridTemplateColumns: '30px 1fr 70px 70px 56px',
+                gridTemplateColumns: `30px 1fr ${monthCycles.map(() => '70px').join(' ')} 56px`,
                 gap: 6,
                 padding: '8px 12px',
                 background: 'var(--surface-2)',
@@ -431,8 +434,9 @@ export default async function SyaikhDashboard() {
             >
               <div>#</div>
               <div>Peserta</div>
-              <div style={{ textAlign: 'center' }}>H1</div>
-              <div style={{ textAlign: 'center' }}>H2</div>
+              {monthCycles.map((c) => (
+                <div key={c} style={{ textAlign: 'center' }}>{formatCycleRangeShort(c)}</div>
+              ))}
               <div style={{ textAlign: 'center' }}>Rata²</div>
             </div>
             {pesertaMonthlyRows.length === 0 ? (
@@ -440,15 +444,13 @@ export default async function SyaikhDashboard() {
                 <p className="t-small">Belum ada data bulan ini.</p>
               </div>
             ) : (
-              pesertaMonthlyRows.map(({ peserta, entry, h1Rek, h2Rek, rataRata }, idx) => {
-                const h1Status = !entry.h1 ? 'belum' : entry.h1.status === 'checked' ? 'selesai' : entry.h1.status === 'submitted' ? 'menunggu' : 'belum';
-                const h2Status = !entry.h2 ? 'belum' : entry.h2.status === 'checked' ? 'selesai' : entry.h2.status === 'submitted' ? 'menunggu' : 'belum';
+              pesertaMonthlyRows.map(({ peserta, sel, rataRata }, idx) => {
                 return (
                   <div
                     key={peserta.id}
                     style={{
                       display: 'grid',
-                      gridTemplateColumns: '30px 1fr 70px 70px 56px',
+                      gridTemplateColumns: `30px 1fr ${monthCycles.map(() => '70px').join(' ')} 56px`,
                       gap: 6,
                       padding: '9px 12px',
                       borderTop: idx === 0 ? 'none' : '1px solid var(--line)',
@@ -463,12 +465,11 @@ export default async function SyaikhDashboard() {
                         {peserta.name}
                       </div>
                     </div>
-                    <div style={{ textAlign: 'center' }}>
-                      <SyaikhMonthCell status={h1Status} rekaman={h1Rek} />
-                    </div>
-                    <div style={{ textAlign: 'center' }}>
-                      <SyaikhMonthCell status={h2Status} rekaman={h2Rek} />
-                    </div>
+                    {sel.map((x) => (
+                      <div key={x.cycle} style={{ textAlign: 'center' }}>
+                        <SyaikhMonthCell status={x.status} rekaman={x.rekaman} />
+                      </div>
+                    ))}
                     <div style={{ textAlign: 'center', fontSize: 12, fontWeight: 700 }}>
                       {rataRata !== null ? (
                         <span style={{ color: rataRata >= 3 ? 'var(--hijau-ink)' : rataRata >= 2 ? 'var(--kuning-ink)' : 'var(--merah-ink)' }}>

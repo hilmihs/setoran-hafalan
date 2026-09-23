@@ -16,6 +16,7 @@
     "test-url": "tsx --env-file=.env.local scripts/test-url.ts",
     "rekap-hits-offline": "tsx --env-file=.env.local scripts/rekap-hits-offline.ts",
     "test-shakwa": "tsx --env-file=.env.local scripts/test-shakwa.ts",
+    "test-week-cycle": "tsx scripts/test-week-cycle.ts",
     "test-evaluasi": "tsx scripts/test-evaluasi.ts",
     "test-evaluasi-dashboard": "tsx scripts/test-evaluasi-dashboard.ts",
     "test-evaluasi-rekap-peserta": "tsx scripts/test-evaluasi-rekap-peserta.ts",

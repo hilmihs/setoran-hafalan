@@ -9,7 +9,7 @@ import {
   formatCycleDeadline,
   formatCycleRange,
   previousCycles,
-  cyclesOfMonth,
+  cyclesInMonth,
   currentYearMonth,
 } from '@/lib/week';
 import { formatCycleRangeShort } from '@/lib/week';
@@ -64,7 +64,9 @@ export default async function KoordinatorDashboard({
     year: 'numeric',
     timeZone: 'UTC',
   });
-  const [h1Week, h2Week] = cyclesOfMonth(rankYear, rankMonth);
+  // Jumlah cycle per bulan tidak tetap sejak aturan bulanan (28 → 27) berlaku:
+  // dua di era 2-pekan, satu sejak Oktober, tiga di September 2026.
+  const rankCycles = cyclesInMonth(rankYear, rankMonth);
   // Opsi bulan: dari bulan anchor (2026-06) s/d bulan berjalan.
   const monthOptions: Array<{ value: string; label: string }> = [];
   {
@@ -248,14 +250,13 @@ export default async function KoordinatorDashboard({
     .from('setoran')
     .select('id, peserta_id, week_start, status, submitted_at, checked_at')
     .in('peserta_id', rankIds.length ? rankIds : ['00000000-0000-0000-0000-000000000000'])
-    .in('week_start', [h1Week, h2Week]);
+    .in('week_start', rankCycles.length ? rankCycles : ['1970-01-01']);
 
   type MonthlySt = { id: string; peserta_id: string; week_start: string; status: string; submitted_at: string | null; checked_at: string | null };
-  const monthlyByPeserta = new Map<string, { h1?: MonthlySt; h2?: MonthlySt }>();
+  const monthlyByPeserta = new Map<string, Record<string, MonthlySt>>();
   for (const st of (monthlySetoranRaw ?? []) as MonthlySt[]) {
     const entry = monthlyByPeserta.get(st.peserta_id) ?? {};
-    if (st.week_start === h1Week) entry.h1 = st;
-    else if (st.week_start === h2Week) entry.h2 = st;
+    entry[st.week_start] = st;
     monthlyByPeserta.set(st.peserta_id, entry);
   }
 
@@ -290,9 +291,14 @@ export default async function KoordinatorDashboard({
   };
   const rankingRows: RankingRow[] = (rankPesertaAll ?? []).map((p) => {
     const entry = monthlyByPeserta.get(p.id) ?? {};
-    const h1Rek = entry.h1 ? monthlyRekamanBySetoran.get(entry.h1.id) ?? [] : [];
-    const h2Rek = entry.h2 ? monthlyRekamanBySetoran.get(entry.h2.id) ?? [] : [];
-    const allNilai = [...h1Rek, ...h2Rek];
+    const perPeriode: RankingRow['periode'] = {};
+    const allNilai: NilaiRekaman[] = [];
+    for (const c of rankCycles) {
+      const st = entry[c];
+      const rek = st ? monthlyRekamanBySetoran.get(st.id) ?? [] : [];
+      allNilai.push(...rek);
+      perPeriode[c] = { status: statusOfSt(st), setoranId: st?.id ?? null, rekaman: rek };
+    }
     const rataRata = allNilai.length > 0
       ? Math.round((allNilai.reduce((acc, n) => acc + nilaiToSkor(n), 0) / allNilai.length) * 10) / 10
       : null;
@@ -302,12 +308,7 @@ export default async function KoordinatorDashboard({
       gender: p.gender as Gender,
       kelasId: p.kelas_id,
       kelasName: kelasById.get(p.kelas_id)?.name ?? '',
-      h1Status: statusOfSt(entry.h1),
-      h2Status: statusOfSt(entry.h2),
-      h1SetoranId: entry.h1?.id ?? null,
-      h2SetoranId: entry.h2?.id ?? null,
-      h1Rekaman: h1Rek,
-      h2Rekaman: h2Rek,
+      periode: perPeriode,
       rataRata,
     };
   });
@@ -329,14 +330,13 @@ export default async function KoordinatorDashboard({
       'musyrif_id',
       allMusyrifIds.length ? allMusyrifIds : ['00000000-0000-0000-0000-000000000000']
     )
-    .in('week_start', [h1Week, h2Week]);
-  const musyrifSetoranByMusyrif = new Map<string, { p1?: string; p2?: string }>();
+    .in('week_start', rankCycles.length ? rankCycles : ['1970-01-01']);
+  const musyrifSetoranByMusyrif = new Map<string, Record<string, string>>();
   const musyrifSetoranIdToMusyrif = new Map<string, string>();
   const checkedMusyrifSetoranIds: string[] = [];
   for (const m of musyrifSetoranList ?? []) {
     const e = musyrifSetoranByMusyrif.get(m.musyrif_id) ?? {};
-    if (m.week_start === h1Week) e.p1 = m.status;
-    else if (m.week_start === h2Week) e.p2 = m.status;
+    e[m.week_start] = m.status;
     musyrifSetoranByMusyrif.set(m.musyrif_id, e);
     musyrifSetoranIdToMusyrif.set(m.id, m.musyrif_id);
     if (m.status === 'checked') checkedMusyrifSetoranIds.push(m.id);
@@ -393,8 +393,9 @@ export default async function KoordinatorDashboard({
       : null;
     return {
       musyrif: m,
-      p1Status: statusKeyOf(e.p1),
-      p2Status: statusKeyOf(e.p2),
+      // Satu entri per cycle bulan ini — jumlahnya ikut aturan cycle, bukan
+      // selalu dua seperti sebelum barnamij jadi bulanan.
+      periodeStatus: rankCycles.map((c) => ({ cycle: c, status: statusKeyOf(e[c]) })),
       rataRata,
     };
   });
@@ -669,8 +670,7 @@ export default async function KoordinatorDashboard({
           kelasOptions={(allKelas ?? []).map((k) => ({ id: k.id, name: k.name, gender: k.gender as Gender }))}
           monthOptions={monthOptions}
           currentMonth={rankYearMonth}
-          h1Label={h1Week.slice(5)}
-          h2Label={h2Week.slice(5)}
+          periods={rankCycles.map((c) => ({ key: c, label: formatCycleRangeShort(c) }))}
         />
 
         {/* Ujian hafalan peserta (±3 bulan sekali) */}
@@ -700,11 +700,11 @@ export default async function KoordinatorDashboard({
           }}
         />
 
-        {/* Status setoran musyrif → syaikh (2 periode/bulan) */}
+        {/* Status setoran musyrif → syaikh, satu badge per cycle bulan itu */}
         <div style={{ marginTop: 12 }}>
           <div className="section-row">
             <div className="t-tiny">
-              Setoran musyrif → Syaikh (ikhwan) / Ustadzah (akhwat) · 2 periode/bulan
+              Setoran musyrif → Syaikh (ikhwan) / Ustadzah (akhwat)
             </div>
             <div className="t-small">{monthLabel} · {musyrifSummaryRows.length} musyrif</div>
           </div>
@@ -714,12 +714,10 @@ export default async function KoordinatorDashboard({
                 <p className="t-small">Belum ada musyrif terdaftar.</p>
               </div>
             ) : (
-              musyrifSummaryRows.map(({ musyrif, p1Status, p2Status, rataRata }) => {
+              musyrifSummaryRows.map(({ musyrif, periodeStatus, rataRata }) => {
                 const sameGender = musyrif.gender === koordinatorGender;
                 // Reminder utk periode berjalan yg belum setor.
-                const curIsP1 = currentCycle === h1Week;
-                const curIsP2 = currentCycle === h2Week;
-                const curStatus = curIsP1 ? p1Status : curIsP2 ? p2Status : null;
+                const curStatus = periodeStatus.find((x) => x.cycle === currentCycle)?.status ?? null;
                 const setorUrl = absUrl('/2in1/musyrif/setor');
                 const reminderWa =
                   sameGender && curStatus === 'belum'
@@ -766,8 +764,9 @@ export default async function KoordinatorDashboard({
                         </div>
                         <div className="t-tiny" style={{ color: 'var(--muted-2)' }}>rata²</div>
                       </div>
-                      <PeriodBadge label="P1" status={p1Status} />
-                      <PeriodBadge label="P2" status={p2Status} />
+                      {periodeStatus.map((x) => (
+                        <PeriodBadge key={x.cycle} label={formatCycleRangeShort(x.cycle)} status={x.status} />
+                      ))}
                     </div>
                   </div>
                 );

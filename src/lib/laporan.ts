@@ -26,7 +26,9 @@
 
 import { supabaseAdmin } from '@/lib/supabase-admin';
 import {
+  cyclesInMonth,
   CYCLE_LENGTH_DAYS,
+  MONTHLY_SWITCH,
   CYCLE_ANCHOR,
   cycleStartOf,
   cycleEndOf,
@@ -96,40 +98,13 @@ const BULAN_ID = [
 ];
 
 /**
- * Enumerate cycles whose END date falls in (year, month).
+ * Cycle-cycle yang berakhir di bulan tertentu.
+ *
+ * Dulu dihitung ulang di sini dengan langkah 14 hari. Sejak barnamij 2in1
+ * jadi bulanan (28 → 27), panjang cycle tidak lagi tetap, jadi aturannya
+ * dipusatkan di `@/lib/week` supaya tidak ada dua versi yang bisa berbeda.
  */
-export function cyclesInMonth(year: number, month: number): string[] {
-  // Mulai dari cycle yang anchor-nya paling dekat ke bulan, lalu maju per 14 hari
-  // Cari cycle_start sedemikian sehingga cycle_end di bulan target
-  const result: string[] = [];
-
-  // Start search range: 28 hari sebelum bulan tsb sampai akhir bulan
-  const monthStart = new Date(Date.UTC(year, month - 1, 1));
-  const monthEnd = new Date(Date.UTC(year, month, 0)); // hari terakhir bulan
-
-  // Mulai dari cycle yang containing monthStart - 14 hari (jaminan we cover boundary)
-  const searchStart = new Date(monthStart);
-  searchStart.setUTCDate(searchStart.getUTCDate() - CYCLE_LENGTH_DAYS - 1);
-
-  // Iterate cycles forward 14 days at a time
-  let currentCycleStart = cycleStartOf(searchStart);
-  for (let safety = 0; safety < 10; safety++) {
-    const cycleEnd = cycleEndOf(currentCycleStart);
-    const [ey, em] = cycleEnd.split('-').map(Number);
-    const endDate = new Date(Date.UTC(ey, em - 1, parseInt(cycleEnd.split('-')[2])));
-    if (endDate.getTime() > monthEnd.getTime() + 7 * 24 * 60 * 60 * 1000) break;
-    if (ey === year && em === month) {
-      result.push(currentCycleStart);
-    }
-    // next cycle
-    const [cy, cm, cd] = currentCycleStart.split('-').map(Number);
-    const nextStart = new Date(Date.UTC(cy, cm - 1, cd));
-    nextStart.setUTCDate(nextStart.getUTCDate() + CYCLE_LENGTH_DAYS);
-    currentCycleStart = nextStart.toISOString().slice(0, 10);
-  }
-
-  return result;
-}
+export { cyclesInMonth };
 
 export function bucketFromAvg(avg: number, hasData: boolean): 0 | 1 | 2 | 3 | 4 {
   if (!hasData) return 0;
@@ -353,5 +328,6 @@ export function bulanLabel(year: number, month: number): string {
   return `${BULAN_ID[month - 1]} ${year}`;
 }
 
-// Re-export cycle constants untuk audit / debug
-export { CYCLE_LENGTH_DAYS, CYCLE_ANCHOR };
+// Re-export konstanta cycle untuk audit / debug. `MONTHLY_SWITCH` ikut karena
+// sejak tanggal itu panjang cycle tidak lagi 14 hari.
+export { CYCLE_LENGTH_DAYS, CYCLE_ANCHOR, MONTHLY_SWITCH };

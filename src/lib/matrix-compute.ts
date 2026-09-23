@@ -27,7 +27,7 @@ import {
   KETERANGAN_NILAI_COLS,
   type KeteranganNilaiFields,
 } from '@/lib/hits-observasi';
-import { cyclesOfMonth } from '@/lib/week';
+import { cyclesInMonth } from '@/lib/week';
 import { getLiburDatesForKelas } from '@/lib/maahir-libur';
 import { KATEGORI_BOBOT } from '@/lib/matrix-indicators';
 import { JENIS_REKAMAN } from '@/types/db';
@@ -206,15 +206,16 @@ export async function computeMatrixForMonth(yearMonth: string): Promise<MatrixRo
     .in('pengajar_id', pengajarIds);
   const masyaikhByPengajar = new Map((masyaikhList ?? []).map((p) => [p.pengajar_id, p]));
 
-  // 4. Tajwid: rata-rata nilai rekaman setoran checked di 2 cycle bulan ini
-  const [h1, h2] = cyclesOfMonth(year, month);
+  // 4. Tajwid: rata-rata nilai rekaman setoran checked di cycle-cycle bulan ini.
+  // Jumlahnya tidak tetap sejak barnamij 2in1 jadi bulanan (28 → 27).
+  const cyclesBulanIni = cyclesInMonth(year, month);
   const setoranList = linkedPesertaIds.length
     ? await fetchInChunks(linkedPesertaIds, (chunk) =>
         supabaseAdmin
           .from('setoran')
           .select('id, peserta_id')
           .eq('status', 'checked')
-          .in('week_start', [h1, h2])
+          .in('week_start', cyclesBulanIni.length ? cyclesBulanIni : ['1970-01-01'])
           .in('peserta_id', chunk)
       )
     : [];

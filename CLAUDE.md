@@ -120,6 +120,28 @@ Each module is `src/app/<module>/<role>/` + a cluster of `src/lib/<prefix>-*.ts`
 | Ketersediaan (`ks_*`) | Teaching-availability → rolling halaqah formation → push to CMS tilawah | `ketersediaan/{pengajar,koordinator,konfirmasi/[token],undangan/[token]}` | `ketersediaan-*.ts`, `lib/tilawah/` |
 | Admin | Superadmin SQL console, users, audit, api-keys | `admin/*` | `admin-db.ts`, `admin-crud*.ts`, `admin-users.ts` |
 
+### 2in1 cycle — two eras, not a fixed length
+
+`week_start` is **derived**, never stored as a period row. Two rules live side by
+side in `src/lib/week.ts` and, identically, in the SQL function `cycle_start_of()`
+(`0086`) — change one and you must change the other; `npm run test-week-cycle`
+locks both:
+
+- before `MONTHLY_SWITCH` (`2026-09-28`) — 2-week cycle, anchor `2026-06-01` (a Monday)
+- from `2026-09-28` — monthly, the 28th through the 27th
+
+The old rule is kept rather than replaced so historical `week_start` values keep
+their meaning and past monthly rekap/rapot don't shift. Side effect on purpose:
+the last 2-week cycle (`2026-09-21`) is **truncated** to 21–27 Sep.
+
+**A month no longer has a fixed number of cycles** — two in the old era, one from
+October, and *three* in September 2026. `cyclesInMonth(year, month)` (returns an
+array; the old fixed-pair `cyclesOfMonth` is gone) is the single source, re-exported
+by `laporan.ts` which used to compute its own copy. `RankingTable` and the
+koordinator/musyrif/syaikh dashboards render one column per cycle, keyed by
+`week_start` — never assume H1/H2.
+
+
 ### Ketersediaan Mengajar HITS (`src/lib/ketersediaan-*.ts`, `src/lib/tilawah/`)
 
 Rolling teacher-availability → halaqah formation → outbound write to the **CMS
@@ -275,8 +297,8 @@ unmerged branches too. It has already bitten twice on this branch: `0069` and
 `0070` setoran target; `0073`–`0075` evaluasi; `0076` check-in Maahir;
 `0077`–`0079` ketersediaan; `0080` ujian 2in1; `0081` api pemakaian;
 `0082` matrix blok akhwat; `0083` program_kelas.ikut_tibyan; `0085` ketersediaan
-kelayakan (next free: `0086` — note `scripts/sql/0084-*.sh` is a data fix, not a
-migration).
+kelayakan; `0086` cycle bulanan (next free: `0087` — note `scripts/sql/0084-*.sh`
+is a data fix, not a migration).
 
 unmerged branches too. Ketersediaan (`docs/ketersediaan-mengajar-hits`) holds
 `0063`–`0067`, `0071`, `0072` — applied to prod but not yet on `main`.

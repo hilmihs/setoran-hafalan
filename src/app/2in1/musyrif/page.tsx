@@ -6,7 +6,7 @@ import {
   currentCycleStart,
   formatCycleDeadline,
   formatCycleRange,
-  cyclesOfMonth,
+  cyclesInMonth,
   currentYearMonth,
 } from '@/lib/week';
 import { formatCycleRangeShort } from '@/lib/week';
@@ -61,7 +61,8 @@ export default async function MusyrifDashboard() {
   const cycle = currentCycleStart();
   const deadlineLabel = formatCycleDeadline(cycle);
   const { year, month, label: monthLabel } = currentYearMonth();
-  const [h1Week, h2Week] = cyclesOfMonth(year, month);
+  // Jumlah cycle sebulan tidak tetap sejak barnamij jadi bulanan (28 → 27).
+  const monthCycles = cyclesInMonth(year, month);
 
   const { data: kelasList } = await supabaseAdmin
     .from('kelas')
@@ -152,15 +153,14 @@ export default async function MusyrifDashboard() {
       'peserta_id',
       pesertaIds.length ? pesertaIds : ['00000000-0000-0000-0000-000000000000']
     )
-    .in('week_start', [h1Week, h2Week]);
+    .in('week_start', monthCycles.length ? monthCycles : ['1970-01-01']);
   const monthlySetoran = (monthlySetoranRaw ?? []) as SetoranRow[];
 
-  // Map: peserta_id → { h1: SetoranRow, h2: SetoranRow }
-  const monthlyByPeserta = new Map<string, { h1?: SetoranRow; h2?: SetoranRow }>();
+  // Map: peserta_id → { <week_start>: SetoranRow }
+  const monthlyByPeserta = new Map<string, Record<string, SetoranRow>>();
   for (const st of monthlySetoran) {
     const entry = monthlyByPeserta.get(st.peserta_id) ?? {};
-    if (st.week_start === h1Week) entry.h1 = st;
-    else if (st.week_start === h2Week) entry.h2 = st;
+    entry[st.week_start] = st;
     monthlyByPeserta.set(st.peserta_id, entry);
   }
 
@@ -183,24 +183,25 @@ export default async function MusyrifDashboard() {
 
   type MonthlyRow = {
     peserta: PesertaRow;
-    h1: { setoran?: SetoranRow; rekaman: NilaiRekaman[] };
-    h2: { setoran?: SetoranRow; rekaman: NilaiRekaman[] };
+    /** Satu sel per cycle bulan ini, urut sesuai `monthCycles`. */
+    sel: Array<{ cycle: string; setoran?: SetoranRow; rekaman: NilaiRekaman[] }>;
     rataRata: number | null;
   };
 
   const monthlyRows: MonthlyRow[] = pesertaList.map((p) => {
     const entry = monthlyByPeserta.get(p.id) ?? {};
-    const h1Rek = entry.h1 ? monthlyRekamanBySetoran.get(entry.h1.id) ?? [] : [];
-    const h2Rek = entry.h2 ? monthlyRekamanBySetoran.get(entry.h2.id) ?? [] : [];
-    const allNilai = [...h1Rek, ...h2Rek];
+    const sel = monthCycles.map((c) => {
+      const st = entry[c];
+      return { cycle: c, setoran: st, rekaman: st ? monthlyRekamanBySetoran.get(st.id) ?? [] : [] };
+    });
+    const allNilai = sel.flatMap((x) => x.rekaman);
     const rataRata =
       allNilai.length > 0
         ? allNilai.reduce((acc, n) => acc + nilaiToSkor(n), 0) / allNilai.length
         : null;
     return {
       peserta: p,
-      h1: { setoran: entry.h1, rekaman: h1Rek },
-      h2: { setoran: entry.h2, rekaman: h2Rek },
+      sel,
       rataRata,
     };
   });
@@ -345,7 +346,7 @@ export default async function MusyrifDashboard() {
             </div>
           )}
 
-          {/* Progress bulanan H1/H2 */}
+          {/* Progress bulanan, satu kolom per cycle */}
           <SectionHeader title={`Progress bulan ini — ${monthLabel}`} right={`${counters.total} peserta`} style={{ marginTop: 24 }} />
           <Podium
             items={monthlyRowsSorted
@@ -376,7 +377,7 @@ export default async function MusyrifDashboard() {
             <div
               style={{
                 display: 'grid',
-                gridTemplateColumns: '1fr 80px 80px 60px',
+                gridTemplateColumns: `1fr ${monthCycles.map(() => '80px').join(' ')} 60px`,
                 gap: 8,
                 padding: '8px 14px',
                 background: 'var(--surface-2)',
@@ -389,8 +390,9 @@ export default async function MusyrifDashboard() {
               }}
             >
               <div>Peserta</div>
-              <div style={{ textAlign: 'center' }}>H1</div>
-              <div style={{ textAlign: 'center' }}>H2</div>
+              {monthCycles.map((c) => (
+                <div key={c} style={{ textAlign: 'center' }}>{formatCycleRangeShort(c)}</div>
+              ))}
               <div style={{ textAlign: 'center' }}>Rata²</div>
             </div>
             {monthlyRowsSorted.length === 0 ? (
@@ -398,7 +400,7 @@ export default async function MusyrifDashboard() {
                 <p className="t-small">Belum ada data bulan ini.</p>
               </div>
             ) : (
-              monthlyRowsSorted.map(({ peserta, h1, h2, rataRata }, idx) => {
+              monthlyRowsSorted.map(({ peserta, sel, rataRata }, idx) => {
                 const setorUrl = absUrl('/2in1/peserta');
                 const reminderWa = buildWaMeUrl(
                   peserta.whatsapp_number,
@@ -414,7 +416,7 @@ export default async function MusyrifDashboard() {
                     key={peserta.id}
                     style={{
                       display: 'grid',
-                      gridTemplateColumns: '1fr 80px 80px 60px',
+                      gridTemplateColumns: `1fr ${monthCycles.map(() => '80px').join(' ')} 60px`,
                       gap: 8,
                       padding: '10px 14px',
                       borderTop: idx === 0 ? 'none' : '1px solid var(--line)',
@@ -426,20 +428,15 @@ export default async function MusyrifDashboard() {
                         {peserta.name}
                       </div>
                     </div>
-                    <div style={{ textAlign: 'center' }}>
-                      <MonthlyCell
-                        setoran={h1.setoran}
-                        rekaman={h1.rekaman}
-                        reminderWa={reminderWa}
-                      />
-                    </div>
-                    <div style={{ textAlign: 'center' }}>
-                      <MonthlyCell
-                        setoran={h2.setoran}
-                        rekaman={h2.rekaman}
-                        reminderWa={reminderWa}
-                      />
-                    </div>
+                    {sel.map((x) => (
+                      <div key={x.cycle} style={{ textAlign: 'center' }}>
+                        <MonthlyCell
+                          setoran={x.setoran}
+                          rekaman={x.rekaman}
+                          reminderWa={reminderWa}
+                        />
+                      </div>
+                    ))}
                     <div style={{ textAlign: 'center', fontSize: 13 }}>
                       {rataRata !== null ? (
                         <span style={{ fontWeight: 600, color: rataRata >= 3 ? 'var(--hijau-ink)' : rataRata >= 2 ? 'var(--kuning-ink)' : 'var(--merah-ink)' }}>
