@@ -11,8 +11,10 @@ pr:
 variables:
   - group: Maahir-Prod # Gunakan prefix ENV_
 
+# Agent pool milik tim server ("Self Hosted") — arahan tim server 24 Sep 2026.
+# Build terjadi di server lewat SSH; agent hanya butuh bash + python3 (render env).
 pool:
-  vmImage: ubuntu-latest
+  name: Self Hosted
 
 steps:
   - checkout: none
