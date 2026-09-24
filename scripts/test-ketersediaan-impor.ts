@@ -91,6 +91,7 @@ CREATE TABLE hits_batch (
 CREATE TABLE hits_halaqah (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   batch_id uuid REFERENCES hits_batch(id), name text NOT NULL,
+  program text NOT NULL DEFAULT 'dasar',
   jadwal_raw text, jadwal_hari text[] NOT NULL DEFAULT '{}',
   waktu_mulai time, waktu_selesai time,
   pengajar_id uuid REFERENCES pengajar(id), active boolean NOT NULL DEFAULT true

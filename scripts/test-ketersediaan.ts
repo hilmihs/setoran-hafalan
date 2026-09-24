@@ -14,6 +14,7 @@ import {
   kunciJamMaster,
   jamKeMenit,
   masihBerjalanPada,
+  selesaiMenurutTahap,
   pitaUmur,
   rentangDariHalaqah,
   susunLabel,
@@ -508,6 +509,31 @@ eq(masihBerjalanPada('2026-10-11', '2026-09-21'), true, 'selesai setelah KBM →
 eq(masihBerjalanPada('2026-10-21', '2026-10-21'), true, 'selesai tepat di hari KBM → masih mengunci');
 eq(masihBerjalanPada(null, '2026-10-21'), true, 'tanpa kaldik → tetap mengunci (aman)');
 eq(masihBerjalanPada('2026-08-30', null), true, 'tanpa acuan → perilaku lama');
+
+// Tanggal selesai per program: kaldik Juni 2026 QN 22 Jun–20 Sep, PB 21 Sep–13 Des.
+// Salinan PROGRAM_STAGE_DEFS (hits-pertemuan.ts menarik supabase, tak bisa diimpor di sini).
+const TAHAP_DASAR = [
+  { kaldikLevel: 'qoidah_nuroniyyah' },
+  { kaldikLevel: 'perbaikan_bacaan' },
+];
+const TAHAP_LANJUTAN = [{ kaldikLevel: 'qoidah_nuroniyyah', kaldikFallback: 'perbaikan_bacaan' }];
+const kaldikJuni = new Map([
+  ['qoidah_nuroniyyah', '2026-09-20'],
+  ['perbaikan_bacaan', '2026-12-13'],
+]);
+eq(selesaiMenurutTahap(TAHAP_DASAR, kaldikJuni), '2026-12-13', 'dasar Juni selesai di akhir kaldik PB');
+eq(selesaiMenurutTahap(TAHAP_LANJUTAN, kaldikJuni), '2026-09-20', 'lanjutan Juni selesai di akhir kaldik QN');
+eq(
+  masihBerjalanPada(selesaiMenurutTahap(TAHAP_LANJUTAN, kaldikJuni), '2026-10-19'),
+  false,
+  'lanjutan Juni tidak mengunci jam batch Oktober'
+);
+eq(
+  selesaiMenurutTahap(TAHAP_LANJUTAN, new Map([['perbaikan_bacaan', '2026-10-04']])),
+  '2026-10-04',
+  'batch lanjutan-only tanpa kaldik QN (Safar) → pakai kaldik PB'
+);
+eq(selesaiMenurutTahap(TAHAP_DASAR, new Map()), null, 'tanpa kaldik → null (pemanggil jatuh ke perilaku lama)');
 
 // ── Prioritas per jam ───────────────────────────────────────────────────────
 console.log('\n# prioritas per jam');

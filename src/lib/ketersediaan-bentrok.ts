@@ -2,9 +2,11 @@ import 'server-only';
 import { perkiraanSelesaiHalaqah } from '@/lib/ketersediaan-pertemuan';
 import { supabaseAdmin } from '@/lib/supabase-admin';
 import type { KsLibur, KsHariIdx, KsSlot } from '@/types/db';
+import { PROGRAM_STAGE_DEFS } from '@/lib/hits-pertemuan';
 import {
   bentrok,
   masihBerjalanPada,
+  selesaiMenurutTahap,
   rentangDariHalaqah,
   rentangDariSlot,
   type RentangJadwal,
@@ -57,6 +59,7 @@ interface HalaqahRow {
   id: string;
   name: string;
   batch_id: string | null;
+  program: string | null;
   jadwal_raw: string | null;
   jadwal_hari: string[] | null;
   waktu_mulai: string | null;
@@ -102,14 +105,17 @@ interface KelasRow {
  * batch Januari dan April 2026 masih `active=true` jauh setelah kelasnya
  * berakhir, dan sinkronisasi sheet menghidupkannya lagi bila dimatikan manual.
  * Kalender pendidikan justru lengkap untuk semua batch aktif (diperiksa 16 Sep
- * 2026), jadi tanggal selesai = tanggal terbesar di kaldik batch-nya, atau di
- * koreksi pertemuan halaqah itu bila lebih akhir.
+ * 2026), jadi tanggal selesai = tanggal terakhir kaldik yang dipakai PROGRAM
+ * halaqah itu (Dasar: QN lalu PB; Lanjutan: tanggal kaldik QN saja), atau
+ * koreksi pertemuan halaqah itu bila lebih akhir. Batch tanpa kaldik level yang
+ * cocok jatuh ke tanggal terbesar batch-nya (perilaku lama, aman).
  *
  * `cacheBatch` dipakai ulang oleh pemanggil yang memeriksa banyak pengajar
- * sekaligus, supaya kaldik satu batch hanya dibaca sekali.
+ * sekaligus, supaya kaldik satu batch hanya dibaca sekali. Kuncinya
+ * `batch` (tanggal terbesar batch) dan `batch|level` (tanggal terbesar per level).
  */
 export async function tanggalSelesaiHalaqah(
-  halaqah: readonly { id: string; batch_id: string | null }[],
+  halaqah: readonly { id: string; batch_id: string | null; program?: string | null }[],
   cacheBatch: Map<string, string | null> = new Map()
 ): Promise<Map<string, string | null>> {
   const out = new Map<string, string | null>();
@@ -121,12 +127,14 @@ export async function tanggalSelesaiHalaqah(
   if (batchBaru.length > 0) {
     const { data } = await supabaseAdmin
       .from('hits_kaldik_hari')
-      .select('batch_id, tanggal')
+      .select('batch_id, level, tanggal')
       .in('batch_id', batchBaru);
     for (const b of batchBaru) cacheBatch.set(b, null);
-    for (const r of (data ?? []) as { batch_id: string; tanggal: string }[]) {
-      const lama = cacheBatch.get(r.batch_id);
-      if (!lama || r.tanggal > lama) cacheBatch.set(r.batch_id, r.tanggal);
+    for (const r of (data ?? []) as { batch_id: string; level: string; tanggal: string }[]) {
+      for (const kunci of [r.batch_id, `${r.batch_id}|${r.level}`]) {
+        const lama = cacheBatch.get(kunci);
+        if (!lama || r.tanggal > lama) cacheBatch.set(kunci, r.tanggal);
+      }
     }
   }
 
@@ -145,12 +153,28 @@ export async function tanggalSelesaiHalaqah(
 
   for (const h of halaqah) {
     const kandidat = [
-      h.batch_id ? (cacheBatch.get(h.batch_id) ?? null) : null,
+      h.batch_id ? selesaiKaldikProgram(h.batch_id, h.program ?? null, cacheBatch) : null,
       koreksiTerakhir.get(h.id) ?? null,
     ].filter((x): x is string => Boolean(x));
     out.set(h.id, kandidat.sort().pop() ?? null);
   }
   return out;
+}
+
+function selesaiKaldikProgram(
+  batchId: string,
+  program: string | null,
+  cacheBatch: Map<string, string | null>
+): string | null {
+  const tahap = PROGRAM_STAGE_DEFS[program ?? 'dasar'] ?? PROGRAM_STAGE_DEFS.dasar;
+  const akhirPerLevel = new Map<string, string>();
+  for (const t of tahap) {
+    for (const level of [t.kaldikLevel, t.kaldikFallback]) {
+      const tgl = level ? cacheBatch.get(`${batchId}|${level}`) : null;
+      if (level && tgl) akhirPerLevel.set(level, tgl);
+    }
+  }
+  return selesaiMenurutTahap(tahap, akhirPerLevel) ?? cacheBatch.get(batchId) ?? null;
 }
 
 /** Semua jam yang sudah terpakai oleh seorang pengajar, siap dipakai penguncian slot. */
@@ -169,7 +193,7 @@ export async function jadwalTerpakaiPengajar(
   const [{ data: halaqah }, { data: kelas }, { data: usulan }] = await Promise.all([
     supabaseAdmin
       .from('hits_halaqah')
-      .select('id, name, batch_id, jadwal_raw, jadwal_hari, waktu_mulai, waktu_selesai, batch:batch_id(name)')
+      .select('id, name, batch_id, program, jadwal_raw, jadwal_hari, waktu_mulai, waktu_selesai, batch:batch_id(name)')
       .eq('pengajar_id', pengajarId)
       .eq('active', true),
     supabaseAdmin

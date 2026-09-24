@@ -430,6 +430,29 @@ export function masihBerjalanPada(selesai: string | null, acuan: string | null):
   return selesai.slice(0, 10) >= acuan.slice(0, 10);
 }
 
+/**
+ * Tanggal kaldik terakhir yang benar-benar dipakai sebuah program halaqah HITS.
+ *
+ * Satu batch punya kaldik per level (QN lalu PB), tetapi tidak semua halaqah
+ * memakai keduanya: Dasar menjalani QN lalu PB, sedangkan Lanjutan menjalani
+ * PB di atas tanggal kaldik QN (lihat PROGRAM_STAGE_DEFS di hits-pertemuan.ts).
+ * Mengambil tanggal terbesar satu batch membuat Lanjutan Juni 2026 tampak
+ * berjalan sampai Desember padahal selesai September.
+ *
+ * `tahap` = daftar kaldik yang dipakai program; null bila tak satu pun kaldiknya ada.
+ */
+export function selesaiMenurutTahap(
+  tahap: readonly { kaldikLevel: string; kaldikFallback?: string }[],
+  akhirPerLevel: ReadonlyMap<string, string>
+): string | null {
+  let akhir: string | null = null;
+  for (const t of tahap) {
+    const tgl = akhirPerLevel.get(t.kaldikLevel) ?? (t.kaldikFallback ? akhirPerLevel.get(t.kaldikFallback) : undefined);
+    if (tgl && (!akhir || tgl > akhir)) akhir = tgl;
+  }
+  return akhir;
+}
+
 // ── Pita umur ──────────────────────────────────────────────────────────────
 
 /**
