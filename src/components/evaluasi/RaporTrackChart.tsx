@@ -29,7 +29,7 @@ export function RaporTrackChart({ label, history }: RaporTrackChartProps) {
     insight +=
       geo.avg >= AMBANG
         ? ' Rata-rata di atas ambang standar.'
-        : ' Rata-rata masih di bawah ambang standar (70).';
+        : ` Rata-rata masih di bawah ambang standar (${AMBANG}).`;
 
   const chartPadRight = geo.chartW - geo.padX;
 

@@ -3,7 +3,7 @@ import ExcelJS from 'exceljs';
 import { supabaseAdmin } from '@/lib/supabase-admin';
 import { getSession } from '@/lib/session';
 import { evalPengajarIdFor } from '@/lib/evaluasi-pengajar';
-import { AMBANG, JENIS, columnsToCounts, type Jenis } from '@/lib/evaluasi';
+import { AMBANG, JENIS, SKOR_MAKS, columnsToCounts, type Jenis } from '@/lib/evaluasi';
 import {
   KOLOM_JALIY, KOLOM_KHAFIY, labelPendek, labelSesi, susunRekapSesi,
   type RekapNilaiInput,
@@ -146,7 +146,7 @@ export async function GET(req: NextRequest) {
         ` · Status: ${sesi.status === 'terkirim' ? 'terkirim' : 'draf'}`,
     ]);
     ws.addRow([
-      `Ambang ${ambang} · Skor = 100 − 6×jaliy − 2×khafiy · Dinilai ${rekap.dinilai}/${peserta.length}` +
+      `Ambang ${ambang} · Skor = ${SKOR_MAKS} − 6×jaliy − 2×khafiy · Dinilai ${rekap.dinilai}/${peserta.length}` +
         ` · Tidak hadir ${rekap.absen} · Belum dinilai ${rekap.belum}` +
         ` · Rata-rata ${rekap.rata ?? '—'} · ≥${ambang}: ${rekap.standar} · <${ambang}: ${rekap.bawah}`,
     ]);

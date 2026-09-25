@@ -168,7 +168,7 @@ function vmLegacy(payload: RapotPayloadLegacy): Vm {
   // Berkala: ikut tier predikat (jangan paksa hijau utk "Di bawah standar"/"Perlu pengulangan").
   const angkaColor = isUjian
     ? lulus === true ? HIJAU : lulus === false ? MERAH : MUTED
-    : angka != null ? tierOf(angka).color : MUTED;
+    : angka != null ? tierOf(angka, payload.ambang).color : MUTED;
 
   return {
     jenisLabel,
@@ -180,7 +180,7 @@ function vmLegacy(payload: RapotPayloadLegacy): Vm {
       ? null
       : {
           teks: payload.berkala?.predikat ?? '—',
-          color: angka != null ? tierOf(angka).color : MUTED,
+          color: angka != null ? tierOf(angka, payload.ambang).color : MUTED,
         },
     peranTeks: null,
   };

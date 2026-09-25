@@ -17,9 +17,9 @@ const peserta = [
   { id: 'd', nama: 'Dewi' },
 ];
 const nilai = {
-  // 1 jaliy (huruf) + 2 khafiy (izhar, iqlab) → 100 − 6 − 4 = 90
+  // 1 jaliy (huruf) + 2 khafiy (izhar, iqlab) → 95 − 6 − 4 = 85
   a: { counts: { ...emptyCounts(), huruf: 1, izhar: 1, iqlab: 1 }, hadir: true, done: true, catatan: ' bagus ' },
-  // 6 jaliy → 100 − 36 = 64 (di bawah ambang 70)
+  // 6 jaliy → 95 − 36 = 59 (di bawah ambang 65)
   b: { counts: { ...emptyCounts(), mad: 6 }, hadir: true, done: true, catatan: '' },
   // absen: counts diabaikan, tak masuk rata-rata maupun total
   c: { counts: { ...emptyCounts(), huruf: 9 }, hadir: false, done: false, catatan: '' },
@@ -28,26 +28,26 @@ const nilai = {
 
 const r = susunRekapSesi(peserta, nilai);
 eq(r.baris.map((b) => [b.id, b.status, b.skor, b.jaliy, b.khafiy]),
-  [['a', 'hadir', 90, 1, 2], ['b', 'hadir', 64, 6, 0], ['c', 'absen', null, 9, 0], ['d', 'belum', null, 0, 0]],
+  [['a', 'hadir', 85, 1, 2], ['b', 'hadir', 59, 6, 0], ['c', 'absen', null, 9, 0], ['d', 'belum', null, 0, 0]],
   'status & skor per baris');
-eq(r.baris[0].tier, 'Mumtaz', 'tier dari skor 90');
+eq(r.baris[0].tier, 'Standar', 'tier dari skor 85');
 eq(r.baris[0].catatan, 'bagus', 'catatan dipangkas');
 eq([r.dinilai, r.absen, r.belum], [2, 1, 1], 'hitung dinilai/absen/belum');
-eq(r.rata, 77, 'rata hanya dari yang dinilai: (90+64)/2 = 77');
-eq([r.standar, r.bawah], [1, 1], 'standar/bawah pada ambang 70');
+eq(r.rata, 72, 'rata hanya dari yang dinilai: (85+59)/2 = 72');
+eq([r.standar, r.bawah], [1, 1], 'standar/bawah pada ambang 65');
 eq([r.totalCounts.huruf, r.totalCounts.mad, r.totalCounts.izhar], [1, 6, 1], 'total kesalahan tak memasukkan peserta absen');
 
 // Map juga diterima.
 const r2 = susunRekapSesi(peserta.slice(0, 1), new Map([['a', nilai.a]]));
-eq(r2.rata, 90, 'input Map');
+eq(r2.rata, 85, 'input Map');
 
 // Tanpa nilai sama sekali.
 const r3 = susunRekapSesi(peserta, {});
 eq([r3.rata, r3.dinilai, r3.belum], [null, 0, 4], 'tanpa nilai: rata null, semua belum');
 
-// Ambang khusus (ujian 65).
-const r4 = susunRekapSesi(peserta, nilai, 65);
-eq([r4.standar, r4.bawah], [1, 1], 'ambang 65: 64 tetap di bawah');
+// Ambang khusus (ujian halaqah bisa berbeda dari AMBANG).
+const r4 = susunRekapSesi(peserta, nilai, 59);
+eq([r4.standar, r4.bawah], [2, 0], 'ambang 59: 59 ikut standar');
 
 // Label sesi.
 const nama = (t: 'qn' | 'pb') => (t === 'qn' ? 'Evaluasi QN' : 'Evaluasi PB');

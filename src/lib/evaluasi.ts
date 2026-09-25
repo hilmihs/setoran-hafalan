@@ -32,8 +32,11 @@ export const LAHN_BY_KEY: Record<string, LahnDef> =
 export const LAHN_BY_COLUMN: Record<string, LahnDef> =
   Object.fromEntries(ALL_LAHN.map((d) => [d.column, d]));
 
-export const AMBANG = 70;                // ambang standar global
-export const AMBANG_UJIAN_DEFAULT = 70;  // default lulus Ujian Akhir (70%)
+// Kebijakan Majelis Pendidikan, 25 September 2026: ambang standar & lulus 65
+// (dulu 70). Rapot yang sudah terbit tidak ikut berubah — ambangnya tersimpan di
+// `payload.ambang` dan dicetak dari situ.
+export const AMBANG = 65;                // ambang standar global
+export const AMBANG_UJIAN_DEFAULT = 65;  // default lulus Ujian Akhir
 export const JENIS = ['qn', 'pb', 'ujian'] as const;
 export type Jenis = (typeof JENIS)[number];
 
@@ -49,17 +52,35 @@ export function columnFor(key: string): string {
   return d.column;
 }
 
+/**
+ * Skor tertinggi yang bisa dicapai — tanpa kesalahan sama sekali pun skornya 95,
+ * tidak ada nilai 100 (kebijakan Majelis Pendidikan, 25 September 2026). Berlaku
+ * untuk SEMUA sesi, berkala maupun ujian, jadi nilai akhir juga paling tinggi 95.
+ *
+ * Rapot yang terbit sebelum aturan ini dihitung dari 100; angkanya tersimpan di
+ * payload dan tidak dihitung ulang. Payload baru menyimpan `skorMaks` supaya
+ * rumus yang dicetak di lembar rapot cocok dengan angkanya.
+ */
+export const SKOR_MAKS = 95;
+/** Skor maksimum rapot terbit sebelum `SKOR_MAKS` berlaku (payload tanpa `skorMaks`). */
+export const SKOR_MAKS_LAMA = 100;
+
 export interface Score { skor: number; jaliyCount: number; khafiyCount: number; }
 export function scoreOf(counts: LahnCounts): Score {
   const j = JALIY.reduce((a, d) => a + (counts[d.key] || 0), 0);
   const kf = KHAFIY.reduce((a, d) => a + (counts[d.key] || 0), 0);
-  return { skor: Math.max(0, 100 - j * 6 - kf * 2), jaliyCount: j, khafiyCount: kf };
+  return { skor: Math.max(0, SKOR_MAKS - j * 6 - kf * 2), jaliyCount: j, khafiyCount: kf };
 }
 
 export interface Tier { label: string; color: string; }
-export function tierOf(skor: number): Tier {
+/**
+ * `ambang` = batas "Standar". Default `AMBANG`; rapot terbit mengirim
+ * `payload.ambang` miliknya supaya rapot lama (ambang 70) tidak tiba-tiba
+ * berpredikat "Standar" di samping vonis MENGULANG.
+ */
+export function tierOf(skor: number, ambang: number = AMBANG): Tier {
   if (skor >= 90) return { label: 'Mumtaz', color: 'oklch(0.40 0.10 150)' };
-  if (skor >= 70) return { label: 'Standar', color: 'oklch(0.40 0.10 150)' };
+  if (skor >= ambang) return { label: 'Standar', color: 'oklch(0.40 0.10 150)' };
   // Dulu "Cukup — di bawah standar": kata "Cukup" bertabrakan dengan vonis
   // DI BAWAH STANDAR di pita rapot QN, jadi diringkas.
   if (skor >= 50) return { label: 'Di bawah standar', color: 'oklch(0.48 0.10 75)' };
@@ -77,7 +98,9 @@ export function initials(nama: string): string {
 // dan hanya Ujian PB yang dihitung). Lihat `nilaiAkhirTrackOf` di bawah.
 export const BOBOT_BERKALA = 0.3;
 export const BOBOT_UJIAN_AKHIR = 0.7;
-export const AMBANG_LULUS_AKHIR = 70; // ambang lulus nilai akhir (fix)
+export const AMBANG_LULUS_AKHIR = 65; // ambang lulus nilai akhir (fix; 70 sebelum 25 Sep 2026)
+/** Ambang rapot era lama — `nilaiAkhirOf` dikunci di sini, bukan ikut aturan baru. */
+export const AMBANG_LULUS_LAMA = 70;
 export const UJIAN_QN_SESI = 1;
 export const UJIAN_PB_SESI = 2;
 
@@ -85,7 +108,7 @@ export const UJIAN_PB_SESI = 2;
  * Lantai nilai peserta (kebijakan Majelis Pendidikan, September 2026): skor ujian
  * dan nilai akhir tidak pernah dicetak di bawah 55, berapa pun lahn-nya.
  *
- * Ini BUKAN ambang kelulusan — ambang lulus tetap `AMBANG_LULUS_AKHIR` (70),
+ * Ini BUKAN ambang kelulusan — ambang lulus tetap `AMBANG_LULUS_AKHIR` (65),
  * jadi peserta bernilai 55 tetap dinyatakan MENGULANG. Lantai hanya menahan
  * angka yang dicetak; jumlah kesalahan di tabel rincian tetap apa adanya.
  *
@@ -212,7 +235,7 @@ export function nilaiAkhirOf(berkalaScores: number[], ujianPbSkor: number | null
     berkalaAvg,
     ujianPbSkor,
     lengkap: berkalaAvg != null && ujianPbSkor != null,
-    lulus: nilai == null ? null : nilai >= AMBANG_LULUS_AKHIR,
+    lulus: nilai == null ? null : nilai >= AMBANG_LULUS_LAMA,
   };
 }
 
@@ -308,7 +331,7 @@ export interface TrackGeometry {
   sessions: TrackPoint[];  // one per history entry
   avg: number | null;      // rounded mean of filled, null if none
   trend: number;           // last filled − prev filled, 0 if <2 filled
-  ambangY: number;         // y of the ambang(70) dashed line
+  ambangY: number;         // y of the AMBANG dashed line
   chartW: number; chartH: number; padX: number;
 }
 

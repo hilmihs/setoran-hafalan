@@ -1,7 +1,7 @@
 import { requirePengajar } from '@/lib/session';
 import { supabaseAdmin } from '@/lib/supabase-admin';
 import { evalPengajarIdFor } from '@/lib/evaluasi-pengajar';
-import { columnsToCounts, JENIS, type Jenis, type Track } from '@/lib/evaluasi';
+import { AMBANG_UJIAN_DEFAULT, columnsToCounts, JENIS, type Jenis, type Track } from '@/lib/evaluasi';
 import {
   EvaluasiPengajarApp,
   type EvaluasiInitial,
@@ -209,7 +209,7 @@ export default async function EvaluasiPengajarPage({
       gender: halaqah.gender,
       mustawa: (halaqah.mustawa as number | null) ?? null,
       level: (halaqah.level as string | null) ?? null,
-      ambang_ujian: (halaqah.ambang_ujian as number) ?? 70,
+      ambang_ujian: (halaqah.ambang_ujian as number) ?? AMBANG_UJIAN_DEFAULT,
       pesertaCount: peserta.length,
       batch: batchNama,
       rapotUjianTerpisah,

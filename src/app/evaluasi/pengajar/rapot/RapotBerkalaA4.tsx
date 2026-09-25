@@ -149,7 +149,7 @@ export default function RapotBerkalaA4({ payload, qr, logoSrc }: Props): ReactEl
 
   const rataGabungan = b?.rataGabungan ?? null;
   const predikat = b?.predikat ?? '—';
-  const predColor = rataGabungan == null ? MUTED : tierOf(rataGabungan).color;
+  const predColor = rataGabungan == null ? MUTED : tierOf(rataGabungan, payload.ambang).color;
 
   return (
     <div

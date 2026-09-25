@@ -190,7 +190,7 @@ export default async function KoordinatorEvaluasiPage({
                 <div
                   className="t-small"
                   style={{ marginTop: 4 }}
-                  title="Peserta yang RATA-RATA skornya dalam cakupan ini di bawah 70 — bukan yang sekadar pernah jeblok di satu sesi."
+                  title="Peserta yang RATA-RATA skornya dalam cakupan ini di bawah ambang standar — bukan yang sekadar pernah jeblok di satu sesi."
                 >
                   Peserta perlu perhatian
                 </div>

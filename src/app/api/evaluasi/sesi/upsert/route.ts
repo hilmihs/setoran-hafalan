@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase-admin';
 import { getSession } from '@/lib/session';
 import { evalPengajarIdFor } from '@/lib/evaluasi-pengajar';
-import { JENIS } from '@/lib/evaluasi';
+import { AMBANG, JENIS } from '@/lib/evaluasi';
 
 export const runtime = 'nodejs';
 
@@ -88,7 +88,7 @@ export async function POST(req: NextRequest) {
         surat: surat ?? 'Al-Baqarah',
         ayat_mulai,
         ayat_selesai,
-        ambang: ambang ?? 70,
+        ambang: ambang ?? AMBANG,
         dibuat_oleh: evalPengajarId,
         updated_at: new Date().toISOString(),
       },

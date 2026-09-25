@@ -100,7 +100,7 @@ export default function RapotUjianA4({ payload, qr, logoSrc }: Props) {
   const kontribBerkala = berkalaAvg == null ? null : 0.3 * berkalaAvg;
   const kontribPb = pbSkor == null ? null : 0.7 * pbSkor;
   const rawAkhir = berkalaAvg == null || pbSkor == null ? null : 0.3 * berkalaAvg + 0.7 * pbSkor;
-  const predikat = uj.nilaiAkhir == null ? '—' : `PREDIKAT ${tierOf(uj.nilaiAkhir).label.toUpperCase()}`;
+  const predikat = uj.nilaiAkhir == null ? '—' : `PREDIKAT ${tierOf(uj.nilaiAkhir, payload.ambang).label.toUpperCase()}`;
 
   const CELL_BORDER = '1px solid #e8e4dc';
   const HEAD: React.CSSProperties = {

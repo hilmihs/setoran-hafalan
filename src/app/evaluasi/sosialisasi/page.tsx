@@ -1,4 +1,4 @@
-import { JALIY, KHAFIY } from '@/lib/evaluasi';
+import { JALIY, KHAFIY, SKOR_MAKS, NILAI_MINIMUM, AMBANG_LULUS_AKHIR as A } from '@/lib/evaluasi';
 import PrintButton from '../pengajar/rapot/PrintButton';
 
 export const dynamic = 'force-static';
@@ -69,7 +69,11 @@ export default function SosialisasiPenilaianPage() {
         <div style={CARD}>
           <div style={SECTION_LABEL}>1 · Skor tiap sesi</div>
           <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 6 }}>
-            Skor = 100 − (Lahn Jaliy × 6) − (Lahn Khafiy × 2)
+            Skor = {SKOR_MAKS} − (Lahn Jaliy × 6) − (Lahn Khafiy × 2)
+          </div>
+          <div style={{ fontSize: 12, color: '#44423d', marginBottom: 6 }}>
+            Tidak ada nilai 100: bacaan tanpa kesalahan sekalipun bernilai <b>{SKOR_MAKS}</b>, dan tiap kesalahan
+            mengurangi dari {SKOR_MAKS}. Skor ujian dan nilai akhir tidak dicetak di bawah <b>{NILAI_MINIMUM}</b>.
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginTop: 8 }}>
             <div>
@@ -86,7 +90,7 @@ export default function SosialisasiPenilaianPage() {
             </div>
           </div>
           <div style={{ fontSize: 12, color: '#44423d', marginTop: 10 }}>
-            Predikat: <b>Mumtaz</b> ≥ 90 · <b>Standar</b> ≥ 70 · <b>Di bawah standar</b> ≥ 50 · <b>Perlu pengulangan</b> &lt; 50.
+            Predikat: <b>Mumtaz</b> ≥ 90 · <b>Standar</b> ≥ {A} · <b>Di bawah standar</b> ≥ 50 · <b>Perlu pengulangan</b> &lt; 50.
           </div>
         </div>
 
@@ -126,8 +130,8 @@ export default function SosialisasiPenilaianPage() {
             Nilai Akhir PB = (rata-rata sesi PB × 30%) + (Ujian PB × 70%)
           </div>
           <div style={{ fontSize: 13, color: '#44423d', lineHeight: 1.55 }}>
-            Ambang <b>70 per rapot</b>, dinilai terpisah untuk QN dan PB. Rapot PB menentukan kelulusan level:
-            nilai akhir ≥ 70 → <b>LULUS</b>; di bawah 70 → <b>MENGULANG</b>. Rapot QN adalah prasyarat: di bawah 70
+            Ambang <b>{A} per rapot</b>, dinilai terpisah untuk QN dan PB. Rapot PB menentukan kelulusan level:
+            nilai akhir ≥ {A} → <b>LULUS</b>; di bawah {A} → <b>MENGULANG</b>. Rapot QN adalah prasyarat: di bawah {A}
             dinyatakan <b>DI BAWAH STANDAR</b>, tetap melanjutkan ke level Perbaikan Bacaan (PB).
           </div>
           <div style={{ fontSize: 12, color: '#44423d', marginTop: 10, background: '#fff', border: '1px solid #d8d3c8', borderRadius: 8, padding: '8px 12px' }}>
@@ -144,7 +148,7 @@ export default function SosialisasiPenilaianPage() {
           <div style={SECTION_LABEL}>5 · Kelulusan</div>
           <div style={{ fontSize: 13, color: '#44423d', lineHeight: 1.55 }}>
             Kelulusan level ditentukan <b>Rapot PB</b>. Rapot QN <b>wajib diselesaikan</b> sebagai prasyarat, tetapi
-            nilai QN di bawah 70 <b>tidak menggugurkan kelulusan</b>.
+            nilai QN di bawah {A} <b>tidak menggugurkan kelulusan</b>.
           </div>
         </div>
 

@@ -3,7 +3,7 @@
 // Rapot SATU TRACK (0062) — pengganti gabungan layar RapotBerkala + RapotUjian.
 // Satu dokumen = satu track (QN atau PB): seluruh sesi evaluasi berkala track itu
 // PLUS ujian akhir track itu. Nilai akhir 30% berkala + 70% ujian (atau 100% ujian
-// pada batch `rapot_ujian_terpisah`), ambang lulus 70.
+// pada batch `rapot_ujian_terpisah`), ambang lulus `payload.ambang` (70, lalu 65 sejak 25 Sep 2026).
 
 import { useState } from 'react';
 import { alasanBelumTerbit, type RapotPayloadTrack, type RapotUjianSnap } from '@/lib/rapot';
@@ -267,7 +267,7 @@ export default function RapotTrack({
       : 'Penentu — rapot ini menentukan kelulusan level';
 
   const catatanSesi = tr.berkala.catatan;
-  const predikatColor = tr.nilaiAkhir != null ? tierOf(tr.nilaiAkhir).color : '#7a766f';
+  const predikatColor = tr.nilaiAkhir != null ? tierOf(tr.nilaiAkhir, ambang).color : '#7a766f';
 
   return (
     <>
@@ -628,7 +628,7 @@ export default function RapotTrack({
                 }}
               >
                 <span style={{ fontSize: 13, fontWeight: 800, color: predikatColor, letterSpacing: '0.04em' }}>
-                  PREDIKAT: {(tr.nilaiAkhir != null ? tierOf(tr.nilaiAkhir).label : tr.predikat).toUpperCase()}
+                  PREDIKAT: {(tr.nilaiAkhir != null ? tierOf(tr.nilaiAkhir, ambang).label : tr.predikat).toUpperCase()}
                 </span>
               </div>
             )}

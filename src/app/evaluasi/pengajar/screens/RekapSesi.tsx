@@ -11,7 +11,7 @@
 // Angka di layar dibangun dari state `work` yang hidup (sama seperti layar
 // Ringkasan), jadi suntingan yang belum sempat tersimpan pun ikut terlihat.
 
-import type { Jenis } from '@/lib/evaluasi';
+import { SKOR_MAKS, type Jenis } from '@/lib/evaluasi';
 import {
   KOLOM_JALIY, KOLOM_KHAFIY, labelPendek, type RekapSesi as RekapData,
 } from '@/lib/evaluasi-rekap-sesi';
@@ -164,7 +164,7 @@ export function RekapSesi(props: Props) {
               Pengajar: {props.pengajarName}
               {aktifOpsi.tgl ? ` · Jadwal: ${fmtTgl(aktifOpsi.tgl)}` : ''}
               {' · '}Ambang {props.ambang}
-              {' · '}Skor = 100 − 6×jaliy − 2×khafiy
+              {' · '}Skor = {SKOR_MAKS} − 6×jaliy − 2×khafiy
             </div>
           </div>
 

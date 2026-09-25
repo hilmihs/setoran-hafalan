@@ -110,9 +110,9 @@ eq(ROWS.map((r) => r.nama), asli, 'urutkanPeserta tidak memutasi masukan');
 
 // ── bolehDiputuskan (kelayakan keputusan mengulang) ──
 // Kandidat HANYA ditentukan Rapot PB. Ini penjaga aturan domain, bukan sekadar
-// uji batas: pernah salah dihitung sebagai "QN<70 ATAU PB<70", yang menyebut
+// uji batas: pernah salah dihitung sebagai "QN<ambang ATAU PB<ambang", yang menyebut
 // mengulang peserta yang secara resmi lulus.
-eq(bolehDiputuskan({ nilaiPb: 69 }), true, 'PB di bawah ambang → kandidat');
+eq(bolehDiputuskan({ nilaiPb: AMBANG_LULUS_AKHIR - 1 }), true, 'PB di bawah ambang → kandidat');
 eq(bolehDiputuskan({ nilaiPb: AMBANG_LULUS_AKHIR }), false, 'PB tepat di ambang → lulus, bukan kandidat');
 eq(bolehDiputuskan({ nilaiPb: 95 }), false, 'PB tinggi → bukan kandidat');
 // Komponen belum lengkap bukan "tidak lulus" — memvonis pengulangan atas nilai

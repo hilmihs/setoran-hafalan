@@ -1,6 +1,6 @@
 import type { ReactElement } from 'react';
 import type { RapotPayloadTrack, RapotTrackSnap, RapotLahnRow } from '@/lib/rapot';
-import { NILAI_MINIMUM } from '@/lib/rapot';
+import { NILAI_MINIMUM, skorMaksOf } from '@/lib/rapot';
 import { tierOf, vonisTrack } from '@/lib/evaluasi';
 import RapotKop from './RapotKop';
 
@@ -426,7 +426,7 @@ export default function RapotTrackA4({
   // Predikat diturunkan dari nilai akhir yang beku, bukan dari string
   // `t.predikat` di snapshot: rapot yang sudah terbit menyimpan label lama
   // ("Cukup — di bawah standar") dan harus ikut berubah tanpa terbit ulang.
-  const predikat = t.nilaiAkhir == null ? t.predikat : tierOf(t.nilaiAkhir).label;
+  const predikat = t.nilaiAkhir == null ? t.predikat : tierOf(t.nilaiAkhir, payload.ambang).label;
 
   const halaqahVal = [identitas.halaqah, identitas.gender].filter(Boolean).join(' · ');
   const levelVal = identitas.level ?? (identitas.mustawa != null ? String(identitas.mustawa) : '—');
@@ -786,7 +786,7 @@ export default function RapotTrackA4({
               {/* Keterangan "batch ini tidak menjalankan sesi evaluasi berkala" dibuang:
                   itu urusan tata kelola angkatan, bukan keterangan yang perlu dibaca
                   wali santri di lembar rapotnya. */}
-              Skor = 100 − (Lahn Jaliy × 6) − (Lahn Khafiy × 2), dengan nilai minimum {NILAI_MINIMUM}. Nilai
+              Skor = {skorMaksOf(payload)} − (Lahn Jaliy × 6) − (Lahn Khafiy × 2), dengan nilai minimum {NILAI_MINIMUM}. Nilai
               akhir 100% dari {ujianLabel}. Ambang lulus {payload.ambang}.
             </div>
 
@@ -850,7 +850,7 @@ export default function RapotTrackA4({
                 Ambang sengaja TIDAK disebut: `payload.ambang` adalah ambang nilai
                 akhir, bukan ambang ujian. Ambang lulus tetap di pita status. */}
             <div style={{ fontSize: 9.5, color: MUTED }}>
-              Skor = 100 − (Lahn Jaliy × 6) − (Lahn Khafiy × 2), dengan nilai minimum {NILAI_MINIMUM}.
+              Skor = {skorMaksOf(payload)} − (Lahn Jaliy × 6) − (Lahn Khafiy × 2), dengan nilai minimum {NILAI_MINIMUM}.
             </div>
 
             <KakiHalaman
