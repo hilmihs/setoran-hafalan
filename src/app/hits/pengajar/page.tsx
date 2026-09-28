@@ -160,7 +160,7 @@ export default async function HitsPengajarPage() {
         <div className="page" style={{ paddingTop: 20 }}>
           <div className="topbar">
             <div className="wordmark">
-              <span className="mark">H</span> Ketua Kelas HITS
+              <span className="mark">H</span> Tunjuk Ketua Kelas
             </div>
             <LogoutButton />
           </div>
@@ -199,7 +199,7 @@ export default async function HitsPengajarPage() {
           </div>
 
           <p className="t-small" style={{ color: 'var(--muted-2)', marginTop: 20 }}>
-            <Link href="/kehadiran/pengajar">← Kembali ke Kehadiran Program</Link>
+            <Link href="/kehadiran/pengajar">← Kembali ke Kehadiran</Link>
           </p>
         </div>
       </div>

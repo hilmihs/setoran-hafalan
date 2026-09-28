@@ -9,11 +9,16 @@ import { usePathname } from 'next/navigation';
  * `/` sendiri disembunyikan (sudah di rumah). Halaman cetak juga (`.no-print`).
  * Bagi user satu-peran, `/` me-redirect balik ke landing perannya — jadi tombol
  * ini efektif berfungsi sebagai "kembali ke dashboard saya".
+ *
+ * Halaman yang sudah punya tautan "‹ Beranda" di topbar-nya masuk
+ * `PUNYA_TAUTAN_BERANDA` — cukup satu jalan pulang per halaman.
  */
+const PUNYA_TAUTAN_BERANDA = new Set(['/kehadiran/pengajar']);
+
 export function HomeFab() {
   const pathname = usePathname();
 
-  if (pathname === '/') return null;
+  if (pathname === '/' || PUNYA_TAUTAN_BERANDA.has(pathname)) return null;
 
   return (
     <a

@@ -98,13 +98,13 @@ export function KetuaKelasStep({
         )}
 
         <div style={{ display: 'flex', gap: 8 }}>
-          <button type="submit" className="btn" disabled={pending} style={{ flex: 1 }}>
+          <button type="submit" className="btn btn-accent" disabled={pending} style={{ flex: 1 }}>
             {pending ? 'Menyimpan...' : 'Simpan Ketua Kelas'}
           </button>
           {pekan === 1 && (
             <button
               type="button"
-              className="btn-ghost"
+              className="btn btn-ghost"
               onClick={onSkip}
               disabled={pending}
             >

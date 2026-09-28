@@ -1,62 +1,35 @@
 import { requirePengajar } from '@/lib/session';
-import { getProgramsForDate, getUnfilledDates } from '@/lib/attendance';
+import { getAntrianCheckin } from '@/lib/attendance';
 import { getKelompokDinilaiIds } from '@/lib/penilai-ketua';
 import { supabaseAdmin } from '@/lib/supabase-admin';
 import { LogoutButton } from '@/components/LogoutButton';
 import { Icon } from '@/components/icons';
-import { FeatureNav } from '@/components/FeatureNav';
-import { StatCard } from '@/components/ui/StatCard';
 import { CheckinForm } from './CheckinForm';
 import { getCurrentPekan } from '@/lib/batch';
+import { tanggalPanjang, tanggalSedang } from '@/lib/tanggal-id';
 import type { KetuaKelasInfo } from './CheckinForm';
 
 export const dynamic = 'force-dynamic';
 
-function jakartaToday(): string {
-  return new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Jakarta' });
-}
+const JENIS_ALASAN: Record<string, string> = { alpa: 'Izin/sakit', terlambat: 'Terlambat' };
 
 export default async function KehadiranPengajarPage() {
   const session = await requirePengajar();
-  const today = jakartaToday();
 
-  const todayPrograms = await getProgramsForDate(session.pengajar_id, today);
-  const unfilled = await getUnfilledDates(session.pengajar_id, 5);
-  // Penilai ketua kelompok — jumlah ketua yang jadi jatah penilaiannya.
-  const jatahPenilaian = (await getKelompokDinilaiIds(session.pengajar_id)).length;
-
-  const allDates = [...unfilled, ...todayPrograms];
-
-  const checkedDates: string[] = [];
-  if (todayPrograms.length > 0) {
-    for (const prog of todayPrograms) {
-      const query = prog.type === 'program'
-        ? supabaseAdmin
-            .from('checkin_pengajar')
-            .select('id')
-            .eq('pengajar_id', session.pengajar_id)
-            .eq('program_id', prog.id)
-            .eq('tanggal', today)
-            .maybeSingle()
-        : supabaseAdmin
-            .from('checkin_pengajar')
-            .select('id')
-            .eq('pengajar_id', session.pengajar_id)
-            .eq('kelas_hits_id', prog.id)
-            .eq('tanggal', today)
-            .maybeSingle();
-      const { data } = await query;
-      if (data) checkedDates.push(`${prog.type}:${prog.id}:${today}`);
-    }
-  }
-
-  const pendingAlasan = await supabaseAdmin
-    .from('pengajuan_alasan')
-    .select('id, tanggal, jenis, alasan, status')
-    .eq('pengajar_id', session.pengajar_id)
-    .eq('status', 'pending')
-    .order('tanggal', { ascending: false })
-    .limit(5);
+  const [antrian, jatahPenilaian, pendingAlasan] = await Promise.all([
+    getAntrianCheckin(session.pengajar_id),
+    // Penilai ketua kelompok — jumlah ketua yang jadi jatah penilaiannya.
+    getKelompokDinilaiIds(session.pengajar_id).then((ids) => ids.length),
+    supabaseAdmin
+      .from('pengajuan_alasan')
+      .select('id, tanggal, jenis, alasan, status')
+      .eq('pengajar_id', session.pengajar_id)
+      .eq('status', 'pending')
+      .order('tanggal', { ascending: false })
+      .limit(5)
+      .then((r) => r.data ?? []),
+  ]);
+  const { today } = antrian;
 
   let pekan: number | null = null;
   let kelasList: KetuaKelasInfo[] = [];
@@ -98,167 +71,67 @@ export default async function KehadiranPengajarPage() {
     }
   }
 
+  const terkait: { href: string; title: string }[] = [
+    { href: '/kehadiran/pengajar/matrix', title: 'Matrix Saya' },
+    ...(session.is_ketua
+      ? [{ href: '/kehadiran/ketua-kelompok/penilaian', title: 'Penilaian Pedagogis Kelompok' }]
+      : []),
+    ...(jatahPenilaian > 0
+      ? [{ href: '/kehadiran/ketua-kelompok/penilaian-ketua', title: `Penilaian Ketua Kelompok (${jatahPenilaian})` }]
+      : []),
+  ];
+
   return (
     <main style={{ minHeight: '100vh' }}>
       <div style={{ maxWidth: 480, margin: '0 auto' }}>
         <div className="page" style={{ paddingTop: 20 }}>
-          <div className="topbar">
-            <div className="wordmark">
-              <span className="mark">M</span> Kehadiran
-            </div>
+          {/* Satu jalan pulang: tautan Beranda di sini; FAB Beranda disembunyikan di rute ini. */}
+          <div className="topbar" style={{ padding: '12px 0 8px' }}>
+            <a href="/" className="back">
+              {Icon.back(14)} Beranda
+            </a>
             <LogoutButton />
           </div>
 
-          <FeatureNav current="/kehadiran/pengajar" />
-
-          <h1 className="t-h1" style={{ marginBottom: 4 }}>
-            Check-in Kehadiran
-          </h1>
-          <p className="t-body" style={{ marginBottom: 20, color: 'var(--muted-2)' }}>
-            {session.name} — {today}
+          <h1 className="t-h1" style={{ margin: '10px 0 4px' }}>Kehadiran</h1>
+          <p className="t-body" style={{ marginBottom: 16, color: 'var(--muted)' }}>
+            {tanggalPanjang(today)}
           </p>
 
-          {todayPrograms.length > 0 && (
-            <div className="matrix-stat-grid" style={{ gridTemplateColumns: '1fr 1fr', marginBottom: 16 }}>
-              <StatCard
-                value={`${checkedDates.length}/${todayPrograms.length}`}
-                label="Sesi terisi hari ini"
-                valueColor={checkedDates.length >= todayPrograms.length ? 'var(--hijau-ink)' : 'var(--kuning-ink)'}
-              />
-              <StatCard
-                value={unfilled.length}
-                label="Sesi lampau belum diisi"
-                valueColor={unfilled.length > 0 ? 'var(--merah-ink)' : undefined}
-              />
-            </div>
-          )}
+          <CheckinForm
+            programs={[...antrian.lampau, ...antrian.hariIni]}
+            checkedKeys={antrian.terisiHariIni}
+            today={today}
+            kelasList={kelasList}
+            pekan={pekan}
+          />
 
-          <a
-            href="/kehadiran/pengajar/matrix"
-            className="card-flat"
-            style={{
-              display: 'block',
-              padding: '12px 16px',
-              marginBottom: 16,
-              textDecoration: 'none',
-              color: 'inherit',
-              borderLeft: '3px solid var(--hijau)',
-            }}
-          >
-            <div style={{ fontWeight: 600, marginBottom: 2 }}>Matrix Saya</div>
-            <div className="t-small" style={{ color: 'var(--muted-2)' }}>
-              Lihat nilai kompetensi Anda bulan ini &amp; rinciannya
-            </div>
-          </a>
-
-          {session.is_ketua && (
-            <a
-              href="/kehadiran/ketua-kelompok"
-              className="card-flat"
-              style={{
-                display: 'block',
-                padding: '12px 16px',
-                marginBottom: 16,
-                textDecoration: 'none',
-                color: 'inherit',
-                borderLeft: '3px solid var(--accent)',
-              }}
-            >
-              <div style={{ fontWeight: 600, marginBottom: 2 }}>
-                Dashboard Ketua Kelompok
-              </div>
-              <div className="t-small" style={{ color: 'var(--muted-2)' }}>
-                Lihat & kelola pengajuan alasan anggota kelompok Anda
-              </div>
-            </a>
-          )}
-
-          {jatahPenilaian > 0 && (
-            <a
-              href="/kehadiran/ketua-kelompok/penilaian-ketua"
-              className="card-flat"
-              style={{
-                display: 'block',
-                padding: '12px 16px',
-                marginBottom: 16,
-                textDecoration: 'none',
-                color: 'inherit',
-                borderLeft: '3px solid var(--kuning)',
-              }}
-            >
-              <div style={{ fontWeight: 600, marginBottom: 2 }}>
-                Penilaian Ketua Kelompok
-              </div>
-              <div className="t-small" style={{ color: 'var(--muted-2)' }}>
-                Nilai {jatahPenilaian} ketua kelompok yang jadi jatah Anda
-              </div>
-            </a>
-          )}
-
-          {allDates.length === 0 ? (
-            <div
-              className="card-flat"
-              style={{ padding: '24px 20px', textAlign: 'center' }}
-            >
-              <p className="t-body">Tidak ada program hari ini.</p>
-              <p className="t-small" style={{ color: 'var(--muted-2)', marginTop: 8 }}>
-                Semua kehadiran sudah terisi.
-              </p>
-            </div>
-          ) : (
-            <>
-              {unfilled.length > 0 && (
-                <div
-                  className="banner"
-                  style={{
-                    background: 'var(--kuning-tint)',
-                    borderColor: 'var(--kuning-line)',
-                    marginBottom: 16,
-                  }}
-                >
-                  <span className="ic" style={{ background: 'var(--kuning)', color: '#fff' }}>!</span>
-                  <div>
-                    <div className="title">Ada {unfilled.length} sesi yang belum diisi</div>
-                    <div className="desc">Isi kehadiran di bawah mulai dari yang paling lama.</div>
+          <div className="t-tiny" style={{ margin: '22px 2px 8px' }}>Terkait</div>
+          <div className="card-flat" style={{ overflow: 'hidden' }}>
+            {pendingAlasan.length > 0 && (
+              <details className="list-details">
+                <summary className="list-row" style={{ cursor: 'pointer' }}>
+                  <div style={{ flex: 1, fontSize: 14, fontWeight: 600 }}>Pengajuan alasan saya</div>
+                  <span className="badge badge-kuning">{pendingAlasan.length} menunggu</span>
+                  <span className="arrow chev">{Icon.arrow(14)}</span>
+                </summary>
+                {pendingAlasan.map((a) => (
+                  <div key={a.id} className="list-row" style={{ display: 'block', background: 'var(--surface-2)' }}>
+                    <div style={{ fontSize: 13, fontWeight: 600 }}>
+                      {tanggalSedang(a.tanggal)} · {JENIS_ALASAN[a.jenis] ?? a.jenis}
+                    </div>
+                    <div className="t-small" style={{ fontSize: 12 }}>{a.alasan}</div>
                   </div>
-                </div>
-              )}
-
-              <CheckinForm
-                programs={allDates}
-                checkedKeys={checkedDates}
-                pengajarId={session.pengajar_id}
-                pengajarGender={session.gender}
-                autoPopup={todayPrograms.some(
-                  (p) => !checkedDates.includes(`${p.type}:${p.id}:${today}`)
-                )}
-                kelasList={kelasList}
-                pekan={pekan}
-              />
-            </>
-          )}
-
-          {pendingAlasan.data && pendingAlasan.data.length > 0 && (
-            <div style={{ marginTop: 24 }}>
-              <h2 className="t-h2" style={{ marginBottom: 12 }}>
-                Pengajuan Alasan (Pending)
-              </h2>
-              {pendingAlasan.data.map((a) => (
-                <div
-                  key={a.id}
-                  className="card-flat"
-                  style={{ padding: '12px 16px', marginBottom: 8 }}
-                >
-                  <div className="t-small" style={{ fontWeight: 600 }}>
-                    {a.tanggal} — {a.jenis}
-                  </div>
-                  <div className="t-small" style={{ color: 'var(--muted-2)' }}>
-                    {a.alasan}
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
+                ))}
+              </details>
+            )}
+            {terkait.map((t) => (
+              <a key={t.href} href={t.href} className="list-row">
+                <div style={{ flex: 1, fontSize: 14, fontWeight: 600 }}>{t.title}</div>
+                <span className="arrow">{Icon.arrow(14)}</span>
+              </a>
+            ))}
+          </div>
         </div>
       </div>
     </main>
