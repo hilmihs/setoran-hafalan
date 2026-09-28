@@ -1,6 +1,7 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
+import { redirect } from 'next/navigation';
 import { getSession } from '@/lib/session';
 import { supabaseAdmin } from '@/lib/supabase-admin';
 import { logAudit } from '@/lib/audit';
@@ -75,6 +76,35 @@ export async function simpanAlasanBelumUjian(_prev: AlasanResult | undefined, fd
   return { ok: true };
 }
 
+/**
+ * Ujian yang dilakukan langsung (telepon/tatap muka), bukan lewat rekaman:
+ * pastikan baris `ujian` ada lalu buka halaman nilai. Status tidak disentuh —
+ * rekaman yang sudah dikirim peserta tetap ikut dinilai di sana.
+ */
+export async function mulaiNilaiLangsung(fd: FormData): Promise<void> {
+  const me = await sesiMusyrif();
+  if (!me) redirect('/2in1/musyrif/login?next=/2in1/musyrif/ujian');
+
+  const periodeId = String(fd.get('periode_id') ?? '');
+  const pesertaId = String(fd.get('peserta_id') ?? '');
+  if (!periodeId || !pesertaId) redirect('/2in1/musyrif/ujian');
+
+  const peserta = await pesertaMilikMusyrif(pesertaId, me.musyrif_id);
+  const { data: periode } = await supabaseAdmin.from('ujian_periode').select('id').eq('id', periodeId).maybeSingle();
+  if (!peserta || !periode) redirect(`/2in1/musyrif/ujian?periode=${periodeId}`);
+
+  const { data: ujian, error } = await supabaseAdmin
+    .from('ujian')
+    .upsert(
+      { periode_id: periodeId, peserta_id: pesertaId, updated_at: new Date().toISOString() },
+      { onConflict: 'periode_id,peserta_id' }
+    )
+    .select('id')
+    .single();
+  if (error || !ujian) throw new Error(`Gagal membuka ujian: ${error?.message ?? 'unknown'}`);
+  redirect(`/2in1/musyrif/ujian/${ujian.id}`);
+}
+
 export async function simpanNilaiUjian(_prev: NilaiUjianResult | undefined, fd: FormData): Promise<NilaiUjianResult> {
   const me = await sesiMusyrif();
   if (!me) return { error: 'Anda harus login sebagai musyrif.' };
@@ -97,34 +127,48 @@ export async function simpanNilaiUjian(_prev: NilaiUjianResult | undefined, fd: 
     .select('jenis, audio_url')
     .eq('ujian_id', ujianId);
   const adaAudio = new Set((rekRows ?? []).filter((r) => r.audio_url).map((r) => r.jenis as string));
-  if (adaAudio.size === 0) return { error: 'Peserta belum mengirim rekaman apa pun.' };
 
+  // Matan yang direkam wajib diberi predikat. Matan tanpa rekaman boleh dinilai
+  // bila diujikan langsung (telepon/tatap muka), atau dikosongkan = tidak diujikan.
   // Validasi semua dulu, baru tulis — jangan sampai tersimpan setengah.
-  const isian: Array<{ jenis: (typeof JENIS_REKAMAN)[number]; predikat: string; masukan: string }> = [];
+  const isian: Array<{ jenis: (typeof JENIS_REKAMAN)[number]; predikat: string; masukan: string; langsung: boolean }> = [];
+  const kosong: Array<(typeof JENIS_REKAMAN)[number]> = [];
   for (const jenis of JENIS_REKAMAN) {
-    if (!adaAudio.has(jenis)) continue;
     const predikat = String(fd.get(`predikat_${jenis}`) ?? '');
+    const langsung = !adaAudio.has(jenis);
     if (!isPredikat(predikat)) {
-      return { error: `Predikat ${labelJenis(jenis)} wajib dipilih.` };
+      if (!langsung) return { error: `Predikat ${labelJenis(jenis)} wajib dipilih.` };
+      kosong.push(jenis);
+      continue;
     }
-    isian.push({ jenis, predikat, masukan: String(fd.get(`masukan_${jenis}`) ?? '').trim() });
+    isian.push({ jenis, predikat, masukan: String(fd.get(`masukan_${jenis}`) ?? '').trim(), langsung });
   }
+  if (isian.length === 0) return { error: 'Beri predikat minimal satu matan.' };
 
   const now = new Date().toISOString();
   const ringkas: string[] = [];
   const masukanParts: string[] = [];
   for (const it of isian) {
-    const { error } = await supabaseAdmin
-      .from('rekaman_ujian')
-      .update({ predikat: it.predikat, masukan: it.masukan || null, checked_at: now, updated_at: now })
-      .eq('ujian_id', ujianId)
-      .eq('jenis', it.jenis);
+    const nilai = { predikat: it.predikat, masukan: it.masukan || null, checked_at: now, updated_at: now };
+    const { error } = it.langsung
+      ? await supabaseAdmin
+          .from('rekaman_ujian')
+          .upsert({ ujian_id: ujianId, jenis: it.jenis, ...nilai }, { onConflict: 'ujian_id,jenis' })
+      : await supabaseAdmin.from('rekaman_ujian').update(nilai).eq('ujian_id', ujianId).eq('jenis', it.jenis);
     if (error) return { error: `Gagal simpan ${labelJenis(it.jenis)}: ${error.message}` };
     ringkas.push(`${labelJenis(it.jenis)}: ${PREDIKAT_LABEL[it.predikat as keyof typeof PREDIKAT_LABEL]}`);
     if (it.masukan) masukanParts.push(`• ${labelJenis(it.jenis)}: ${it.masukan}`);
   }
-  for (const jenis of JENIS_REKAMAN) {
-    if (!adaAudio.has(jenis)) ringkas.push(`${labelJenis(jenis)}: tidak direkam`);
+  for (const jenis of kosong) {
+    // Nilai langsung yang dibatalkan: buang barisnya (tanpa audio, tak ada yang hilang).
+    const { error } = await supabaseAdmin
+      .from('rekaman_ujian')
+      .delete()
+      .eq('ujian_id', ujianId)
+      .eq('jenis', jenis)
+      .is('audio_url', null);
+    if (error) return { error: `Gagal simpan ${labelJenis(jenis)}: ${error.message}` };
+    ringkas.push(`${labelJenis(jenis)}: tidak diujikan`);
   }
 
   const { error: uErr } = await supabaseAdmin
@@ -138,7 +182,11 @@ export async function simpanNilaiUjian(_prev: NilaiUjianResult | undefined, fd: 
     action: ujian.status === 'checked' ? 'ujian.nilai_ubah' : 'ujian.nilai',
     targetTable: 'ujian',
     targetId: ujianId,
-    detail: { peserta_id: peserta.id, ringkas: ringkas.join(' | ') },
+    detail: {
+      peserta_id: peserta.id,
+      ringkas: ringkas.join(' | '),
+      langsung: isian.filter((it) => it.langsung).map((it) => it.jenis),
+    },
   });
 
   revalidatePath('/2in1/musyrif/ujian');

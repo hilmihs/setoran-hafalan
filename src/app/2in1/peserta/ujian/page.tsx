@@ -169,12 +169,12 @@ export default async function PesertaUjianPage({ searchParams }: { searchParams:
                       <div key={j} className="card" style={{ padding: 14, marginBottom: 10 }}>
                         <div className="rec-head" style={{ marginBottom: 6 }}>
                           <div className="title">{JENIS_LABEL_UJIAN[j]}</div>
-                          {r?.audio_url ? (
+                          {r?.predikat || r?.audio_url ? (
                             <PredikatBadge predikat={r.predikat} />
                           ) : (
                             <span className="badge badge-neutral">
                               <span className="dot" />
-                              tidak direkam
+                              tidak diujikan
                             </span>
                           )}
                         </div>

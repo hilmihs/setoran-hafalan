@@ -103,13 +103,15 @@ export default async function NilaiUjianPage({ params }: { params: { id: string 
         <div style={{ marginBottom: 14 }}>
           <LegendaPredikat />
         </div>
-        {ujian.status === 'draft' ? (
-          <div className="card-flat" style={{ padding: 14 }}>
-            <p className="t-small" style={{ margin: 0 }}>Peserta belum mengirim rekaman ujian.</p>
+        {ujian.status === 'draft' && (
+          <div className="card-flat" style={{ padding: 14, marginBottom: 12 }}>
+            <p className="t-small" style={{ margin: 0 }}>
+              Peserta belum mengirim rekaman. Bila sudah diujikan langsung (telepon/tatap muka), isi predikat matan
+              yang diujikan; matan yang tidak diujikan biarkan kosong.
+            </p>
           </div>
-        ) : (
-          <NilaiUjianForm ujianId={ujian.id} rekamanList={rekamanList} sudahDinilai={ujian.status === 'checked'} />
         )}
+        <NilaiUjianForm ujianId={ujian.id} rekamanList={rekamanList} sudahDinilai={ujian.status === 'checked'} />
       </div>
     </Wrap>
   );

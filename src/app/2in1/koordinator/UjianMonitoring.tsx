@@ -219,9 +219,9 @@ export async function UjianMonitoring({
                       <td><StatusUjianBadge status={status} /></td>
                       <td>{status === 'dinilai' ? <PredikatTrio rekaman={rekaman} /> : <span className="t-small">—</span>}</td>
                       <td>
-                        {ujian?.submitted_at ? (
+                        {ujian?.submitted_at || ujian?.checked_at ? (
                           <>
-                            <div className="sub">kirim {tgl(ujian.submitted_at)}</div>
+                            <div className="sub">{ujian.submitted_at ? `kirim ${tgl(ujian.submitted_at)}` : 'ujian langsung'}</div>
                             {ujian.checked_at && <div className="sub">dinilai {tgl(ujian.checked_at)}</div>}
                           </>
                         ) : (

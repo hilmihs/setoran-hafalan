@@ -15,6 +15,7 @@ import { formatRentang, statusPeriode, statusUjianPeserta, type StatusUjianPeser
 import { absUrl } from '@/lib/url';
 import { buildWaMeUrl, tplReminderPesertaBelumUjian } from '@/lib/whatsapp';
 import type { Gender } from '@/types/db';
+import { mulaiNilaiLangsung } from './actions';
 import { AlasanBelumForm } from './AlasanBelumForm';
 
 export const dynamic = 'force-dynamic';
@@ -81,7 +82,8 @@ export default async function MusyrifUjianPage({ searchParams }: { searchParams:
             Ujian peserta
           </h1>
           <p className="t-small" style={{ marginBottom: 12 }}>
-            Peserta merekam 3 matan di rentang ujian, lalu antum beri predikat per matan.
+            Peserta merekam 3 matan di rentang ujian, lalu antum beri predikat per matan. Ujian lewat telepon/tatap
+            muka? Pakai <strong>Nilai langsung</strong>.
           </p>
 
           {semua.length > 1 && (
@@ -175,7 +177,18 @@ export default async function MusyrifUjianPage({ searchParams }: { searchParams:
                                   {Icon.wa(11)} Ingatkan
                                 </a>
                               )}
-                              <StatusUjianBadge status="belum" />
+                              {/* Badge "belum" diganti tombol — baris sempit di layar HP. */}
+                              {stPeriode !== 'akan' ? (
+                                <form action={mulaiNilaiLangsung}>
+                                  <input type="hidden" name="periode_id" value={periode.id} />
+                                  <input type="hidden" name="peserta_id" value={peserta.id} />
+                                  <button type="submit" className="act-btn" title="Ujian lewat telepon/tatap muka">
+                                    Nilai langsung
+                                  </button>
+                                </form>
+                              ) : (
+                                <StatusUjianBadge status="belum" />
+                              )}
                             </>
                           )}
                         </div>

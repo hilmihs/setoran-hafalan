@@ -30,8 +30,7 @@ export function NilaiUjianForm({
   const [pilih, setPilih] = useState<Partial<Record<JenisRekaman, PredikatUjian | null>>>(() =>
     Object.fromEntries(rekamanList.map((r) => [r.jenis, r.predikat]))
   );
-  const dinilaiList = rekamanList.filter((r) => r.adaRekaman);
-  const terisi = dinilaiList.filter((r) => pilih[r.jenis]).length;
+  const terisi = rekamanList.filter((r) => pilih[r.jenis]).length;
 
   if (state?.ok) {
     return (
@@ -56,7 +55,7 @@ export function NilaiUjianForm({
     <form action={formAction}>
       <input type="hidden" name="ujian_id" value={ujianId} />
       <div className="t-small" style={{ marginBottom: 14 }}>
-        {terisi} / {dinilaiList.length} dinilai
+        {terisi} / {rekamanList.length} matan dinilai
         {sudahDinilai && ' · sudah pernah dinilai, perubahan akan menimpa nilai lama'}
       </div>
 
@@ -66,54 +65,64 @@ export function NilaiUjianForm({
             <div className="title">{r.label}</div>
           </div>
 
-          {!r.adaRekaman ? (
-            <p className="t-small" style={{ fontStyle: 'italic', margin: '8px 0 0' }}>
-              Peserta tidak mengirim rekaman ini.
-            </p>
+          {r.adaRekaman ? (
+            r.audioUrl ? (
+              <audio controls preload="none" src={r.audioUrl} style={{ width: '100%', margin: '8px 0 12px' }} />
+            ) : (
+              <p className="t-small" style={{ fontStyle: 'italic', margin: '8px 0 14px' }}>
+                Audio tidak tersedia.
+              </p>
+            )
           ) : (
-            <>
-              {r.audioUrl ? (
-                <audio controls preload="none" src={r.audioUrl} style={{ width: '100%', margin: '8px 0 12px' }} />
-              ) : (
-                <p className="t-small" style={{ fontStyle: 'italic', margin: '8px 0 14px' }}>
-                  Audio tidak tersedia.
-                </p>
-              )}
-
-              <label className="field-label">Predikat</label>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 6 }}>
-                {PREDIKAT_UJIAN.map((p) => (
-                  <label
-                    key={p}
-                    className={`nilai ${PREDIKAT_WARNA[p]} ${pilih[r.jenis] === p ? 'on' : ''}`}
-                    style={{ cursor: 'pointer', fontSize: 12, gap: 4 }}
-                  >
-                    <input
-                      type="radio"
-                      name={`predikat_${r.jenis}`}
-                      value={p}
-                      defaultChecked={r.predikat === p}
-                      onChange={() => setPilih((prev) => ({ ...prev, [r.jenis]: p }))}
-                      required
-                      style={{ position: 'absolute', opacity: 0, pointerEvents: 'none' }}
-                    />
-                    <span className="dot" />
-                    {PREDIKAT_LABEL[p]}
-                  </label>
-                ))}
-              </div>
-
-              <label className="field-label" style={{ marginTop: 12 }}>
-                Masukan
-              </label>
-              <textarea
-                className="textarea"
-                name={`masukan_${r.jenis}`}
-                defaultValue={r.masukan ?? ''}
-                placeholder="Catatan untuk peserta…"
-              />
-            </>
+            <p className="t-small" style={{ fontStyle: 'italic', margin: '8px 0 14px' }}>
+              Tidak ada rekaman. Isi predikat bila matan ini diujikan langsung (telepon/tatap muka).
+            </p>
           )}
+
+          <label className="field-label">Predikat</label>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 6 }}>
+            {PREDIKAT_UJIAN.map((p) => (
+              <label
+                key={p}
+                className={`nilai ${PREDIKAT_WARNA[p]} ${pilih[r.jenis] === p ? 'on' : ''}`}
+                style={{ cursor: 'pointer', fontSize: 12, gap: 4 }}
+              >
+                <input
+                  type="radio"
+                  name={`predikat_${r.jenis}`}
+                  value={p}
+                  defaultChecked={r.predikat === p}
+                  onChange={() => setPilih((prev) => ({ ...prev, [r.jenis]: p }))}
+                  required={r.adaRekaman}
+                  style={{ position: 'absolute', opacity: 0, pointerEvents: 'none' }}
+                />
+                <span className="dot" />
+                {PREDIKAT_LABEL[p]}
+              </label>
+            ))}
+          </div>
+          {!r.adaRekaman && (
+            <label className="t-small" style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 8, cursor: 'pointer' }}>
+              <input
+                type="radio"
+                name={`predikat_${r.jenis}`}
+                value=""
+                defaultChecked={!r.predikat}
+                onChange={() => setPilih((prev) => ({ ...prev, [r.jenis]: null }))}
+              />
+              Tidak diujikan
+            </label>
+          )}
+
+          <label className="field-label" style={{ marginTop: 12 }}>
+            Masukan
+          </label>
+          <textarea
+            className="textarea"
+            name={`masukan_${r.jenis}`}
+            defaultValue={r.masukan ?? ''}
+            placeholder="Catatan untuk peserta…"
+          />
         </div>
       ))}
 
