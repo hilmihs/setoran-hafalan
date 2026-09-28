@@ -23,11 +23,11 @@ const KOTAK: React.CSSProperties = {
   width: '100%',
   padding: '10px 12px',
   borderRadius: 10,
-  border: '1.5px solid #e8e4dc',
+  border: '1.5px solid var(--line)',
   background: '#ffffff',
   font: 'inherit',
   fontSize: 14,
-  color: '#1b1a17',
+  color: 'var(--ink)',
 };
 
 export function KelolaPeserta({ halaqahId, halaqahNama, peserta, coba, back }: Props) {
@@ -92,11 +92,11 @@ export function KelolaPeserta({ halaqahId, halaqahNama, peserta, coba, back }: P
 
   return (
     <>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 16px', background: '#ffffff', borderBottom: '1px solid #e8e4dc' }}>
-        <button onClick={back} style={{ width: 32, height: 32, borderRadius: 8, border: '1px solid #e8e4dc', background: '#ffffff', color: '#44423d', fontSize: 15, cursor: 'pointer' }}>←</button>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 16px', background: '#ffffff', borderBottom: '1px solid var(--line)' }}>
+        <button onClick={back} style={{ width: 32, height: 32, borderRadius: 8, border: '1px solid var(--line)', background: '#ffffff', color: 'var(--ink-2)', fontSize: 15, cursor: 'pointer' }}>←</button>
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ fontSize: 15, fontWeight: 700 }}>Peserta Halaqah</div>
-          <div style={{ fontSize: 11, color: '#7a766f' }}>{halaqahNama} · {peserta.length} peserta</div>
+          <div style={{ fontSize: 11, color: 'var(--muted)' }}>{halaqahNama} · {peserta.length} peserta</div>
         </div>
       </div>
 
@@ -113,7 +113,7 @@ export function KelolaPeserta({ halaqahId, halaqahNama, peserta, coba, back }: P
       )}
 
       <div style={{ padding: '18px 16px 0' }}>
-        <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.04em', textTransform: 'uppercase', color: '#7a766f', marginBottom: 10 }}>
+        <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.04em', textTransform: 'uppercase', color: 'var(--muted)', marginBottom: 10 }}>
           Tambah peserta
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
@@ -134,7 +134,7 @@ export function KelolaPeserta({ halaqahId, halaqahNama, peserta, coba, back }: P
               padding: '0 16px',
               borderRadius: 10,
               border: 'none',
-              background: '#1b1a17',
+              background: 'var(--ink)',
               color: '#ffffff',
               font: 'inherit',
               fontSize: 14,
@@ -146,22 +146,22 @@ export function KelolaPeserta({ halaqahId, halaqahNama, peserta, coba, back }: P
             {sibuk?.jenis === 'tambah' ? '…' : 'Tambah'}
           </button>
         </div>
-        <div style={{ fontSize: 11, color: '#a8a39a', marginTop: 6 }}>
+        <div style={{ fontSize: 11, color: 'var(--muted-2)', marginTop: 6 }}>
           Nama semua peserta bisa dibetulkan di sini. Pembetulan hanya berlaku untuk modul Evaluasi —
           data di pusat tidak ikut berubah.
         </div>
       </div>
 
       <div style={{ padding: '20px 16px 0' }}>
-        <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.04em', textTransform: 'uppercase', color: '#7a766f', marginBottom: 10 }}>
+        <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.04em', textTransform: 'uppercase', color: 'var(--muted)', marginBottom: 10 }}>
           Daftar peserta ({peserta.length})
         </div>
         {peserta.length === 0 ? (
-          <div style={{ background: '#ffffff', border: '1px solid #e8e4dc', borderRadius: 12, padding: 14, fontSize: 12, color: '#a8a39a' }}>
+          <div style={{ background: '#ffffff', border: '1px solid var(--line)', borderRadius: 12, padding: 14, fontSize: 12, color: 'var(--muted-2)' }}>
             Belum ada peserta. Tambahkan lewat kotak di atas.
           </div>
         ) : (
-          <div style={{ background: '#ffffff', border: '1px solid #e8e4dc', borderRadius: 12, overflow: 'hidden' }}>
+          <div style={{ background: '#ffffff', border: '1px solid var(--line)', borderRadius: 12, overflow: 'hidden' }}>
             {peserta.map((p, i) => {
               const manual = isPesertaManual(p.id);
               const sedangUbah = ubahId === p.id;
@@ -171,7 +171,7 @@ export function KelolaPeserta({ halaqahId, halaqahNama, peserta, coba, back }: P
                   key={p.id}
                   style={{
                     padding: '10px 12px',
-                    borderBottom: i < peserta.length - 1 ? '1px solid #e8e4dc' : 'none',
+                    borderBottom: i < peserta.length - 1 ? '1px solid var(--line)' : 'none',
                     background: sedangHapus ? 'oklch(0.98 0.015 25)' : 'transparent',
                   }}
                 >
@@ -187,13 +187,13 @@ export function KelolaPeserta({ halaqahId, halaqahNama, peserta, coba, back }: P
                       <button
                         onClick={() => simpanUbah(p.id)}
                         disabled={adaProses || ubahNama.trim().length < 2}
-                        style={{ flexShrink: 0, height: 42, padding: '0 14px', borderRadius: 10, border: 'none', background: '#1b1a17', color: '#ffffff', font: 'inherit', fontSize: 13, fontWeight: 600, cursor: 'pointer', opacity: adaProses || ubahNama.trim().length < 2 ? 0.5 : 1 }}
+                        style={{ flexShrink: 0, height: 42, padding: '0 14px', borderRadius: 10, border: 'none', background: 'var(--ink)', color: '#ffffff', font: 'inherit', fontSize: 13, fontWeight: 600, cursor: 'pointer', opacity: adaProses || ubahNama.trim().length < 2 ? 0.5 : 1 }}
                       >
                         Simpan
                       </button>
                       <button
                         onClick={() => setUbahId(null)}
-                        style={{ flexShrink: 0, height: 42, padding: '0 12px', borderRadius: 10, border: '1px solid #d8d3c8', background: '#ffffff', font: 'inherit', fontSize: 13, color: '#7a766f', cursor: 'pointer' }}
+                        style={{ flexShrink: 0, height: 42, padding: '0 12px', borderRadius: 10, border: '1px solid var(--line-2)', background: '#ffffff', font: 'inherit', fontSize: 13, color: 'var(--muted)', cursor: 'pointer' }}
                       >
                         Batal
                       </button>
@@ -219,7 +219,7 @@ export function KelolaPeserta({ halaqahId, halaqahNama, peserta, coba, back }: P
                       </button>
                       <button
                         onClick={() => setKonfirmasiHapus(null)}
-                        style={{ flexShrink: 0, height: 34, padding: '0 12px', borderRadius: 8, border: '1px solid #d8d3c8', background: '#ffffff', font: 'inherit', fontSize: 12, color: '#7a766f', cursor: 'pointer' }}
+                        style={{ flexShrink: 0, height: 34, padding: '0 12px', borderRadius: 8, border: '1px solid var(--line-2)', background: '#ffffff', font: 'inherit', fontSize: 12, color: 'var(--muted)', cursor: 'pointer' }}
                       >
                         Batal
                       </button>
@@ -227,16 +227,16 @@ export function KelolaPeserta({ halaqahId, halaqahNama, peserta, coba, back }: P
                   ) : (
                     <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                       <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ fontSize: 13, fontWeight: 600, color: '#1b1a17' }}>{p.nama}</div>
+                        <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--ink)' }}>{p.nama}</div>
                         {manual && (
-                          <div style={{ fontSize: 10, color: '#a8a39a', marginTop: 1 }}>ditambahkan sendiri</div>
+                          <div style={{ fontSize: 10, color: 'var(--muted-2)', marginTop: 1 }}>ditambahkan sendiri</div>
                         )}
                       </div>
                       {!coba && (
                         <>
                           <button
                             onClick={() => { setUbahId(p.id); setUbahNama(p.nama); setKonfirmasiHapus(null); }}
-                            style={{ flexShrink: 0, height: 30, padding: '0 10px', borderRadius: 7, border: '1px solid #d8d3c8', background: '#ffffff', font: 'inherit', fontSize: 11, fontWeight: 600, color: '#44423d', cursor: 'pointer' }}
+                            style={{ flexShrink: 0, height: 30, padding: '0 10px', borderRadius: 7, border: '1px solid var(--line-2)', background: '#ffffff', font: 'inherit', fontSize: 11, fontWeight: 600, color: 'var(--ink-2)', cursor: 'pointer' }}
                           >
                             Ubah
                           </button>
@@ -256,7 +256,7 @@ export function KelolaPeserta({ halaqahId, halaqahNama, peserta, coba, back }: P
           </div>
         )}
         {jumlahManual > 0 && (
-          <div style={{ fontSize: 11, color: '#a8a39a', marginTop: 8 }}>
+          <div style={{ fontSize: 11, color: 'var(--muted-2)', marginTop: 8 }}>
             {jumlahManual} peserta ditambahkan sendiri. Agar tercatat di semua modul, mintakan juga
             pendaftarannya ke koordinator.
           </div>

@@ -4,6 +4,7 @@ import { getKelompokDinilaiIds } from '@/lib/penilai-ketua';
 import { supabaseAdmin } from '@/lib/supabase-admin';
 import { LogoutButton } from '@/components/LogoutButton';
 import { Icon } from '@/components/icons';
+import { FiturHeader } from '@/components/FiturHeader';
 import { CheckinForm } from './CheckinForm';
 import { getCurrentPekan } from '@/lib/batch';
 import { tanggalPanjang, tanggalSedang } from '@/lib/tanggal-id';
@@ -84,20 +85,13 @@ export default async function KehadiranPengajarPage() {
   return (
     <main style={{ minHeight: '100vh' }}>
       <div style={{ maxWidth: 480, margin: '0 auto' }}>
-        <div className="page" style={{ paddingTop: 20 }}>
-          {/* Satu jalan pulang: tautan Beranda di sini; FAB Beranda disembunyikan di rute ini. */}
-          <div className="topbar" style={{ padding: '12px 0 8px' }}>
-            <a href="/" className="back">
-              {Icon.back(14)} Beranda
-            </a>
-            <LogoutButton />
-          </div>
-
-          <h1 className="t-h1" style={{ margin: '10px 0 4px' }}>Kehadiran</h1>
-          <p className="t-body" style={{ marginBottom: 16, color: 'var(--muted)' }}>
-            {tanggalPanjang(today)}
-          </p>
-
+        <FiturHeader
+          ikon="kalender"
+          judul="Kehadiran"
+          sub={tanggalPanjang(today)}
+          kanan={<LogoutButton />}
+        />
+        <div className="page">
           <CheckinForm
             programs={[...antrian.lampau, ...antrian.hariIni]}
             checkedKeys={antrian.terisiHariIni}

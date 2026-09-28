@@ -4,7 +4,6 @@ import { supabaseAdmin } from '@/lib/supabase-admin';
 import { getHitsHarian } from '@/lib/hits-harian';
 import { fetchInChunks } from '@/lib/hits-rekap';
 import { LogoutButton } from '@/components/LogoutButton';
-import { FeatureNav } from '@/components/FeatureNav';
 import { StatCard } from '@/components/ui/StatCard';
 import { SectionHeader } from '@/components/ui/SectionHeader';
 import { MiniDistribution } from '@/components/ui/MiniDistribution';
@@ -256,7 +255,6 @@ export default async function KoordinatorKetuaKelasPage({
             <LogoutButton />
           </div>
 
-          <FeatureNav current="/observasi/koordinator" />
 
           <h1 className="t-h1" style={{ marginBottom: 4 }}>
             Monitoring Observasi HITS

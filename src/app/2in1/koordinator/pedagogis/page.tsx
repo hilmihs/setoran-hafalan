@@ -268,8 +268,8 @@ export default async function KoordinatorPedagogisPage({ searchParams }: { searc
       <div className="dash-header">
         <div className="grp">
           <Link href="/2in1/koordinator" className="wordmark"><span className="mark">M</span>Maahir</Link>
-          <span style={{ width: 1, height: 16, background: 'var(--line-2)' }} />
-          <span className="t-small" style={{ color: 'var(--ink-2)', fontWeight: 500 }}>Inspeksi Guru</span>
+          <span style={{ width: 1, height: 16, background: 'var(--forest-line)' }} />
+          <span className="t-small" style={{ color: 'var(--forest-soft)', fontWeight: 500 }}>Inspeksi Guru</span>
         </div>
         <div className="grp">
           <Link href="/2in1/koordinator" className="btn btn-sm btn-ghost" style={{ height: 32, padding: '0 12px', textDecoration: 'none' }}>← Dashboard</Link>

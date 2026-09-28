@@ -12,7 +12,6 @@ import {
 } from '@/lib/maahir-checkin-pengajar';
 import { periodePengajarLabel, periodePengajarTampilan } from '@/lib/periode-pengajar';
 import { todayJakarta } from '@/lib/anggota-periode';
-import { FeatureNav } from '@/components/FeatureNav';
 import { SectionHeader } from '@/components/ui/SectionHeader';
 import { StatCard } from '@/components/ui/StatCard';
 import { Icon } from '@/components/icons';
@@ -52,7 +51,6 @@ export default async function PengajarMaahirPage() {
         </div>
 
         <div className="page">
-          <FeatureNav current="/kehadiran/pengajar-maahir" />
 
           <h1 className="t-h1" style={{ marginBottom: 2 }}>Check-in Kelas Maahir</h1>
           <p className="t-small" style={{ color: 'var(--muted-2)', marginBottom: 14 }}>

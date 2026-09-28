@@ -3,36 +3,55 @@
 @tailwind utilities;
 
 /* =========================================================
-   Design tokens (warm neutral surfaces + emerald accent)
+   Design tokens — key visual Muhajir Project #Tilawah
+   Warna dari logo: hijau hutan (forest) = permukaan brand (header,
+   tombol utama), emas = aksen (status aktif, periode, sorotan),
+   krem hangat = latar. Nama token lama dipertahankan supaya ±120
+   halaman ikut berganti tanpa disentuh satu per satu.
    ========================================================= */
 :root {
-  --bg:        #f4f2ed;
+  /* Brand */
+  --forest:      #2E403B;
+  --forest-2:    #243430;   /* hover */
+  --forest-ink:  #F7F4EC;   /* teks di atas forest */
+  --forest-soft: rgba(247,244,236,0.62);
+  --forest-line: rgba(247,244,236,0.22);
+  --emas:        #D5BE75;
+  --emas-ink:    #8A7534;
+  --emas-ink-2:  #6E5E2A;
+  --emas-tint:   #F1E9CF;
+  --emas-line:   #E6D9AE;
+  --krem:        #F7F4EC;
+
+  --bg:        #F7F4EC;
   --surface:   #ffffff;
-  --surface-2: #faf8f4;
-  --surface-3: #efece5;
+  --surface-2: #FBF8F0;
+  --surface-3: #EFEBE0;
 
-  --ink:       #1b1a17;
-  --ink-2:     #44423d;
-  --muted:     #7a766f;
-  --muted-2:   #a8a39a;
+  --ink:       #1E2A27;
+  --ink-2:     #3C4642;
+  --muted:     #6B7570;
+  --muted-2:   #A5A89F;
 
-  --line:      #e8e4dc;
-  --line-2:    #d8d3c8;
+  --line:      #E7E2D5;
+  --line-2:    #DAD4C5;
 
-  --accent:      oklch(0.58 0.09 165);
-  --accent-2:    oklch(0.46 0.09 165);
-  --accent-tint: oklch(0.96 0.025 165);
-  --accent-line: oklch(0.88 0.045 165);
+  /* Aksen = forest (dulu emerald). */
+  --accent:      #2E403B;
+  --accent-2:    #243430;
+  --accent-tint: #E8EEEB;
+  --accent-line: #C6D2CD;
 
   --hijau:       oklch(0.62 0.11 150);
   --hijau-tint:  oklch(0.96 0.035 150);
   --hijau-line:  oklch(0.85 0.06 150);
   --hijau-ink:   oklch(0.40 0.10 150);
 
-  --kuning:      oklch(0.78 0.13 85);
-  --kuning-tint: oklch(0.97 0.04 85);
-  --kuning-line: oklch(0.88 0.08 85);
-  --kuning-ink:  oklch(0.48 0.10 75);
+  /* Kuning = keluarga emas logo. */
+  --kuning:      #D5BE75;
+  --kuning-tint: #F6F0DC;
+  --kuning-line: #E6D9AE;
+  --kuning-ink:  #8A7534;
 
   --merah:       oklch(0.62 0.16 25);
   --merah-tint:  oklch(0.96 0.03 25);
@@ -42,20 +61,20 @@
   /* alias: --danger -> --merah-ink (legacy usages) */
   --danger:      oklch(0.46 0.14 25);
   --success:     oklch(0.40 0.10 150);
-  --border:      #d8d3c8;
+  --border:      #DAD4C5;
 
   /* aliases for legacy/missing token refs */
   --primary:        var(--accent);
   --warning-bg:     var(--kuning-tint);
   --warning-border: var(--kuning-line);
 
-  --r-sm: 8px;
-  --r-md: 12px;
-  --r-lg: 16px;
-  --r-xl: 22px;
+  --r-sm: 12px;
+  --r-md: 16px;
+  --r-lg: 18px;
+  --r-xl: 24px;
 
-  --shadow-card:   0 1px 0 rgba(20,18,14,0.02), 0 1px 2px rgba(20,18,14,0.03);
-  --shadow-raised: 0 1px 2px rgba(20,18,14,0.04), 0 6px 24px -8px rgba(20,18,14,0.10);
+  --shadow-card:   0 1px 0 rgba(30,42,39,0.02), 0 1px 2px rgba(30,42,39,0.04);
+  --shadow-raised: 0 12px 28px -14px rgba(46,64,59,0.5);
 }
 
 html, body {
@@ -67,14 +86,14 @@ html, body {
 }
 
 /* ========== Type ========== */
-.t-h1 { font-size: 22px; font-weight: 600; line-height: 1.2; letter-spacing: -0.02em; color: var(--ink); }
-.t-h2 { font-size: 17px; font-weight: 600; line-height: 1.25; letter-spacing: -0.015em; color: var(--ink); }
-.t-h3 { font-size: 15px; font-weight: 600; line-height: 1.3; color: var(--ink); }
+.t-h1 { font-size: 24px; font-weight: 800; line-height: 1.15; letter-spacing: -0.025em; color: var(--ink); }
+.t-h2 { font-size: 17px; font-weight: 700; line-height: 1.25; letter-spacing: -0.015em; color: var(--ink); }
+.t-h3 { font-size: 15px; font-weight: 700; line-height: 1.3; color: var(--ink); }
 .t-body { font-size: 14px; line-height: 1.45; color: var(--ink-2); }
 .t-small { font-size: 13px; line-height: 1.4; color: var(--muted); }
 .t-tiny {
   font-size: 11px; line-height: 1.3; color: var(--muted);
-  letter-spacing: 0.02em; text-transform: uppercase; font-weight: 600;
+  letter-spacing: 0.06em; text-transform: uppercase; font-weight: 700;
 }
 .t-mono { font-family: var(--font-mono), ui-monospace, monospace; font-variant-numeric: tabular-nums; }
 
@@ -102,7 +121,7 @@ html, body {
 .input,
 .select {
   width: 100%;
-  height: 44px;
+  height: 48px;
   padding: 0 14px;
   background: var(--surface);
   border: 1px solid var(--line-2);
@@ -115,15 +134,15 @@ html, body {
 }
 .select {
   appearance: none;
-  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'><path d='M1 1.5L6 6.5L11 1.5' stroke='%237a766f' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round' fill='none'/></svg>");
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'><path d='M1 1.5L6 6.5L11 1.5' stroke='%236B7570' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round' fill='none'/></svg>");
   background-repeat: no-repeat;
   background-position: right 14px center;
   padding-right: 38px;
 }
 .input:focus,
 .select:focus {
-  border-color: var(--accent);
-  box-shadow: 0 0 0 3px color-mix(in oklch, var(--accent) 18%, transparent);
+  border-color: var(--forest);
+  box-shadow: 0 0 0 4px rgba(213,190,117,0.35);
 }
 .input::placeholder { color: var(--muted-2); }
 .select:disabled { background-color: var(--surface-2); color: var(--muted); cursor: not-allowed; }
@@ -144,8 +163,8 @@ html, body {
   transition: border-color .12s, box-shadow .12s;
 }
 .textarea:focus {
-  border-color: var(--accent);
-  box-shadow: 0 0 0 3px color-mix(in oklch, var(--accent) 18%, transparent);
+  border-color: var(--forest);
+  box-shadow: 0 0 0 4px rgba(213,190,117,0.35);
 }
 .textarea:disabled { background: var(--surface-2); color: var(--muted); }
 
@@ -156,10 +175,10 @@ html, body {
   gap: 8px;
   height: 48px;
   padding: 0 18px;
-  border-radius: var(--r-sm);
+  border-radius: 14px;
   font: inherit;
   font-size: 15px;
-  font-weight: 600;
+  font-weight: 700;
   letter-spacing: -0.005em;
   border: 1px solid transparent;
   cursor: pointer;
@@ -169,29 +188,32 @@ html, body {
 }
 .btn:active:not(:disabled) { transform: translateY(0.5px); }
 .btn:focus-visible {
-  outline: 2px solid var(--accent);
+  outline: 2px solid var(--emas);
   outline-offset: 2px;
-  border-radius: var(--r-sm);
 }
 .btn:disabled { cursor: not-allowed; opacity: 0.55; }
 .btn-block { width: 100%; }
 
-.btn-primary { background: var(--ink); color: #fff; }
-.btn-primary:hover:not(:disabled) { background: #2a2722; }
+.btn-primary { background: var(--forest); color: var(--forest-ink); }
+.btn-primary:hover:not(:disabled) { background: var(--forest-2); }
 
-.btn-accent { background: var(--accent); color: #fff; }
+.btn-accent { background: var(--forest); color: var(--forest-ink); }
 .btn-accent:hover:not(:disabled) { background: var(--accent-2); }
 
 .btn-ghost { background: var(--surface); border-color: var(--line-2); color: var(--ink); }
 .btn-ghost:hover:not(:disabled) { background: var(--surface-2); }
 
 .btn-soft { background: var(--surface-3); color: var(--ink); }
-.btn-soft:hover:not(:disabled) { background: #e7e3d9; }
+.btn-soft:hover:not(:disabled) { background: #E7E2D5; }
+
+/* Emas — aksi sekunder yang tetap menonjol (mis. "Cek", "Selesai" merekam). */
+.btn-emas { background: var(--emas); color: var(--forest); }
+.btn-emas:hover:not(:disabled) { background: #CBB263; }
 
 .btn-danger { background: var(--merah); color: #fff; }
 .btn-danger:hover:not(:disabled) { background: var(--merah-ink); }
 
-.btn-sm { height: 36px; padding: 0 12px; font-size: 13px; border-radius: 6px; }
+.btn-sm { height: 36px; padding: 0 12px; font-size: 13px; border-radius: 10px; }
 
 .btn-wa { background: oklch(0.58 0.12 155); color: #fff; }
 .btn-wa:hover:not(:disabled) { background: oklch(0.52 0.12 155); }
@@ -214,35 +236,68 @@ html, body {
 .badge-merah { background: var(--merah-tint); border-color: var(--merah-line); color: var(--merah-ink); }
 .badge-merah .dot { background: var(--merah); }
 
-/* ========== Topbar (mobile) ========== */
+/* ========== Topbar = app bar forest ==========
+   Dipakai ±65 halaman, sebagian di dalam .page, sebagian di luarnya.
+   Di dalam .page ia melebar menembus padding halaman (var --page-px) supaya
+   tampil sebagai pita header penuh yang sama. Semua isi umumnya (wordmark,
+   tautan .back, tombol ghost, LogoutButton, pekan-tag) diwarnai ulang di sini. */
 .topbar {
-  display: flex; align-items: center; justify-content: space-between;
-  padding: 14px 20px 10px;
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  flex-wrap: wrap;
+  padding: 14px 20px;
+  margin-bottom: 18px;
+  background: var(--forest);
+  color: var(--forest-ink);
+  border-radius: 0 0 22px 22px;
 }
+.page > .topbar { margin-left: calc(-1 * var(--page-px)); margin-right: calc(-1 * var(--page-px)); }
+.page:has(> .topbar:first-child) { padding-top: 0 !important; }
 .topbar .back {
-  display: inline-flex; align-items: center; gap: 4px;
-  color: var(--muted); font-size: 13px; text-decoration: none;
+  display: inline-flex; align-items: center; gap: 6px;
+  height: 32px; padding: 0 12px 0 10px;
+  border: 1px solid var(--forest-line); border-radius: 10px;
+  color: var(--forest-ink); font-size: 12.5px; font-weight: 600; text-decoration: none;
 }
-.topbar .back:hover { color: var(--ink-2); }
+.topbar .back:hover { background: rgba(247,244,236,0.08); }
+.topbar .wordmark { color: var(--emas); font-weight: 800; }
+.topbar .btn-ghost,
+.topbar .btn-soft,
+.dash-header .btn-ghost,
+.dash-header .btn-soft {
+  background: transparent; border-color: var(--forest-line); color: var(--forest-ink);
+}
+.topbar .btn-ghost:hover:not(:disabled),
+.topbar .btn-soft:hover:not(:disabled),
+.dash-header .btn-ghost:hover:not(:disabled),
+.dash-header .btn-soft:hover:not(:disabled) { background: rgba(247,244,236,0.08); }
+.topbar .btn-sm, .dash-header .btn-sm { height: 32px; }
+.topbar .t-small, .topbar .t-tiny, .topbar .t-body,
+.dash-header .t-small, .dash-header .t-tiny, .dash-header .t-body { color: var(--forest-soft); }
+.topbar .pekan-tag, .dash-header .pekan-tag { background: rgba(213,190,117,0.14); color: var(--emas); font-weight: 600; }
+.topbar .pekan-tag .dot, .dash-header .pekan-tag .dot { background: var(--emas); }
+.topbar .avatar, .dash-header .avatar { background: var(--emas); color: var(--forest); font-weight: 800; }
 
-/* ========== Wordmark ========== */
+/* ========== Wordmark ==========
+   .mark berisi huruf "M" di ±60 halaman; kini diganti mark logo MPT
+   lewat latar gambar (hurufnya disembunyikan, tetap ada untuk pembaca layar). */
 .wordmark {
-  display: inline-flex; align-items: center; gap: 8px;
-  font-weight: 700; font-size: 14px; letter-spacing: -0.01em; color: var(--ink);
+  display: inline-flex; align-items: center; gap: 10px;
+  font-weight: 800; font-size: 15px; letter-spacing: -0.01em; color: var(--forest);
   text-decoration: none;
 }
 .wordmark .mark {
-  width: 22px; height: 22px;
-  border-radius: 6px;
-  background: var(--ink); color: #fff;
-  display: inline-flex; align-items: center; justify-content: center;
-  font-size: 12px; font-weight: 700;
+  width: 30px; height: 30px; flex-shrink: 0;
+  border-radius: 9px;
+  background: var(--forest) url(/mpt-mark.png) center / cover no-repeat;
+  border: 1px solid rgba(213,190,117,0.35);
+  color: transparent; font-size: 0;
+  display: inline-flex;
 }
 
 /* ========== Page padding ========== */
 /* Bottom padding besar: sisakan ruang untuk FAB Beranda (kiri-bawah) dan
    Laporkan Error (kanan-bawah) supaya tidak menutupi baris terakhir. */
-.page { padding: 0 20px 84px; }
+.page { --page-px: 20px; padding: 0 var(--page-px) 84px; }
 
 .section-row {
   display: flex; align-items: baseline; justify-content: space-between;
@@ -258,7 +313,7 @@ html, body {
   display: flex; flex-direction: column; gap: 4px;
 }
 .stat .v {
-  font-size: 28px; font-weight: 700; letter-spacing: -0.02em; line-height: 1;
+  font-size: 28px; font-weight: 800; letter-spacing: -0.02em; line-height: 1;
 }
 .stat .l { font-size: 12px; color: var(--muted); font-weight: 500; }
 .stat .l .accent-dot {
@@ -288,12 +343,12 @@ html, body {
 .steps .step {
   height: 4px; flex: 1; border-radius: 2px; background: var(--line);
 }
-.steps .step.done { background: var(--accent); }
-.steps .step.active { background: var(--ink); }
+.steps .step.done { background: var(--forest); }
+.steps .step.active { background: var(--emas); }
 
 /* ========== Audio recorder ========== */
 .rec {
-  border-radius: var(--r-md);
+  border-radius: 18px;
   border: 1px solid var(--line);
   background: var(--surface);
   padding: 14px;
@@ -302,7 +357,7 @@ html, body {
   display: flex; align-items: center; justify-content: space-between;
   margin-bottom: 10px;
 }
-.rec-head .title { font-size: 14px; font-weight: 600; color: var(--ink); }
+.rec-head .title { font-size: 15px; font-weight: 700; color: var(--ink); }
 .rec-head .status {
   font-size: 11px; color: var(--muted);
   display: inline-flex; align-items: center; gap: 6px;
@@ -315,6 +370,8 @@ html, body {
 .rec-head .status.done .dot { background: var(--hijau); }
 .rec-head .status.rec { color: var(--merah-ink); }
 .rec-head .status.rec .dot { background: var(--merah); animation: pulse 1.4s ease-in-out infinite; }
+.rec-head .status.paused { color: var(--kuning-ink); }
+.rec-head .status.paused .dot { background: var(--kuning); }
 
 @keyframes pulse {
   0%, 100% { opacity: 1; }
@@ -325,7 +382,7 @@ html, body {
 @keyframes spin { to { transform: rotate(360deg); } }
 
 .wave { color: var(--muted-2); }
-.wave.done { color: var(--accent); }
+.wave.done { color: var(--emas); }
 .wave.rec { color: var(--merah); }
 
 .rec-action {
@@ -334,12 +391,12 @@ html, body {
 }
 .rec-action .play {
   width: 36px; height: 36px; border-radius: 50%;
-  background: var(--ink); color: #fff;
+  background: var(--forest); color: var(--emas);
   display: inline-flex; align-items: center; justify-content: center;
   flex-shrink: 0;
   border: none; cursor: pointer;
 }
-.rec-action .play:hover { background: #2a2722; }
+.rec-action .play:hover { background: var(--forest-2); }
 .rec-action .time {
   font-family: var(--font-mono), ui-monospace, monospace;
   font-size: 12px;
@@ -366,19 +423,19 @@ html, body {
   width: 100%;
   display: flex; align-items: center; gap: 10px;
   padding: 12px 14px;
-  background: var(--surface-2);
-  border: 1px dashed var(--line-2);
+  background: var(--krem);
+  border: 1.5px dashed #D9CFA9;
   border-radius: var(--r-sm);
   cursor: pointer;
 }
-.rec-start:hover:not(:disabled) { background: var(--surface-3); }
+.rec-start:hover:not(:disabled) { background: var(--emas-tint); }
 .rec-start:disabled { opacity: 0.5; cursor: not-allowed; }
 .rec-start .ic {
-  width: 32px; height: 32px; border-radius: 50%;
-  background: var(--merah-tint); color: var(--merah-ink);
+  width: 34px; height: 34px; border-radius: 50%;
+  background: var(--forest); color: var(--emas);
   display: inline-flex; align-items: center; justify-content: center;
 }
-.rec-start .txt { font-size: 13px; color: var(--ink-2); font-weight: 500; }
+.rec-start .txt { font-size: 13px; color: var(--ink-2); font-weight: 600; }
 .rec-start .hint { font-size: 11px; color: var(--muted); margin-left: auto; }
 
 /* ========== Nilai pill choices ========== */
@@ -605,9 +662,9 @@ html, body {
 
 .act-btn {
   display: inline-flex; align-items: center; gap: 6px;
-  height: 28px; padding: 0 10px;
-  border-radius: 6px;
-  font-size: 12px; font-weight: 600;
+  height: 30px; padding: 0 11px;
+  border-radius: 9px;
+  font-size: 12px; font-weight: 700;
   border: 1px solid var(--line-2);
   background: var(--surface);
   color: var(--ink-2);
@@ -617,20 +674,22 @@ html, body {
 .act-btn:hover { background: var(--surface-2); }
 .act-btn.wa { background: oklch(0.58 0.12 155); color: #fff; border-color: transparent; }
 .act-btn.wa:hover { background: oklch(0.52 0.12 155); }
+.act-btn.emas { background: var(--emas); color: var(--forest); border-color: transparent; }
+.act-btn.emas:hover { background: #CBB263; }
 .act-btn.wa.warn { background: oklch(0.70 0.13 75); }
 .act-btn.wa.warn:hover { background: oklch(0.62 0.13 75); }
 
 /* Pekan tag */
 .pekan-tag {
   display: inline-flex; align-items: center; gap: 6px;
-  font-size: 11px; color: var(--muted);
-  background: var(--surface-3);
-  padding: 4px 8px;
+  font-size: 11px; color: var(--emas-ink-2);
+  background: var(--emas-tint);
+  padding: 4px 9px;
   border-radius: 999px;
   font-weight: 500;
   white-space: nowrap;
 }
-.pekan-tag .dot { width: 5px; height: 5px; border-radius: 50%; background: var(--accent); }
+.pekan-tag .dot { width: 5px; height: 5px; border-radius: 50%; background: var(--emas); }
 
 /* Dialog */
 dialog::backdrop {
@@ -679,8 +738,9 @@ dialog[open] {
 }
 .podium-card.first {
   box-shadow: var(--shadow-raised);
-  border-color: var(--kuning-line);
-  background: var(--kuning-tint);
+  border-color: var(--forest);
+  background: var(--forest);
+  color: var(--forest-ink);
   transform: translateY(-8px);
 }
 
@@ -720,7 +780,7 @@ dialog[open] {
 }
 
 /* Btn-xs (smaller than btn-sm) */
-.btn-xs { height: 28px; padding: 0 8px; font-size: 11px; border-radius: 6px; }
+.btn-xs { height: 28px; padding: 0 9px; font-size: 11px; border-radius: 8px; }
 
 @media (min-width: 720px) {
   .matrix-stat-grid {
@@ -750,9 +810,10 @@ dialog[open] {
   display: flex; align-items: center; justify-content: space-between;
   gap: 12px; flex-wrap: wrap;
   padding: 16px 28px;
-  border-bottom: 1px solid var(--line);
-  background: var(--surface);
+  background: var(--forest);
+  color: var(--forest-ink);
 }
+.dash-header .wordmark { color: var(--emas); }
 .dash-header .grp { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
 .dash-body {
   padding: 24px 28px;
@@ -775,8 +836,8 @@ dialog[open] {
   .stat-grid-3 { grid-template-columns: repeat(3, 1fr); gap: 8px; }
   .stat { padding: 12px; }
   .stat .v { font-size: 22px; }
-  .page { padding: 0 14px 84px; }
-  .topbar { padding: 12px 14px 8px; }
+  .page { --page-px: 14px; }
+  .topbar { padding: 12px 14px; }
   .section-row { margin: 14px 2px 8px; }
   .k-table { font-size: 12px; }
   .k-table thead th { padding: 8px 10px; }
@@ -1185,3 +1246,161 @@ a.list-row:hover { background: var(--surface-2); }
 .list-details > summary::-webkit-details-marker { display: none; }
 .list-details .chev svg { transform: rotate(90deg); transition: transform .12s; }
 .list-details[open] .chev svg { transform: rotate(-90deg); }
+
+/* ========== FAB Beranda ==========
+   Disembunyikan otomatis bila halaman sudah punya tautan Beranda sendiri
+   (FiturHeader memberi atribut data-punya-beranda). */
+.home-fab {
+  position: fixed; bottom: 20px; left: 20px; z-index: 9998;
+  height: 44px; padding: 0 16px 0 13px; border-radius: 22px;
+  background: var(--forest); color: var(--forest-ink);
+  border: 1px solid rgba(213,190,117,0.35);
+  box-shadow: 0 6px 18px -6px rgba(46,64,59,0.55);
+  text-decoration: none;
+  display: inline-flex; align-items: center; gap: 7px;
+  font-size: 13px; font-weight: 700; line-height: 1;
+}
+.home-fab svg { color: var(--emas); }
+.home-fab:hover { background: var(--forest-2); }
+body:has([data-punya-beranda]) .home-fab { display: none; }
+
+/* ========== FiturHeader (header forest halaman fitur) ========== */
+.fitur-header {
+  background: var(--forest); color: var(--forest-ink);
+  padding: 16px 18px 20px;
+  border-radius: 0 0 24px 24px;
+  display: flex; flex-direction: column; gap: 16px;
+  margin-bottom: 20px;
+}
+.fitur-header.menumpang { padding-bottom: 58px; margin-bottom: 0; }
+.fh-tumpang { margin-top: -40px; position: relative; }
+.fh-atas { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.fh-beranda {
+  display: inline-flex; align-items: center; gap: 7px;
+  height: 32px; padding: 0 12px 0 8px;
+  border-radius: 10px; border: 1px solid var(--forest-line);
+  color: var(--forest-ink); text-decoration: none;
+  font-size: 12.5px; font-weight: 600;
+}
+.fh-beranda:hover { background: rgba(247,244,236,0.08); }
+.fh-mark {
+  width: 18px; height: 18px; border-radius: 5px;
+  background: var(--forest) url(/mpt-mark.png) center / cover no-repeat;
+}
+.fh-kanan { display: flex; align-items: center; gap: 6px; }
+.fh-kanan .btn-ghost, .fh-kanan .btn-soft {
+  background: transparent; border-color: var(--forest-line); color: var(--forest-ink);
+}
+.fh-kanan .btn-ghost:hover:not(:disabled) { background: rgba(247,244,236,0.08); }
+.fh-kanan .btn-sm { height: 32px; font-size: 12.5px; }
+.fh-judul { display: flex; align-items: center; gap: 12px; }
+.fh-ikon {
+  width: 44px; height: 44px; border-radius: 13px; flex-shrink: 0;
+  background: var(--emas); color: var(--forest);
+  display: flex; align-items: center; justify-content: center;
+}
+.fh-title { font-size: 18px; font-weight: 800; letter-spacing: -0.02em; color: var(--forest-ink); line-height: 1.2; }
+.fh-sub { font-size: 12px; color: var(--forest-soft); margin-top: 2px; }
+.fh-garis { height: 1px; background: rgba(247,244,236,0.12); }
+.fh-identitas { display: flex; align-items: center; gap: 12px; }
+.fh-avatar {
+  width: 42px; height: 42px; border-radius: 50%; flex-shrink: 0;
+  background: var(--emas); color: var(--forest);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 14px; font-weight: 800;
+}
+.fh-label { font-size: 12px; color: var(--forest-soft); }
+.fh-nama { font-size: 17px; font-weight: 700; color: var(--forest-ink); }
+.chip-periode {
+  display: inline-flex; align-items: center; gap: 6px;
+  height: 26px; padding: 0 10px; border-radius: 999px;
+  background: rgba(213,190,117,0.14); color: var(--emas);
+  font-size: 11px; font-weight: 600; white-space: nowrap;
+}
+.chip-periode .dot { width: 5px; height: 5px; border-radius: 50%; background: var(--emas); }
+
+/* Kartu yang menumpang ke header forest punya bayangan hangat. */
+.kartu-angkat { box-shadow: var(--shadow-raised); }
+
+/* Kotak judul emas di atas daftar (mis. "Perlu diselesaikan"). */
+.kartu-emas-head {
+  padding: 10px 16px; background: var(--emas-tint);
+  font-size: 11px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase;
+  color: var(--emas-ink-2);
+}
+.kartu-emas {
+  border-radius: 18px; background: var(--emas-tint); border: 1px solid var(--emas-line);
+  padding: 16px;
+}
+
+/* Bulatan panah forest-emas (aksi di baris daftar). */
+.panah-bulat {
+  width: 28px; height: 28px; border-radius: 50%; flex-shrink: 0;
+  background: var(--forest); color: var(--emas);
+  display: flex; align-items: center; justify-content: center;
+}
+
+/* ========== Beranda ========== */
+.beranda-head {
+  background: var(--forest); color: var(--forest-ink);
+  padding: 18px 20px 26px;
+  border-radius: 0 0 24px 24px;
+  display: flex; flex-direction: column; gap: 22px;
+  margin-bottom: 4px;
+}
+.beranda-head[data-tumpang] { padding-bottom: 60px; margin-bottom: 0; }
+.beranda-avatar {
+  width: 34px; height: 34px; border-radius: 50%;
+  background: var(--emas); color: var(--forest);
+  display: inline-flex; align-items: center; justify-content: center;
+  font-size: 13px; font-weight: 800; text-decoration: none;
+}
+.beranda-salam { font-size: 26px; font-weight: 800; letter-spacing: -0.025em; line-height: 1.15; color: var(--forest-ink); margin: 0 0 6px; }
+.beranda-tanggal { font-size: 13.5px; color: rgba(247,244,236,0.7); }
+.menu-ikon {
+  width: 36px; height: 36px; border-radius: 10px; flex-shrink: 0;
+  background: var(--forest); color: var(--emas);
+  display: flex; align-items: center; justify-content: center;
+}
+
+/* ========== Login ========== */
+.login-latar { min-height: 100vh; background: var(--forest); }
+.login-bingkai { max-width: 480px; margin: 0 auto; min-height: 100vh; display: flex; flex-direction: column; }
+.login-logo {
+  height: 300px; flex-shrink: 0;
+  background: var(--forest) url(/logo-mpt.png) center 56% / 300px no-repeat;
+}
+.login-lembar {
+  flex: 1; background: var(--krem);
+  border-radius: 28px 28px 0 0;
+  padding: 28px 22px 32px;
+  display: flex; flex-direction: column; gap: 14px;
+}
+@media (max-height: 700px) { .login-logo { height: 220px; background-size: 220px; } }
+
+/* Perekam yang sedang merekam: kartu forest (desain 1c). LiveWaveform
+   memasang warna inline, jadi perlu !important untuk membaliknya ke emas. */
+.rec.rec-live { background: var(--forest); border-color: var(--forest); }
+.rec.rec-live .rec-head .title { color: var(--forest-ink); }
+.rec.rec-live .rec-head .status.rec { color: #F2A38F; }
+.rec.rec-live .rec-head .status.paused { color: var(--emas); }
+.rec.rec-live .wave.rec { color: var(--emas) !important; }
+.rec.rec-live .rec-action .time { color: var(--forest-ink); font-size: 20px; font-weight: 500; }
+.rec.rec-live .rec-action .stop { color: var(--emas); }
+.fh-tumpang .stat, .stat-grid-3.fh-tumpang .stat { border-color: transparent; box-shadow: 0 10px 24px -14px rgba(46,64,59,0.45); }
+
+/* Kop halaman Evaluasi koordinator: pita forest di layar, tetapi polos saat
+   dicetak — kop ini ikut ke PDF rekap dan tak boleh menghabiskan tinta. */
+@media screen {
+  .kop-fitur {
+    background: var(--forest); color: var(--forest-ink);
+    padding: 16px 18px; border-radius: 18px;
+  }
+  .kop-fitur .t-h1, .kop-fitur .t-h2 { color: var(--forest-ink); }
+  .kop-fitur .t-small, .kop-fitur .t-tiny { color: var(--forest-soft); }
+  .kop-fitur a:not(.btn) { color: var(--emas); }
+  .kop-fitur .btn-ghost { background: transparent; border-color: var(--forest-line); color: var(--forest-ink); }
+  .kop-fitur .btn-ghost:hover:not(:disabled) { background: rgba(247,244,236,0.08); }
+  .kop-fitur .btn { white-space: nowrap; }
+  .kop-fitur > .no-print { flex-wrap: wrap; }
+}

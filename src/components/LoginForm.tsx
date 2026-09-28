@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { Icon } from '@/components/icons';
 import { useFormState, useFormStatus } from 'react-dom';
 import { login } from '@/lib/auth';
 
@@ -58,9 +59,10 @@ function SubmitBtn() {
       type="submit"
       disabled={pending}
       className="btn btn-block btn-primary"
-      style={{ marginTop: 6 }}
+      style={{ marginTop: 6, height: 52 }}
     >
       {pending ? 'Memproses…' : 'Login'}
+      {!pending && <span style={{ color: 'var(--emas)', display: 'flex' }}>{Icon.arrow(14)}</span>}
     </button>
   );
 }

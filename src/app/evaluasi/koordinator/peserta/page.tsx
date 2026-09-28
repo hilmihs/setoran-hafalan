@@ -111,7 +111,7 @@ export default async function KoordinatorPesertaPage({
         </Link>
 
         {/* Header */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 14, flexWrap: 'wrap' }}>
+        <div className="kop-fitur" style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 14, flexWrap: 'wrap' }}>
           <div>
             <div className="t-h1" style={{ fontSize: 20 }}>
               Peringkat Peserta

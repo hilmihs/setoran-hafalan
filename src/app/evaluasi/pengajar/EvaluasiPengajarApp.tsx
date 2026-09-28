@@ -122,7 +122,7 @@ export type SaveStatus = 'idle' | 'saving' | 'saved' | 'error';
 export const JALIY_SHADES = ['oklch(0.97 0.02 25)', 'oklch(0.93 0.05 25)', 'oklch(0.88 0.08 25)', 'oklch(0.82 0.11 25)', 'oklch(0.75 0.14 25)'];
 export const JALIY_BORDERS = ['oklch(0.86 0.07 25)', 'oklch(0.80 0.09 25)', 'oklch(0.74 0.11 25)', 'oklch(0.68 0.13 25)', 'oklch(0.60 0.15 25)'];
 export const KHAFIY_SHADES = ['#ffffff', 'oklch(0.96 0.02 85)', 'oklch(0.92 0.04 85)', 'oklch(0.87 0.06 85)', 'oklch(0.82 0.08 85)'];
-export const KHAFIY_BORDERS = ['#e8e4dc', 'oklch(0.88 0.05 85)', 'oklch(0.84 0.07 85)', 'oklch(0.78 0.09 85)', 'oklch(0.72 0.11 85)'];
+export const KHAFIY_BORDERS = ['var(--line)', 'oklch(0.88 0.05 85)', 'oklch(0.84 0.07 85)', 'oklch(0.78 0.09 85)', 'oklch(0.72 0.11 85)'];
 
 export interface Tile {
   key: string;
@@ -820,7 +820,7 @@ export function EvaluasiPengajarApp({ initial }: { initial: EvaluasiInitial }) {
   const headerMeta = `${halaqah.nama} · ${genderLabel(halaqah.gender)} · ${levelLabel} · ${halaqah.pesertaCount} peserta`;
 
   // Home cards.
-  const dotColorsDone = { qn: 'oklch(0.58 0.09 165)', pb: 'oklch(0.55 0.10 210)', ujian: 'oklch(0.58 0.09 165)' };
+  const dotColorsDone = { qn: 'var(--accent)', pb: 'oklch(0.55 0.10 210)', ujian: 'var(--accent)' };
   const homeCards = (['qn', 'pb', 'ujian'] as Jenis[]).map((j) => {
     const opts = sesiOptionsFor(j);
     const max = opts.length;
@@ -832,10 +832,10 @@ export function EvaluasiPengajarApp({ initial }: { initial: EvaluasiInitial }) {
     const cur = firstUnsent ?? (opts.includes(preferred) ? preferred : opts[opts.length - 1] ?? 1);
     const dots = opts.map((n) => ({
       key: `d${n}`,
-      color: sentKeyOf(n) ? dotColorsDone[j] : n === cur ? 'oklch(0.78 0.10 80)' : '#e8e4dc',
+      color: sentKeyOf(n) ? dotColorsDone[j] : n === cur ? 'oklch(0.78 0.10 80)' : 'var(--line)',
     }));
-    const bg = j === 'qn' ? 'oklch(0.96 0.025 165)' : j === 'pb' ? 'oklch(0.96 0.03 210)' : 'oklch(0.96 0.035 85)';
-    const border = j === 'qn' ? 'oklch(0.88 0.045 165)' : j === 'pb' ? 'oklch(0.87 0.05 210)' : 'oklch(0.88 0.07 82)';
+    const bg = j === 'qn' ? 'var(--accent-tint)' : j === 'pb' ? 'oklch(0.96 0.03 210)' : 'oklch(0.96 0.035 85)';
+    const border = j === 'qn' ? 'var(--accent-line)' : j === 'pb' ? 'oklch(0.87 0.05 210)' : 'oklch(0.88 0.07 82)';
     return {
       key: j,
       icon: j === 'qn' ? '📖' : j === 'pb' ? '📝' : '🎓',
@@ -885,8 +885,8 @@ export function EvaluasiPengajarApp({ initial }: { initial: EvaluasiInitial }) {
       initial: initials(p.nama),
       toggle: () => toggleIncluded(p.id),
       checkMark: inc ? '✓' : '',
-      checkBg: inc ? 'oklch(0.58 0.09 165)' : '#ffffff',
-      checkBorder: inc ? 'oklch(0.58 0.09 165)' : '#d8d3c8',
+      checkBg: inc ? 'var(--accent)' : '#ffffff',
+      checkBorder: inc ? 'var(--accent)' : 'var(--line-2)',
       rowOpacity: inc ? 1 : 0.45,
       buka: () => {
         setActiveIdx(i);
@@ -1166,10 +1166,10 @@ export function EvaluasiPengajarApp({ initial }: { initial: EvaluasiInitial }) {
   const shellStyle: React.CSSProperties = {
     maxWidth: 460,
     margin: '0 auto',
-    background: '#f4f2ed',
+    background: 'var(--bg)',
     display: 'flex',
     flexDirection: 'column',
-    boxShadow: '0 0 0 1px #e8e4dc',
+    boxShadow: '0 0 0 1px var(--line)',
   };
 
   // Overlay cetak: render lembar A4 tiap peserta terpilih, lalu useEffect memicu print.
@@ -1187,7 +1187,7 @@ export function EvaluasiPengajarApp({ initial }: { initial: EvaluasiInitial }) {
           <button
             type="button"
             onClick={() => setPrintReq(null)}
-            style={{ height: 38, padding: '0 14px', borderRadius: 8, border: '1px solid #d8d3c8', background: '#ffffff', font: 'inherit', fontSize: 13, fontWeight: 600, color: '#44423d', cursor: 'pointer' }}
+            style={{ height: 38, padding: '0 14px', borderRadius: 8, border: '1px solid var(--line-2)', background: '#ffffff', font: 'inherit', fontSize: 13, fontWeight: 600, color: 'var(--ink-2)', cursor: 'pointer' }}
           >
             ← Tutup
           </button>
@@ -1223,7 +1223,7 @@ export function EvaluasiPengajarApp({ initial }: { initial: EvaluasiInitial }) {
               setTimeout(pulihkan, 60_000);
               window.print();
             }}
-            style={{ height: 38, padding: '0 16px', borderRadius: 8, border: 'none', background: 'oklch(0.58 0.09 165)', font: 'inherit', fontSize: 13, fontWeight: 700, color: '#ffffff', cursor: 'pointer' }}
+            style={{ height: 38, padding: '0 16px', borderRadius: 8, border: 'none', background: 'var(--accent)', font: 'inherit', fontSize: 13, fontWeight: 700, color: '#ffffff', cursor: 'pointer' }}
           >
             ⬇ Cetak / Simpan PDF
           </button>
@@ -1238,7 +1238,7 @@ export function EvaluasiPengajarApp({ initial }: { initial: EvaluasiInitial }) {
   }
 
   return (
-    <div style={{ minHeight: '100vh', background: '#f4f2ed' }}>
+    <div style={{ minHeight: '100vh', background: 'var(--bg)' }}>
       <style>{`
         .ev-shell { min-height: 100vh; min-height: 100dvh; }
         .ev-press { transition: transform 0.06s ease; }
@@ -1248,7 +1248,7 @@ export function EvaluasiPengajarApp({ initial }: { initial: EvaluasiInitial }) {
         .ev-step:active { transform: scale(0.92); }
         .ev-minus:active { transform: scale(0.88); }
         .ev-dark:hover { background: #2a2722 !important; }
-        .ev-ghost:hover { background: #faf8f4 !important; }
+        .ev-ghost:hover { background: var(--surface-2) !important; }
         .ev-num::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
       `}</style>
       {coba && (
@@ -1273,13 +1273,13 @@ export function EvaluasiPengajarApp({ initial }: { initial: EvaluasiInitial }) {
       <div className="ev-shell" style={shellStyle}>
         {screen === 'p-home' && (
           <>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '14px 16px', background: '#ffffff', borderBottom: '1px solid #e8e4dc' }}>
-              <div style={{ width: 38, height: 38, borderRadius: '50%', background: '#efece5', color: '#44423d', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, fontWeight: 700 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '14px 16px', background: '#ffffff', borderBottom: '1px solid var(--line)' }}>
+              <div style={{ width: 38, height: 38, borderRadius: '50%', background: 'var(--surface-3)', color: 'var(--ink-2)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, fontWeight: 700 }}>
                 {initials(initial.pengajarName)}
               </div>
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ fontSize: 15, fontWeight: 700, lineHeight: 1.2 }}>{initial.pengajarName}</div>
-                <div style={{ fontSize: 11, color: '#7a766f', marginTop: 1 }}>{headerMeta}</div>
+                <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 1 }}>{headerMeta}</div>
               </div>
               <button
                 type="button"
@@ -1289,9 +1289,9 @@ export function EvaluasiPengajarApp({ initial }: { initial: EvaluasiInitial }) {
                   flexShrink: 0,
                   padding: '7px 12px',
                   borderRadius: 999,
-                  border: `1.5px solid ${coba ? 'oklch(0.75 0.12 85)' : '#e8e4dc'}`,
+                  border: `1.5px solid ${coba ? 'oklch(0.75 0.12 85)' : 'var(--line)'}`,
                   background: coba ? 'oklch(0.95 0.05 85)' : '#ffffff',
-                  color: coba ? 'oklch(0.42 0.09 75)' : '#7a766f',
+                  color: coba ? 'oklch(0.42 0.09 75)' : 'var(--muted)',
                   font: 'inherit',
                   fontSize: 12,
                   fontWeight: 700,
@@ -1304,13 +1304,13 @@ export function EvaluasiPengajarApp({ initial }: { initial: EvaluasiInitial }) {
 
             {initial.halaqahOptions.length > 1 && (
               <div style={{ padding: '10px 16px 0' }}>
-                <label style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.04em', textTransform: 'uppercase', color: '#7a766f', display: 'block', marginBottom: 4 }}>
+                <label style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.04em', textTransform: 'uppercase', color: 'var(--muted)', display: 'block', marginBottom: 4 }}>
                   Halaqah ({initial.halaqahOptions.length})
                 </label>
                 <select
                   value={halaqah.id}
                   onChange={(e) => { window.location.href = `/evaluasi/pengajar?halaqah=${encodeURIComponent(e.target.value)}`; }}
-                  style={{ width: '100%', padding: '10px 12px', borderRadius: 10, border: '1.5px solid #e8e4dc', background: '#ffffff', fontSize: 14, fontWeight: 600, color: '#1b1a17', cursor: 'pointer' }}
+                  style={{ width: '100%', padding: '10px 12px', borderRadius: 10, border: '1.5px solid var(--line)', background: '#ffffff', fontSize: 14, fontWeight: 600, color: 'var(--ink)', cursor: 'pointer' }}
                 >
                   {initial.halaqahOptions.map((h) => (
                     <option key={h.id} value={h.id}>{h.nama}</option>
@@ -1325,16 +1325,16 @@ export function EvaluasiPengajarApp({ initial }: { initial: EvaluasiInitial }) {
               <button
                 onClick={() => nav('p-peserta')}
                 className="ev-press"
-                style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%', textAlign: 'left', padding: '12px 14px', borderRadius: 12, border: '1px solid #e8e4dc', background: '#ffffff', font: 'inherit', cursor: 'pointer' }}
+                style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%', textAlign: 'left', padding: '12px 14px', borderRadius: 12, border: '1px solid var(--line)', background: '#ffffff', font: 'inherit', cursor: 'pointer' }}
               >
                 <span style={{ fontSize: 16, flexShrink: 0 }}>👥</span>
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: 13, fontWeight: 600, color: '#1b1a17' }}>Peserta halaqah</div>
-                  <div style={{ fontSize: 11, color: '#a8a39a', marginTop: 1 }}>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--ink)' }}>Peserta halaqah</div>
+                  <div style={{ fontSize: 11, color: 'var(--muted-2)', marginTop: 1 }}>
                     {peserta.length} peserta · tambah, betulkan nama, keluarkan
                   </div>
                 </div>
-                <span style={{ fontSize: 15, color: '#d8d3c8' }}>›</span>
+                <span style={{ fontSize: 15, color: 'var(--line-2)' }}>›</span>
               </button>
 
               {/* Nama & level halaqah ikut tercetak di kop rapot, jadi salah ejaan
@@ -1342,21 +1342,21 @@ export function EvaluasiPengajarApp({ initial }: { initial: EvaluasiInitial }) {
               <button
                 onClick={() => nav('p-halaqah')}
                 className="ev-press"
-                style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%', textAlign: 'left', padding: '12px 14px', marginTop: 10, borderRadius: 12, border: '1px solid #e8e4dc', background: '#ffffff', font: 'inherit', cursor: 'pointer' }}
+                style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%', textAlign: 'left', padding: '12px 14px', marginTop: 10, borderRadius: 12, border: '1px solid var(--line)', background: '#ffffff', font: 'inherit', cursor: 'pointer' }}
               >
                 <span style={{ fontSize: 16, flexShrink: 0 }}>🏷</span>
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: 13, fontWeight: 600, color: '#1b1a17' }}>Data halaqah</div>
-                  <div style={{ fontSize: 11, color: '#a8a39a', marginTop: 1 }}>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--ink)' }}>Data halaqah</div>
+                  <div style={{ fontSize: 11, color: 'var(--muted-2)', marginTop: 1 }}>
                     {halaqah.nama} · {levelLabel}
                   </div>
                 </div>
-                <span style={{ fontSize: 15, color: '#d8d3c8' }}>›</span>
+                <span style={{ fontSize: 15, color: 'var(--line-2)' }}>›</span>
               </button>
             </div>
 
             <div style={{ padding: '18px 16px 0' }}>
-              <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.04em', textTransform: 'uppercase', color: '#7a766f', marginBottom: 10 }}>
+              <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.04em', textTransform: 'uppercase', color: 'var(--muted)', marginBottom: 10 }}>
                 Mulai penilaian · 4 sesi tiap level
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
@@ -1369,15 +1369,15 @@ export function EvaluasiPengajarApp({ initial }: { initial: EvaluasiInitial }) {
                   >
                     <div style={{ width: 44, height: 44, borderRadius: 12, background: '#ffffff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20, flexShrink: 0 }}>{hc.icon}</div>
                     <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontSize: 15, fontWeight: 700, color: '#1b1a17' }}>{hc.title}</div>
-                      <div style={{ fontSize: 12, color: '#7a766f', marginTop: 2 }}>{hc.desc}</div>
+                      <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--ink)' }}>{hc.title}</div>
+                      <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 2 }}>{hc.desc}</div>
                     </div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
                       {hc.dots.map((d) => (
                         <span key={d.key} style={{ width: 8, height: 8, borderRadius: '50%', background: d.color }} />
                       ))}
                     </div>
-                    <span style={{ fontSize: 18, color: '#a8a39a' }}>→</span>
+                    <span style={{ fontSize: 18, color: 'var(--muted-2)' }}>→</span>
                   </button>
                 ))}
               </div>
@@ -1387,7 +1387,7 @@ export function EvaluasiPengajarApp({ initial }: { initial: EvaluasiInitial }) {
                 membuka pratinjau tanpa QR, sementara "Terbitkan" tersembunyi di
                 ujung sesi → daftar → ringkasan → ketuk peserta. */}
             <div style={{ padding: '20px 16px 0' }}>
-              <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.04em', textTransform: 'uppercase', color: '#7a766f', marginBottom: 10 }}>Rapot akhir</div>
+              <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.04em', textTransform: 'uppercase', color: 'var(--muted)', marginBottom: 10 }}>Rapot akhir</div>
               <button
                 onClick={() => nav('p-rapot')}
                 className="ev-press"
@@ -1395,15 +1395,15 @@ export function EvaluasiPengajarApp({ initial }: { initial: EvaluasiInitial }) {
               >
                 <div style={{ width: 44, height: 44, borderRadius: 12, background: '#ffffff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20, flexShrink: 0 }}>🎓</div>
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: 15, fontWeight: 700, color: '#1b1a17' }}>Rapot Akhir QN &amp; PB</div>
-                  <div style={{ fontSize: 12, color: '#7a766f', marginTop: 2, lineHeight: 1.45 }}>
+                  <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--ink)' }}>Rapot Akhir QN &amp; PB</div>
+                  <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 2, lineHeight: 1.45 }}>
                     {ringkasRapot.siap} siap terbit · {ringkasRapot.belum} belum lengkap ·{' '}
                     {ringkasRapot.terbit} sudah terbit
                   </div>
                 </div>
-                <span style={{ fontSize: 18, color: '#a8a39a' }}>→</span>
+                <span style={{ fontSize: 18, color: 'var(--muted-2)' }}>→</span>
               </button>
-              <div style={{ fontSize: 11, color: '#a8a39a', marginTop: 8, lineHeight: 1.45 }}>
+              <div style={{ fontSize: 11, color: 'var(--muted-2)', marginTop: 8, lineHeight: 1.45 }}>
                 Cetak PDF dan terbitkan lembar resmi ber-QR dari satu tempat. Ujian akhir sudah
                 termasuk di dalam rapot tiap track.
               </div>
@@ -1411,37 +1411,37 @@ export function EvaluasiPengajarApp({ initial }: { initial: EvaluasiInitial }) {
 
             {/* Rekap per sesi — satu tabel semua peserta + rincian lahn, cetak/XLSX. */}
             <div style={{ padding: '20px 16px 0' }}>
-              <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.04em', textTransform: 'uppercase', color: '#7a766f', marginBottom: 10 }}>Rekap nilai</div>
+              <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.04em', textTransform: 'uppercase', color: 'var(--muted)', marginBottom: 10 }}>Rekap nilai</div>
               <button
                 onClick={() => nav('p-rekap')}
                 className="ev-press"
-                style={{ display: 'flex', alignItems: 'center', gap: 12, width: '100%', textAlign: 'left', padding: 16, borderRadius: 14, border: '1.5px solid #e8e4dc', background: '#ffffff', cursor: 'pointer', font: 'inherit' }}
+                style={{ display: 'flex', alignItems: 'center', gap: 12, width: '100%', textAlign: 'left', padding: 16, borderRadius: 14, border: '1.5px solid var(--line)', background: '#ffffff', cursor: 'pointer', font: 'inherit' }}
               >
-                <div style={{ width: 44, height: 44, borderRadius: 12, background: '#efece5', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20, flexShrink: 0 }}>📊</div>
+                <div style={{ width: 44, height: 44, borderRadius: 12, background: 'var(--surface-3)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20, flexShrink: 0 }}>📊</div>
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: 15, fontWeight: 700, color: '#1b1a17' }}>Rekap nilai per sesi</div>
-                  <div style={{ fontSize: 12, color: '#7a766f', marginTop: 2, lineHeight: 1.45 }}>
+                  <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--ink)' }}>Rekap nilai per sesi</div>
+                  <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 2, lineHeight: 1.45 }}>
                     Satu tabel semua peserta beserta rincian lahn · cetak PDF atau unduh XLSX
                   </div>
                 </div>
-                <span style={{ fontSize: 18, color: '#a8a39a' }}>→</span>
+                <span style={{ fontSize: 18, color: 'var(--muted-2)' }}>→</span>
               </button>
             </div>
 
             <div style={{ padding: '20px 16px 0' }}>
-              <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.04em', textTransform: 'uppercase', color: '#7a766f', marginBottom: 10 }}>Riwayat sesi</div>
+              <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.04em', textTransform: 'uppercase', color: 'var(--muted)', marginBottom: 10 }}>Riwayat sesi</div>
               {riwayat.length === 0 ? (
-                <div style={{ background: '#ffffff', border: '1px solid #e8e4dc', borderRadius: 12, padding: '14px', fontSize: 12, color: '#a8a39a' }}>
+                <div style={{ background: '#ffffff', border: '1px solid var(--line)', borderRadius: 12, padding: '14px', fontSize: 12, color: 'var(--muted-2)' }}>
                   Belum ada sesi yang dikirim.
                 </div>
               ) : (
-                <div style={{ background: '#ffffff', border: '1px solid #e8e4dc', borderRadius: 12, overflow: 'hidden' }}>
+                <div style={{ background: '#ffffff', border: '1px solid var(--line)', borderRadius: 12, overflow: 'hidden' }}>
                   {riwayat.map((r, i) => (
-                    <div key={r.key} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 14px', borderBottom: i < riwayat.length - 1 ? '1px solid #e8e4dc' : 'none' }}>
+                    <div key={r.key} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 14px', borderBottom: i < riwayat.length - 1 ? '1px solid var(--line)' : 'none' }}>
                       <span style={{ width: 8, height: 8, borderRadius: '50%', background: 'oklch(0.62 0.11 150)', flexShrink: 0 }} />
                       <div style={{ flex: 1 }}>
                         <div style={{ fontSize: 13, fontWeight: 600 }}>{r.label}</div>
-                        <div style={{ fontSize: 11, color: '#a8a39a', marginTop: 1 }}>
+                        <div style={{ fontSize: 11, color: 'var(--muted-2)', marginTop: 1 }}>
                           {r.hadirCount}/{r.total} peserta · rata-rata {r.avg ?? '—'}
                         </div>
                       </div>
@@ -1457,7 +1457,7 @@ export function EvaluasiPengajarApp({ initial }: { initial: EvaluasiInitial }) {
                           <button
                             disabled={bukaBusy === r.key}
                             onClick={() => { setBukaKonfirmasi(null); setRiwayatError(null); }}
-                            style={{ height: 28, padding: '0 10px', borderRadius: 7, border: '1px solid #e8e4dc', background: '#fff', font: 'inherit', fontSize: 11, fontWeight: 600, color: '#44423d', cursor: 'pointer' }}
+                            style={{ height: 28, padding: '0 10px', borderRadius: 7, border: '1px solid var(--line)', background: '#fff', font: 'inherit', fontSize: 11, fontWeight: 600, color: 'var(--ink-2)', cursor: 'pointer' }}
                           >
                             Batal
                           </button>
@@ -1481,7 +1481,7 @@ export function EvaluasiPengajarApp({ initial }: { initial: EvaluasiInitial }) {
                           <button
                             disabled={resetBusyId === r.key}
                             onClick={() => { setResetKonfirmasi(null); setRiwayatError(null); }}
-                            style={{ height: 28, padding: '0 10px', borderRadius: 7, border: '1px solid #e8e4dc', background: '#fff', font: 'inherit', fontSize: 11, fontWeight: 600, color: '#44423d', cursor: 'pointer' }}
+                            style={{ height: 28, padding: '0 10px', borderRadius: 7, border: '1px solid var(--line)', background: '#fff', font: 'inherit', fontSize: 11, fontWeight: 600, color: 'var(--ink-2)', cursor: 'pointer' }}
                           >
                             Batal
                           </button>
@@ -1507,7 +1507,7 @@ export function EvaluasiPengajarApp({ initial }: { initial: EvaluasiInitial }) {
                           </button>
                           <button
                             onClick={() => bukaPusatRapot(r.jenis, r.nomor)}
-                            style={{ height: 28, padding: '0 10px', borderRadius: 7, border: '1px solid #d8d3c8', background: '#ffffff', font: 'inherit', fontSize: 11, fontWeight: 600, color: '#44423d', cursor: 'pointer' }}
+                            style={{ height: 28, padding: '0 10px', borderRadius: 7, border: '1px solid var(--line-2)', background: '#ffffff', font: 'inherit', fontSize: 11, fontWeight: 600, color: 'var(--ink-2)', cursor: 'pointer' }}
                           >
                             🖨 Cetak
                           </button>
@@ -1522,7 +1522,7 @@ export function EvaluasiPengajarApp({ initial }: { initial: EvaluasiInitial }) {
                   {riwayatError}
                 </div>
               ) : (
-                <div style={{ marginTop: 8, fontSize: 11, color: '#a8a39a', lineHeight: 1.4 }}>
+                <div style={{ marginTop: 8, fontSize: 11, color: 'var(--muted-2)', lineHeight: 1.4 }}>
                   <b>Buka</b> mengembalikan sesi jadi draft — nilai lama tetap ada, tinggal disunting.
                   <b> Reset</b> mengosongkan seluruh nilainya dari nol, termasuk Ujian QN &amp; Ujian PB.
                   Rapot yang sudah terbit harus dicabut lebih dulu.
@@ -1628,7 +1628,7 @@ export function EvaluasiPengajarApp({ initial }: { initial: EvaluasiInitial }) {
             nama={activeP.nama}
             pos={activeIdx + 1}
             totalPeserta={peserta.length}
-            ringGradient={`conic-gradient(${nilaiTier.color} ${nilaiSc.skor}%, #e8e4dc 0)`}
+            ringGradient={`conic-gradient(${nilaiTier.color} ${nilaiSc.skor}%, var(--line) 0)`}
             skor={nilaiSc.skor}
             skorColor={nilaiTier.color}
             tierLabel={nilaiTier.label}

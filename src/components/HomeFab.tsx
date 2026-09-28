@@ -10,42 +10,20 @@ import { usePathname } from 'next/navigation';
  * Bagi user satu-peran, `/` me-redirect balik ke landing perannya — jadi tombol
  * ini efektif berfungsi sebagai "kembali ke dashboard saya".
  *
- * Halaman yang sudah punya tautan "‹ Beranda" di topbar-nya masuk
- * `PUNYA_TAUTAN_BERANDA` — cukup satu jalan pulang per halaman.
+ * Halaman yang sudah punya tautan Beranda sendiri (FiturHeader memasang
+ * `data-punya-beranda`) menyembunyikan tombol ini lewat CSS `.home-fab`.
  */
-const PUNYA_TAUTAN_BERANDA = new Set(['/kehadiran/pengajar']);
-
 export function HomeFab() {
   const pathname = usePathname();
 
-  if (pathname === '/' || PUNYA_TAUTAN_BERANDA.has(pathname)) return null;
+  if (pathname === '/') return null;
 
   return (
     <a
       href="/"
       aria-label="Kembali ke beranda"
       title="Kembali ke beranda"
-      className="no-print"
-      style={{
-        position: 'fixed',
-        bottom: 20,
-        left: 20,
-        height: 44,
-        padding: '0 16px 0 13px',
-        borderRadius: 22,
-        background: 'var(--surface)',
-        color: 'var(--ink)',
-        border: '1px solid var(--line-2)',
-        boxShadow: '0 2px 8px rgba(20,18,14,0.14)',
-        textDecoration: 'none',
-        display: 'inline-flex',
-        alignItems: 'center',
-        gap: 7,
-        fontSize: 13,
-        fontWeight: 600,
-        lineHeight: 1,
-        zIndex: 9998,
-      }}
+      className="home-fab no-print"
     >
       <svg width="17" height="17" viewBox="0 0 20 20" fill="none" aria-hidden>
         <path

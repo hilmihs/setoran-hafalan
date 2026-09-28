@@ -4,7 +4,6 @@ import { getSession } from '@/lib/session';
 import { supabaseAdmin } from '@/lib/supabase-admin';
 import { LogoutButton } from '@/components/LogoutButton';
 import { currentYearMonth } from '@/lib/week';
-import { FeatureNav } from '@/components/FeatureNav';
 import { PenilaianMasyaikhForm } from '@/components/PenilaianMasyaikhForm';
 
 export const dynamic = 'force-dynamic';
@@ -101,8 +100,8 @@ export default async function PenilaianPage({
           <Link href="/" className="wordmark">
             <span className="mark">M</span>Maahir
           </Link>
-          <span style={{ width: 1, height: 16, background: 'var(--line-2)' }} />
-          <span className="t-small" style={{ color: 'var(--ink-2)', fontWeight: 500 }}>
+          <span style={{ width: 1, height: 16, background: 'var(--forest-line)' }} />
+          <span className="t-small" style={{ color: 'var(--forest-soft)', fontWeight: 500 }}>
             Penilaian Pengajar
           </span>
         </div>
@@ -115,7 +114,6 @@ export default async function PenilaianPage({
       </div>
 
       <div className="dash-body" style={{ maxWidth: 800 }}>
-        <FeatureNav current="/penilaian" />
 
         <div>
           <h1 className="t-h1" style={{ fontSize: 22, marginBottom: 4 }}>

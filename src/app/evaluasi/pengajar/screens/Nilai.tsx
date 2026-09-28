@@ -49,11 +49,11 @@ export function Nilai(props: NilaiProps) {
   const sv = statusView(props.status);
   return (
     <>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 16px', background: '#ffffff', borderBottom: '1px solid #e8e4dc', position: 'sticky', top: 0, zIndex: 5 }}>
-        <button onClick={props.back} style={{ width: 32, height: 32, borderRadius: 8, border: '1px solid #e8e4dc', background: '#ffffff', color: '#44423d', fontSize: 15, cursor: 'pointer', flexShrink: 0 }}>←</button>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 16px', background: '#ffffff', borderBottom: '1px solid var(--line)', position: 'sticky', top: 0, zIndex: 5 }}>
+        <button onClick={props.back} style={{ width: 32, height: 32, borderRadius: 8, border: '1px solid var(--line)', background: '#ffffff', color: 'var(--ink-2)', fontSize: 15, cursor: 'pointer', flexShrink: 0 }}>←</button>
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ fontSize: 14, fontWeight: 700, lineHeight: 1.2 }}>{props.nama}</div>
-          <div style={{ fontSize: 11, color: '#7a766f', marginTop: 1 }}>Peserta {props.pos} dari {props.totalPeserta}</div>
+          <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 1 }}>Peserta {props.pos} dari {props.totalPeserta}</div>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11, fontWeight: 600, color: 'oklch(0.50 0.09 70)', background: 'oklch(0.96 0.035 85)', border: '1px solid oklch(0.88 0.07 82)', padding: '4px 9px', borderRadius: 999, whiteSpace: 'nowrap' }}>
           <span style={{ width: 6, height: 6, borderRadius: '50%', background: sv.dot }} />{sv.text}
@@ -61,18 +61,18 @@ export function Nilai(props: NilaiProps) {
       </div>
 
       <div style={{ padding: '14px 16px 0' }}>
-        <div style={{ borderRadius: 20, padding: 16, background: 'linear-gradient(150deg, oklch(0.97 0.02 165), oklch(0.945 0.03 165))', border: '1px solid oklch(0.88 0.045 165)' }}>
+        <div style={{ borderRadius: 20, padding: 16, background: 'linear-gradient(150deg, oklch(0.97 0.02 165), oklch(0.945 0.03 165))', border: '1px solid var(--accent-line)' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
             <div style={{ position: 'relative', width: 84, height: 84, borderRadius: '50%', flexShrink: 0, background: props.ringGradient, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
               <div style={{ width: 68, height: 68, borderRadius: '50%', background: '#fbfaf7', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
                 <span style={{ fontSize: 21, fontWeight: 800, lineHeight: 1, color: props.skorColor, fontVariantNumeric: 'tabular-nums' }}>{props.skor}</span>
-                <span style={{ fontSize: 9, fontWeight: 700, color: '#a8a39a' }}>/ 100</span>
+                <span style={{ fontSize: 9, fontWeight: 700, color: 'var(--muted-2)' }}>/ 100</span>
               </div>
             </div>
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ fontSize: 15, fontWeight: 800, color: props.skorColor }}>{props.tierLabel}</div>
               <div style={{ fontSize: 11, color: '#5c5950', marginTop: 2 }}>{props.hitungan}</div>
-              <div style={{ fontSize: 10, color: '#7a766f', marginTop: 4 }}>Ambang lulus: {props.ambang} / 100</div>
+              <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 4 }}>Ambang lulus: {props.ambang} / 100</div>
             </div>
           </div>
         </div>
@@ -89,9 +89,9 @@ export function Nilai(props: NilaiProps) {
       )}
 
       <div style={{ padding: '18px 16px 0' }}>
-        <div style={{ fontSize: 11, color: '#a8a39a', marginBottom: 10 }}>Ketuk kartu setiap ada kesalahan · ketuk angka untuk mengoreksi manual</div>
+        <div style={{ fontSize: 11, color: 'var(--muted-2)', marginBottom: 10 }}>Ketuk kartu setiap ada kesalahan · ketuk angka untuk mengoreksi manual</div>
         <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.04em', textTransform: 'uppercase', color: 'oklch(0.46 0.14 25)', marginBottom: 8 }}>
-          Lahn Jaliy <span style={{ fontWeight: 500, color: '#a8a39a', textTransform: 'none' }}>· −6 / kesalahan</span>
+          Lahn Jaliy <span style={{ fontWeight: 500, color: 'var(--muted-2)', textTransform: 'none' }}>· −6 / kesalahan</span>
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8 }}>
           {props.jaliy.map((c) => (
@@ -108,7 +108,7 @@ export function Nilai(props: NilaiProps) {
 
       <div style={{ padding: '16px 16px 0' }}>
         <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.04em', textTransform: 'uppercase', color: 'oklch(0.48 0.10 75)', marginBottom: 8 }}>
-          Lahn Khafiy <span style={{ fontWeight: 500, color: '#a8a39a', textTransform: 'none' }}>· −2 / kesalahan</span>
+          Lahn Khafiy <span style={{ fontWeight: 500, color: 'var(--muted-2)', textTransform: 'none' }}>· −2 / kesalahan</span>
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
           {props.khafiy.map((c) => (
@@ -124,17 +124,17 @@ export function Nilai(props: NilaiProps) {
       </div>
 
       <div style={{ padding: '18px 16px 0' }}>
-        <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.05em', textTransform: 'uppercase', color: '#7a766f', marginBottom: 6 }}>Catatan untuk peserta</div>
+        <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.05em', textTransform: 'uppercase', color: 'var(--muted)', marginBottom: 6 }}>Catatan untuk peserta</div>
         <textarea
           placeholder="Mad wajib di ayat 148 masih pendek. Latih lagi 5× sebelum pertemuan depan."
           value={props.catatan}
           onChange={(e) => props.setCatatan(e.target.value)}
-          style={{ width: '100%', minHeight: 66, padding: '10px 12px', background: '#ffffff', border: '1px solid #d8d3c8', borderRadius: 8, font: 'inherit', fontSize: 13, lineHeight: 1.45, color: '#1b1a17', outline: 'none', resize: 'none' }}
+          style={{ width: '100%', minHeight: 66, padding: '10px 12px', background: '#ffffff', border: '1px solid var(--line-2)', borderRadius: 8, font: 'inherit', fontSize: 13, lineHeight: 1.45, color: 'var(--ink)', outline: 'none', resize: 'none' }}
         />
       </div>
 
       <div style={{ height: 110 }} />
-      <div style={{ position: 'sticky', bottom: 0, background: '#ffffff', borderTop: '1px solid #e8e4dc', padding: '10px 16px 14px' }}>
+      <div style={{ position: 'sticky', bottom: 0, background: '#ffffff', borderTop: '1px solid var(--line)', padding: '10px 16px 14px' }}>
         {/* Gerbang ujian: konfirmasi kelulusan wajib sebelum simpan. Kotak centang
             aslinya di kartu rekomendasi (jauh di atas, kelewat saat menggulir), jadi
             tombol tampak "terkunci" tanpa sebab. Salinannya ditaruh di sini supaya
@@ -164,8 +164,8 @@ export function Nilai(props: NilaiProps) {
           </label>
         )}
         <div style={{ display: 'flex', gap: 8 }}>
-          <button onClick={props.prevPeserta} disabled={props.isFirst} className="ev-ghost" style={{ width: 50, height: 48, borderRadius: 8, border: '1px solid #d8d3c8', background: '#ffffff', font: 'inherit', fontSize: 16, color: '#1b1a17', cursor: props.isFirst ? 'not-allowed' : 'pointer', opacity: props.isFirst ? 0.5 : 1 }}>←</button>
-          <button onClick={props.simpanLanjut} disabled={props.simpanDisabled} className="ev-dark" style={{ flex: 1, height: 48, borderRadius: 8, border: 'none', background: '#1b1a17', color: '#ffffff', font: 'inherit', fontSize: 15, fontWeight: 600, cursor: props.simpanDisabled ? 'not-allowed' : 'pointer', opacity: props.simpanDisabled ? 0.5 : 1 }}>{props.simpanLabel}</button>
+          <button onClick={props.prevPeserta} disabled={props.isFirst} className="ev-ghost" style={{ width: 50, height: 48, borderRadius: 8, border: '1px solid var(--line-2)', background: '#ffffff', font: 'inherit', fontSize: 16, color: 'var(--ink)', cursor: props.isFirst ? 'not-allowed' : 'pointer', opacity: props.isFirst ? 0.5 : 1 }}>←</button>
+          <button onClick={props.simpanLanjut} disabled={props.simpanDisabled} className="ev-dark" style={{ flex: 1, height: 48, borderRadius: 8, border: 'none', background: 'var(--ink)', color: '#ffffff', font: 'inherit', fontSize: 15, fontWeight: 600, cursor: props.simpanDisabled ? 'not-allowed' : 'pointer', opacity: props.simpanDisabled ? 0.5 : 1 }}>{props.simpanLabel}</button>
         </div>
       </div>
     </>

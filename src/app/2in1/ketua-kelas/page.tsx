@@ -6,7 +6,6 @@ import { getUnfilledMaahirDays } from '@/lib/maahir-presensi';
 import { adaTakhassusVia } from '@/lib/takhassus-via-halaqah';
 import { Icon } from '@/components/icons';
 import { SectionHeader } from '@/components/ui/SectionHeader';
-import { FeatureNav } from '@/components/FeatureNav';
 
 export const dynamic = 'force-dynamic';
 
@@ -102,7 +101,6 @@ export default async function KetuaKelasPage() {
         </div>
 
         <div className="page">
-          <FeatureNav current="/2in1/ketua-kelas" />
           <p className="t-small" style={{ color: 'var(--muted-2)', marginBottom: 16 }}>
             {myKelas.map((k) => k.name).join(' · ')}
           </p>

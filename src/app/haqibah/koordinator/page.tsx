@@ -9,7 +9,6 @@ import { redirect } from 'next/navigation';
 import { getAllAccesses } from '@/lib/session';
 import { isSuperadmin } from '@/lib/admin-guard';
 import { LogoutButton } from '@/components/LogoutButton';
-import { FeatureNav } from '@/components/FeatureNav';
 import { daftarFile, daftarFolder, jalurFolder, urlFile } from '@/lib/haqibah';
 import { KelolaPanel } from './KelolaPanel';
 
@@ -59,7 +58,6 @@ export default async function HaqibahKoordinatorPage({
             <LogoutButton />
           </div>
 
-          <FeatureNav current="/haqibah/koordinator" />
 
           <h1 className="t-h1" style={{ marginBottom: 4 }}>Kelola Haqibatul Mu’allim</h1>
           <p className="t-small" style={{ color: 'var(--muted-2)', marginBottom: 16 }}>

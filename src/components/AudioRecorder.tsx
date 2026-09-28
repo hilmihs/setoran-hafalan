@@ -291,7 +291,7 @@ export function AudioRecorder({
   }
 
   return (
-    <div className="rec">
+    <div className={state.kind === 'recording' || state.kind === 'paused' ? 'rec rec-live' : 'rec'}>
       <div className="rec-head">
         <div className="title">{label}</div>
         <Status state={state.kind} elapsed={elapsed} durationSec={state.kind === 'recorded' ? state.durationSec : 0} submitted={submitted} />
@@ -484,8 +484,8 @@ function Status({
   }
   if (state === 'paused') {
     return (
-      <span className="status" style={{ color: 'var(--kuning-ink)' }}>
-        <span className="dot" style={{ background: 'var(--kuning)' }} />
+      <span className="status paused">
+        <span className="dot" />
         <span className="t-mono">{formatTime(elapsed)} (jeda)</span>
       </span>
     );

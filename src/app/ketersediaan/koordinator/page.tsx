@@ -2,7 +2,6 @@ import type { ReactNode } from 'react';
 import { notFound } from 'next/navigation';
 import { requireOneOfRoles } from '@/lib/session';
 import { LogoutButton } from '@/components/LogoutButton';
-import { FeatureNav } from '@/components/FeatureNav';
 import { isSuperadmin } from '@/lib/admin-guard';
 import { listPeriode, listSlot } from '@/lib/ketersediaan-periode';
 import { ringkasSlot } from '@/lib/ketersediaan-permintaan';
@@ -90,7 +89,6 @@ export default async function KetersediaanKoordinatorPage({
     return (
       <Bingkai>
         <Kop />
-        <FeatureNav current="/ketersediaan/koordinator" />
         <h1 className="t-h1" style={{ marginBottom: 4 }}>Kelola Ketersediaan Mengajar</h1>
         <p className="t-small" style={{ color: 'var(--muted)', marginBottom: 16 }}>
           Belum ada periode. Buat satu periode per batch KBM — misalnya Batch September 2026 dan Batch Oktober 2026 —
@@ -382,7 +380,6 @@ export default async function KetersediaanKoordinatorPage({
   return (
     <Bingkai>
       <Kop />
-      <FeatureNav current="/ketersediaan/koordinator" />
       <h1 className="t-h1" style={{ margin: '8px 0 2px' }}>Kelola Ketersediaan Mengajar</h1>
       <p className="t-small" style={{ color: 'var(--muted)', margin: 0 }}>
         Masih tersembunyi — hanya terlihat oleh superadmin. Pengajar belum bisa membuka halamannya.
@@ -529,7 +526,6 @@ async function HalamanGabungan({
   return (
     <Bingkai>
       <Kop />
-      <FeatureNav current="/ketersediaan/koordinator" />
       <h1 className="t-h1" style={{ margin: '8px 0 2px' }}>Kelola Ketersediaan Mengajar</h1>
       <p className="t-small" style={{ color: 'var(--muted)', margin: 0 }}>
         Gabungan {hasil.periode.map((p) => p.nama).join(' + ')}. Untuk membentuk halaqah, buka tahapnya masing-masing.

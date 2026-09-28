@@ -2,7 +2,6 @@ import { redirect } from 'next/navigation';
 import { requireKetuaKelas } from '@/lib/session';
 import { supabaseAdmin } from '@/lib/supabase-admin';
 import { LogoutButton } from '@/components/LogoutButton';
-import { FeatureNav } from '@/components/FeatureNav';
 import { StatCard } from '@/components/ui/StatCard';
 import { loadHalaqahPertemuan } from '@/lib/hits-ketua';
 import { getHitsRekapForHalaqah } from '@/lib/hits-rekap';
@@ -176,7 +175,6 @@ export default async function HitsKetuaPage({
             <LogoutButton />
           </div>
 
-          <FeatureNav current="/hits/ketua" />
 
           {myHalaqah.length > 1 && (
             <div style={{ marginBottom: 12 }}>

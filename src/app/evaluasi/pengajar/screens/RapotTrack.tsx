@@ -37,7 +37,7 @@ interface Props {
 }
 
 const HIJAU = 'oklch(0.40 0.10 150)';
-const HIJAU_BTN = 'oklch(0.58 0.09 165)';
+const HIJAU_BTN = 'var(--accent)';
 const BANNER_BG = 'oklch(0.96 0.035 150)';
 const BANNER_BORDER = 'oklch(0.85 0.06 150)';
 const MERAH = 'oklch(0.46 0.14 25)';
@@ -50,7 +50,7 @@ const AMBER_BORDER = 'oklch(0.86 0.08 85)';
 const JALIY_COLOR = 'oklch(0.46 0.14 25)';
 const KHAFIY_COLOR = 'oklch(0.48 0.10 75)';
 
-const KAP = { fontSize: 10, fontWeight: 700, letterSpacing: '0.05em', textTransform: 'uppercase', color: '#7a766f', marginBottom: 8 } as const;
+const KAP = { fontSize: 10, fontWeight: 700, letterSpacing: '0.05em', textTransform: 'uppercase', color: 'var(--muted)', marginBottom: 8 } as const;
 
 function shortOf(t: Track): string {
   return t === 'qn' ? 'QN' : 'PB';
@@ -75,10 +75,10 @@ function SnapCard({ snap, peran }: { snap: RapotUjianSnap; peran: RapotPayloadTr
       }}
     >
       <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ fontSize: 12.5, fontWeight: 700, color: '#1b1a17' }}>
+        <div style={{ fontSize: 12.5, fontWeight: 700, color: 'var(--ink)' }}>
           {snap.label} — {vonis.teks}
         </div>
-        <div style={{ fontSize: 11, color: '#7a766f', marginTop: 1 }}>
+        <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 1 }}>
           {snap.jaliy} jaliy · {snap.khafiy} khafiy
         </div>
       </div>
@@ -101,9 +101,9 @@ function TrenSesi({ history, label, rata }: { history: (number | null)[]; label:
   const geo = buildTrackGeometry(history);
   const x2 = geo.chartW - geo.padX;
   return (
-    <div style={{ background: '#faf8f4', border: '1px solid #e8e4dc', borderRadius: 14, padding: 14 }}>
+    <div style={{ background: 'var(--surface-2)', border: '1px solid var(--line)', borderRadius: 14, padding: 14 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
-        <span style={{ fontSize: 12.5, fontWeight: 800, color: '#1b1a17' }}>Progres {label}</span>
+        <span style={{ fontSize: 12.5, fontWeight: 800, color: 'var(--ink)' }}>Progres {label}</span>
         <span style={{ marginLeft: 'auto', fontSize: 11, fontWeight: 700, color: HIJAU }}>
           rata-rata {rata ?? '—'}
         </span>
@@ -117,7 +117,7 @@ function TrenSesi({ history, label, rata }: { history: (number | null)[]; label:
           y1={geo.ambangY}
           x2={x2}
           y2={geo.ambangY}
-          stroke="#d8d3c8"
+          stroke="var(--line-2)"
           strokeWidth={1.5}
           strokeDasharray="3,3"
         />
@@ -156,7 +156,7 @@ function TrenSesi({ history, label, rata }: { history: (number | null)[]; label:
         {geo.sessions.map((s) => (
           <span
             key={s.no}
-            style={{ fontSize: 9, color: '#a8a39a', fontWeight: 600, width: 30, textAlign: 'center' }}
+            style={{ fontSize: 9, color: 'var(--muted-2)', fontWeight: 600, width: 30, textAlign: 'center' }}
           >
             S{s.no}
           </span>
@@ -170,14 +170,14 @@ function TrenSesi({ history, label, rata }: { history: (number | null)[]; label:
 function LahnTable({ rows, kosong }: { rows: { key: string; label: string; group: 'jaliy' | 'khafiy'; count: number }[]; kosong: string }) {
   if (rows.length === 0) {
     return (
-      <div style={{ border: '1px solid #e8e4dc', borderRadius: 10, padding: '10px 12px', fontSize: 12, color: '#a8a39a' }}>
+      <div style={{ border: '1px solid var(--line)', borderRadius: 10, padding: '10px 12px', fontSize: 12, color: 'var(--muted-2)' }}>
         {kosong}
       </div>
     );
   }
   const total = rows.reduce((a, r) => a + r.count, 0);
   return (
-    <div style={{ border: '1px solid #e8e4dc', borderRadius: 10, overflow: 'hidden' }}>
+    <div style={{ border: '1px solid var(--line)', borderRadius: 10, overflow: 'hidden' }}>
       {rows.map((r) => (
         <div
           key={r.key}
@@ -187,19 +187,19 @@ function LahnTable({ rows, kosong }: { rows: { key: string; label: string; group
             gap: 8,
             fontSize: 12,
             padding: '7px 12px',
-            borderBottom: '1px solid #f4f2ed',
+            borderBottom: '1px solid var(--bg)',
           }}
         >
-          <span style={{ flex: 1, color: '#44423d' }}>{r.label}</span>
+          <span style={{ flex: 1, color: 'var(--ink-2)' }}>{r.label}</span>
           <span style={{ fontSize: 9.5, fontWeight: 700, color: r.group === 'jaliy' ? JALIY_COLOR : KHAFIY_COLOR }}>
             {r.group === 'jaliy' ? 'Jaliy' : 'Khafiy'}
           </span>
-          <span style={{ fontWeight: 700, color: '#1b1a17', fontVariantNumeric: 'tabular-nums', minWidth: 18, textAlign: 'right' }}>
+          <span style={{ fontWeight: 700, color: 'var(--ink)', fontVariantNumeric: 'tabular-nums', minWidth: 18, textAlign: 'right' }}>
             {r.count}
           </span>
         </div>
       ))}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, padding: '8px 12px', background: '#faf8f4' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, padding: '8px 12px', background: 'var(--surface-2)' }}>
         <span style={{ flex: 1, fontWeight: 800 }}>Total kesalahan</span>
         <span style={{ fontWeight: 800, fontVariantNumeric: 'tabular-nums', minWidth: 18, textAlign: 'right' }}>{total}</span>
       </div>
@@ -251,11 +251,11 @@ export default function RapotTrack({
   const status = vonis.teks;
   const showNilai = tr.nilaiAkhir != null;
   const stColor =
-    vonis.nada === 'lulus' ? HIJAU : vonis.nada === 'mengulang' ? MERAH : vonis.nada === 'bawah_standar' ? AMBER : '#7a766f';
+    vonis.nada === 'lulus' ? HIJAU : vonis.nada === 'mengulang' ? MERAH : vonis.nada === 'bawah_standar' ? AMBER : 'var(--muted)';
   const stBg =
-    vonis.nada === 'lulus' ? BANNER_BG : vonis.nada === 'mengulang' ? MERAH_BG : vonis.nada === 'bawah_standar' ? AMBER_BG : '#f4f2ed';
+    vonis.nada === 'lulus' ? BANNER_BG : vonis.nada === 'mengulang' ? MERAH_BG : vonis.nada === 'bawah_standar' ? AMBER_BG : 'var(--bg)';
   const stBorder =
-    vonis.nada === 'lulus' ? BANNER_BORDER : vonis.nada === 'mengulang' ? MERAH_BORDER : vonis.nada === 'bawah_standar' ? AMBER_BORDER : '#e8e4dc';
+    vonis.nada === 'lulus' ? BANNER_BORDER : vonis.nada === 'mengulang' ? MERAH_BORDER : vonis.nada === 'bawah_standar' ? AMBER_BORDER : 'var(--line)';
 
   const berkalaAvg = tr.berkalaAvg ?? 0;
   const ujianSkor = tr.ujianSkor ?? 0;
@@ -267,18 +267,18 @@ export default function RapotTrack({
       : 'Penentu — rapot ini menentukan kelulusan level';
 
   const catatanSesi = tr.berkala.catatan;
-  const predikatColor = tr.nilaiAkhir != null ? tierOf(tr.nilaiAkhir, ambang).color : '#7a766f';
+  const predikatColor = tr.nilaiAkhir != null ? tierOf(tr.nilaiAkhir, ambang).color : 'var(--muted)';
 
   return (
     <>
       <div
         className="no-print"
-        style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 16px', background: '#ffffff', borderBottom: '1px solid #e8e4dc' }}
+        style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 16px', background: '#ffffff', borderBottom: '1px solid var(--line)' }}
       >
         <button
           type="button"
           onClick={onBack}
-          style={{ width: 32, height: 32, borderRadius: 8, border: '1px solid #e8e4dc', background: '#ffffff', color: '#44423d', fontSize: 15, cursor: 'pointer', flexShrink: 0 }}
+          style={{ width: 32, height: 32, borderRadius: 8, border: '1px solid var(--line)', background: '#ffffff', color: 'var(--ink-2)', fontSize: 15, cursor: 'pointer', flexShrink: 0 }}
         >
           ←
         </button>
@@ -288,7 +288,7 @@ export default function RapotTrack({
             type="button"
             onClick={onCetak}
             title="Cetak lembar A4 tanpa menerbitkan"
-            style={{ height: 36, padding: '0 12px', borderRadius: 8, border: '1px solid #d8d3c8', background: '#ffffff', font: 'inherit', fontSize: 12.5, fontWeight: 700, color: '#44423d', cursor: 'pointer', whiteSpace: 'nowrap' }}
+            style={{ height: 36, padding: '0 12px', borderRadius: 8, border: '1px solid var(--line-2)', background: '#ffffff', font: 'inherit', fontSize: 12.5, fontWeight: 700, color: 'var(--ink-2)', cursor: 'pointer', whiteSpace: 'nowrap' }}
           >
             🖨 Cetak
           </button>
@@ -321,7 +321,7 @@ export default function RapotTrack({
       {onPilihTrack && (
         <div
           className="no-print"
-          style={{ display: 'flex', gap: 6, padding: '10px 16px 0', background: '#f4f2ed' }}
+          style={{ display: 'flex', gap: 6, padding: '10px 16px 0', background: 'var(--bg)' }}
         >
           {TRACKS.map((t) => {
             const aktif = t === tr.track;
@@ -334,12 +334,12 @@ export default function RapotTrack({
                   height: 30,
                   padding: '0 14px',
                   borderRadius: 999,
-                  border: `1.5px solid ${aktif ? HIJAU_BTN : '#e8e4dc'}`,
+                  border: `1.5px solid ${aktif ? HIJAU_BTN : 'var(--line)'}`,
                   background: aktif ? BANNER_BG : '#ffffff',
                   font: 'inherit',
                   fontSize: 12,
                   fontWeight: 700,
-                  color: aktif ? HIJAU : '#7a766f',
+                  color: aktif ? HIJAU : 'var(--muted)',
                   cursor: 'pointer',
                 }}
               >
@@ -407,7 +407,7 @@ export default function RapotTrack({
           <div style={{ fontSize: 12, fontWeight: 800, color: HIJAU, marginBottom: 3 }}>
             Rapot {short} terbit
           </div>
-          <div style={{ fontSize: 11.5, color: '#44423d', lineHeight: 1.5, marginBottom: 10 }}>
+          <div style={{ fontSize: 11.5, color: 'var(--ink-2)', lineHeight: 1.5, marginBottom: 10 }}>
             Simpan tautannya sekarang. Menerbitkan ulang akan membuat tautan ini
             tidak berlaku.
           </div>
@@ -416,9 +416,9 @@ export default function RapotTrack({
             style={{
               fontSize: 11,
               fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
-              color: '#44423d',
+              color: 'var(--ink-2)',
               background: '#ffffff',
-              border: '1px solid #e8e4dc',
+              border: '1px solid var(--line)',
               borderRadius: 8,
               padding: '8px 10px',
               marginBottom: 10,
@@ -465,12 +465,12 @@ export default function RapotTrack({
                 flex: '1 1 120px',
                 minHeight: 44,
                 borderRadius: 8,
-                border: '1px solid #d8d3c8',
+                border: '1px solid var(--line-2)',
                 background: '#ffffff',
                 font: 'inherit',
                 fontSize: 13,
                 fontWeight: 700,
-                color: '#44423d',
+                color: 'var(--ink-2)',
                 cursor: 'pointer',
               }}
             >
@@ -510,7 +510,7 @@ export default function RapotTrack({
         <div
           style={{
             background: '#ffffff',
-            border: '1px solid #e8e4dc',
+            border: '1px solid var(--line)',
             borderRadius: 16,
             padding: '0 0 22px',
             boxShadow: '0 1px 2px rgba(20,18,14,0.04), 0 6px 24px -8px rgba(20,18,14,0.10)',
@@ -537,9 +537,9 @@ export default function RapotTrack({
           {/* Identitas */}
           <div style={{ padding: '20px 18px 0', textAlign: 'center' }}>
             <div style={{ fontSize: 17, fontWeight: 800 }}>{id.peserta}</div>
-            <div style={{ fontSize: 12, color: '#7a766f', marginTop: 2 }}>{metaParts.join(' · ')}</div>
-            {id.batch && <div style={{ fontSize: 11, color: '#a8a39a', marginTop: 3 }}>Batch {id.batch}</div>}
-            <div style={{ fontSize: 10.5, color: '#a8a39a', marginTop: 6, lineHeight: 1.45 }}>{peranTeks}</div>
+            <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 2 }}>{metaParts.join(' · ')}</div>
+            {id.batch && <div style={{ fontSize: 11, color: 'var(--muted-2)', marginTop: 3 }}>Batch {id.batch}</div>}
+            <div style={{ fontSize: 10.5, color: 'var(--muted-2)', marginTop: 6, lineHeight: 1.45 }}>{peranTeks}</div>
           </div>
 
           {/* Donat nilai akhir + komponen 30/70 (atau 100% ujian) */}
@@ -552,7 +552,7 @@ export default function RapotTrack({
                   height: 120,
                   borderRadius: '50%',
                   flexShrink: 0,
-                  background: `conic-gradient(${stColor} ${tr.nilaiAkhir}%, #e8e4dc 0)`,
+                  background: `conic-gradient(${stColor} ${tr.nilaiAkhir}%, var(--line) 0)`,
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
@@ -562,7 +562,7 @@ export default function RapotTrack({
                   <span style={{ fontSize: 34, fontWeight: 800, lineHeight: 1, color: stColor, fontVariantNumeric: 'tabular-nums' }}>
                     {tr.nilaiAkhir}
                   </span>
-                  <span style={{ fontSize: 9, fontWeight: 700, color: '#a8a39a', marginTop: 2 }}>/ 100</span>
+                  <span style={{ fontSize: 9, fontWeight: 700, color: 'var(--muted-2)', marginTop: 2 }}>/ 100</span>
                 </div>
               </div>
               <div style={{ flex: 1, minWidth: 0 }}>
@@ -571,14 +571,14 @@ export default function RapotTrack({
                   <>
                     <div style={{ marginBottom: 10 }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11.5, marginBottom: 4 }}>
-                        <span style={{ color: '#44423d', fontWeight: 600 }}>Ujian {short}</span>
+                        <span style={{ color: 'var(--ink-2)', fontWeight: 600 }}>Ujian {short}</span>
                         <span style={{ fontWeight: 800, fontVariantNumeric: 'tabular-nums' }}>{tr.ujianSkor ?? '–'}</span>
                       </div>
-                      <div style={{ height: 7, borderRadius: 4, background: '#efece5', overflow: 'hidden' }}>
+                      <div style={{ height: 7, borderRadius: 4, background: 'var(--surface-3)', overflow: 'hidden' }}>
                         <div style={{ height: '100%', width: `${ujianSkor}%`, background: HIJAU_BTN }} />
                       </div>
                     </div>
-                    <div style={{ fontSize: 10.5, color: '#a8a39a', lineHeight: 1.4 }}>
+                    <div style={{ fontSize: 10.5, color: 'var(--muted-2)', lineHeight: 1.4 }}>
                       Nilai akhir 100% dari Ujian {short}.
                     </div>
                   </>
@@ -586,23 +586,23 @@ export default function RapotTrack({
                   <>
                     <div style={{ marginBottom: 10 }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11.5, marginBottom: 4 }}>
-                        <span style={{ color: '#44423d', fontWeight: 600 }}>Berkala {short} · bobot 30%</span>
+                        <span style={{ color: 'var(--ink-2)', fontWeight: 600 }}>Berkala {short} · bobot 30%</span>
                         <span style={{ fontWeight: 800, fontVariantNumeric: 'tabular-nums' }}>{tr.berkalaAvg ?? '–'}</span>
                       </div>
-                      <div style={{ height: 7, borderRadius: 4, background: '#efece5', overflow: 'hidden' }}>
+                      <div style={{ height: 7, borderRadius: 4, background: 'var(--surface-3)', overflow: 'hidden' }}>
                         <div style={{ height: '100%', width: `${berkalaAvg}%`, background: 'oklch(0.72 0.07 210)' }} />
                       </div>
                     </div>
                     <div style={{ marginBottom: 10 }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11.5, marginBottom: 4 }}>
-                        <span style={{ color: '#44423d', fontWeight: 600 }}>Ujian {short} · bobot 70%</span>
+                        <span style={{ color: 'var(--ink-2)', fontWeight: 600 }}>Ujian {short} · bobot 70%</span>
                         <span style={{ fontWeight: 800, fontVariantNumeric: 'tabular-nums' }}>{tr.ujianSkor ?? '–'}</span>
                       </div>
-                      <div style={{ height: 7, borderRadius: 4, background: '#efece5', overflow: 'hidden' }}>
+                      <div style={{ height: 7, borderRadius: 4, background: 'var(--surface-3)', overflow: 'hidden' }}>
                         <div style={{ height: '100%', width: `${ujianSkor}%`, background: HIJAU_BTN }} />
                       </div>
                     </div>
-                    <div style={{ fontSize: 10.5, color: '#a8a39a', lineHeight: 1.4 }}>
+                    <div style={{ fontSize: 10.5, color: 'var(--muted-2)', lineHeight: 1.4 }}>
                       ({tr.berkalaAvg ?? '–'} × 0,3) + ({tr.ujianSkor ?? '–'} × 0,7) = {rawFormula} → {tr.nilaiAkhir}
                     </div>
                   </>
@@ -622,8 +622,8 @@ export default function RapotTrack({
                   gap: 8,
                   padding: 9,
                   borderRadius: 10,
-                  background: '#faf8f4',
-                  border: '1px solid #e8e4dc',
+                  background: 'var(--surface-2)',
+                  border: '1px solid var(--line)',
                   marginBottom: 18,
                 }}
               >
@@ -640,7 +640,7 @@ export default function RapotTrack({
                 <div style={{ marginBottom: 8 }}>
                   <TrenSesi history={tr.berkala.history} label={tr.label} rata={tr.berkalaAvg} />
                 </div>
-                <div style={{ fontSize: 10.5, color: '#a8a39a', marginBottom: 18, lineHeight: 1.45 }}>
+                <div style={{ fontSize: 10.5, color: 'var(--muted-2)', marginBottom: 18, lineHeight: 1.45 }}>
                   {sesiTerisi} dari {SESI_BERKALA_PER_TRACK} sesi dinilai. Rata-ratanya menyumbang 30% nilai akhir.
                 </div>
               </>
@@ -652,12 +652,12 @@ export default function RapotTrack({
               {tr.ujian ? (
                 <SnapCard snap={tr.ujian} peran={tr.peran} />
               ) : (
-                <div style={{ background: '#faf8f4', border: '1px solid #e8e4dc', borderRadius: 12, padding: '11px 12px', fontSize: 12, color: '#a8a39a' }}>
+                <div style={{ background: 'var(--surface-2)', border: '1px solid var(--line)', borderRadius: 12, padding: '11px 12px', fontSize: 12, color: 'var(--muted-2)' }}>
                   Belum ada Ujian {short}
                 </div>
               )}
             </div>
-            <div style={{ fontSize: 10.5, color: '#a8a39a', marginBottom: 18, lineHeight: 1.45 }}>
+            <div style={{ fontSize: 10.5, color: 'var(--muted-2)', marginBottom: 18, lineHeight: 1.45 }}>
               {tr.ujianSaja ? (
                 <>Nilai akhir 100% dari <b>Ujian {short}</b>. Ambang lulus {ambang}.</>
               ) : (
@@ -689,10 +689,10 @@ export default function RapotTrack({
                   {catatanSesi.map((c, i) => (
                     <div
                       key={`${c.label}-${i}`}
-                      style={{ background: '#faf8f4', border: '1px solid #e8e4dc', borderRadius: 8, padding: '9px 11px' }}
+                      style={{ background: 'var(--surface-2)', border: '1px solid var(--line)', borderRadius: 8, padding: '9px 11px' }}
                     >
-                      <div style={{ fontSize: 10, fontWeight: 700, color: '#a8a39a', marginBottom: 2 }}>{c.label}</div>
-                      <div style={{ fontSize: 12, lineHeight: 1.5, color: '#44423d' }}>{c.teks}</div>
+                      <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--muted-2)', marginBottom: 2 }}>{c.label}</div>
+                      <div style={{ fontSize: 12, lineHeight: 1.5, color: 'var(--ink-2)' }}>{c.teks}</div>
                     </div>
                   ))}
                 </div>
@@ -705,9 +705,9 @@ export default function RapotTrack({
               style={{
                 fontSize: 12.5,
                 lineHeight: 1.55,
-                color: '#44423d',
-                background: '#faf8f4',
-                border: '1px solid #e8e4dc',
+                color: 'var(--ink-2)',
+                background: 'var(--surface-2)',
+                border: '1px solid var(--line)',
                 borderRadius: 8,
                 padding: '10px 12px',
                 marginBottom: 18,
@@ -722,10 +722,10 @@ export default function RapotTrack({
 
             {/* Tanda tangan — penguji saja; kolom koordinator sudah dihapus,
                 sejalan dengan lembar A4-nya. */}
-            <div style={{ paddingTop: 14, borderTop: '1px solid #e8e4dc' }}>
+            <div style={{ paddingTop: 14, borderTop: '1px solid var(--line)' }}>
               <div style={{ textAlign: 'center', maxWidth: 200, margin: '0 auto' }}>
                 <div style={{ height: 36 }} />
-                <div style={{ fontSize: 10, color: '#a8a39a', borderTop: '1px solid #d8d3c8', paddingTop: 4 }}>
+                <div style={{ fontSize: 10, color: 'var(--muted-2)', borderTop: '1px solid var(--line-2)', paddingTop: 4 }}>
                   {penerbit}
                   <br />
                   Pengajar / Penguji

@@ -3,7 +3,6 @@ import { supabaseAdmin } from '@/lib/supabase-admin';
 import { LogoutButton } from '@/components/LogoutButton';
 import { PrintButton } from '@/components/PrintButton';
 import { Icon } from '@/components/icons';
-import { FeatureNav } from '@/components/FeatureNav';
 import { StatCard } from '@/components/ui/StatCard';
 import { MatrixTable, type MatrixTableRow } from '@/components/MatrixTable';
 import { MatrixRekapAspek } from '@/components/matrix/MatrixRekapAspek';
@@ -275,7 +274,6 @@ export default async function MatrixKoordinatorPage({
             </div>
           </div>
 
-          <div className="no-print"><FeatureNav current="/matrix/koordinator" /></div>
 
           {/* Hero header */}
           <div

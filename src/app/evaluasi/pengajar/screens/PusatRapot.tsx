@@ -47,7 +47,7 @@ interface Props {
 }
 
 const HIJAU = 'oklch(0.40 0.10 150)';
-const HIJAU_BTN = 'oklch(0.58 0.09 165)';
+const HIJAU_BTN = 'var(--accent)';
 const BANNER_BG = 'oklch(0.96 0.035 150)';
 const BANNER_BORDER = 'oklch(0.85 0.06 150)';
 const MERAH = 'oklch(0.46 0.14 25)';
@@ -61,7 +61,7 @@ const KAP: React.CSSProperties = {
   fontWeight: 700,
   letterSpacing: '0.04em',
   textTransform: 'uppercase',
-  color: '#7a766f',
+  color: 'var(--muted)',
   marginBottom: 10,
 };
 
@@ -120,11 +120,11 @@ export function PusatRapot(props: Props) {
 
   return (
     <>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 16px', background: '#ffffff', borderBottom: '1px solid #e8e4dc' }}>
-        <button onClick={props.back} style={{ width: 32, height: 32, borderRadius: 8, border: '1px solid #e8e4dc', background: '#ffffff', color: '#44423d', fontSize: 15, cursor: 'pointer' }}>←</button>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 16px', background: '#ffffff', borderBottom: '1px solid var(--line)' }}>
+        <button onClick={props.back} style={{ width: 32, height: 32, borderRadius: 8, border: '1px solid var(--line)', background: '#ffffff', color: 'var(--ink-2)', fontSize: 15, cursor: 'pointer' }}>←</button>
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ fontSize: 15, fontWeight: 700 }}>Rapot Akhir</div>
-          <div style={{ fontSize: 11, color: '#7a766f' }}>
+          <div style={{ fontSize: 11, color: 'var(--muted)' }}>
             {props.halaqahNama} · {peserta.length} peserta
           </div>
         </div>
@@ -143,12 +143,12 @@ export function PusatRapot(props: Props) {
                 height: 32,
                 padding: '0 14px',
                 borderRadius: 999,
-                border: `1.5px solid ${aktif ? HIJAU_BTN : '#e8e4dc'}`,
+                border: `1.5px solid ${aktif ? HIJAU_BTN : 'var(--line)'}`,
                 background: aktif ? BANNER_BG : '#ffffff',
                 font: 'inherit',
                 fontSize: 12,
                 fontWeight: 700,
-                color: aktif ? HIJAU : '#7a766f',
+                color: aktif ? HIJAU : 'var(--muted)',
                 cursor: 'pointer',
               }}
             >
@@ -158,7 +158,7 @@ export function PusatRapot(props: Props) {
         })}
       </div>
 
-      <div style={{ padding: '8px 16px 0', fontSize: 11, color: '#a8a39a', lineHeight: 1.5 }}>
+      <div style={{ padding: '8px 16px 0', fontSize: 11, color: 'var(--muted-2)', lineHeight: 1.5 }}>
         {props.namaTrack(track)} ·{' '}
         {ujianSaja
           ? `nilai akhir 100% dari Ujian ${short}`
@@ -183,7 +183,7 @@ export function PusatRapot(props: Props) {
         </div>
 
         {baris.length === 0 ? (
-          <div style={{ background: '#ffffff', border: '1px solid #e8e4dc', borderRadius: 12, padding: 14, fontSize: 12, color: '#a8a39a' }}>
+          <div style={{ background: '#ffffff', border: '1px solid var(--line)', borderRadius: 12, padding: 14, fontSize: 12, color: 'var(--muted-2)' }}>
             Belum ada peserta di halaqah ini.
           </div>
         ) : (
@@ -194,24 +194,24 @@ export function PusatRapot(props: Props) {
               const nilai = b.tr.nilaiAkhir;
               const vonis = vonisTrack(b.tr.peran, b.tr.lulus);
               const warna =
-                vonis.nada === 'lulus' ? HIJAU : vonis.nada === 'mengulang' ? MERAH : vonis.nada === 'bawah_standar' ? AMBER : '#a8a39a';
+                vonis.nada === 'lulus' ? HIJAU : vonis.nada === 'mengulang' ? MERAH : vonis.nada === 'bawah_standar' ? AMBER : 'var(--muted-2)';
               const konfirmasi = konfirmasiUlang === b.peserta.id;
               return (
                 <div
                   key={b.peserta.id}
                   style={{
                     background: '#ffffff',
-                    border: `1px solid ${t ? BANNER_BORDER : '#e8e4dc'}`,
+                    border: `1px solid ${t ? BANNER_BORDER : 'var(--line)'}`,
                     borderRadius: 12,
                     padding: '11px 12px',
                   }}
                 >
                   <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                     <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontSize: 13, fontWeight: 700, color: '#1b1a17' }}>
+                      <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--ink)' }}>
                         {b.peserta.nama}
                       </div>
-                      <div style={{ fontSize: 11, color: b.siap ? '#7a766f' : MERAH, marginTop: 2, lineHeight: 1.4 }}>
+                      <div style={{ fontSize: 11, color: b.siap ? 'var(--muted)' : MERAH, marginTop: 2, lineHeight: 1.4 }}>
                         {b.siap
                           ? `${vonis.teks} · nilai akhir ${nilai}`
                           : b.alasan.join(' · ')}
@@ -232,7 +232,7 @@ export function PusatRapot(props: Props) {
                       type="button"
                       onClick={() => props.onCetak([b.peserta.id])}
                       title={b.siap ? 'Cetak lembar A4' : 'Cetak pratinjau — belum lengkap, tanpa QR'}
-                      style={{ ...BTN, border: '1px solid #d8d3c8', background: '#ffffff', color: '#44423d' }}
+                      style={{ ...BTN, border: '1px solid var(--line-2)', background: '#ffffff', color: 'var(--ink-2)' }}
                     >
                       🖨 Cetak{b.siap ? '' : ' pratinjau'}
                     </button>
@@ -268,7 +268,7 @@ export function PusatRapot(props: Props) {
                         <button
                           type="button"
                           onClick={() => salin(t.token)}
-                          style={{ ...BTN, border: '1px solid #d8d3c8', background: '#ffffff', color: '#44423d' }}
+                          style={{ ...BTN, border: '1px solid var(--line-2)', background: '#ffffff', color: 'var(--ink-2)' }}
                         >
                           {tersalin === t.token ? 'Tersalin ✓' : 'Salin tautan'}
                         </button>
@@ -314,7 +314,7 @@ export function PusatRapot(props: Props) {
                         <button
                           type="button"
                           onClick={() => setKonfirmasiUlang(null)}
-                          style={{ ...BTN, border: '1px solid #e8e4dc', background: '#ffffff', color: '#44423d' }}
+                          style={{ ...BTN, border: '1px solid var(--line)', background: '#ffffff', color: 'var(--ink-2)' }}
                         >
                           Batal
                         </button>
@@ -344,7 +344,7 @@ export function PusatRapot(props: Props) {
       {/* Repo ini tak punya generator PDF di server (lihat globals.css) — PDF
           selalu lahir dari dialog cetak peramban. Sebagian kebingungan
           "menarik PDF" berhenti di kalimat ini. */}
-      <div style={{ padding: '12px 16px 0', fontSize: 11, color: '#a8a39a', lineHeight: 1.5 }}>
+      <div style={{ padding: '12px 16px 0', fontSize: 11, color: 'var(--muted-2)', lineHeight: 1.5 }}>
         Untuk menyimpan PDF: tekan Cetak, lalu di dialog cetak pilih tujuan
         <b> Save as PDF</b> (Android: <b>Simpan sebagai PDF</b>). Lembar ber-QR hanya
         didapat dari rapot yang sudah diterbitkan.

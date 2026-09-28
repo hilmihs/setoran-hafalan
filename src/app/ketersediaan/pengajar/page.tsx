@@ -1,7 +1,6 @@
 import { requirePengajar } from '@/lib/session';
 import { supabaseAdmin } from '@/lib/supabase-admin';
 import { LogoutButton } from '@/components/LogoutButton';
-import { FeatureNav } from '@/components/FeatureNav';
 import Link from 'next/link';
 import { formTerbuka, getPeriodeAktif, listSlot, periodeTerbukaUntukPengajar } from '@/lib/ketersediaan-periode';
 import {
@@ -75,7 +74,6 @@ export default async function KetersediaanPengajarPage({
     return (
       <Bingkai>
         {kop}
-        <FeatureNav current="/ketersediaan/pengajar" />
         <h1 className="t-h1" style={{ marginBottom: 4 }}>Ketersediaan Mengajar HITS</h1>
         <p className="t-small" style={{ color: 'var(--muted-2)' }}>
           Belum ada periode penarikan yang dibuka. Koordinator akan mengumumkan bila sudah siap.
@@ -90,7 +88,6 @@ export default async function KetersediaanPengajarPage({
     return (
       <Bingkai>
         {kop}
-        <FeatureNav current="/ketersediaan/pengajar" />
         <h1 className="t-h1" style={{ marginBottom: 4 }}>Ketersediaan Mengajar HITS</h1>
         <p className="t-small" style={{ color: 'var(--muted-2)' }}>
           Anda belum terdaftar sebagai pengajar untuk periode <strong>{periode.nama}</strong>,
@@ -187,7 +184,6 @@ export default async function KetersediaanPengajarPage({
   return (
     <Bingkai>
       {kop}
-      <FeatureNav current="/ketersediaan/pengajar" />
 
       <h1 className="t-h1" style={{ marginBottom: 4 }}>Ketersediaan Mengajar HITS</h1>
       {terbukaSemua.length > 1 && (

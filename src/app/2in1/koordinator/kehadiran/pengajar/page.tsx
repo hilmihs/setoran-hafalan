@@ -17,7 +17,6 @@ import {
 } from '@/lib/periode-pengajar';
 import { todayJakarta } from '@/lib/anggota-periode';
 import { MonthNavSelect } from '@/components/MonthNavSelect';
-import { FeatureNav } from '@/components/FeatureNav';
 import { SectionHeader } from '@/components/ui/SectionHeader';
 import { Icon } from '@/components/icons';
 
@@ -68,7 +67,6 @@ export default async function RekapPengajarMaahirPage({
         </div>
 
         <div className="page">
-          <FeatureNav current="/2in1/koordinator/kehadiran/pengajar" />
 
           <div className="section-row" style={{ alignItems: 'center', marginBottom: 6 }}>
             <div>

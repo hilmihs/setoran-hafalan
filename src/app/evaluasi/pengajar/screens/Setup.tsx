@@ -25,23 +25,23 @@ interface SetupProps {
 export function Setup(props: SetupProps) {
   return (
     <>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 16px', background: '#ffffff', borderBottom: '1px solid #e8e4dc' }}>
-        <button onClick={props.back} style={{ width: 32, height: 32, borderRadius: 8, border: '1px solid #e8e4dc', background: '#ffffff', color: '#44423d', fontSize: 15, cursor: 'pointer' }}>←</button>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 16px', background: '#ffffff', borderBottom: '1px solid var(--line)' }}>
+        <button onClick={props.back} style={{ width: 32, height: 32, borderRadius: 8, border: '1px solid var(--line)', background: '#ffffff', color: 'var(--ink-2)', fontSize: 15, cursor: 'pointer' }}>←</button>
         <div>
           <div style={{ fontSize: 15, fontWeight: 700 }}>{props.judul}</div>
-          <div style={{ fontSize: 11, color: '#7a766f' }}>{props.sesiLabel}</div>
+          <div style={{ fontSize: 11, color: 'var(--muted)' }}>{props.sesiLabel}</div>
         </div>
       </div>
 
       <div style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 14 }}>
-        <div style={{ background: '#ffffff', border: '1px solid #e8e4dc', borderRadius: 12, padding: 14 }}>
-          <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.05em', textTransform: 'uppercase', color: '#7a766f', marginBottom: 6 }}>Halaqah</div>
+        <div style={{ background: '#ffffff', border: '1px solid var(--line)', borderRadius: 12, padding: 14 }}>
+          <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.05em', textTransform: 'uppercase', color: 'var(--muted)', marginBottom: 6 }}>Halaqah</div>
           <div style={{ fontSize: 14, fontWeight: 700 }}>{props.halaqahLine}</div>
-          <div style={{ fontSize: 12, color: '#7a766f', marginTop: 2 }}>{props.pesertaCount} peserta terdaftar</div>
+          <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 2 }}>{props.pesertaCount} peserta terdaftar</div>
         </div>
 
-        <div style={{ background: '#ffffff', border: '1px solid #e8e4dc', borderRadius: 12, padding: 14 }}>
-          <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.05em', textTransform: 'uppercase', color: '#7a766f', marginBottom: 10 }}>{props.isUjian ? 'Ujian yang mana?' : 'Evaluasi ke berapa?'}</div>
+        <div style={{ background: '#ffffff', border: '1px solid var(--line)', borderRadius: 12, padding: 14 }}>
+          <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.05em', textTransform: 'uppercase', color: 'var(--muted)', marginBottom: 10 }}>{props.isUjian ? 'Ujian yang mana?' : 'Evaluasi ke berapa?'}</div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 8 }}>
             {props.sesiOptions.map((n) => {
               const on = n === props.activeSession;
@@ -49,7 +49,7 @@ export function Setup(props: SetupProps) {
                 <div key={n} style={{ position: 'relative' }}>
                   <button
                     onClick={() => props.pickSession(n)}
-                    style={{ width: '100%', height: 44, borderRadius: 8, border: `1.5px solid ${on ? '#1b1a17' : '#ffffff'}`, background: on ? '#1b1a17' : '#ffffff', color: on ? '#ffffff' : '#44423d', font: 'inherit', fontSize: 14, fontWeight: 700, cursor: 'pointer' }}
+                    style={{ width: '100%', height: 44, borderRadius: 8, border: `1.5px solid ${on ? 'var(--ink)' : '#ffffff'}`, background: on ? 'var(--ink)' : '#ffffff', color: on ? '#ffffff' : 'var(--ink-2)', font: 'inherit', fontSize: 14, fontWeight: 700, cursor: 'pointer' }}
                   >
                     {props.sesiOptionLabels?.[n - 1] ?? `Sesi ${n}`}
                   </button>
@@ -68,7 +68,7 @@ export function Setup(props: SetupProps) {
                 <button
                   key={n}
                   onClick={() => props.onToggleSesi?.(n, false)}
-                  style={{ height: 30, padding: '0 10px', borderRadius: 8, border: '1px dashed #d8d3c8', background: '#faf8f4', color: '#7a766f', font: 'inherit', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}
+                  style={{ height: 30, padding: '0 10px', borderRadius: 8, border: '1px dashed var(--line-2)', background: 'var(--surface-2)', color: 'var(--muted)', font: 'inherit', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}
                 >
                   ↩ Pulihkan {props.sesiOptionLabels?.[n - 1] ?? `Sesi ${n}`}
                 </button>
@@ -76,7 +76,7 @@ export function Setup(props: SetupProps) {
             </div>
           )}
           {props.isUjian && (
-            <div style={{ fontSize: 11, color: '#a8a39a', marginTop: 10 }}>
+            <div style={{ fontSize: 11, color: 'var(--muted-2)', marginTop: 10 }}>
               Ujian QN dan Ujian PB dua-duanya wajib — masing-masing menyumbang nilai akhir Rapot
               Akhir track-nya, jadi tak bisa dihapus.
             </div>
@@ -100,7 +100,7 @@ export function Setup(props: SetupProps) {
           position: 'sticky',
           bottom: 0,
           background: '#ffffff',
-          borderTop: '1px solid #e8e4dc',
+          borderTop: '1px solid var(--line)',
           padding: '10px 16px calc(20px + env(safe-area-inset-bottom))',
           marginTop: 16,
         }}
@@ -108,7 +108,7 @@ export function Setup(props: SetupProps) {
         <button
           onClick={props.lanjut}
           className="ev-dark"
-          style={{ width: '100%', height: 50, borderRadius: 8, border: 'none', background: '#1b1a17', color: '#ffffff', font: 'inherit', fontSize: 15, fontWeight: 600, cursor: 'pointer' }}
+          style={{ width: '100%', height: 50, borderRadius: 8, border: 'none', background: 'var(--ink)', color: '#ffffff', font: 'inherit', fontSize: 15, fontWeight: 600, cursor: 'pointer' }}
         >
           Lanjut ke daftar peserta →
         </button>

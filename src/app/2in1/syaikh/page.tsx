@@ -4,7 +4,6 @@ import { supabaseAdmin } from '@/lib/supabase-admin';
 import { currentCycleStart, formatCycleDeadline, formatCycleRange, formatCycleRangeShort, cyclesInMonth, currentYearMonth } from '@/lib/week';
 import { LogoutButton } from '@/components/LogoutButton';
 import { Icon, Initials } from '@/components/icons';
-import { FeatureNav } from '@/components/FeatureNav';
 import { StatCard } from '@/components/ui/StatCard';
 import { SectionHeader } from '@/components/ui/SectionHeader';
 import { Podium } from '@/components/ui/Podium';
@@ -250,7 +249,6 @@ export default async function SyaikhDashboard() {
         </div>
 
         <div className="page">
-          <FeatureNav current="/2in1" />
           <div className="row" style={{ padding: '4px 0 16px' }}>
             <div
               className="avatar"

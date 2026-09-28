@@ -15,20 +15,11 @@ import { todayJakarta } from '@/lib/anggota-periode';
 import { tanggalTanpaTahun, daftarHari, jamTitik } from '@/lib/tanggal-id';
 import { LogoutButton } from '@/components/LogoutButton';
 import { Icon } from '@/components/icons';
+import { FiturIkon, type IkonNama } from '@/components/FiturIkon';
 import type { PengajarSession } from '@/types/db';
 
 type Tugas = { href: string; title: string; sub: string; warna: 'merah' | 'kuning' };
-type MenuItem = { href: string; title: string; short: string; group: FeatureGroup };
-
-/** [latar, tinta] tanda huruf per kelompok menu. */
-const WARNA_KELOMPOK: Record<FeatureGroup, [string, string]> = {
-  mengajar: ['var(--accent-tint)', 'var(--accent-2)'],
-  maahir: ['var(--hijau-tint)', 'var(--hijau-ink)'],
-  nilai: ['var(--kuning-tint)', 'var(--kuning-ink)'],
-  koordinasi: ['var(--surface-3)', 'var(--ink-2)'],
-  admin: ['var(--merah-tint)', 'var(--merah-ink)'],
-  lainnya: ['var(--surface-3)', 'var(--ink-2)'],
-};
+type MenuItem = { href: string; title: string; short: string; group: FeatureGroup; ikon: IkonNama };
 
 /** 'Ust. Abdullah Fauzi' → 'AF' — gelar berakhiran titik dilewati. */
 function inisial(nama: string): string {
@@ -123,15 +114,15 @@ export default async function HomePage({ searchParams }: { searchParams: { next?
     // entri di FEATURE_LINKS; tambah entri sintetis di kelompoknya.
     const menu: MenuItem[] = [
       ...(isKetuaMaahir
-        ? [{ href: '/2in1/ketua-kelas', title: 'Presensi Kelas Maahir', short: 'Sebagai ketua kelas · Kelas Maahir, At-Tibyan', group: 'maahir' as const }]
+        ? [{ href: '/2in1/ketua-kelas', title: 'Presensi Kelas Maahir', short: 'Sebagai ketua kelas · Kelas Maahir, At-Tibyan', group: 'maahir' as const, ikon: 'cek' as const }]
         : []),
       ...(selfMembership
-        ? [{ href: '/2in1/maahir-mandiri', title: 'Presensi Mandiri', short: `Tandai kehadiran Anda — ${selfMembership.kelas.name}`, group: 'maahir' as const }]
+        ? [{ href: '/2in1/maahir-mandiri', title: 'Presensi Mandiri', short: `Tandai kehadiran Anda — ${selfMembership.kelas.name}`, group: 'maahir' as const, ikon: 'cek' as const }]
         : []),
       ...(superadmin
         ? [
-            { href: '/admin/audit', title: 'Log Aktivitas', short: 'Riwayat audit semua aksi pengguna', group: 'admin' as const },
-            { href: '/admin/users', title: 'Manajemen User', short: 'Akun, reset password, login sebagai', group: 'admin' as const },
+            { href: '/admin/audit', title: 'Log Aktivitas', short: 'Riwayat audit semua aksi pengguna', group: 'admin' as const, ikon: 'daftar' as const },
+            { href: '/admin/users', title: 'Manajemen User', short: 'Akun, reset password, login sebagai', group: 'admin' as const, ikon: 'atur' as const },
           ]
         : []),
       ...available,
@@ -144,82 +135,69 @@ export default async function HomePage({ searchParams }: { searchParams: { next?
     return (
       <main style={{ minHeight: '100vh' }}>
         <div style={{ maxWidth: 480, margin: '0 auto' }}>
-          <div className="page" style={{ paddingTop: 40 }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 22 }}>
-              <div className="wordmark">
+          <header className="beranda-head" data-tumpang={tugas.length > 0 ? '' : undefined}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <div className="wordmark" style={{ color: 'var(--emas)' }}>
                 <span className="mark">M</span>
                 Muhajir Project Tilawah
               </div>
-              <a
-                href="/akun"
-                title="Akun"
-                aria-label="Akun"
-                style={{
-                  width: 32,
-                  height: 32,
-                  borderRadius: '50%',
-                  background: 'var(--surface-3)',
-                  color: 'var(--ink-2)',
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  fontSize: 12,
-                  fontWeight: 600,
-                  textDecoration: 'none',
-                }}
-              >
+              <a href="/akun" title="Akun" aria-label="Akun" className="beranda-avatar">
                 {inisial(userName)}
               </a>
             </div>
+            <div>
+              <h1 className="beranda-salam">Assalamu&apos;alaikum, {userName}</h1>
+              <div className="beranda-tanggal">
+                {tanggalTanpaTahun(today)}
+                {tugas.length > 0 && (
+                  <>
+                    {' · '}
+                    <span style={{ color: 'var(--emas)', fontWeight: 600 }}>{tugas.length} hal menunggu Anda</span>
+                  </>
+                )}
+              </div>
+            </div>
+          </header>
 
-            <h1 className="t-h1" style={{ marginBottom: 4 }}>
-              Assalamu&apos;alaikum, {userName}
-            </h1>
-            <p className="t-body" style={{ marginBottom: 20, color: 'var(--muted)' }}>
-              {tanggalTanpaTahun(today)}
-              {tugas.length > 0 ? ` · ${tugas.length} hal menunggu Anda` : ''}
-            </p>
-
+          <div className="page" style={{ paddingTop: 0 }}>
             {tugas.length > 0 && (
-              <>
-                <div className="t-tiny" style={{ margin: '0 2px 8px' }}>Perlu diselesaikan</div>
-                <div className="card" style={{ overflow: 'hidden', marginBottom: 22 }}>
-                  {tugas.map((t) => (
-                    <a key={t.title} href={t.href} className="list-row" style={{ padding: 14 }}>
-                      <span style={{ width: 8, height: 8, borderRadius: '50%', background: `var(--${t.warna})`, flexShrink: 0 }} />
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ fontSize: 14, fontWeight: 600 }}>{t.title}</div>
-                        <div className="sub">{t.sub}</div>
-                      </div>
-                      <span className="arrow" style={{ color: 'var(--muted)' }}>{Icon.arrow(14)}</span>
-                    </a>
-                  ))}
-                </div>
-              </>
+              <div className="card kartu-angkat fh-tumpang" style={{ overflow: 'hidden', borderRadius: 18, borderColor: 'var(--emas-line)', marginBottom: 12 }}>
+                <div className="kartu-emas-head">Perlu diselesaikan</div>
+                {tugas.map((t) => (
+                  <a key={t.title} href={t.href} className="list-row" style={{ padding: '14px 16px', borderTop: '1px solid var(--line)' }}>
+                    <span style={{ width: 8, height: 8, borderRadius: '50%', background: `var(--${t.warna})`, flexShrink: 0 }} />
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 15, fontWeight: 700 }}>{t.title}</div>
+                      <div className="sub" style={{ fontSize: 12.5 }}>{t.sub}</div>
+                    </div>
+                    <span className="panah-bulat">{Icon.arrow(12)}</span>
+                  </a>
+                ))}
+              </div>
             )}
 
             {kelompok.map((g) => (
               <section key={g.key}>
-                <div className="t-tiny" style={{ margin: '0 2px 8px' }}>{g.label}</div>
-                <div className="card-flat" style={{ overflow: 'hidden', marginBottom: 18 }}>
+                <div className="t-tiny" style={{ margin: '22px 4px 8px' }}>{g.label}</div>
+                <div className="card-flat" style={{ overflow: 'hidden', borderRadius: 18 }}>
                   {g.items.map((it) => (
-                    <a key={it.href} href={it.href} className="list-row">
-                      <span className="list-mark" style={{ background: WARNA_KELOMPOK[g.key][0], color: WARNA_KELOMPOK[g.key][1] }}>
-                        {it.title.charAt(0)}
+                    <a key={it.href} href={it.href} className="list-row" style={{ padding: '14px 16px' }}>
+                      <span className="menu-ikon">
+                        <FiturIkon nama={it.ikon} />
                       </span>
                       <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ fontSize: 14, fontWeight: 600 }}>{it.title}</div>
-                        <div className="sub">{it.short}</div>
+                        <div style={{ fontSize: 15, fontWeight: 700, letterSpacing: '-0.01em' }}>{it.title}</div>
+                        <div className="sub" style={{ fontSize: 12.5 }}>{it.short}</div>
                       </div>
-                      <span className="arrow">{Icon.arrow(14)}</span>
+                      <span className="arrow" style={{ color: 'var(--emas-ink)' }}>{Icon.arrow(14)}</span>
                     </a>
                   ))}
                 </div>
               </section>
             ))}
 
-            <div style={{ textAlign: 'center', marginTop: 6 }}>
-              <LogoutButton style={{ height: 36 }} />
+            <div style={{ textAlign: 'center', marginTop: 24 }}>
+              <LogoutButton className="btn btn-sm btn-ghost" style={{ height: 40, background: 'transparent' }} />
             </div>
           </div>
         </div>
@@ -228,46 +206,37 @@ export default async function HomePage({ searchParams }: { searchParams: { next?
   }
 
   return (
-    <main style={{ minHeight: '100vh' }}>
-      <div style={{ maxWidth: 420, margin: '0 auto' }}>
-        <div className="page" style={{ paddingTop: 56 }}>
-          <div className="wordmark" style={{ marginBottom: 24 }}>
-            <span className="mark">M</span>
-            Muhajir Project Tilawah
+    <main className="login-latar">
+      <div className="login-bingkai">
+        {/* Key visual: logo MPT di atas forest, lembar krem naik dari bawah. */}
+        <div className="login-logo" role="img" aria-label="Muhajir Project #Tilawah" />
+        <div className="login-lembar">
+          <div style={{ marginBottom: 6 }}>
+            <h1 className="t-h1" style={{ fontSize: 26, marginBottom: 6 }}>Assalamu&apos;alaikum</h1>
+            <p className="t-body" style={{ color: 'var(--ink-2)' }}>
+              Masuk dengan nomor WhatsApp dan password Anda.
+            </p>
           </div>
-
-          <h1 className="t-h1" style={{ marginBottom: 6 }}>Assalamu&apos;alaikum</h1>
-          <p className="t-body" style={{ marginBottom: 26 }}>
-            Masuk dengan nomor WhatsApp dan password Anda.
-          </p>
 
           <LoginForm next={safeNext ?? undefined} />
 
           {/* Shakwa terbuka tanpa akun — pelapor luar tetap punya jalan masuk. */}
-          <a
-            href="/shakwa"
-            className="card-flat"
-            style={{
-              display: 'block',
-              padding: '14px 18px',
-              marginTop: 20,
-              textDecoration: 'none',
-              color: 'inherit',
-              borderRadius: 12,
-            }}
-          >
-            <div style={{ fontWeight: 600, marginBottom: 4 }}>Sampaikan Shakwa</div>
-            <div className="t-small" style={{ color: 'var(--muted-2)' }}>
-              Aduan, izin, masukan, atau cerita menarik — tanpa perlu masuk
+          <a href="/shakwa" className="kartu-emas" style={{ display: 'flex', alignItems: 'center', gap: 14, textDecoration: 'none', color: 'inherit', marginTop: 8 }}>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 3 }}>Sampaikan Shakwa</div>
+              <div style={{ fontSize: 12.5, lineHeight: 1.4, color: 'var(--emas-ink-2)' }}>
+                Aduan, izin, masukan, atau cerita menarik — tanpa perlu masuk
+              </div>
             </div>
+            <span className="panah-bulat" style={{ width: 32, height: 32 }}>{Icon.arrow(13)}</span>
           </a>
 
-          <p
-            className="t-small"
-            style={{ textAlign: 'center', marginTop: 22, color: 'var(--muted-2)' }}
-          >
-            Periode {formatCycleRangeShort(currentCycleStart())}
-          </p>
+          <div style={{ marginTop: 'auto', paddingTop: 18, display: 'flex', justifyContent: 'center' }}>
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 11.5, fontWeight: 600, color: 'var(--muted)' }}>
+              <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--emas)' }} />
+              Periode {formatCycleRangeShort(currentCycleStart())}
+            </span>
+          </div>
         </div>
       </div>
     </main>

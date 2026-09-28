@@ -34,7 +34,7 @@ export default async function KoordinatorEvaluasiPage({
     <main style={{ minHeight: '100vh' }}>
       <div className="eval-print-wrap" style={{ maxWidth: 1180, margin: '0 auto', padding: '20px 20px 40px' }}>
         {/* Header */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 14, flexWrap: 'wrap' }}>
+        <div className="kop-fitur" style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 14, flexWrap: 'wrap' }}>
           <div>
             <div className="t-h1" style={{ fontSize: 20 }}>
               Dashboard Koordinator

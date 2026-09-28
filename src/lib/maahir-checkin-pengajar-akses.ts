@@ -34,7 +34,7 @@ export async function getPengajarMaahirSesi(): Promise<PengajarMaahirAkses | nul
 
 /**
  * Opsi `featureLinksFor` untuk sesi ini — dua akses yang tak terbaca dari
- * role. Dipakai beranda & FeatureNav.
+ * role. Dipakai beranda.
  */
 export async function fiturOptsMaahirPengajar(): Promise<{
   pengajarMaahir: boolean;

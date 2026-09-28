@@ -455,8 +455,8 @@ export default async function KoordinatorDashboard({
           <Link href="/" className="wordmark">
             <span className="mark">M</span>Maahir
           </Link>
-          <span style={{ width: 1, height: 16, background: 'var(--line-2)' }} />
-          <span className="t-small" style={{ color: 'var(--ink-2)', fontWeight: 500 }}>
+          <span style={{ width: 1, height: 16, background: 'var(--forest-line)' }} />
+          <span className="t-small" style={{ color: 'var(--forest-soft)', fontWeight: 500 }}>
             Koordinator {koordinatorGender === 'ikhwan' ? 'Ikhwan' : 'Akhwat'}
           </span>
         </div>
@@ -472,8 +472,8 @@ export default async function KoordinatorDashboard({
                 width: 30,
                 height: 30,
                 fontSize: 12,
-                background: 'var(--accent-tint)',
-                color: 'var(--accent-2)',
+                background: 'var(--emas)',
+                color: 'var(--forest)',
               }}
             >
               <Initials name={koor.name} />

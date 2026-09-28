@@ -11,8 +11,8 @@ import {
 } from '@/lib/week';
 import { formatCycleRangeShort } from '@/lib/week';
 import { LogoutButton } from '@/components/LogoutButton';
+import { FiturHeader, ChipPeriode } from '@/components/FiturHeader';
 import { Icon, Initials } from '@/components/icons';
-import { FeatureNav } from '@/components/FeatureNav';
 import { StatCard } from '@/components/ui/StatCard';
 import { SectionHeader } from '@/components/ui/SectionHeader';
 import { Podium } from '@/components/ui/Podium';
@@ -216,50 +216,48 @@ export default async function MusyrifDashboard() {
   return (
     <main style={{ minHeight: '100vh' }}>
       <div style={{ maxWidth: 480, margin: '0 auto' }}>
-        <div className="topbar">
-          <div className="wordmark">
-            <span className="mark">M</span>Maahir
+        <FiturHeader
+          ikon="mic"
+          judul="Barnamij 2in1"
+          sub="Dashboard musyrif"
+          menumpang
+          kanan={
+            <>
+              <Link href="/akun" className="btn btn-sm btn-ghost">
+                Akun
+              </Link>
+              <LogoutButton />
+            </>
+          }
+        >
+          <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 10 }}>
+            <div style={{ minWidth: 0 }}>
+              <div className="fh-label">{sapaan}</div>
+              <div className="fh-nama" style={{ fontSize: 22, fontWeight: 800, letterSpacing: '-0.02em' }}>
+                {s.session.name}
+              </div>
+              <div className="fh-label" style={{ marginTop: 4 }}>Batas setoran: {deadlineLabel}</div>
+            </div>
+            <ChipPeriode>{formatCycleRangeShort(cycle)}</ChipPeriode>
           </div>
-          <div style={{ display: 'flex', gap: 8 }}>
-            <Link
-              href="/akun"
-              className="btn btn-sm btn-ghost"
-              style={{ height: 30, padding: '0 10px', textDecoration: 'none' }}
-            >
-              Akun
-            </Link>
-            <LogoutButton />
-          </div>
-        </div>
+        </FiturHeader>
 
         <div className="page">
-          <FeatureNav current="/2in1" />
-          <div className="row" style={{ padding: '4px 0 16px' }}>
-            <div
-              className="avatar"
-              style={{ background: 'var(--accent-tint)', color: 'var(--accent-2)' }}
-            >
-              <Initials name={s.session.name} />
-            </div>
-            <div style={{ flex: 1 }}>
-              <div style={{ fontSize: 12, color: 'var(--muted)' }}>{sapaan}</div>
-              <div style={{ fontSize: 16, fontWeight: 600 }}>{s.session.name}</div>
-            </div>
-            <span className="pekan-tag">
-              <span className="dot" />
-              Periode {formatCycleRangeShort(cycle)}
-            </span>
+          {/* Stats peserta cycle berjalan — menumpang ke header forest */}
+          <div className="stat-grid-3 fh-tumpang" style={{ marginBottom: 12 }}>
+            <StatCard value={counters.belum} label="Belum" valueColor="var(--merah-ink)" dotColor="var(--merah)" />
+            <StatCard value={counters.menunggu} label="Menunggu" valueColor="var(--kuning-ink)" dotColor="var(--kuning)" />
+            <StatCard value={counters.selesai} label="Selesai" valueColor="var(--hijau-ink)" dotColor="var(--hijau)" />
           </div>
-
-          {/* Ujian hafalan peserta (±3 bulan sekali) */}
-          <UjianKartuMusyrif pesertaIds={pesertaIds} />
 
           {/* Setoran musyrif → syaikh */}
-          <div className="section-row">
-            <div className="t-tiny">Setoran saya ke {syaikhTitle(musyrifGender)}</div>
-            <SelfSetoranBadge status={selfSetoran?.status} />
-          </div>
-          <div className="card-flat" style={{ padding: 14, marginBottom: 16 }}>
+          <div className="kartu-emas" style={{ display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 16 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
+              <span className="t-tiny" style={{ color: 'var(--emas-ink-2)' }}>
+                Setoran saya ke {syaikhTitle(musyrifGender)}
+              </span>
+              <SelfSetoranBadge status={selfSetoran?.status} />
+            </div>
             <SelfSetoranAction
               status={selfSetoran?.status ?? null}
               setoranId={selfSetoran?.id ?? null}
@@ -267,12 +265,8 @@ export default async function MusyrifDashboard() {
             />
           </div>
 
-          {/* Stats peserta cycle berjalan */}
-          <div className="stat-grid-3" style={{ marginBottom: 14 }}>
-            <StatCard value={counters.belum} label="Belum" valueColor="var(--merah-ink)" dotColor="var(--merah)" />
-            <StatCard value={counters.menunggu} label="Menunggu" valueColor="var(--kuning-ink)" dotColor="var(--kuning)" />
-            <StatCard value={counters.selesai} label="Selesai" valueColor="var(--hijau-ink)" dotColor="var(--hijau)" />
-          </div>
+          {/* Ujian hafalan peserta (±3 bulan sekali) */}
+          <UjianKartuMusyrif pesertaIds={pesertaIds} />
 
           {/* Cycle berjalan: list peserta */}
           <SectionHeader title="Cycle berjalan — peserta saya" right={`${counters.total} orang`} />
@@ -282,7 +276,7 @@ export default async function MusyrifDashboard() {
               <p className="t-small">Belum ada peserta di kelas Anda.</p>
             </div>
           ) : (
-            <div className="card-flat" style={{ overflow: 'hidden' }}>
+            <div className="card-flat" style={{ overflow: 'hidden', borderRadius: 18 }}>
               {rows.map(({ peserta, setoran, rekaman, statusKey }) => {
                 const k = kelasById.get(peserta.kelas_id);
                 const setorUrl = absUrl('/2in1/peserta');
@@ -323,11 +317,10 @@ export default async function MusyrifDashboard() {
                     {statusKey === 'menunggu' && setoran && (
                       <Link
                         href={`/2in1/musyrif/cek/${setoran.id}`}
-                        className="badge badge-kuning"
+                        className="act-btn emas"
                         style={{ textDecoration: 'none' }}
                       >
-                        <span className="dot" />
-                        Cek
+                        Cek {Icon.arrow(11)}
                       </Link>
                     )}
                     {statusKey === 'selesai' && (
@@ -371,13 +364,15 @@ export default async function MusyrifDashboard() {
           />
           <div
             className="card-flat"
-            style={{ padding: 0, overflow: 'hidden', marginBottom: 24 }}
+            style={{ padding: 0, overflowX: 'auto', marginBottom: 24, borderRadius: 18 }}
           >
+            {/* September 2026 punya tiga cycle — tabel bisa lebih lebar dari layar; gulir, jangan potong. */}
+            <div style={{ minWidth: 'max-content' }}>
             {/* Header */}
             <div
               style={{
                 display: 'grid',
-                gridTemplateColumns: `1fr ${monthCycles.map(() => '80px').join(' ')} 60px`,
+                gridTemplateColumns: `minmax(140px, 1fr) ${monthCycles.map(() => '80px').join(' ')} 60px`,
                 gap: 8,
                 padding: '8px 14px',
                 background: 'var(--surface-2)',
@@ -416,7 +411,7 @@ export default async function MusyrifDashboard() {
                     key={peserta.id}
                     style={{
                       display: 'grid',
-                      gridTemplateColumns: `1fr ${monthCycles.map(() => '80px').join(' ')} 60px`,
+                      gridTemplateColumns: `minmax(140px, 1fr) ${monthCycles.map(() => '80px').join(' ')} 60px`,
                       gap: 8,
                       padding: '10px 14px',
                       borderTop: idx === 0 ? 'none' : '1px solid var(--line)',
@@ -450,6 +445,7 @@ export default async function MusyrifDashboard() {
                 );
               })
             )}
+            </div>
           </div>
         </div>
       </div>

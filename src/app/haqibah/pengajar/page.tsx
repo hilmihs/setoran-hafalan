@@ -7,7 +7,6 @@
 import Link from 'next/link';
 import { requirePengajar } from '@/lib/session';
 import { LogoutButton } from '@/components/LogoutButton';
-import { FeatureNav } from '@/components/FeatureNav';
 import { daftarFile, daftarFolder, jalurFolder, urlFile } from '@/lib/haqibah';
 
 export const dynamic = 'force-dynamic';
@@ -50,7 +49,6 @@ export default async function HaqibahPengajarPage({
             <LogoutButton />
           </div>
 
-          <FeatureNav current="/haqibah/pengajar" />
 
           <h1 className="t-h1" style={{ marginBottom: 4 }}>Haqibatul Mu’allim</h1>
           <p className="t-small" style={{ color: 'var(--muted-2)', marginBottom: 16 }}>

@@ -199,6 +199,7 @@ export default async function KoordinatorHalaqahPage({
 
         {/* Header */}
         <div
+          className="kop-fitur"
           style={{
             display: 'flex',
             alignItems: 'center',
@@ -210,7 +211,7 @@ export default async function KoordinatorHalaqahPage({
           <div>
             <div style={{ fontSize: 20, fontWeight: 700 }}>
               {halaqah.nama as string}{' '}
-              <span style={{ fontSize: 14, fontWeight: 500, color: 'var(--muted)' }}>· {sub}</span>
+              <span className="t-small" style={{ fontSize: 14, fontWeight: 500 }}>· {sub}</span>
             </div>
             <div className="t-small" style={{ marginTop: 2 }}>
               Pengajar: {pengajar}

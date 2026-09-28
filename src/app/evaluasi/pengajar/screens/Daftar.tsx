@@ -48,17 +48,17 @@ export function Daftar(props: DaftarProps) {
   };
   return (
     <>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 16px', background: '#ffffff', borderBottom: '1px solid #e8e4dc' }}>
-        <button onClick={props.back} style={{ width: 32, height: 32, borderRadius: 8, border: '1px solid #e8e4dc', background: '#ffffff', color: '#44423d', fontSize: 15, cursor: 'pointer' }}>←</button>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 16px', background: '#ffffff', borderBottom: '1px solid var(--line)' }}>
+        <button onClick={props.back} style={{ width: 32, height: 32, borderRadius: 8, border: '1px solid var(--line)', background: '#ffffff', color: 'var(--ink-2)', fontSize: 15, cursor: 'pointer' }}>←</button>
         <div style={{ flex: 1 }}>
           <div style={{ fontSize: 15, fontWeight: 700 }}>{props.judul}</div>
-          <div style={{ fontSize: 11, color: '#7a766f' }}>{props.sub}</div>
+          <div style={{ fontSize: 11, color: 'var(--muted)' }}>{props.sub}</div>
         </div>
         {props.onPdf && !confirmReset && (
           <button
             onClick={props.onPdf}
             title="Cetak / simpan rapot rinci peserta sesi ini"
-            style={{ height: 34, padding: '0 12px', borderRadius: 8, border: '1px solid #d8d3c8', background: '#ffffff', font: 'inherit', fontSize: 12, fontWeight: 600, color: '#44423d', cursor: 'pointer', whiteSpace: 'nowrap' }}
+            style={{ height: 34, padding: '0 12px', borderRadius: 8, border: '1px solid var(--line-2)', background: '#ffffff', font: 'inherit', fontSize: 12, fontWeight: 600, color: 'var(--ink-2)', cursor: 'pointer', whiteSpace: 'nowrap' }}
           >
             ⬇ PDF
           </button>
@@ -86,7 +86,7 @@ export function Daftar(props: DaftarProps) {
             <button
               disabled={props.resetBusy}
               onClick={tutupKonfirmasi}
-              style={{ height: 34, padding: '0 10px', borderRadius: 8, border: '1px solid #e8e4dc', background: '#fff', font: 'inherit', fontSize: 12, fontWeight: 600, color: '#44423d', cursor: props.resetBusy ? 'default' : 'pointer', opacity: props.resetBusy ? 0.6 : 1 }}
+              style={{ height: 34, padding: '0 10px', borderRadius: 8, border: '1px solid var(--line)', background: '#fff', font: 'inherit', fontSize: 12, fontWeight: 600, color: 'var(--ink-2)', cursor: props.resetBusy ? 'default' : 'pointer', opacity: props.resetBusy ? 0.6 : 1 }}
             >
               Batal
             </button>
@@ -100,36 +100,36 @@ export function Daftar(props: DaftarProps) {
             {props.resetError}
           </div>
         ) : (
-          <div style={{ fontSize: 11, color: '#7a766f', lineHeight: 1.4 }}>Semua peserta dipilih otomatis. Ketuk untuk lepas centang bila tidak hadir hari ini.</div>
+          <div style={{ fontSize: 11, color: 'var(--muted)', lineHeight: 1.4 }}>Semua peserta dipilih otomatis. Ketuk untuk lepas centang bila tidak hadir hari ini.</div>
         )}
       </div>
 
       <div style={{ padding: '12px 16px 0', display: 'flex', flexDirection: 'column', gap: 8 }}>
         {props.items.map((p) => (
-          <div key={p.key} style={{ display: 'flex', alignItems: 'center', gap: 12, background: '#ffffff', border: '1px solid #e8e4dc', borderRadius: 12, padding: '10px 12px', opacity: p.rowOpacity }}>
+          <div key={p.key} style={{ display: 'flex', alignItems: 'center', gap: 12, background: '#ffffff', border: '1px solid var(--line)', borderRadius: 12, padding: '10px 12px', opacity: p.rowOpacity }}>
             <button onClick={p.toggle} style={{ width: 22, height: 22, borderRadius: 6, border: `1.5px solid ${p.checkBorder}`, background: p.checkBg, color: '#ffffff', fontSize: 13, fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flexShrink: 0 }}>{p.checkMark}</button>
-            <div style={{ width: 32, height: 32, borderRadius: '50%', background: '#efece5', color: '#44423d', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 700, flexShrink: 0 }}>{p.initial}</div>
+            <div style={{ width: 32, height: 32, borderRadius: '50%', background: 'var(--surface-3)', color: 'var(--ink-2)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 700, flexShrink: 0 }}>{p.initial}</div>
             <button onClick={p.buka} style={{ flex: 1, minWidth: 0, textAlign: 'left', background: 'none', border: 'none', font: 'inherit', cursor: 'pointer', padding: 0 }}>
-              <div style={{ fontSize: 13, fontWeight: 600, color: '#1b1a17' }}>{p.nama}{p.ketua}</div>
-              <div style={{ fontSize: 11, color: '#a8a39a', marginTop: 1 }}>{p.statusText}</div>
+              <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--ink)' }}>{p.nama}{p.ketua}</div>
+              <div style={{ fontSize: 11, color: 'var(--muted-2)', marginTop: 1 }}>{p.statusText}</div>
             </button>
             {p.showSkor && (
               <span style={{ fontSize: 13, fontWeight: 800, color: p.skorColor, fontVariantNumeric: 'tabular-nums' }}>{p.skor}</span>
             )}
-            <span style={{ fontSize: 15, color: '#d8d3c8' }}>›</span>
+            <span style={{ fontSize: 15, color: 'var(--line-2)' }}>›</span>
           </div>
         ))}
       </div>
 
       <div style={{ flex: 1 }} />
-      <div style={{ position: 'sticky', bottom: 0, background: '#ffffff', borderTop: '1px solid #e8e4dc', padding: '12px 16px calc(18px + env(safe-area-inset-bottom))', marginTop: 16 }}>
+      <div style={{ position: 'sticky', bottom: 0, background: '#ffffff', borderTop: '1px solid var(--line)', padding: '12px 16px calc(18px + env(safe-area-inset-bottom))', marginTop: 16 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
-          <div style={{ flex: 1, height: 6, borderRadius: 3, background: '#e8e4dc', overflow: 'hidden' }}>
-            <div style={{ height: '100%', borderRadius: 3, background: 'oklch(0.58 0.09 165)', width: `${props.progressPct}%` }} />
+          <div style={{ flex: 1, height: 6, borderRadius: 3, background: 'var(--line)', overflow: 'hidden' }}>
+            <div style={{ height: '100%', borderRadius: 3, background: 'var(--accent)', width: `${props.progressPct}%` }} />
           </div>
-          <span style={{ fontSize: 12, fontWeight: 700, color: '#44423d', whiteSpace: 'nowrap' }}>{props.selesai}/{props.total} selesai</span>
+          <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--ink-2)', whiteSpace: 'nowrap' }}>{props.selesai}/{props.total} selesai</span>
         </div>
-        <button onClick={props.mulai} style={{ width: '100%', height: 50, borderRadius: 8, border: 'none', background: '#1b1a17', color: '#ffffff', font: 'inherit', fontSize: 15, fontWeight: 600, cursor: 'pointer' }}>{props.tombolLabel}</button>
+        <button onClick={props.mulai} style={{ width: '100%', height: 50, borderRadius: 8, border: 'none', background: 'var(--ink)', color: '#ffffff', font: 'inherit', fontSize: 15, fontWeight: 600, cursor: 'pointer' }}>{props.tombolLabel}</button>
       </div>
     </>
   );

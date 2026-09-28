@@ -3,7 +3,6 @@ import { requirePengajar } from '@/lib/session';
 import { getSessionWa } from '@/lib/program-kelas';
 import { supabaseAdmin } from '@/lib/supabase-admin';
 import { LogoutButton } from '@/components/LogoutButton';
-import { FeatureNav } from '@/components/FeatureNav';
 import { deriveHalaqahPertemuanWithOverrides, type PertemuanOverride } from '@/lib/hits-pertemuan';
 import { todayJakarta } from '@/lib/maahir-presensi';
 import { AssignKetuaPanel, type HalaqahForAssign } from './AssignKetuaStep';
@@ -165,7 +164,6 @@ export default async function HitsPengajarPage() {
             <LogoutButton />
           </div>
 
-          <FeatureNav current="/hits/pengajar" />
 
           <TabayyunAlasanPanel items={tabayyunItems} />
 

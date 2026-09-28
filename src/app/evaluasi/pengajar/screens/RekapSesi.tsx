@@ -40,10 +40,10 @@ interface Props {
   back: () => void;
 }
 
-const INK = '#1b1a17';
-const MUTED = '#7a766f';
-const BORDER = '#e8e4dc';
-const HEAD_BG = '#efece5';
+const INK = 'var(--ink)';
+const MUTED = 'var(--muted)';
+const BORDER = 'var(--line)';
+const HEAD_BG = 'var(--surface-3)';
 const HIJAU = 'oklch(0.40 0.10 150)';
 const MERAH = 'oklch(0.46 0.14 25)';
 const AMBER = 'oklch(0.48 0.10 75)';
@@ -74,12 +74,12 @@ function fmtTgl(iso: string | null): string {
 
 const TH: React.CSSProperties = {
   padding: '6px 6px',
-  borderBottom: `1px solid #d8d3c8`,
+  borderBottom: `1px solid var(--line-2)`,
   borderRight: `1px solid ${BORDER}`,
   background: HEAD_BG,
   fontSize: 10.5,
   fontWeight: 700,
-  color: '#44423d',
+  color: 'var(--ink-2)',
   textAlign: 'center',
   whiteSpace: 'nowrap',
   verticalAlign: 'bottom',
@@ -105,7 +105,7 @@ export function RekapSesi(props: Props) {
       <style dangerouslySetInnerHTML={{ __html: PRINT_CSS }} />
 
       <div className="no-print" style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 16px', background: '#ffffff', borderBottom: `1px solid ${BORDER}` }}>
-        <button onClick={props.back} style={{ width: 32, height: 32, borderRadius: 8, border: `1px solid ${BORDER}`, background: '#ffffff', color: '#44423d', fontSize: 15, cursor: 'pointer' }}>←</button>
+        <button onClick={props.back} style={{ width: 32, height: 32, borderRadius: 8, border: `1px solid ${BORDER}`, background: '#ffffff', color: 'var(--ink-2)', fontSize: 15, cursor: 'pointer' }}>←</button>
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ fontSize: 15, fontWeight: 700 }}>Rekap nilai per sesi</div>
           <div style={{ fontSize: 11, color: MUTED }}>{props.halaqahNama} · satu tabel semua peserta</div>
@@ -115,7 +115,7 @@ export function RekapSesi(props: Props) {
       {/* Pilih sesi */}
       <div className="no-print" style={{ padding: '12px 16px 0' }}>
         {opsi.length === 0 ? (
-          <div style={{ background: '#ffffff', border: `1px solid ${BORDER}`, borderRadius: 12, padding: 14, fontSize: 12, color: '#a8a39a' }}>
+          <div style={{ background: '#ffffff', border: `1px solid ${BORDER}`, borderRadius: 12, padding: 14, fontSize: 12, color: 'var(--muted-2)' }}>
             Belum ada sesi yang dibuat. Mulai sesi dari beranda dulu.
           </div>
         ) : (
@@ -132,7 +132,7 @@ export function RekapSesi(props: Props) {
                     borderRadius: 999,
                     border: `1.5px solid ${on ? HIJAU : BORDER}`,
                     background: on ? 'oklch(0.96 0.035 150)' : '#ffffff',
-                    color: on ? HIJAU : '#44423d',
+                    color: on ? HIJAU : 'var(--ink-2)',
                     font: 'inherit',
                     fontSize: 12,
                     fontWeight: 700,
@@ -235,13 +235,13 @@ export function RekapSesi(props: Props) {
                       <td style={{ ...TD, fontWeight: 700 }}>{redup ? '' : b.khafiy}</td>
                       <td style={{ ...TD, fontWeight: 800, fontSize: 13, color: skorColor }}>{b.skor ?? '—'}</td>
                       <td style={{ ...TD, fontSize: 11, color: skorColor }}>{b.tier ?? '—'}</td>
-                      <td style={{ ...TD, textAlign: 'left', whiteSpace: 'normal', minWidth: 160, fontSize: 11, color: '#44423d', borderRight: 'none' }}>{b.catatan}</td>
+                      <td style={{ ...TD, textAlign: 'left', whiteSpace: 'normal', minWidth: 160, fontSize: 11, color: 'var(--ink-2)', borderRight: 'none' }}>{b.catatan}</td>
                     </tr>
                   );
                 })}
                 {rekap.baris.length === 0 && (
                   <tr>
-                    <td colSpan={jumlahKolom} style={{ ...TD, color: '#a8a39a', padding: 14 }}>Belum ada peserta aktif.</td>
+                    <td colSpan={jumlahKolom} style={{ ...TD, color: 'var(--muted-2)', padding: 14 }}>Belum ada peserta aktif.</td>
                   </tr>
                 )}
               </tbody>
@@ -270,7 +270,7 @@ export function RekapSesi(props: Props) {
             </table>
           </div>
 
-          <div className="no-print" style={{ fontSize: 11, color: '#a8a39a', marginTop: 8, lineHeight: 1.45 }}>
+          <div className="no-print" style={{ fontSize: 11, color: 'var(--muted-2)', marginTop: 8, lineHeight: 1.45 }}>
             Di HP, geser tabel ke samping untuk melihat semua kolom. Untuk PDF: tekan Cetak,
             lalu pilih tujuan &ldquo;Simpan sebagai PDF&rdquo; di dialog cetak (lembar lanskap).
             XLSX memuat nilai yang sudah tersimpan di server.
@@ -291,14 +291,14 @@ export function RekapSesi(props: Props) {
           <a
             href={aktif ? props.xlsxUrl(false) : undefined}
             aria-disabled={!aktif}
-            style={{ flex: 1, height: 42, borderRadius: 8, border: `1px solid #d8d3c8`, background: '#ffffff', color: INK, fontSize: 13, fontWeight: 600, display: 'flex', alignItems: 'center', justifyContent: 'center', textDecoration: 'none', opacity: aktif ? 1 : 0.5, pointerEvents: aktif ? 'auto' : 'none' }}
+            style={{ flex: 1, height: 42, borderRadius: 8, border: `1px solid var(--line-2)`, background: '#ffffff', color: INK, fontSize: 13, fontWeight: 600, display: 'flex', alignItems: 'center', justifyContent: 'center', textDecoration: 'none', opacity: aktif ? 1 : 0.5, pointerEvents: aktif ? 'auto' : 'none' }}
           >
             ⬇ XLSX sesi ini
           </a>
           <a
             href={opsi.length ? props.xlsxUrl(true) : undefined}
             aria-disabled={!opsi.length}
-            style={{ flex: 1, height: 42, borderRadius: 8, border: `1px solid #d8d3c8`, background: '#ffffff', color: INK, fontSize: 13, fontWeight: 600, display: 'flex', alignItems: 'center', justifyContent: 'center', textDecoration: 'none', opacity: opsi.length ? 1 : 0.5, pointerEvents: opsi.length ? 'auto' : 'none' }}
+            style={{ flex: 1, height: 42, borderRadius: 8, border: `1px solid var(--line-2)`, background: '#ffffff', color: INK, fontSize: 13, fontWeight: 600, display: 'flex', alignItems: 'center', justifyContent: 'center', textDecoration: 'none', opacity: opsi.length ? 1 : 0.5, pointerEvents: opsi.length ? 'auto' : 'none' }}
           >
             ⬇ XLSX semua sesi
           </a>

@@ -7,12 +7,12 @@ import {
   type ExistingSetoran,
 } from '@/components/PesertaSetoranForm';
 import { Icon } from '@/components/icons';
-import { FeatureNav } from '@/components/FeatureNav';
 import {
   RiwayatPenilaian,
   type RiwayatCycle,
 } from '@/components/RiwayatPenilaian';
 import { LogoutButton } from '@/components/LogoutButton';
+import { FiturHeader, FiturIdentitas, ChipPeriode } from '@/components/FiturHeader';
 import { UjianKartuPeserta } from '@/components/ujian/UjianKartu';
 import {
   CYCLE_ANCHOR,
@@ -209,41 +209,28 @@ export default async function PesertaPage() {
   return (
     <main style={{ minHeight: '100vh' }}>
       <div style={{ maxWidth: 480, margin: '0 auto' }}>
-        <div className="topbar">
-          <div className="wordmark">
-            <span className="mark">M</span>Maahir
-          </div>
-          <div style={{ display: 'flex', gap: 8 }}>
-            <Link
-              href="/akun"
-              className="btn btn-sm btn-ghost"
-              style={{ height: 30, padding: '0 10px' }}
-            >
-              Akun
-            </Link>
-            <LogoutButton />
-          </div>
-        </div>
+        <FiturHeader
+          ikon="mic"
+          judul="Barnamij 2in1"
+          sub="Setoran hafalan Tuhfah, Jazariyyah, Syawahid"
+          kanan={
+            <>
+              <Link href="/akun" className="btn btn-sm btn-ghost">
+                Akun
+              </Link>
+              <LogoutButton />
+            </>
+          }
+        >
+          <FiturIdentitas
+            inisial={initialsOf(displayName)}
+            label="Peserta"
+            nama={displayName}
+            kanan={<ChipPeriode>{formatCycleRangeShort(week)}</ChipPeriode>}
+          />
+        </FiturHeader>
 
         <div className="page">
-          <FeatureNav current="/2in1" />
-          <div className="row" style={{ padding: '4px 0 14px' }}>
-            <div
-              className="avatar"
-              style={{ background: 'var(--accent-tint)', color: 'var(--accent-2)' }}
-            >
-              {initialsOf(displayName)}
-            </div>
-            <div style={{ flex: 1 }}>
-              <div style={{ fontSize: 12, color: 'var(--muted)' }}>Peserta</div>
-              <div style={{ fontSize: 16, fontWeight: 600 }}>{displayName}</div>
-            </div>
-            <span className="pekan-tag">
-              <span className="dot" />
-              Periode {formatCycleRangeShort(week)}
-            </span>
-          </div>
-
           {isKetua && (
             <Link
               href={pertemuanHariIni ? `/2in1/ketua-kelas/pertemuan/${pertemuanHariIni.id}` : '/2in1/ketua-kelas'}

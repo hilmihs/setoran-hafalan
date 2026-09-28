@@ -49,7 +49,7 @@ function fmt(n: number | null): string {
 /** Status resmi kelulusan level — HANYA dari Rapot PB. */
 function StatusPill({ lulus }: { lulus: boolean | null }) {
   if (lulus === null) {
-    return <span style={{ color: '#7a766f', fontVariantNumeric: 'tabular-nums' }}>—</span>;
+    return <span style={{ color: 'var(--muted)', fontVariantNumeric: 'tabular-nums' }}>—</span>;
   }
   const isLulus = lulus === true;
   return (
@@ -109,11 +109,11 @@ export default function RekapNilaiAkhir({ halaqahNama, rows }: RekapNilaiAkhirPr
   const jumlahQnBelumLengkap = rows.filter((r) => !r.qn.lengkap).length;
 
   return (
-    <div style={{ background: '#f4f2ed', padding: '24px 26px 30px', boxSizing: 'border-box' }}>
+    <div style={{ background: 'var(--bg)', padding: '24px 26px 30px', boxSizing: 'border-box' }}>
       {/* Header */}
       <div style={{ marginBottom: 18 }}>
-        <div style={{ fontSize: 20, fontWeight: 700, color: '#1b1a17' }}>{halaqahNama}</div>
-        <div style={{ fontSize: 12, color: '#7a766f', marginTop: 2 }}>
+        <div style={{ fontSize: 20, fontWeight: 700, color: 'var(--ink)' }}>{halaqahNama}</div>
+        <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 2 }}>
           Nilai akhir tiap track = 30% rata 4 sesi + 70% ujian track itu · ambang{' '}
           {AMBANG_LULUS_AKHIR} · status resmi mengikuti Rapot PB; Rapot QN prasyarat yang wajib
           diselesaikan.
@@ -122,9 +122,9 @@ export default function RekapNilaiAkhir({ halaqahNama, rows }: RekapNilaiAkhirPr
 
       {/* Ringkasan */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 10, marginBottom: 16 }}>
-        <div style={{ background: '#ffffff', border: '1px solid #e8e4dc', borderRadius: 12, padding: '13px 14px' }}>
-          <div style={{ fontSize: 22, fontWeight: 800, lineHeight: 1, fontVariantNumeric: 'tabular-nums', color: '#1b1a17' }}>{total}</div>
-          <div style={{ fontSize: 10.5, color: '#7a766f', marginTop: 5, fontWeight: 600 }}>Peserta</div>
+        <div style={{ background: '#ffffff', border: '1px solid var(--line)', borderRadius: 12, padding: '13px 14px' }}>
+          <div style={{ fontSize: 22, fontWeight: 800, lineHeight: 1, fontVariantNumeric: 'tabular-nums', color: 'var(--ink)' }}>{total}</div>
+          <div style={{ fontSize: 10.5, color: 'var(--muted)', marginTop: 5, fontWeight: 600 }}>Peserta</div>
         </div>
         <div style={{ background: HIJAU_BG, border: `1px solid ${HIJAU_BORDER}`, borderRadius: 12, padding: '13px 14px' }}>
           <div style={{ fontSize: 22, fontWeight: 800, lineHeight: 1, color: HIJAU_TXT, fontVariantNumeric: 'tabular-nums' }}>{jumlahLulus}</div>
@@ -141,18 +141,18 @@ export default function RekapNilaiAkhir({ halaqahNama, rows }: RekapNilaiAkhirPr
       </div>
 
       {/* Tabel */}
-      <div style={{ background: '#ffffff', border: '1px solid #e8e4dc', borderRadius: 12, overflow: 'hidden' }}>
+      <div style={{ background: '#ffffff', border: '1px solid var(--line)', borderRadius: 12, overflow: 'hidden' }}>
         <div
           style={{
             display: 'grid',
             gridTemplateColumns: GRID,
-            background: '#faf8f4',
-            borderBottom: '1px solid #e8e4dc',
+            background: 'var(--surface-2)',
+            borderBottom: '1px solid var(--line)',
             fontSize: 10,
             fontWeight: 700,
             letterSpacing: '0.03em',
             textTransform: 'uppercase',
-            color: '#7a766f',
+            color: 'var(--muted)',
           }}
         >
           <div style={{ padding: '10px 14px' }}>Peserta</div>
@@ -165,13 +165,13 @@ export default function RekapNilaiAkhir({ halaqahNama, rows }: RekapNilaiAkhirPr
         </div>
 
         {rows.length === 0 ? (
-          <div style={{ padding: '28px 14px', textAlign: 'center', fontSize: 12, color: '#7a766f' }}>
+          <div style={{ padding: '28px 14px', textAlign: 'center', fontSize: 12, color: 'var(--muted)' }}>
             Belum ada data rekap.
           </div>
         ) : (
           rows.map((r, i) => {
             const isLast = i === rows.length - 1;
-            const pbAkhirColor = r.pb.nilai === null ? '#7a766f' : r.pb.lulus === false ? MERAH_TXT : HIJAU_TXT;
+            const pbAkhirColor = r.pb.nilai === null ? 'var(--muted)' : r.pb.lulus === false ? MERAH_TXT : HIJAU_TXT;
             return (
               <div
                 key={`${r.nama}-${i}`}
@@ -179,7 +179,7 @@ export default function RekapNilaiAkhir({ halaqahNama, rows }: RekapNilaiAkhirPr
                   display: 'grid',
                   gridTemplateColumns: GRID,
                   alignItems: 'center',
-                  borderBottom: isLast ? 'none' : '1px solid #f4f2ed',
+                  borderBottom: isLast ? 'none' : '1px solid var(--bg)',
                   fontSize: 12,
                   // Tint merah HANYA dari Rapot PB. QN rendah tidak memerahkan baris.
                   background: r.pb.lulus === false ? MERAH_ROW : undefined,
@@ -191,8 +191,8 @@ export default function RekapNilaiAkhir({ halaqahNama, rows }: RekapNilaiAkhirPr
                       width: 26,
                       height: 26,
                       borderRadius: '50%',
-                      background: '#efece5',
-                      color: '#44423d',
+                      background: 'var(--surface-3)',
+                      color: 'var(--ink-2)',
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
@@ -203,23 +203,23 @@ export default function RekapNilaiAkhir({ halaqahNama, rows }: RekapNilaiAkhirPr
                   >
                     {initials(r.nama)}
                   </span>
-                  <span style={{ fontWeight: 600, color: '#1b1a17' }}>{r.nama}</span>
+                  <span style={{ fontWeight: 600, color: 'var(--ink)' }}>{r.nama}</span>
                 </div>
                 {/* QN akhir — informasi prasyarat, tidak pernah diwarnai merah. */}
-                <div style={{ padding: '9px 0', textAlign: 'center', fontSize: 13, fontWeight: 700, fontVariantNumeric: 'tabular-nums', color: r.qn.nilai === null ? '#7a766f' : '#1b1a17' }}>
+                <div style={{ padding: '9px 0', textAlign: 'center', fontSize: 13, fontWeight: 700, fontVariantNumeric: 'tabular-nums', color: r.qn.nilai === null ? 'var(--muted)' : 'var(--ink)' }}>
                   {fmt(r.qn.nilai)}
                 </div>
                 <div style={{ padding: '9px 12px' }}>
                   <PrasyaratPill qn={r.qn} />
                 </div>
-                <div style={{ padding: '9px 0', textAlign: 'center', fontWeight: 700, fontVariantNumeric: 'tabular-nums', color: '#1b1a17' }}>
+                <div style={{ padding: '9px 0', textAlign: 'center', fontWeight: 700, fontVariantNumeric: 'tabular-nums', color: 'var(--ink)' }}>
                   {r.pb.ujianSaja ? (
-                    <span style={{ fontSize: 9.5, fontWeight: 600, color: '#7a766f', letterSpacing: '0.02em' }}>100% ujian</span>
+                    <span style={{ fontSize: 9.5, fontWeight: 600, color: 'var(--muted)', letterSpacing: '0.02em' }}>100% ujian</span>
                   ) : (
                     fmt(r.pb.berkalaAvg)
                   )}
                 </div>
-                <div style={{ padding: '9px 0', textAlign: 'center', fontVariantNumeric: 'tabular-nums', color: '#44423d' }}>
+                <div style={{ padding: '9px 0', textAlign: 'center', fontVariantNumeric: 'tabular-nums', color: 'var(--ink-2)' }}>
                   {fmt(r.pb.ujianSkor)}
                 </div>
                 <div style={{ padding: '9px 0', textAlign: 'center', fontSize: 14, fontWeight: 800, color: pbAkhirColor, fontVariantNumeric: 'tabular-nums' }}>
@@ -236,7 +236,7 @@ export default function RekapNilaiAkhir({ halaqahNama, rows }: RekapNilaiAkhirPr
 
       {/* Footer ringkas */}
       {total > 0 && (
-        <div style={{ marginTop: 12, fontSize: 11.5, color: '#7a766f' }}>
+        <div style={{ marginTop: 12, fontSize: 11.5, color: 'var(--muted)' }}>
           {jumlahLulus} dari {total} peserta lulus (dari Rapot PB) · {jumlahQnBelumLengkap} Rapot QN
           belum lengkap.
         </div>
