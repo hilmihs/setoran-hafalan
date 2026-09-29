@@ -27,6 +27,11 @@ export function LiveWaveform({
 
   useEffect(() => {
     pausedRef.current = !!paused;
+    // Setelah layar terkunci / pindah aplikasi, browser (terutama iOS) bisa
+    // men-suspend AudioContext; bangunkan lagi saat rekaman dilanjutkan agar
+    // gelombang tidak diam padahal suara masuk.
+    const ac = ctxRef.current;
+    if (!paused && ac && ac.state === 'suspended') ac.resume().catch(() => {});
   }, [paused]);
 
   useEffect(() => {
@@ -41,6 +46,8 @@ export function LiveWaveform({
       if (!AudioCtx) throw new Error('no AudioContext');
       const ac = new AudioCtx();
       ctxRef.current = ac;
+      // AudioContext yang dibuat di luar gestur pengguna bisa mulai 'suspended'.
+      if (ac.state === 'suspended') ac.resume().catch(() => {});
       const src = ac.createMediaStreamSource(stream);
       analyser = ac.createAnalyser();
       analyser.fftSize = 256;

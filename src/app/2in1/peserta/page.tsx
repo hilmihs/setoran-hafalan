@@ -123,7 +123,7 @@ export default async function PesertaPage() {
   const { data: allRekaman } = setoranIds.length
     ? await supabaseAdmin
         .from('rekaman')
-        .select('setoran_id, jenis, nilai, masukan, audio_url, duration_seconds')
+        .select('setoran_id, jenis, nilai, masukan, audio_url, duration_seconds, recorded_at')
         .in('setoran_id', setoranIds)
     : { data: [] };
 
@@ -134,6 +134,7 @@ export default async function PesertaPage() {
     masukan: string | null;
     audio_url: string | null;
     duration_seconds: number | null;
+    recorded_at: string | null;
   };
   const rekamanBySetoran = new Map<string, RekRow[]>();
   for (const r of (allRekaman ?? []) as RekRow[]) {
@@ -151,13 +152,19 @@ export default async function PesertaPage() {
   const currentSubmittedJenis: JenisRekaman[] = curReks
     .filter((r) => r.audio_url)
     .map((r) => r.jenis);
-  const restoredCurrent: Partial<Record<JenisRekaman, { audioUrl: string; durationSec: number }>> = {};
+  // `recordedAt` = waktu rekaman server terakhir di-upload. Ikut dikirim agar
+  // form bisa membandingkannya dengan draf IndexedDB (draf lebih baru = rekam
+  // ulang yang uploadnya gagal → jangan ditimpa rekaman server yang lama).
+  const restoredCurrent: Partial<
+    Record<JenisRekaman, { audioUrl: string; durationSec: number; recordedAt: string | null }>
+  > = {};
   for (const r of curReks) {
     if (r.audio_url) {
       try {
         restoredCurrent[r.jenis] = {
           audioUrl: await signedAudioUrl(r.audio_url, 86400),
           durationSec: r.duration_seconds ?? 0,
+          recordedAt: r.recorded_at ?? null,
         };
       } catch {
         // storage error — audio tidak bisa dipulihkan, peserta bisa rekam ulang
@@ -205,6 +212,14 @@ export default async function PesertaPage() {
   }
   // Riwayat: terbaru dulu. Backfill: terlama dulu (lunasi yang paling lama).
   riwayatCycles.reverse();
+
+  // Periode tepat sebelum cycle berjalan. Kalau belum lengkap, peserta yang baru
+  // saja melewati pergantian periode (mis. upload selesai lewat 00:00) perlu
+  // diingatkan di atas — jangan sampai ia merekam ulang di periode baru.
+  const periodeSebelumnya = allCycles.length >= 2 ? allCycles[allCycles.length - 2] : null;
+  const tunggakanTerakhir = periodeSebelumnya
+    ? backfillCycles.find((bc) => bc.cycleStart === periodeSebelumnya) ?? null
+    : null;
 
   return (
     <main style={{ minHeight: '100vh' }}>
@@ -260,6 +275,38 @@ export default async function PesertaPage() {
 
           <UjianKartuPeserta pesertaId={session.peserta_id} />
 
+          {musyrif && tunggakanTerakhir && (
+            <a
+              href={`#setor-periode-${tunggakanTerakhir.cycleStart}`}
+              className="banner"
+              style={{
+                textDecoration: 'none',
+                marginBottom: 18,
+                background: 'var(--kuning-tint)',
+                borderColor: 'var(--kuning)',
+                borderWidth: 1.5,
+                alignItems: 'center',
+              }}
+            >
+              <span
+                className="ic"
+                style={{ background: 'var(--kuning)', color: '#fff', fontWeight: 800 }}
+                aria-hidden
+              >
+                !
+              </span>
+              <span style={{ flex: 1 }}>
+                <span className="title" style={{ display: 'block' }}>
+                  Setoran periode {tunggakanTerakhir.label} belum lengkap —{' '}
+                  {tunggakanTerakhir.submittedJenis.length}/3 terkirim.
+                </span>
+                <span className="desc" style={{ display: 'block', color: 'var(--kuning-ink)' }}>
+                  Lengkapi di bawah →
+                </span>
+              </span>
+            </a>
+          )}
+
           <h1 className="t-h1" style={{ marginBottom: 2 }}>
             Setoran cycle ini
           </h1>
@@ -277,6 +324,9 @@ export default async function PesertaPage() {
               endpoint="/api/2in1/setoran/submit"
               singleSubmitEndpoint="/api/2in1/rekaman/submit-single"
               cacheKey={week}
+              // Kunci periode yang dirender halaman ini: upload yang baru selesai
+              // lewat 00:00 di batas periode tetap masuk periode ini, bukan berikutnya.
+              periodWeekStart={week}
               submittedJenis={currentSubmittedJenis}
               restored={restoredCurrent}
               pesertaName={displayName}
@@ -300,7 +350,14 @@ export default async function PesertaPage() {
               </p>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                 {backfillCycles.map((bc) => (
-                  <details key={bc.cycleStart} className="card" style={{ padding: 14 }}>
+                  <details
+                    key={bc.cycleStart}
+                    id={`setor-periode-${bc.cycleStart}`}
+                    className="card"
+                    style={{ padding: 14, scrollMarginTop: 16 }}
+                    // Periode tepat sebelumnya yang belum lengkap langsung terbuka.
+                    open={bc.cycleStart === tunggakanTerakhir?.cycleStart}
+                  >
                     <summary
                       style={{
                         cursor: 'pointer',

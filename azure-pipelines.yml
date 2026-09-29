@@ -3,10 +3,10 @@ trigger:
     include:
       - main
 
-pr:
-  branches:
-    include:
-      - main
+# Pipeline ini SELURUHNYA deploy ke prod (stop service → build → start). PR
+# tidak boleh memicunya: dulu `pr: main` ikut menjalankan deploy — situs mati
+# ±3 menit dan kode yang belum di-merge sempat live. Deploy hanya dari push main.
+pr: none
 
 variables:
   - group: Maahir-Prod # Gunakan prefix ENV_

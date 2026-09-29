@@ -2,13 +2,17 @@ import Link from 'next/link';
 import { requireSyaikh } from '@/lib/session';
 import { supabaseAdmin } from '@/lib/supabase-admin';
 import { signedAudioUrl } from '@/lib/storage';
-import { CekForm, type RekamanView } from '@/components/CekForm';
 import { Icon } from '@/components/icons';
-import { formatCycleRange } from '@/lib/week';
 import { formatCycleRangeShort } from '@/lib/week';
 import { salutation } from '@/lib/whatsapp';
 import { JENIS_REKAMAN, type JenisRekaman, type Gender } from '@/types/db';
+import { CekSetoranForm, type RekamanView } from '../../../musyrif/cek/CekSetoranForm';
+import { hitungKelengkapan } from '../../../musyrif/cek/kelengkapan';
 import { submitCekSyaikh } from './actions';
+
+// Masa berlaku tautan audio bertanda tangan — 12 jam, cukup untuk satu sesi
+// memeriksa (dulu 1 jam, audio berhenti bisa diputar di tengah pemeriksaan).
+const AUDIO_URL_TTL_SEC = 12 * 3600;
 
 export const dynamic = 'force-dynamic';
 
@@ -65,13 +69,14 @@ export default async function SyaikhCekPage({ params }: { params: { id: string }
       let audioUrl: string | null = null;
       if (r?.audio_url) {
         try {
-          audioUrl = await signedAudioUrl(r.audio_url, 3600);
+          audioUrl = await signedAudioUrl(r.audio_url, AUDIO_URL_TTL_SEC);
         } catch {
           audioUrl = null;
         }
       }
       return {
         jenis: j,
+        disetor: Boolean(r),
         audioUrl,
         durationSec: r?.duration_seconds ?? null,
         nilai: (r?.nilai ?? null) as RekamanView['nilai'],
@@ -81,6 +86,15 @@ export default async function SyaikhCekPage({ params }: { params: { id: string }
   );
 
   const sapaan = salutation(musyrif.gender);
+
+  const lengkap = hitungKelengkapan(setoran.week_start, rekamanByJenis.keys());
+  const catatanKurang =
+    lengkap.kurang.length > 0
+      ? {
+          judul: 'Setoran belum lengkap',
+          isi: `${lengkap.kurangLabel} belum disetor. Nilai rekaman yang ada saja.`,
+        }
+      : null;
 
   return (
     <Wrap>
@@ -105,13 +119,15 @@ export default async function SyaikhCekPage({ params }: { params: { id: string }
             <> · disetor {formatTime(setoran.submitted_at)}</>
           )}
         </p>
-        <CekForm
+        <CekSetoranForm
           setoranId={setoran.id}
           rekamanList={rekamanList}
           alreadyChecked={setoran.status === 'checked'}
           action={submitCekSyaikh}
           backHref="/2in1/syaikh"
           forwardLabel="Kirim hasil ke musyrif"
+          pengirim="musyrif"
+          catatanKurang={catatanKurang}
         />
       </div>
     </Wrap>

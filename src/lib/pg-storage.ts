@@ -38,6 +38,40 @@ export function verifyAudio(fullPath: string, exp: number, sig: string): boolean
   return sig.length === expected.length && sig === expected;
 }
 
+/**
+ * Tebak Content-Type audio dari magic bytes kepala berkas.
+ *
+ * Nama berkas rekaman selalu `<jenis>.webm` (lihat storage.ts), padahal isinya
+ * bergantung peramban perekam: Safari/iOS menghasilkan MP4, sebagian Firefox
+ * Ogg, unggahan manual bisa MP3/WAV. Menyajikan MP4 sebagai `audio/webm`
+ * membuat <audio> di iOS menolak memutarnya. Jadi tipe ditentukan dari isi,
+ * bukan dari ekstensi. `null` = tidak dikenali → pemanggil jatuh ke ekstensi.
+ *
+ * Cukup 12 byte pertama.
+ */
+export function sniffAudioMime(head: Uint8Array): string | null {
+  const b = head;
+  const n = b.length;
+  const ascii = (off: number, s: string) =>
+    n >= off + s.length && [...s].every((ch, i) => b[off + i] === ch.charCodeAt(0));
+
+  // WebM / Matroska (EBML header).
+  if (n >= 4 && b[0] === 0x1a && b[1] === 0x45 && b[2] === 0xdf && b[3] === 0xa3) return 'audio/webm';
+  // ISO-BMFF (MP4/M4A/3GP): kotak 'ftyp' di offset 4.
+  if (ascii(4, 'ftyp')) return 'audio/mp4';
+  if (ascii(0, 'OggS')) return 'audio/ogg';
+  if (ascii(0, 'RIFF') && ascii(8, 'WAVE')) return 'audio/wav';
+  if (ascii(0, 'fLaC')) return 'audio/flac';
+  if (ascii(0, 'ID3')) return 'audio/mpeg';
+  if (n >= 2 && b[0] === 0xff) {
+    // AAC ADTS: sync 12 bit + layer '00' (FFF1 / FFF9).
+    if ((b[1] & 0xf6) === 0xf0) return 'audio/aac';
+    // MP3 frame sync: 11 bit set, layer ≠ '00'.
+    if ((b[1] & 0xe0) === 0xe0 && (b[1] & 0x06) !== 0) return 'audio/mpeg';
+  }
+  return null;
+}
+
 type StoreErr = { message: string } | null;
 type Bucket = ReturnType<typeof bucketApi>;
 

@@ -1,6 +1,11 @@
 import { supabaseAdmin, AUDIO_BUCKET } from './supabase-admin';
 import type { JenisRekaman } from '@/types/db';
 
+// Catatan ekstensi: semua jalur rekaman berakhiran `.webm` apa pun isinya
+// (Safari/iOS merekam MP4, sebagian peramban Ogg). Ekstensi itu sengaja TIDAK
+// diubah — nilai `audio_url` lama di DB menunjuk jalur ini. Tipe sebenarnya
+// ditebak dari magic bytes saat disajikan (`sniffAudioMime` di pg-storage.ts,
+// dipakai /api/audio), jadi jangan mengandalkan ekstensi untuk menentukan format.
 export function audioObjectPath(args: {
   pesertaId: string;
   weekStart: string;

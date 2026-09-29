@@ -3,21 +3,30 @@ import { redirect } from 'next/navigation';
 import { getSession } from '@/lib/session';
 import { supabaseAdmin } from '@/lib/supabase-admin';
 import { signedAudioUrl } from '@/lib/storage';
-import { CekForm, type RekamanView } from '@/components/CekForm';
 import { Icon } from '@/components/icons';
-import { formatCycleRange } from '@/lib/week';
 import { formatCycleRangeShort } from '@/lib/week';
-import { JENIS_REKAMAN, type JenisRekaman } from '@/types/db';
+import { JENIS_REKAMAN, type JenisRekaman, type MusyrifSession } from '@/types/db';
+import { CekSetoranForm, type RekamanView } from '../CekSetoranForm';
+import { hitungKelengkapan } from '../kelengkapan';
 import { submitCek } from './actions';
+
+// Masa berlaku tautan audio bertanda tangan. Dulu 1 jam — musyrif yang
+// memeriksa lama (atau membiarkan tab terbuka) mendapati audio tak bisa
+// diputar lagi. 12 jam cukup untuk satu sesi memeriksa.
+const AUDIO_URL_TTL_SEC = 12 * 3600;
 
 export const dynamic = 'force-dynamic';
 
 export default async function CekPage({ params }: { params: { id: string } }) {
   const s = await getSession();
-  if (!s.session || s.session.role !== 'musyrif') {
+  // Lewat accesses, bukan role aktif — pemegang banyak role tetap bisa masuk.
+  const akses = (s.accesses ?? (s.session ? [s.session] : [])).find(
+    (a) => a.role === 'musyrif'
+  ) as MusyrifSession | undefined;
+  if (!akses) {
     redirect(`/2in1/musyrif/login?next=/2in1/musyrif/cek/${params.id}`);
   }
-  const musyrifId = s.session.musyrif_id;
+  const musyrifId = akses.musyrif_id;
 
   const { data: setoran } = await supabaseAdmin
     .from('setoran')
@@ -67,13 +76,14 @@ export default async function CekPage({ params }: { params: { id: string } }) {
       let audioUrl: string | null = null;
       if (r?.audio_url) {
         try {
-          audioUrl = await signedAudioUrl(r.audio_url, 3600);
+          audioUrl = await signedAudioUrl(r.audio_url, AUDIO_URL_TTL_SEC);
         } catch {
           audioUrl = null;
         }
       }
       return {
         jenis: j,
+        disetor: Boolean(r),
         audioUrl,
         durationSec: r?.duration_seconds ?? null,
         nilai: (r?.nilai ?? null) as RekamanView['nilai'],
@@ -81,6 +91,32 @@ export default async function CekPage({ params }: { params: { id: string } }) {
       };
     })
   );
+
+  const lengkap = hitungKelengkapan(setoran.week_start, rekamanByJenis.keys());
+  let catatanKurang: { judul: string; isi: string } | null = null;
+  if (lengkap.kurang.length > 0) {
+    if (lengkap.ada.length === 0) {
+      catatanKurang = {
+        judul: 'Belum ada rekaman yang disetor',
+        isi: lengkap.lewatBatas
+          ? `Periode ini sudah berakhir (${lengkap.batasLabel}) tanpa rekaman.`
+          : `Peserta masih bisa menyetor sampai ${lengkap.batasLabel}.`,
+      };
+    } else if (lengkap.lewatBatas) {
+      catatanKurang = {
+        judul: 'Setoran tidak lengkap',
+        isi: `${lengkap.kurangLabel} tidak disetor sampai periode berakhir (${lengkap.batasLabel}). Nilai rekaman yang ada saja.`,
+      };
+    } else {
+      catatanKurang = {
+        judul: 'Setoran belum lengkap',
+        isi:
+          `${lengkap.kurangLabel} belum disetor. Peserta masih bisa menambahkannya sampai ${lengkap.batasLabel}. ` +
+          'Rekaman yang sudah ada boleh dinilai sekarang; begitu peserta menambah rekaman, ' +
+          'setoran kembali ke daftar tunggu periksa untuk dinilai lagi.',
+      };
+    }
+  }
 
   return (
     <Wrap>
@@ -104,13 +140,15 @@ export default async function CekPage({ params }: { params: { id: string } }) {
             <> · disetor {formatTime(setoran.submitted_at)}</>
           )}
         </p>
-        <CekForm
+        <CekSetoranForm
           setoranId={setoran.id}
           rekamanList={rekamanList}
           alreadyChecked={setoran.status === 'checked'}
           action={submitCek}
           backHref="/2in1/musyrif"
           forwardLabel="Kirim hasil ke peserta"
+          pengirim="peserta"
+          catatanKurang={catatanKurang}
         />
       </div>
     </Wrap>
