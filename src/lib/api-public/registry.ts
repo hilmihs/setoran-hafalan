@@ -411,6 +411,48 @@ export const ENTITIES: Record<string, EntityDef> = {
     ],
     order: { column: 'urutan', dir: 'asc' },
   },
+  // Sesi evaluasi per halaqah. `status`: 'draft' = masih bisa disunting pengajar,
+  // 'terkirim' = sudah dikirim ke koordinator. `dihapus` = sesi dibatalkan —
+  // konsumen sebaiknya menyaring `dihapus=false`.
+  'evaluasi/sesi': {
+    route: 'evaluasi/sesi', table: 'evaluasi_sesi', scope: 'evaluasi',
+    columns: [
+      'id', 'halaqah_id', 'jenis', 'nomor_sesi', 'tgl_jadwal', 'surat', 'ayat_mulai',
+      'ayat_selesai', 'ambang', 'status', 'dihapus', 'created_at', 'updated_at',
+    ],
+    filters: [
+      { param: 'halaqah_id', column: 'halaqah_id', kind: 'eq' },
+      { param: 'jenis', column: 'jenis', kind: 'eq' },
+      { param: 'status', column: 'status', kind: 'eq' },
+      { param: 'dihapus', column: 'dihapus', kind: 'bool' },
+      { param: 'tanggal_dari', column: 'tgl_jadwal', kind: 'date_from' },
+      { param: 'tanggal_sampai', column: 'tgl_jadwal', kind: 'date_to' },
+      { param: 'sejak', column: 'updated_at', kind: 'ts_since' },
+    ],
+    order: { column: 'tgl_jadwal', dir: 'desc' },
+  },
+  // Nilai tiap peserta per sesi: jumlah kesalahan lahn per kategori + skor.
+  // Baris milik sesi 'draft' masih bisa berubah — untuk angka final, ambil dulu
+  // `evaluasi/sesi?status=terkirim` lalu saring nilai dengan `sesi_id`.
+  // `catatan` (teks bebas pengajar) sengaja TIDAK diekspos.
+  'evaluasi/nilai': {
+    route: 'evaluasi/nilai', table: 'evaluasi_nilai', scope: 'evaluasi',
+    columns: [
+      'id', 'sesi_id', 'peserta_id', 'hadir', 'done', 'confirmed', 'ayat_terakhir',
+      'jk_huruf', 'jk_harakat', 'jk_mad', 'jk_tasydid',
+      'kh_izhar', 'kh_idgham_bighunnah', 'kh_idgham_bilaghunnah', 'kh_idgham_mimi',
+      'kh_iqlab', 'kh_ikhfa_hakiki', 'kh_ikhfa_syafawi',
+      'skor', 'updated_at',
+    ],
+    filters: [
+      { param: 'sesi_id', column: 'sesi_id', kind: 'eq' },
+      { param: 'peserta_id', column: 'peserta_id', kind: 'eq' },
+      { param: 'hadir', column: 'hadir', kind: 'bool' },
+      { param: 'confirmed', column: 'confirmed', kind: 'bool' },
+      { param: 'sejak', column: 'updated_at', kind: 'ts_since' },
+    ],
+    order: { column: 'updated_at', dir: 'desc' },
+  },
   // Rapot resmi (snapshot beku ber-QR). Yang keluar hanya ANGKA + lifecycle:
   //  - `token` tak pernah keluar (di FORBIDDEN_COLUMNS) — pemegangnya bisa
   //    membuka halaman verifikasi publik /evaluasi/rapot/cek/<token>.

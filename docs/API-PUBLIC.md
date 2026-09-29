@@ -249,9 +249,9 @@ Kolom yang keluar per entitas:
 - **`matrix-rekap`**: `id`, `pengajar_id`, `year_month`, `skor_bacaan`, `skor_hafalan`, `skor_tajwid`, `skor_kehadiran_maahir`, `skor_kehadiran_tibyan`, `rata_rata_hard_skill`, `skor_metode_pengajaran`, `skor_kepatuhan_silabus`, `skor_manajemen_halaqah`, `skor_evaluasi_penguasaan`, `rata_rata_pedagogis`, `skor_kedisiplinan_waktu`, `skor_komitmen_jadwal`, `skor_tanggung_jawab`, `skor_kepatuhan_sop`, `rata_rata_soft_skill`, `rata_rata_keseluruhan`, `ranking`, `total_teguran_bulan`, `total_teguran_kumulatif`, `updated_at`
 - **`indikator-standar`**: `kode`, `kategori`, `nama`, `standar`
 
-### 3.4 Entitas mentah — scope `evaluasi` (5)
+### 3.4 Entitas mentah — scope `evaluasi` (7)
 
-Modul **Evaluasi Halaqah**: master data + **rapot resmi** peserta. Scope-nya sengaja
+Modul **Evaluasi Halaqah**: master data, **sesi & nilai per sesi**, dan **rapot resmi** peserta. Scope-nya sengaja
 dipisah dari `penilaian` — `penilaian` menilai *guru*, `evaluasi` menilai *peserta*.
 Key lama yang cuma punya `penilaian` **tidak** otomatis bisa membaca route ini.
 
@@ -261,6 +261,8 @@ Key lama yang cuma punya `penilaian` **tidak** otomatis bisa membaca route ini.
 | `evaluasi/pengajar` | `gender` |
 | `evaluasi/halaqah` | `gender`, `pengajar_id`, `batch_id`, `level` |
 | `evaluasi/peserta` | `halaqah_id`, `gender`, `aktif`, `is_ketua` |
+| `evaluasi/sesi` | `halaqah_id`, `jenis`, `status`, `dihapus`, `tanggal_dari`, `tanggal_sampai` (atas `tgl_jadwal`), `sejak` |
+| `evaluasi/nilai` | `sesi_id`, `peserta_id`, `hadir`, `confirmed`, `sejak` |
 | `evaluasi/rapot` | `peserta_id`, `halaqah_id`, `jenis_rapot`, `status`, `lulus`, `tanggal_dari`, `tanggal_sampai`, `sejak` |
 
 Kolom yang keluar per entitas:
@@ -269,7 +271,20 @@ Kolom yang keluar per entitas:
 - **`evaluasi/pengajar`**: `id`, `nama`, `gender`, `synced_at`
 - **`evaluasi/halaqah`**: `id`, `nama`, `gender`, `mustawa`, `level`, `pengajar_id`, `batch_id`, `ambang_ujian`, `synced_at`
 - **`evaluasi/peserta`**: `id`, `nama`, `gender`, `halaqah_id`, `is_ketua`, `aktif`, `urutan`, `synced_at`
+- **`evaluasi/sesi`**: `id`, `halaqah_id`, `jenis` (`qn`/`pb`/`ujian`), `nomor_sesi`, `tgl_jadwal`, `surat`, `ayat_mulai`, `ayat_selesai`, `ambang`, `status` (`draft`/`terkirim`), `dihapus`, `created_at`, `updated_at`
+- **`evaluasi/nilai`**: `id`, `sesi_id`, `peserta_id`, `hadir`, `done`, `confirmed`, `ayat_terakhir`, jumlah kesalahan lahn jaliy `jk_huruf`, `jk_harakat`, `jk_mad`, `jk_tasydid`, lahn khafiy `kh_izhar`, `kh_idgham_bighunnah`, `kh_idgham_bilaghunnah`, `kh_idgham_mimi`, `kh_iqlab`, `kh_ikhfa_hakiki`, `kh_ikhfa_syafawi`, `skor`, `updated_at`
 - **`evaluasi/rapot`**: `id`, `halaqah_id`, `peserta_id`, `jenis_rapot`, `nilai_akhir`, `berkala_avg`, `ujian_skor`, `ujian_pb_skor`, `lulus`, `ambang`, `diterbitkan_oleh`, `diterbitkan_at`, `status`, `superseded_by`, `dicabut_at`
+
+**Nilai per sesi — cara memakainya.** Nilai milik sesi `draft` masih bisa diubah
+pengajar kapan saja; angka final hanya dari sesi `terkirim`. Pola yang disarankan:
+
+1. `GET /api/v1/evaluasi/sesi?status=terkirim&dihapus=false` (opsional `halaqah_id`, `jenis`, `sejak`)
+2. untuk tiap `id` sesi: `GET /api/v1/evaluasi/nilai?sesi_id=<id>`
+3. gabungkan dengan `evaluasi/peserta` (nama) lewat `peserta_id`, dan `evaluasi/halaqah` lewat `halaqah_id` sesi.
+
+Untuk sinkron berkala, pakai `sejak=<YYYY-MM-DD>` di kedua route (`updated_at`). `catatan`
+pengajar (teks bebas) sengaja **tidak** diekspos. `peserta_id` bisa berawalan `manual:`
+(peserta yang ditambahkan pengajar sendiri, bukan dari sinkron hilmihs).
 
 Yang **tidak** keluar dari `evaluasi/rapot`:
 

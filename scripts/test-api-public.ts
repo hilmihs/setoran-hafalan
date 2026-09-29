@@ -262,7 +262,7 @@ function testPenilaianRefRegistry() {
   console.log('penilaian + ref registry:');
   check('5 penilaian entities', Object.values(ENTITIES).filter(e => e.scope === 'penilaian').length === 5);
   check('4 ref entities', Object.values(ENTITIES).filter(e => e.scope === 'ref').length === 4);
-  check('total 43 entities', Object.keys(ENTITIES).length === 43);
+  check('total 45 entities', Object.keys(ENTITIES).length === 45);
   check('14 maahir still', Object.values(ENTITIES).filter(e => e.scope === 'maahir').length === 14);
   check('14 hits still', Object.values(ENTITIES).filter(e => e.scope === 'hits').length === 14);
   for (const r of ['musyrif', 'koordinator', 'syaikh', 'koordinator-ketua-kelas']) {
@@ -287,7 +287,7 @@ function testScope() {
 function testEvaluasiRegistry() {
   console.log('evaluasi registry:');
   const evaluasi = Object.values(ENTITIES).filter(e => e.scope === 'evaluasi');
-  check('5 evaluasi entities', evaluasi.length === 5);
+  check('7 evaluasi entities', evaluasi.length === 7);
   check('semua entitas evaluasi ber-scope evaluasi', evaluasi.every(e => e.scope === 'evaluasi'));
 
   const rapot = getEntity('evaluasi/rapot')!;
@@ -309,9 +309,15 @@ function testEvaluasiRegistry() {
   check('eval peserta drops kurasi', !getEntity('evaluasi/peserta')!.columns.includes('kurasi'));
   check('eval halaqah drops kurasi', !getEntity('evaluasi/halaqah')!.columns.includes('kurasi'));
 
-  // Nilai per sesi (evaluasi_nilai) TIDAK dibuka — kolom `catatan`-nya teks bebas.
-  check('evaluasi/nilai NOT exposed', getEntity('evaluasi/nilai') === null);
-  check('evaluasi/sesi NOT exposed', getEntity('evaluasi/sesi') === null);
+  // Nilai per sesi dibuka (angka lahn + skor), tetapi `catatan` — teks bebas
+  // pengajar tentang peserta — tak boleh ikut keluar.
+  const nilai = getEntity('evaluasi/nilai');
+  const sesi = getEntity('evaluasi/sesi');
+  check('evaluasi/nilai exposed', !!nilai && nilai.scope === 'evaluasi');
+  check('evaluasi/nilai drops catatan', !!nilai && !nilai.columns.includes('catatan'));
+  check('evaluasi/nilai filter sesi_id', !!nilai && nilai.filters.some(f => f.param === 'sesi_id'));
+  check('evaluasi/sesi exposed', !!sesi && sesi.scope === 'evaluasi');
+  check('evaluasi/sesi filter status', !!sesi && sesi.filters.some(f => f.param === 'status'));
 }
 
 async function main() {
