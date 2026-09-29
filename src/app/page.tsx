@@ -46,13 +46,14 @@ export default async function HomePage({ searchParams }: { searchParams: { next?
     // Sudah login tapi diarahkan dgn ?next= (mis. ganti akun) → ke tujuan.
     if (safeNext) redirect(safeNext);
 
-    // Ketua/wakil kelas Maahir wajib selesaikan presensi yang terluput dulu.
+    // Ketua/wakil kelas Maahir dengan presensi terluput: dulu di-redirect paksa
+    // ke halaman presensi. Karena login mendarat langsung di halaman peran,
+    // redirect itu hanya kena saat orang menekan Beranda — dan sejak FeatureNav
+    // dihapus, Beranda satu-satunya jalan ke menu lain, jadi mereka terkurung.
+    // Kini jadi tugas merah teratas di "Perlu diselesaikan".
     const wa = await getSessionWa();
     const isKetuaMaahir = wa ? (await findKetuaProgramKelas(wa)).length > 0 : false;
-    if (wa && isKetuaMaahir) {
-      const unfilled = await getUnfilledMaahirDays(wa);
-      if (unfilled.length > 0) redirect('/2in1/ketua-kelas/presensi');
-    }
+    const maahirTerluput = wa && isKetuaMaahir ? await getUnfilledMaahirDays(wa) : [];
 
     // Presensi mandiri (kelas self_attendance, mis. Maahir Takhassus Ikhwan):
     // peserta isi sendiri lewat akunnya.
@@ -77,6 +78,14 @@ export default async function HomePage({ searchParams }: { searchParams: { next?
 
     // "Perlu diselesaikan" — tugas yang menunggu, ditampilkan di atas menu.
     const tugas: Tugas[] = [];
+    if (maahirTerluput.length > 0) {
+      tugas.push({
+        href: '/2in1/ketua-kelas/presensi',
+        warna: 'merah',
+        title: `Isi ${maahirTerluput.length} presensi kelas Maahir`,
+        sub: `${ringkasNama(maahirTerluput.map((d) => d.kelasName))} · mulai yang paling lama`,
+      });
+    }
     const pengajar = accesses.find((a): a is PengajarSession => a.role === 'pengajar');
     if (pengajar) {
       const antrian = await getAntrianCheckin(pengajar.pengajar_id);
