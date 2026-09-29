@@ -67,6 +67,13 @@ export async function runEntity(def: EntityDef, parsed: Extract<ParseResult, { o
     else if (f.kind === 'is_null') { if (f.value === true) q = q.is(f.column, null); else q = q.not(f.column, 'is', null); }
   }
   q = q.order(def.order.column, { ascending: parsed.urut === 'asc' });
+  // Pemutus seri WAJIB: paginasi memakai OFFSET, dan kolom urut default sering
+  // tidak unik (`evaluasi/sesi.tgl_jadwal` null di semua baris, `urutan` hampir
+  // selalu 0). Tanpa kunci unik, urutan baris yang seri tidak dijamin sama antar
+  // halaman — konsumen melihat baris terlewat & terulang padahal tiap halaman 200
+  // (dashboard 30 Sep 2026: 10.302 dari 13.805 evaluasi/nilai, 1.558 dari 1.896 sesi).
+  const kunci = def.columns.includes('id') ? 'id' : def.columns[0];
+  if (kunci !== def.order.column) q = q.order(kunci, { ascending: true });
   const from = (parsed.page - 1) * parsed.limit;
   q = q.range(from, from + parsed.limit - 1);
   const { data, count } = await q;
