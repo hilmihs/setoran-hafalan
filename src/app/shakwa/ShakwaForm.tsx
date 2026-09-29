@@ -6,14 +6,21 @@ import {
   KATEGORI,
   KATEGORI_LUPA_PASSWORD,
   LUPA_PASSWORD_PATH,
-  HALAQAH_OPTIONS,
   IZIN_JENIS,
   MAX_LAMPIRAN,
   kategoriDef,
   type ShakwaIzinJenis,
 } from '@/lib/shakwa';
 
+import type { ProgramOpsi } from '@/lib/shakwa-program';
+
 export type HalaqahPengajar = { id: string; name: string };
+
+// Nilai tetap — sama dengan konstanta di src/lib/shakwa-program.ts (modul itu
+// server-only, jadi tak diimpor nilainya di sini).
+const PROGRAM_LAINNYA = 'lainnya';
+const HALAQAH_UMUM = 'umum';
+const PROGRAM_LAIN_SAJA = '__lain';
 
 type RincianRow = {
   tanggal: string;
@@ -37,12 +44,32 @@ export function ShakwaForm({
   prefillGender,
   isPengajar,
   halaqahPengajar,
+  semuaProgram,
+  programSaya,
 }: {
   prefillNama: string;
   prefillGender: string;
   isPengajar: boolean;
   halaqahPengajar: HalaqahPengajar[];
+  /** Semua program aktif + halaqahnya (dari data, bukan daftar tetap). */
+  semuaProgram: ProgramOpsi[];
+  /** Program & halaqah yang diajar pengguna ini — kosong bila bukan pengajar. */
+  programSaya: ProgramOpsi[];
 }) {
+  const [gender, setGender] = useState(prefillGender);
+  // Pengajar melihat program yang ia ajar dulu; "Program lain…" membuka daftar lengkap.
+  const [pakaiDaftarLengkap, setPakaiDaftarLengkap] = useState(programSaya.length === 0);
+  const daftarProgram = pakaiDaftarLengkap ? semuaProgram : programSaya;
+  const [programId, setProgramId] = useState(
+    !pakaiDaftarLengkap && programSaya.length === 1 ? programSaya[0].id : ''
+  );
+  const [halaqahId, setHalaqahId] = useState('');
+  const program = daftarProgram.find((p) => p.id === programId) ?? null;
+  // Daftar lengkap disaring gender pelapor; halaqah milik pengajar ditampilkan semua.
+  const opsiHalaqah = (program?.halaqah ?? []).filter(
+    (h) => !pakaiDaftarLengkap || !gender || !h.gender || h.gender === gender
+  );
+
   const [kategori, setKategori] = useState('');
   const [rincian, setRincian] = useState<RincianRow[]>([{ ...barisKosong }]);
   const [hasil, setHasil] = useState<KirimShakwaResult | null>(null);
@@ -137,7 +164,11 @@ export function ShakwaForm({
           id="shakwa-gender"
           name="gender"
           required
-          defaultValue={prefillGender}
+          value={gender}
+          onChange={(e) => {
+            setGender(e.target.value);
+            setHalaqahId('');
+          }}
           className="input"
           style={{ width: '100%' }}
         >
@@ -217,17 +248,71 @@ export function ShakwaForm({
 
       {!lupaPassword && (
         <div style={{ marginBottom: 18 }}>
-          <label style={labelStyle} htmlFor="shakwa-halaqah">
-            Halaqoh <span style={{ color: 'var(--merah-ink)' }}>*</span>
+          <label style={labelStyle} htmlFor="shakwa-program">
+            Program <span style={{ color: 'var(--merah-ink)' }}>*</span>
           </label>
-          <select id="shakwa-halaqah" name="halaqah_label" required className="input" style={{ width: '100%' }}>
-            <option value="">— pilih —</option>
-            {HALAQAH_OPTIONS.map((h) => (
-              <option key={h} value={h}>
-                {h}
+          <select
+            id="shakwa-program"
+            name="program_id"
+            required
+            value={programId}
+            onChange={(e) => {
+              const v = e.target.value;
+              setHalaqahId('');
+              if (v === PROGRAM_LAIN_SAJA) {
+                setPakaiDaftarLengkap(true);
+                setProgramId('');
+                return;
+              }
+              setProgramId(v);
+            }}
+            className="input"
+            style={{ width: '100%' }}
+          >
+            <option value="">— pilih program —</option>
+            {daftarProgram.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.nama}
               </option>
             ))}
+            {!pakaiDaftarLengkap ? (
+              <option value={PROGRAM_LAIN_SAJA}>Program lain…</option>
+            ) : (
+              <option value={PROGRAM_LAINNYA}>Lainnya / tidak terkait program</option>
+            )}
           </select>
+          {!pakaiDaftarLengkap && (
+            <p className="t-small" style={{ marginTop: 6 }}>
+              Menampilkan program yang Anda ajar.
+            </p>
+          )}
+
+          {programId && programId !== PROGRAM_LAINNYA && (
+            <div style={{ marginTop: 12 }}>
+              <label style={labelStyle} htmlFor="shakwa-halaqah">
+                Halaqah <span style={{ color: 'var(--merah-ink)' }}>*</span>
+              </label>
+              <select
+                id="shakwa-halaqah"
+                name="halaqah_id"
+                required
+                value={halaqahId}
+                onChange={(e) => setHalaqahId(e.target.value)}
+                className="input"
+                style={{ width: '100%' }}
+              >
+                <option value="">
+                  {pakaiDaftarLengkap && !gender ? '— pilih gender dulu —' : '— pilih halaqah —'}
+                </option>
+                {opsiHalaqah.map((h) => (
+                  <option key={h.id} value={h.id}>
+                    {h.nama}
+                  </option>
+                ))}
+                <option value={HALAQAH_UMUM}>Tidak terkait halaqah tertentu</option>
+              </select>
+            </div>
+          )}
         </div>
       )}
 

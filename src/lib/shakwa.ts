@@ -193,20 +193,6 @@ export const STATUS_LABEL: Record<ShakwaStatus, string> = {
   closed: 'Ditutup',
 };
 
-/**
- * Daftar tetap — sengaja bukan dari hits_batch: sebagian program di formulir
- * (Tahsin/Tahfidz Nurim, Tahsin Alfatihah) memang tak punya baris batch HITS.
- */
-export const HALAQAH_OPTIONS = [
-  'HITS JANUARI',
-  'HITS APRIL',
-  'HITS JUNI',
-  'HITS INTENSIF',
-  'HITS SAFAR',
-  'TAHSIN NURIM',
-  'TAHFIDZ NURIM',
-  'TAHSIN ALFATIHAH',
-] as const;
 
 export type ShakwaIzinJenis = 'KMT' | 'KBLA' | 'JKG' | 'TIDAK_HADIR';
 

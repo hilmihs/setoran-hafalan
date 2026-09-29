@@ -5,7 +5,6 @@ import {
   KATEGORI,
   KATEGORI_BY_VALUE,
   TUJUAN_WA,
-  HALAQAH_OPTIONS,
   STATUS_LABEL,
   STATUS_PILIHAN,
   nomorTiket,
@@ -72,8 +71,6 @@ eq(
   'kategori yang berbagi tujuan koordinator peserta'
 );
 
-eq(HALAQAH_OPTIONS.length, 8, 'ada 8 pilihan halaqoh');
-eq(HALAQAH_OPTIONS[0], 'HITS JANUARI', 'halaqoh pertama');
 
 // --- Status: kosakata kolom vs label tampilan ---
 eq(STATUS_PILIHAN, ['submitted', 'in_review', 'resolved'], "'closed' tak ditawarkan ke koordinator");

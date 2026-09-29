@@ -3,6 +3,7 @@ import { getAllAccesses } from '@/lib/session';
 import { supabaseAdmin } from '@/lib/supabase-admin';
 import { PANDUAN_KATEGORI } from '@/lib/shakwa';
 import { ShakwaForm, type HalaqahPengajar } from './ShakwaForm';
+import { daftarProgramShakwa, programPengajarShakwa } from '@/lib/shakwa-program';
 import type { PengajarSession } from '@/types/db';
 
 export const dynamic = 'force-dynamic';
@@ -26,6 +27,13 @@ export default async function ShakwaPage() {
       .order('name');
     halaqahPengajar = (data ?? []).map((h) => ({ id: h.id as string, name: h.name as string }));
   }
+
+  // Pilihan program/halaqah dari data nyata. Pengajar melihat program yang ia
+  // ajar lebih dulu; daftar lengkap tetap dikirim untuk opsi "Program lain…".
+  const [semuaProgram, programSaya] = await Promise.all([
+    daftarProgramShakwa(),
+    pengajar ? programPengajarShakwa(pengajar.pengajar_id) : Promise.resolve([]),
+  ]);
 
   return (
     <main style={{ minHeight: '100vh' }}>
@@ -69,6 +77,8 @@ export default async function ShakwaPage() {
             prefillGender={pengajar?.gender ?? accesses[0]?.gender ?? ''}
             isPengajar={!!pengajar}
             halaqahPengajar={halaqahPengajar}
+            semuaProgram={semuaProgram}
+            programSaya={programSaya}
           />
 
           <p className="t-tiny" style={{ color: 'var(--muted-2)', textAlign: 'center', marginTop: 20 }}>
