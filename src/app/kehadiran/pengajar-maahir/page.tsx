@@ -155,6 +155,18 @@ export default async function PengajarMaahirPage() {
             <span style={{ color: 'var(--muted-2)' }}>→</span>
           </Link>
 
+          <Link
+            href="/kehadiran/pertemuan"
+            className="card-flat"
+            style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 14px', marginTop: 8, textDecoration: 'none', color: 'inherit', borderRadius: 10 }}
+          >
+            <div>
+              <div style={{ fontSize: 13, fontWeight: 600 }}>Rekap pertemuan semua program</div>
+              <div className="t-tiny" style={{ color: 'var(--muted-2)' }}>Jumlah pertemuan per halaqah, termasuk Dashboard Edu</div>
+            </div>
+            <span style={{ color: 'var(--muted-2)' }}>→</span>
+          </Link>
+
           <p className="t-tiny" style={{ color: 'var(--muted-2)', marginTop: 16 }}>
             Jam check-in dicatat apa adanya saat tombol ditekan. Materi boleh diisi setelah kelas
             selesai. Pengisian dan penyuntingan hanya untuk periode berjalan (16 s/d 15); sesudah

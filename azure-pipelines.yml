@@ -84,15 +84,16 @@ steps:
       failOnStdErr: false
       inline: |
         # Timer harian menembak endpoint pull ber-CRON_SECRET. Idempotent.
-        # CRON_SECRET dibaca dari maahir.env yang sudah terpasang (nilai tak dicetak).
-        SECRET=$(grep '^ENV_CRON_SECRET=' /var/www/html/maahir/maahir.env | cut -d= -f2- | tr -d '"')
+        # Secret TIDAK ditulis ke berkas unit (/etc/systemd/system bisa dibaca semua
+        # user): systemd membacanya sendiri dari maahir.env lewat EnvironmentFile.
         URL="https://maahir.muhajirproject.org/api/evaluasi/sync/pull"
         sudo tee /etc/systemd/system/next-maahir-sync.service >/dev/null <<EOF
         [Unit]
         Description=Pull master data hilmihs -> mirror evaluasi maahir
         [Service]
         Type=oneshot
-        ExecStart=/usr/bin/curl -fsS -X POST -H "Authorization: Bearer ${SECRET}" ${URL}
+        EnvironmentFile=/var/www/html/maahir/maahir.env
+        ExecStart=/usr/bin/curl -fsS -X POST -H "Authorization: Bearer \${ENV_CRON_SECRET}" ${URL}
         EOF
         sudo tee /etc/systemd/system/next-maahir-sync.timer >/dev/null <<EOF
         [Unit]
@@ -106,6 +107,41 @@ steps:
         sudo systemctl daemon-reload
         sudo systemctl enable --now next-maahir-sync.timer
         echo "✅ timer aktif:"; sudo systemctl list-timers next-maahir-sync.timer --no-pager || true
+  - task: Ssh@0
+    displayName: "⏱️ Pasang systemd timer rekap pertemuan (4x sehari)"
+    inputs:
+      sshEndpoint: "server-staging@103.181.142.223"
+      runOptions: "inline"
+      failOnStdErr: false
+      inline: |
+        # Timer 4x sehari menembak sinkron snapshot rekap pertemuan pengajar
+        # (Dashboard Edu → berkas cache). Idempotent: berkas unit ditimpa utuh.
+        # Secret TIDAK ditulis ke berkas unit (/etc/systemd/system bisa dibaca semua
+        # user): systemd membacanya sendiri dari maahir.env lewat EnvironmentFile.
+        URL="https://maahir.muhajirproject.org/api/kehadiran/pertemuan/sync"
+        sudo tee /etc/systemd/system/next-maahir-pertemuan.service >/dev/null <<EOF
+        [Unit]
+        Description=Sinkron rekap pertemuan pengajar (Dashboard Edu) -> cache maahir
+        [Service]
+        Type=oneshot
+        EnvironmentFile=/var/www/html/maahir/maahir.env
+        ExecStart=/usr/bin/curl -fsS --max-time 180 -X POST -H "Authorization: Bearer \${ENV_CRON_SECRET}" ${URL}
+        EOF
+        sudo tee /etc/systemd/system/next-maahir-pertemuan.timer >/dev/null <<EOF
+        [Unit]
+        Description=Sinkron rekap pertemuan 05.30, 11.30, 16.30, 21.30 WIB
+        [Timer]
+        OnCalendar=*-*-* 22:30:00 UTC
+        OnCalendar=*-*-* 04:30:00 UTC
+        OnCalendar=*-*-* 09:30:00 UTC
+        OnCalendar=*-*-* 14:30:00 UTC
+        Persistent=true
+        [Install]
+        WantedBy=timers.target
+        EOF
+        sudo systemctl daemon-reload
+        sudo systemctl enable --now next-maahir-pertemuan.timer
+        echo "✅ timer aktif:"; sudo systemctl list-timers next-maahir-pertemuan.timer --no-pager || true
   - task: Ssh@0
     displayName: "🔧 Ensure nginx upload limit (audio rekaman ~14MB)"
     inputs:

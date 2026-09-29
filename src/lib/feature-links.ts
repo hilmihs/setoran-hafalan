@@ -93,6 +93,27 @@ export const FEATURE_LINKS: FeatureLink[] = [
     ikon: 'kalender',
     match: (a) => a.role === 'pengajar',
   },
+  // Rekap Pertemuan: dua pintu ke URL yang sama — pengajar (role) dan pengajar
+  // kelas Maahir tanpa role pengajar (lewat WA). featureLinksFor membuang duplikat href.
+  {
+    href: '/kehadiran/pertemuan',
+    title: 'Rekap Pertemuan',
+    description: 'Jumlah pertemuan tiap program & halaqah yang Anda ajar, periode 16–15',
+    group: 'mengajar',
+    short: 'Pertemuan per halaqah, periode 16–15',
+    ikon: 'grafik',
+    match: (a) => a.role === 'pengajar',
+  },
+  {
+    href: '/kehadiran/pertemuan',
+    title: 'Rekap Pertemuan',
+    description: 'Jumlah pertemuan tiap program & halaqah yang Anda ajar, periode 16–15',
+    group: 'mengajar',
+    short: 'Pertemuan per halaqah, periode 16–15',
+    ikon: 'grafik',
+    match: () => true,
+    requires: 'pengajarMaahir',
+  },
   {
     href: '/kehadiran/pengajar-maahir',
     title: 'Check-in Kelas Maahir',

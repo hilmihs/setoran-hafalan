@@ -74,6 +74,7 @@ export default async function KehadiranPengajarPage() {
 
   const terkait: { href: string; title: string }[] = [
     { href: '/kehadiran/pengajar/matrix', title: 'Matrix Saya' },
+    { href: '/kehadiran/pertemuan', title: 'Rekap Pertemuan' },
     ...(session.is_ketua
       ? [{ href: '/kehadiran/ketua-kelompok/penilaian', title: 'Penilaian Pedagogis Kelompok' }]
       : []),

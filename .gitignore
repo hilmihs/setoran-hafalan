@@ -49,3 +49,7 @@ docs/dump-*.sql
 # Data export (PII: WA, password_hash) — never commit
 maahir-export/
 *.export.json
+
+# Penyimpanan lokal dev (STORAGE_DIR default): audio rekaman + cache snapshot
+# rekap-pertemuan. Bukan kode.
+/storage/

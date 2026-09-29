@@ -1404,3 +1404,6 @@ body:has([data-punya-beranda]) .home-fab { display: none; }
   .kop-fitur .btn { white-space: nowrap; }
   .kop-fitur > .no-print { flex-wrap: wrap; }
 }
+/* Tombol ghost di mana pun di dalam header forest (mis. navigasi periode ‹ ›). */
+.fitur-header .btn-ghost { background: transparent; border-color: var(--forest-line); color: var(--forest-ink); }
+.fitur-header .btn-ghost:hover:not(:disabled) { background: rgba(247,244,236,0.08); }
