@@ -22,7 +22,8 @@ import {
   tplMusyrifSubmitToSyaikh,
 } from '@/lib/whatsapp';
 import { absUrl } from '@/lib/url';
-import type { JenisRekaman, NilaiRekaman, Gender } from '@/types/db';
+import { signedAudioUrl } from '@/lib/storage';
+import { JENIS_REKAMAN, type JenisRekaman, type NilaiRekaman, type Gender } from '@/types/db';
 
 export const dynamic = 'force-dynamic';
 
@@ -31,6 +32,7 @@ export default async function MusyrifSetorPage() {
   if (!s.session || s.session.role !== 'musyrif') redirect('/2in1/musyrif/login');
   const musyrifId = s.session.musyrif_id;
   const musyrifGender = s.session.gender;
+  const musyrifName = s.session.name;
 
   // Resolve syaikh untuk gender ini
   const { data: syaikhRaw } = await supabaseAdmin
@@ -48,20 +50,47 @@ export default async function MusyrifSetorPage() {
 
   const cycle = currentCycleStart();
 
-  const { data: setoran } = await supabaseAdmin
+  // Semua setoran sejak anchor (termasuk cycle berjalan) + rekamannya, sekali baca.
+  const allCycles = allCyclesSinceAnchor();
+  const { data: allSetoran } = await supabaseAdmin
     .from('setoran_musyrif')
-    .select('id, status')
+    .select('id, week_start, status')
     .eq('musyrif_id', musyrifId)
-    .eq('week_start', cycle)
-    .maybeSingle();
+    .gte('week_start', CYCLE_ANCHOR);
+  const setoranIds = (allSetoran ?? []).map((r) => r.id as string);
+  const { data: allRekaman } = setoranIds.length
+    ? await supabaseAdmin
+        .from('rekaman_musyrif')
+        .select('setoran_musyrif_id, jenis, nilai, masukan, audio_url, duration_seconds, recorded_at')
+        .in('setoran_musyrif_id', setoranIds)
+    : { data: [] };
+
+  type RekRow = {
+    setoran_musyrif_id: string;
+    jenis: JenisRekaman;
+    nilai: NilaiRekaman | null;
+    masukan: string | null;
+    audio_url: string | null;
+    duration_seconds: number | null;
+    recorded_at: string | null;
+  };
+  const rekamanBySetoran = new Map<string, RekRow[]>();
+  for (const r of (allRekaman ?? []) as RekRow[]) {
+    const arr = rekamanBySetoran.get(r.setoran_musyrif_id) ?? [];
+    arr.push(r);
+    rekamanBySetoran.set(r.setoran_musyrif_id, arr);
+  }
+  const setoranByCycle = new Map(
+    (allSetoran ?? []).map((r) => [r.week_start as string, r as { id: string; week_start: string; status: string }])
+  );
+
+  // --- Cycle berjalan ---
+  const setoran = setoranByCycle.get(cycle) ?? null;
+  const curReks = setoran ? rekamanBySetoran.get(setoran.id) ?? [] : [];
+  const currentSubmittedJenis: JenisRekaman[] = curReks.filter((r) => r.audio_url).map((r) => r.jenis);
 
   let existing: ExistingSetoran | null = null;
   if (setoran && (setoran.status === 'submitted' || setoran.status === 'checked')) {
-    const { data: rekaman } = await supabaseAdmin
-      .from('rekaman_musyrif')
-      .select('jenis, nilai, masukan')
-      .eq('setoran_musyrif_id', setoran.id);
-
     let syaikhWaUrl: string | null = null;
     if (setoran.status === 'submitted' && syaikh) {
       const cekUrl = absUrl(`/2in1/syaikh/cek/${setoran.id}`);
@@ -78,43 +107,53 @@ export default async function MusyrifSetorPage() {
       id: setoran.id,
       status: setoran.status,
       musyrifWaUrl: syaikhWaUrl,
-      rekaman: (rekaman ?? []).map((r) => ({
-        jenis: r.jenis as JenisRekaman,
-        nilai: (r.nilai as NilaiRekaman | null) ?? null,
+      rekaman: curReks.map((r) => ({
+        jenis: r.jenis,
+        nilai: r.nilai ?? null,
         masukan: r.masukan ?? null,
       })),
     };
   }
 
-  // --- Backfill periode terlewat (sejak anchor): setoran_musyrif belum dicek & <3 rekaman audio ---
-  const allCycles = allCyclesSinceAnchor();
-  const { data: allSetoran } = await supabaseAdmin
-    .from('setoran_musyrif')
-    .select('id, week_start, status')
-    .eq('musyrif_id', musyrifId)
-    .gte('week_start', CYCLE_ANCHOR);
-  const setoranIds = (allSetoran ?? []).map((r) => r.id);
-  const { data: allRekaman } = setoranIds.length
-    ? await supabaseAdmin
-        .from('rekaman_musyrif')
-        .select('setoran_musyrif_id, jenis, audio_url')
-        .in('setoran_musyrif_id', setoranIds)
-    : { data: [] };
-  const setoranById = new Map((allSetoran ?? []).map((r) => [r.id, r]));
-  const submittedByCycle = new Map<string, JenisRekaman[]>();
-  for (const r of allRekaman ?? []) {
+  // Pulihkan rekaman cycle berjalan dari server (anti-hilang saat refresh /
+  // ganti HP). `recordedAt` ikut dikirim supaya form bisa membandingkannya
+  // dengan draf di perangkat (draf lebih baru = rekam ulang yang gagal terkirim).
+  const restoredCurrent: Partial<
+    Record<JenisRekaman, { audioUrl: string; durationSec: number; recordedAt: string | null }>
+  > = {};
+  for (const r of curReks) {
     if (!r.audio_url) continue;
-    const st = setoranById.get(r.setoran_musyrif_id);
-    if (!st) continue;
-    const arr = submittedByCycle.get(st.week_start) ?? [];
-    arr.push(r.jenis as JenisRekaman);
-    submittedByCycle.set(st.week_start, arr);
+    try {
+      restoredCurrent[r.jenis] = {
+        audioUrl: await signedAudioUrl(r.audio_url, 86400),
+        durationSec: r.duration_seconds ?? 0,
+        recordedAt: r.recorded_at ?? null,
+      };
+    } catch {
+      // storage error — audio tidak bisa dipulihkan, musyrif bisa rekam ulang
+    }
   }
-  const statusByCycle = new Map((allSetoran ?? []).map((r) => [r.week_start, r.status]));
+
+  // Setoran yang sudah dinilai tapi masih kurang rekaman → sisanya boleh
+  // disusulkan; setoran dibuka ulang dan diperiksa lagi oleh syaikh.
+  const dicekBelumLengkap =
+    setoran?.status === 'checked' && currentSubmittedJenis.length < JENIS_REKAMAN.length;
+
+  // --- Backfill periode terlewat (sejak anchor): setoran_musyrif belum dicek & <3 rekaman audio ---
   const backfillCycles = allCycles
     .filter((c) => c !== cycle) // cycle berjalan ditangani form utama
-    .filter((c) => statusByCycle.get(c) !== 'checked' && (submittedByCycle.get(c)?.length ?? 0) < 3)
-    .map((c) => ({ cycleStart: c, label: formatCycleRange(c), submittedJenis: submittedByCycle.get(c) ?? [] }));
+    .map((c) => {
+      const st = setoranByCycle.get(c);
+      const reks = st ? rekamanBySetoran.get(st.id) ?? [] : [];
+      return {
+        cycleStart: c,
+        label: formatCycleRange(c),
+        status: st?.status,
+        submittedJenis: reks.filter((r) => r.audio_url).map((r) => r.jenis),
+      };
+    })
+    .filter((bc) => bc.status !== 'checked' && bc.submittedJenis.length < JENIS_REKAMAN.length)
+    .map(({ status: _status, ...bc }) => bc);
 
   const sapaan = salutation(musyrifGender);
   const titel = syaikh ? syaikhTitle(syaikh.gender) : musyrifGender === 'ikhwan' ? 'Syaikh' : 'Ustadzah';
@@ -157,14 +196,31 @@ export default async function MusyrifSetorPage() {
             {syaikh ? <>disampaikan ke {titel} {syaikh.name}</> : 'belum ada Syaikh/Ustadzah aktif'}
           </p>
 
+          {syaikh && dicekBelumLengkap && (
+            <p className="t-small" style={{ marginBottom: 12, color: 'var(--kuning-ink)' }}>
+              {titel} {syaikh.name} sudah menilai rekaman yang ada. Rekaman yang belum
+              disetor masih bisa dikirim sampai periode ini berakhir — setelah dikirim,
+              setoran kembali menunggu pemeriksaan {titel.toLowerCase()}, dan nilai yang
+              sudah diberikan tetap tersimpan.
+            </p>
+          )}
+
           {syaikh ? (
             <PesertaSetoranForm
               musyrifName={`${titel} ${syaikh.name}`}
               musyrifInitials={initialsOf(syaikh.name)}
               existing={existing}
-              endpoint="/api/setoran-musyrif/submit"
+              endpoint="/api/2in1/setoran-musyrif/submit"
+              singleSubmitEndpoint="/api/2in1/setoran-musyrif/submit-single"
               targetRoleLabel={`${titel} Anda`}
               cacheKey={`m-${cycle}`}
+              // Kunci periode yang dirender halaman ini: upload yang baru selesai
+              // lewat 00:00 di batas periode tetap masuk periode ini, bukan berikutnya.
+              periodWeekStart={cycle}
+              submittedJenis={currentSubmittedJenis}
+              restored={restoredCurrent}
+              pesertaName={musyrifName}
+              pesertaId={musyrifId}
             />
           ) : (
             <p className="t-body">
@@ -178,8 +234,8 @@ export default async function MusyrifSetorPage() {
                 Setor periode terlewat
               </h2>
               <p className="t-small" style={{ marginBottom: 14 }}>
-                Periode lalu yang belum lengkap. Rekam ke-3 jenis lalu kirim untuk
-                periode tersebut.
+                Periode lalu yang belum lengkap. Rekaman bisa dikirim satu per satu
+                untuk periode tersebut.
               </p>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                 {backfillCycles.map((bc) => (
@@ -202,11 +258,14 @@ export default async function MusyrifSetorPage() {
                         musyrifName={`${titel} ${syaikh.name}`}
                         musyrifInitials={initialsOf(syaikh.name)}
                         existing={null}
-                        endpoint="/api/setoran-musyrif/submit"
+                        endpoint="/api/2in1/setoran-musyrif/submit"
+                        singleSubmitEndpoint="/api/2in1/setoran-musyrif/submit-single"
                         targetRoleLabel={`${titel} Anda`}
                         cacheKey={`m-${bc.cycleStart}`}
                         periodWeekStart={bc.cycleStart}
                         submittedJenis={bc.submittedJenis}
+                        pesertaName={musyrifName}
+                        pesertaId={musyrifId}
                       />
                     </div>
                   </details>

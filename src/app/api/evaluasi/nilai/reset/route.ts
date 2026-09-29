@@ -13,6 +13,11 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 // Reset (hapus) nilai satu sesi — seluruh peserta, atau satu peserta bila
 // peserta_id diberikan. Beraudit.
 //
+// Layar pengajar kini memakai reset PER PESERTA sebagai bawaan; reset seluruh
+// sesi hanya lewat konfirmasi kedua yang menyebut jumlah peserta. Dulu tombol
+// Reset di daftar peserta mengirim sesi_id saja dan menghapus nilai SEMUA
+// peserta — dipakai untuk membetulkan satu orang, menghapus sekelas.
+//
 // Sesi 'terkirim' dulu ditolak mentah ("tak bisa direset"), sehingga pengajar
 // harus membuka kunci dari kartu riwayat lebih dulu — dua layar berbeda untuk
 // satu maksud, dan tombol Reset di layar daftar cuma memunculkan galat. Kini
@@ -62,6 +67,19 @@ export async function POST(req: NextRequest) {
     // penting — status dikembalikan ke 'draft' SEBELUM nilai dihapus supaya tak
     // ada jendela di mana sesi berstatus terkirim tapi isinya sudah kosong.
     const terkirim = sesi.status === 'terkirim';
+    // Reset satu peserta TIDAK ikut membuka sesi terkirim: membuka mengubah
+    // status seluruh sesi (keluar dari data koordinator) — akibat yang terlalu
+    // besar untuk ketukan "kosongkan satu orang". Buka kuncinya dulu, terang-terangan.
+    if (terkirim && typeof peserta_id === 'string') {
+      return NextResponse.json(
+        {
+          error:
+            'Sesi ini sudah dikirim ke koordinator. Buka kunci sesi dulu, baru nilai satu peserta bisa dikosongkan.',
+          terkirim: true,
+        },
+        { status: 409 }
+      );
+    }
     if (terkirim) {
       const penghalang = await rapotAktifPenghalangBuka(
         sesi.halaqah_id as string,

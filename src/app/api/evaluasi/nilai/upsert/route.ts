@@ -3,10 +3,28 @@ import { supabaseAdmin } from '@/lib/supabase-admin';
 import { getSession } from '@/lib/session';
 import { evalPengajarIdFor } from '@/lib/evaluasi-pengajar';
 import { scoreOf, countsToColumns, type LahnCounts } from '@/lib/evaluasi';
+import { simpanNilaiBerversi } from '@/lib/evaluasi-nilai-simpan';
 
 export const runtime = 'nodejs';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+// Pesan untuk sesi yang sudah dikirim. Dulu cuma "Sesi sudah dikirim" dan
+// layar pengajar tak menampilkannya sama sekali — suntingan tampak tersimpan
+// lalu "hilang" saat halaman dimuat ulang.
+const PESAN_TERKIRIM =
+  'Sesi ini sudah dikirim ke koordinator — nilainya tidak bisa diubah lagi. ' +
+  'Buka kunci sesi dulu (tombol "Buka kunci") bila memang perlu diperbaiki.';
+
+/** Jumlah lahn wajar untuk kolom smallint; buang NaN/negatif/pecahan. */
+function rapikanCounts(counts: LahnCounts): LahnCounts {
+  const out: LahnCounts = {};
+  for (const [k, v] of Object.entries(counts)) {
+    const n = Math.floor(Number(v));
+    out[k] = Number.isFinite(n) ? Math.min(Math.max(0, n), 999) : 0;
+  }
+  return out;
+}
 
 export async function POST(req: NextRequest) {
   try {
@@ -19,8 +37,8 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const body = await req.json();
-    const { sesi_id, peserta_id, hadir, ayat_terakhir, counts, catatan, confirmed, done } =
+    const body = (await req.json()) as Record<string, unknown>;
+    const { sesi_id, peserta_id, hadir, ayat_terakhir, counts: countsMentah, catatan, confirmed, done } =
       body as {
         sesi_id: string;
         peserta_id: string;
@@ -31,6 +49,19 @@ export async function POST(req: NextRequest) {
         confirmed?: boolean;
         done?: boolean;
       };
+    // Penjaga versi (opsional, supaya tab lama yang belum dimuat ulang tetap
+    // jalan): bila klien menyertakan `expected_updated_at` — string versi yang
+    // ia kenal, atau null = "baris belum ada" — penulisan hanya terjadi bila
+    // server masih di versi itu. Tanpa kolom ini: perilaku lama (timpa).
+    const pakaiVersi = Object.prototype.hasOwnProperty.call(body, 'expected_updated_at');
+    const expected = body.expected_updated_at;
+    if (
+      pakaiVersi &&
+      expected !== null &&
+      (typeof expected !== 'string' || Number.isNaN(Date.parse(expected)))
+    ) {
+      return NextResponse.json({ error: 'expected_updated_at tidak valid' }, { status: 400 });
+    }
 
     if (typeof sesi_id !== 'string' || !UUID_RE.test(sesi_id)) {
       return NextResponse.json({ error: 'sesi_id tidak valid' }, { status: 400 });
@@ -38,9 +69,10 @@ export async function POST(req: NextRequest) {
     if (typeof peserta_id !== 'string' || !peserta_id) {
       return NextResponse.json({ error: 'peserta_id wajib diisi' }, { status: 400 });
     }
-    if (!counts || typeof counts !== 'object' || Array.isArray(counts)) {
+    if (!countsMentah || typeof countsMentah !== 'object' || Array.isArray(countsMentah)) {
       return NextResponse.json({ error: 'counts harus objek' }, { status: 400 });
     }
+    const counts = rapikanCounts(countsMentah);
 
     const { data: sesi } = await supabaseAdmin
       .from('evaluasi_sesi')
@@ -51,7 +83,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Sesi tidak ditemukan' }, { status: 404 });
     }
     if (sesi.status === 'terkirim') {
-      return NextResponse.json({ error: 'Sesi sudah dikirim' }, { status: 409 });
+      return NextResponse.json({ error: PESAN_TERKIRIM, terkirim: true }, { status: 409 });
     }
 
     const { data: halaqah } = await supabaseAdmin
@@ -70,6 +102,37 @@ export async function POST(req: NextRequest) {
     // Skor selalu dihitung di server dari counts — jangan percaya skor dari klien.
     const skor = scoreOf(counts).skor;
     const cols = countsToColumns(counts);
+
+    if (pakaiVersi) {
+      const hasil = await simpanNilaiBerversi(
+        {
+          sesi_id,
+          peserta_id,
+          hadir: hadir ?? true,
+          ayat_terakhir: ayat_terakhir ?? null,
+          cols,
+          skor,
+          catatan: catatan ?? null,
+          confirmed: !!confirmed,
+          done: !!done,
+        },
+        (expected as string | null) ?? null
+      );
+      if (hasil.ok) {
+        return NextResponse.json({ ok: true, skor, updated_at: hasil.updated_at });
+      }
+      if (hasil.alasan === 'terkirim') {
+        return NextResponse.json({ error: PESAN_TERKIRIM, terkirim: true }, { status: 409 });
+      }
+      return NextResponse.json(
+        {
+          error: 'Nilai peserta ini sudah diubah di perangkat lain.',
+          conflict: true,
+          current: hasil.current,
+        },
+        { status: 409 }
+      );
+    }
 
     const { error } = await supabaseAdmin.from('evaluasi_nilai').upsert(
       {

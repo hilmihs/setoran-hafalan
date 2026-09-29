@@ -18,6 +18,11 @@ interface SetupProps {
   deletedOptions?: number[];
   /** Ujian only: hapus/pulihkan sesi. */
   onToggleSesi?: (n: number, dihapus: boolean) => void;
+  /** Nomor sesi yang sudah dikirim ke koordinator (ditandai "terkirim", hanya-baca). */
+  sesiTerkirim?: number[];
+  /** Sesi yang sedang dipilih sudah terkirim. */
+  terkunci?: boolean;
+  lanjutLabel?: string;
   back: () => void;
   lanjut: () => void;
 }
@@ -45,13 +50,22 @@ export function Setup(props: SetupProps) {
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 8 }}>
             {props.sesiOptions.map((n) => {
               const on = n === props.activeSession;
+              // Sesi terkirim ditandai: dulu semua nomor tampak sama, pengajar
+              // membuka sesi yang sudah dikirim, menyunting, dan server diam-diam
+              // menolak setiap simpanan.
+              const sent = !!props.sesiTerkirim?.includes(n);
               return (
                 <div key={n} style={{ position: 'relative' }}>
                   <button
                     onClick={() => props.pickSession(n)}
-                    style={{ width: '100%', height: 44, borderRadius: 8, border: `1.5px solid ${on ? 'var(--ink)' : '#ffffff'}`, background: on ? 'var(--ink)' : '#ffffff', color: on ? '#ffffff' : 'var(--ink-2)', font: 'inherit', fontSize: 14, fontWeight: 700, cursor: 'pointer' }}
+                    style={{ width: '100%', minHeight: 44, padding: '4px 2px', borderRadius: 8, border: `1.5px solid ${on ? 'var(--ink)' : sent ? 'oklch(0.85 0.06 150)' : '#ffffff'}`, background: on ? 'var(--ink)' : sent ? 'oklch(0.96 0.035 150)' : '#ffffff', color: on ? '#ffffff' : 'var(--ink-2)', font: 'inherit', fontSize: 14, fontWeight: 700, cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', lineHeight: 1.15 }}
                   >
-                    {props.sesiOptionLabels?.[n - 1] ?? `Sesi ${n}`}
+                    <span>{props.sesiOptionLabels?.[n - 1] ?? `Sesi ${n}`}</span>
+                    {sent && (
+                      <span style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: '0.02em', color: on ? '#ffffff' : 'oklch(0.40 0.10 150)', opacity: on ? 0.85 : 1 }}>
+                        ✓ terkirim
+                      </span>
+                    )}
                   </button>
                   {/* Tombol hapus sesi ujian dibuang (0062): Ujian QN & Ujian PB
                       dua-duanya wajib — masing-masing menyumbang 70% nilai akhir
@@ -73,6 +87,12 @@ export function Setup(props: SetupProps) {
                   ↩ Pulihkan {props.sesiOptionLabels?.[n - 1] ?? `Sesi ${n}`}
                 </button>
               ))}
+            </div>
+          )}
+          {props.terkunci && (
+            <div style={{ marginTop: 10, fontSize: 11.5, lineHeight: 1.45, color: 'oklch(0.40 0.10 150)', background: 'oklch(0.96 0.035 150)', border: '1px solid oklch(0.85 0.06 150)', borderRadius: 8, padding: '8px 10px' }}>
+              🔒 Sesi ini sudah dikirim ke koordinator — nilainya hanya bisa dilihat. Bila perlu
+              diperbaiki, buka kuncinya dari daftar peserta.
             </div>
           )}
           {props.isUjian && (
@@ -110,7 +130,7 @@ export function Setup(props: SetupProps) {
           className="ev-dark"
           style={{ width: '100%', height: 50, borderRadius: 8, border: 'none', background: 'var(--ink)', color: '#ffffff', font: 'inherit', fontSize: 15, fontWeight: 600, cursor: 'pointer' }}
         >
-          Lanjut ke daftar peserta →
+          {props.lanjutLabel ?? 'Lanjut ke daftar peserta →'}
         </button>
       </div>
     </>

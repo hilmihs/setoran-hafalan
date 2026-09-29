@@ -29,6 +29,9 @@ import type { JenisRekaman, NilaiRekaman } from '@/types/db';
 
 export const dynamic = 'force-dynamic';
 
+/** Periode pertama yang setoran dinilai-tapi-belum-lengkapnya boleh disusulkan. */
+const SUSULAN_DINILAI_MULAI = '2026-08-24';
+
 export default async function PesertaPage() {
   const s = await getSession();
   if (!s.session || s.session.role !== 'peserta') redirect('/');
@@ -178,6 +181,8 @@ export default async function PesertaPage() {
     cycleStart: string;
     label: string;
     submittedJenis: JenisRekaman[];
+    /** Diisi bila setoran periode itu sudah dinilai: jenis bernilai tampil hanya-baca. */
+    existing: ExistingSetoran | null;
   }> = [];
   // Periode lampau yang sudah disetor (submitted/checked) → tampil di riwayat.
   const riwayatCycles: RiwayatCycle[] = [];
@@ -189,11 +194,28 @@ export default async function PesertaPage() {
     const submittedJenis = reks.filter((r) => r.audio_url).map((r) => r.jenis);
     const status = s?.status as 'draft' | 'submitted' | 'checked' | undefined;
 
-    if (status !== 'checked' && submittedJenis.length < 3) {
+    // Setoran yang sudah dinilai tapi belum lengkap boleh disusulkan (server
+    // membukanya kembali ke 'submitted', nilai yang ada tetap) — dibatasi mulai
+    // periode yang mencakup September 2026; periode lebih lama dibiarkan.
+    const bolehSusul = status !== 'checked' || cycle >= SUSULAN_DINILAI_MULAI;
+    if (bolehSusul && submittedJenis.length < 3) {
       backfillCycles.push({
         cycleStart: cycle,
         label: formatCycleRange(cycle),
         submittedJenis,
+        existing:
+          s && status === 'checked'
+            ? {
+                id: s.id,
+                status: 'checked',
+                musyrifWaUrl: null,
+                rekaman: reks.map((r) => ({
+                  jenis: r.jenis as JenisRekaman,
+                  nilai: (r.nilai as NilaiRekaman | null) ?? null,
+                  masukan: r.masukan ?? null,
+                })),
+              }
+            : null,
       });
     }
     if ((status === 'submitted' || status === 'checked') && submittedJenis.length > 0) {
@@ -379,7 +401,7 @@ export default async function PesertaPage() {
                       <PesertaSetoranForm
                         musyrifName={musyrif.name}
                         musyrifInitials={initialsOf(musyrif.name)}
-                        existing={null}
+                        existing={bc.existing}
                         targetRoleLabel={`${musyrifTitle(musyrif.gender)} kelas Anda`}
                         endpoint="/api/2in1/setoran/submit"
                         singleSubmitEndpoint="/api/2in1/rekaman/submit-single"

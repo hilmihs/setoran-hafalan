@@ -23,6 +23,8 @@ interface RingkasanProps {
   kirimDisabled: boolean;
   kirimLabel: string;
   offlineNote: string;
+  /** Tampilkan catatan di bawah tombol kirim sebagai galat (merah, tebal). */
+  offlineNoteError?: boolean;
   back: () => void;
   /** Buka menu cetak rapot A4. Tanpa ini tombol jatuh ke print layar (hasil kurang rapi). */
   onCetak?: () => void;
@@ -77,7 +79,12 @@ export function Ringkasan(props: RingkasanProps) {
       <div style={{ flex: 1 }} />
       <div className="no-print" style={{ position: 'sticky', bottom: 0, background: '#ffffff', borderTop: '1px solid var(--line)', padding: '12px 16px calc(18px + env(safe-area-inset-bottom))', marginTop: 18 }}>
         <button onClick={props.kirim} disabled={props.kirimDisabled} style={{ width: '100%', height: 50, borderRadius: 8, border: 'none', background: 'var(--ink)', color: '#ffffff', font: 'inherit', fontSize: 15, fontWeight: 600, cursor: props.kirimDisabled ? 'not-allowed' : 'pointer', opacity: props.kirimDisabled ? 0.55 : 1 }}>{props.kirimLabel}</button>
-        <div style={{ textAlign: 'center', fontSize: 11, color: 'var(--muted-2)', marginTop: 8 }}>{props.offlineNote}</div>
+        <div
+          role={props.offlineNoteError ? 'alert' : undefined}
+          style={{ textAlign: 'center', fontSize: props.offlineNoteError ? 12 : 11, fontWeight: props.offlineNoteError ? 700 : 400, color: props.offlineNoteError ? 'oklch(0.46 0.14 25)' : 'var(--muted-2)', marginTop: 8, lineHeight: 1.4 }}
+        >
+          {props.offlineNote}
+        </div>
       </div>
 
       {props.waOpen && (

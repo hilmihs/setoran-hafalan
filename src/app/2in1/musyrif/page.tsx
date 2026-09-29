@@ -144,6 +144,16 @@ export default async function MusyrifDashboard() {
     .eq('week_start', cycle)
     .maybeSingle();
   const selfSetoran = selfSetoranRaw as { id: string; status: StatusSetoran } | null;
+  // Jumlah rekaman ber-audio setoran sendiri — setoran yang sudah dinilai tapi
+  // belum lengkap masih boleh disusulkan dari halaman setor.
+  let selfJumlahRekaman = 0;
+  if (selfSetoran) {
+    const { data: selfRekaman } = await supabaseAdmin
+      .from('rekaman_musyrif')
+      .select('jenis, audio_url')
+      .eq('setoran_musyrif_id', selfSetoran.id);
+    selfJumlahRekaman = (selfRekaman ?? []).filter((r) => r.audio_url).length;
+  }
 
   // Monthly H1/H2 data
   const { data: monthlySetoranRaw } = await supabaseAdmin
@@ -262,6 +272,7 @@ export default async function MusyrifDashboard() {
               status={selfSetoran?.status ?? null}
               setoranId={selfSetoran?.id ?? null}
               musyrifGender={musyrifGender}
+              jumlahRekaman={selfJumlahRekaman}
             />
           </div>
 
@@ -531,11 +542,20 @@ function SelfSetoranAction({
   status,
   setoranId: _setoranId,
   musyrifGender,
+  jumlahRekaman,
 }: {
   status: StatusSetoran | null;
   setoranId: string | null;
   musyrifGender: Gender;
+  jumlahRekaman: number;
 }) {
+  if (status === 'checked' && jumlahRekaman < 3) {
+    return (
+      <Link href="/2in1/musyrif/setor" className="btn btn-block btn-ghost" style={{ textDecoration: 'none' }}>
+        {Icon.mic(14)} Lengkapi rekaman yang belum disetor ({jumlahRekaman}/3)
+      </Link>
+    );
+  }
   if (status === 'checked') {
     return <div className="t-small">Antum sudah dinilai cycle ini. Barakallahu fiik.</div>;
   }

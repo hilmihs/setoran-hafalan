@@ -1,8 +1,10 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { Gender } from '@/types/db';
+import { HALAQAH_COOKIE } from '@/lib/evaluasi-cookie';
 import {
+  ALL_LAHN,
   scoreOf,
   tierOf,
   initials,
@@ -90,6 +92,8 @@ export interface EvaluasiInitial {
   peserta: EvPeserta[];
   sesiList: EvSesi[];
   work: Record<string, EvWork>;
+  /** Versi (updated_at) tiap baris nilai, key sama dengan `work`. Penjaga tulis basi. */
+  versi: Record<string, string>;
   currentSession: Record<Jenis, number>;
   /** Rapot berstatus 'aktif' milik halaqah ini — sumber token yang bisa dibuka lagi. */
   rapotTerbit: RapotTerbit[];
@@ -116,7 +120,61 @@ export type Screen =
   | 'p-halaqah'
   | 'p-rapot'
   | 'p-rekap';
-export type SaveStatus = 'idle' | 'saving' | 'saved' | 'error';
+/**
+ * Status simpan satu isian (peserta × sesi).
+ * - pending  : ada perubahan di HP yang belum berangkat (jendela debounce / antre)
+ * - saving   : sedang dikirim
+ * - saved    : server sudah menerima versi terakhir
+ * - error    : gagal — dicoba ulang otomatis bila galatnya sementara
+ * - conflict : baris diubah di perangkat lain; isi terbaru sudah dimuat
+ * - coba     : Mode Coba — sengaja tidak disimpan
+ */
+export type SaveStatus = 'idle' | 'pending' | 'saving' | 'saved' | 'error' | 'conflict' | 'coba';
+
+/** Status yang berarti "isian ini belum aman di server". */
+function belumAman(st: SaveStatus | undefined): boolean {
+  return st === 'pending' || st === 'saving' || st === 'error';
+}
+
+// Coba ulang otomatis untuk galat sementara (jaringan putus, server 5xx):
+// 1s, 2s, 4s, 8s, 16s, 30s — lalu berhenti dan menunggu "Coba lagi" / sinyal kembali.
+const MAKS_ULANG_OTOMATIS = 6;
+function jedaUlang(ke: number): number {
+  return Math.min(30_000, 1000 * 2 ** ke);
+}
+
+/** Pecah key `work` → (peserta, jenis, sesi). Id peserta boleh memuat ':' ('manual:…'). */
+function uraiKey(key: string): { id: string; j: Jenis; session: number } {
+  const parts = key.split('|');
+  const session = Number(parts.pop());
+  const j = parts.pop() as Jenis;
+  return { id: parts.join('|'), j, session };
+}
+
+/**
+ * Sidik isi satu isian — untuk mengenali kiriman kita sendiri yang jawabannya
+ * hilang di jalan (sinyal putus SETELAH server menulis). Tanpa ini kiriman
+ * ulangnya terbaca sebagai "diubah di perangkat lain".
+ */
+function sidikIsi(w: { hadir: boolean; counts: LahnCounts; catatan: string | null; confirmed: boolean; done: boolean }): string {
+  return JSON.stringify([
+    w.hadir !== false,
+    ALL_LAHN.map((d) => Math.max(0, Math.floor(Number(w.counts?.[d.key]) || 0))),
+    w.catatan ?? '',
+    !!w.confirmed,
+    !!w.done,
+  ]);
+}
+
+/** Bentuk `current` dari 409 konflik /api/evaluasi/nilai/upsert. */
+interface NilaiServer {
+  hadir: boolean;
+  counts: LahnCounts;
+  catatan: string;
+  confirmed: boolean;
+  done: boolean;
+  updated_at: string;
+}
 
 // Tile-color arrays (presentation, ported from mockup).
 export const JALIY_SHADES = ['oklch(0.97 0.02 25)', 'oklch(0.93 0.05 25)', 'oklch(0.88 0.08 25)', 'oklch(0.82 0.11 25)', 'oklch(0.75 0.14 25)'];
@@ -171,6 +229,9 @@ function sesiLabelPendek(j: Jenis, nomor: number): string {
   return `${JENIS_SHORT[j]} Sesi ${nomor}`;
 }
 
+// useLayoutEffect memicu peringatan saat dirender di server; di sana cukup useEffect.
+const useIsoLayoutEffect = typeof window !== 'undefined' ? useLayoutEffect : useEffect;
+
 function genderLabel(g: Gender): string {
   return g === 'ikhwan' ? 'Ikhwan' : 'Akhwat';
 }
@@ -224,6 +285,20 @@ export function EvaluasiPengajarApp({ initial }: { initial: EvaluasiInitial }) {
     return out;
   });
   const [kirimStatus, setKirimStatus] = useState<SaveStatus>('idle');
+  // Pesan kirim dari server/penjaga lokal — dulu cuma "Gagal mengirim".
+  const [kirimPesan, setKirimPesan] = useState<string | null>(null);
+  // Isian yang gagal tersimpan: key → pesan. Cermin state dari `gagalRef`
+  // (ref dibaca penangan beforeunload/pagehide yang tak ikut render).
+  const [gagal, setGagal] = useState<Record<string, string>>({});
+  // Pemberitahuan konflik (baris diubah di perangkat lain) — tampil sampai ditutup.
+  const [konflik, setKonflik] = useState<string | null>(null);
+  // Reset satu peserta (layar Nilai).
+  const [resetPesertaBusy, setResetPesertaBusy] = useState(false);
+  const [resetPesertaError, setResetPesertaError] = useState<string | null>(null);
+  // Tinggi pita atas yang menempel (Mode Coba + peringatan simpan), supaya
+  // kepala layar Nilai yang juga menempel tidak tertutup olehnya.
+  const pitaRef = useRef<HTMLDivElement | null>(null);
+  const [pitaTinggi, setPitaTinggi] = useState(0);
   // Reset sesi: tombol dikunci selama permintaan berjalan, galat ditampilkan di
   // layar daftar (dulu fire-and-forget — kegagalan diam-diam).
   const [resetBusy, setResetBusy] = useState(false);
@@ -263,23 +338,49 @@ export function EvaluasiPengajarApp({ initial }: { initial: EvaluasiInitial }) {
     return j === 'ujian' ? all.filter((n) => !ujianDihapus.has(n)) : all;
   };
 
-  // Refs untuk baca state terbaru di dalam callback async (debounce).
+  // `workRef` = sumber kebenaran SINKRON untuk isian. Setiap perubahan lewat
+  // `ubahWork` menulis ref DULU lalu state, sehingga pengirim (yang membaca
+  // ref) selalu melihat isi terbaru — termasuk `done: true` dari tombol
+  // "Simpan & lanjut" yang langsung dikirim tanpa menunggu render.
   const workRef = useRef(work);
-  workRef.current = work;
+  const ubahWork = useCallback((fn: (prev: Record<string, EvWork>) => Record<string, EvWork>) => {
+    workRef.current = fn(workRef.current);
+    setWork(workRef.current);
+  }, []);
   // Mode Coba: eksperimen tanpa menyentuh server. Snapshot work saat ON → restore saat OFF.
   const [coba, setCoba] = useState(false);
   const cobaRef = useRef(coba);
   cobaRef.current = coba;
-  const cobaSnapshot = useRef<{ work: Record<string, EvWork>; ujianDihapus: Set<number> } | null>(null);
+  const cobaSnapshot = useRef<{
+    work: Record<string, EvWork>;
+    ujianDihapus: Set<number>;
+    sentSesi: Record<string, boolean>;
+  } | null>(null);
+  const sentSesiRef = useRef(sentSesi);
+  sentSesiRef.current = sentSesi;
   const sesiIdRef = useRef<Record<string, string>>(
     Object.fromEntries(initial.sesiList.map((s) => [`${s.jenis}|${s.nomor_sesi}`, s.id]))
   );
+  // Satu permintaan pembuatan sesi per (jenis, nomor) — beberapa peserta sesi
+  // baru yang tersimpan bersamaan tak lagi memicu beberapa sesi/upsert.
+  const sesiIdJanji = useRef<Record<string, Promise<string | null>>>({});
   const setupRef = useRef({ surat, ayatMulai, ayatSelesai });
   setupRef.current = { surat, ayatMulai, ayatSelesai };
-  const timers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
-  // Thunk simpan tertunda per key — dipakai flushSaves() agar edit dalam jendela
-  // debounce tak hilang saat pindah peserta / tutup tab (L1).
-  const pendingSaves = useRef<Record<string, () => void>>({});
+
+  // ── Antrean simpan per isian ──
+  // Aturan: untuk satu key paling banyak SATU permintaan di jalan; perubahan
+  // yang datang selama itu ditandai `kotor` dan dikirim sesudahnya dengan isi
+  // TERBARU (yang terbaru menang, urutan tiba tak bisa terbalik).
+  const timers = useRef<Record<string, ReturnType<typeof setTimeout>>>({}); // debounce 700ms
+  const kotor = useRef<Set<string>>(new Set()); // perlu dikirim
+  const diJalan = useRef<Record<string, Promise<void>>>({}); // sedang dikirim
+  const timerUlang = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
+  const hitungUlang = useRef<Record<string, number>>({});
+  const gagalRef = useRef<Record<string, string>>({});
+  // Versi baris di server (updated_at) per key; tak ada = baris belum ada.
+  const versiRef = useRef<Record<string, string>>({ ...initial.versi });
+  // Isi kiriman yang nasibnya tak diketahui (putus di jalan) per key.
+  const belumPasti = useRef<Record<string, string>>({});
 
   const getWork = useCallback(
     (id: string, j: Jenis, session: number): EvWork => {
@@ -297,7 +398,19 @@ export function EvaluasiPengajarApp({ initial }: { initial: EvaluasiInitial }) {
   );
 
   const setStatus = useCallback((key: string, st: SaveStatus) => {
-    setStatuses((prev) => ({ ...prev, [key]: st }));
+    setStatuses((prev) => (prev[key] === st ? prev : { ...prev, [key]: st }));
+  }, []);
+
+  const setGagalKey = useCallback((key: string, pesan: string | null) => {
+    const next = { ...gagalRef.current };
+    if (pesan === null) {
+      if (!(key in next)) return;
+      delete next[key];
+    } else {
+      next[key] = pesan;
+    }
+    gagalRef.current = next;
+    setGagal(next);
   }, []);
 
   // Pastikan sesi ada di server; kembalikan sesi_id (atau null bila gagal).
@@ -306,112 +419,368 @@ export function EvaluasiPengajarApp({ initial }: { initial: EvaluasiInitial }) {
       const skey = `${j}|${session}`;
       const cached = sesiIdRef.current[skey];
       if (cached) return cached;
-      try {
-        // Silabus: utamakan default sesi (j, session) dari sesiList — bukan
-        // setupRef (layar aktif) — agar save tertunda utk sesi lain tak salah
-        // silabus. Fallback ke setupRef hanya utk sesi yang belum ada di silabus.
-        const known = initial.sesiList.find((s) => s.jenis === j && s.nomor_sesi === session);
-        const su = setupRef.current;
-        const res = await fetch('/api/evaluasi/sesi/upsert', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            halaqah_id: halaqah.id,
-            jenis: j,
-            nomor_sesi: session,
-            tgl_jadwal: config.jadwal?.[j]?.[session - 1] || null,
-            surat: known?.surat ?? su.surat,
-            ayat_mulai: known?.ayat_mulai ?? su.ayatMulai,
-            ayat_selesai: known?.ayat_selesai ?? su.ayatSelesai,
-            ambang: j === 'ujian' ? halaqah.ambang_ujian : AMBANG,
-          }),
-        });
-        const json = await res.json();
-        if (!res.ok || !json.sesi_id) return null;
-        sesiIdRef.current[skey] = json.sesi_id;
-        return json.sesi_id as string;
-      } catch {
-        return null;
-      }
+      const berjalan = sesiIdJanji.current[skey];
+      if (berjalan) return berjalan;
+      const janji = (async (): Promise<string | null> => {
+        try {
+          // Silabus: utamakan default sesi (j, session) dari sesiList — bukan
+          // setupRef (layar aktif) — agar save tertunda utk sesi lain tak salah
+          // silabus. Fallback ke setupRef hanya utk sesi yang belum ada di silabus.
+          const known = initial.sesiList.find((s) => s.jenis === j && s.nomor_sesi === session);
+          const su = setupRef.current;
+          const res = await fetch('/api/evaluasi/sesi/upsert', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              halaqah_id: halaqah.id,
+              jenis: j,
+              nomor_sesi: session,
+              tgl_jadwal: config.jadwal?.[j]?.[session - 1] || null,
+              surat: known?.surat ?? su.surat,
+              ayat_mulai: known?.ayat_mulai ?? su.ayatMulai,
+              ayat_selesai: known?.ayat_selesai ?? su.ayatSelesai,
+              ambang: j === 'ujian' ? halaqah.ambang_ujian : AMBANG,
+            }),
+          });
+          const json = await res.json();
+          if (!res.ok || !json.sesi_id) return null;
+          sesiIdRef.current[skey] = json.sesi_id;
+          return json.sesi_id as string;
+        } catch {
+          return null;
+        } finally {
+          delete sesiIdJanji.current[skey];
+        }
+      })();
+      sesiIdJanji.current[skey] = janji;
+      return janji;
     },
     [halaqah.id, halaqah.ambang_ujian, config.jadwal, initial.sesiList]
   );
 
-  // Simpan satu baris nilai ke server (optimistic; tidak memblokir navigasi).
-  const saveNilai = useCallback(
-    async (id: string, j: Jenis, session: number, override: { done?: boolean; hadir?: boolean } = {}) => {
-      const key = workKey(id, j, session);
-      // Mode Coba: jangan sentuh server; state lokal sudah terupdate via updateWork.
+  const namaPeserta = useCallback(
+    (id: string) => peserta.find((p) => p.id === id)?.nama ?? 'Peserta',
+    [peserta]
+  );
+
+  // `drain` dan `kirimSatu` saling memanggil (coba ulang terjadwal) — lewat ref.
+  const drainRef = useRef<(key: string, keepalive?: boolean) => Promise<void>>(() => Promise.resolve());
+
+  /** Catat kegagalan; galat sementara dijadwalkan ulang otomatis dengan jeda bertambah. */
+  const tandaiGagal = useCallback(
+    (key: string, pesan: string, sementara: boolean) => {
+      setStatus(key, 'error');
+      setGagalKey(key, pesan);
+      if (!sementara) return;
+      kotor.current.add(key);
+      const ke = hitungUlang.current[key] ?? 0;
+      if (ke >= MAKS_ULANG_OTOMATIS) return; // berhenti; tunggu "Coba lagi" / sinyal kembali
+      hitungUlang.current[key] = ke + 1;
+      if (timerUlang.current[key]) clearTimeout(timerUlang.current[key]);
+      timerUlang.current[key] = setTimeout(() => {
+        delete timerUlang.current[key];
+        void drainRef.current(key);
+      }, jedaUlang(ke));
+    },
+    [setStatus, setGagalKey]
+  );
+
+  /**
+   * Kirim SATU isian ke server. `true` = tersimpan (atau tak perlu), `false` =
+   * berhenti (gagal/konflik/Mode Coba) — pemanggil tak boleh mengulang segera.
+   *
+   * Bila sesi_id sudah dikenal, fetch dipanggil SINKRON (tanpa await sebelum
+   * fetch) sehingga `keepalive` dari penangan pagehide benar-benar berangkat.
+   */
+  const kirimSatu = useCallback(
+    async (key: string, keepalive = false): Promise<boolean> => {
+      const { id, j, session } = uraiKey(key);
       if (cobaRef.current) {
-        setStatus(key, 'saved');
-        return;
+        // Mode Coba: isian asli yang masih antre jangan dibuang — kembalikan
+        // ke antrean, dikirim lagi saat Mode Coba dimatikan.
+        kotor.current.add(key);
+        return false;
       }
-      const sesiId = await ensureSesiId(j, session);
+      const skey = `${j}|${session}`;
+      const sesiId = sesiIdRef.current[skey] ?? (await ensureSesiId(j, session));
       if (!sesiId) {
-        setStatus(key, 'error');
-        return;
+        tandaiGagal(key, 'Sesi belum bisa dibuat di server — periksa koneksi.', true);
+        return false;
       }
       const w = getWork(id, j, session);
-      const hadir = override.hadir ?? w.hadir !== false;
+      const sidik = sidikIsi(w);
       setStatus(key, 'saving');
+      let res: Response;
       try {
-        const res = await fetch('/api/evaluasi/nilai/upsert', {
+        res = await fetch('/api/evaluasi/nilai/upsert', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
+          keepalive,
           body: JSON.stringify({
             sesi_id: sesiId,
             peserta_id: id,
-            hadir,
+            hadir: w.hadir !== false,
             counts: w.counts,
             catatan: w.catatan,
             confirmed: w.confirmed,
-            done: override.done ?? w.done,
+            done: w.done,
+            expected_updated_at: versiRef.current[key] ?? null,
           }),
         });
-        if (!res.ok) throw new Error('save failed');
-        setStatus(key, 'saved');
       } catch {
-        setStatus(key, 'error');
+        // Bisa jadi server SUDAH menulis lalu jawabannya hilang — ingat isinya.
+        belumPasti.current[key] = sidik;
+        tandaiGagal(key, 'Koneksi terputus — dicoba lagi otomatis.', true);
+        return false;
       }
+      const json = (await res.json().catch(() => null)) as
+        | { updated_at?: string; error?: string; conflict?: boolean; terkirim?: boolean; current?: NilaiServer | null }
+        | null;
+
+      if (res.ok) {
+        delete belumPasti.current[key];
+        if (json?.updated_at) versiRef.current[key] = json.updated_at;
+        hitungUlang.current[key] = 0;
+        if (timerUlang.current[key]) {
+          clearTimeout(timerUlang.current[key]);
+          delete timerUlang.current[key];
+        }
+        setGagalKey(key, null);
+        setStatus(key, kotor.current.has(key) ? 'pending' : 'saved');
+        return true;
+      }
+
+      if (res.status === 409 && json?.conflict) {
+        // Baris berubah di perangkat lain: JANGAN timpa. Muat isi terbarunya
+        // ke layar, buang perubahan lokal yang basi, dan beri tahu pengajar.
+        const cur = json.current ?? null;
+        if (cur && belumPasti.current[key] && belumPasti.current[key] === sidikIsi(cur)) {
+          // Yang "mengubah" ternyata kiriman kita sendiri yang jawabannya
+          // hilang. Pakai versinya, lalu kirim isi terbaru lagi.
+          delete belumPasti.current[key];
+          versiRef.current[key] = cur.updated_at;
+          kotor.current.add(key);
+          return true;
+        }
+        delete belumPasti.current[key];
+        kotor.current.delete(key);
+        if (cur) {
+          versiRef.current[key] = cur.updated_at;
+          ubahWork((prev) => ({
+            ...prev,
+            [key]: {
+              counts: cur.counts,
+              catatan: cur.catatan,
+              ayat: prev[key]?.ayat ?? null,
+              done: cur.done,
+              confirmed: cur.confirmed,
+              hadir: cur.hadir,
+            },
+          }));
+        } else {
+          delete versiRef.current[key];
+          ubahWork((prev) => {
+            const next = { ...prev };
+            delete next[key];
+            return next;
+          });
+        }
+        setGagalKey(key, null);
+        setStatus(key, 'conflict');
+        setKonflik(
+          `Nilai ${namaPeserta(id)} (${sesiLabelPendek(j, session)}) diubah di perangkat lain. ` +
+            'Data terbarunya sudah dimuat — periksa lagi, lalu ubah bila perlu.'
+        );
+        return false;
+      }
+
+      if (res.status === 409 && json?.terkirim) {
+        // Sesi ternyata sudah terkirim (mis. dari perangkat lain): kunci layar.
+        setSentSesi((prev) => ({ ...prev, [skey]: true }));
+        tandaiGagal(key, json.error || 'Sesi ini sudah dikirim — perubahan tidak tersimpan.', false);
+        return false;
+      }
+
+      if (res.status === 401) {
+        tandaiGagal(key, 'Sesi login habis — muat ulang halaman lalu masuk lagi.', false);
+        return false;
+      }
+      const sementara = res.status >= 500 || res.status === 408 || res.status === 429;
+      tandaiGagal(
+        key,
+        json?.error || `Gagal menyimpan (kode ${res.status}).`,
+        sementara
+      );
+      return false;
     },
-    [ensureSesiId, getWork, setStatus]
+    [ensureSesiId, getWork, setStatus, setGagalKey, tandaiGagal, ubahWork, namaPeserta]
   );
+
+  /** Kirim isian `key` selama masih kotor; satu permintaan di jalan per key. */
+  const drain = useCallback(
+    (key: string, keepalive = false): Promise<void> => {
+      const ada = diJalan.current[key];
+      if (ada) return ada;
+      // eslint-disable-next-line prefer-const
+      let janji: Promise<void>;
+      janji = (async () => {
+        while (kotor.current.has(key)) {
+          kotor.current.delete(key);
+          let ok = false;
+          try {
+            ok = await kirimSatu(key, keepalive);
+          } catch {
+            tandaiGagal(key, 'Galat tak terduga saat menyimpan — dicoba lagi otomatis.', true);
+          }
+          if (!ok) break;
+        }
+      })().finally(() => {
+        if (diJalan.current[key] === janji) delete diJalan.current[key];
+      });
+      diJalan.current[key] = janji;
+      return janji;
+    },
+    [kirimSatu, tandaiGagal]
+  );
+  drainRef.current = drain;
 
   const scheduleSave = useCallback(
     (id: string, j: Jenis, session: number) => {
       const key = workKey(id, j, session);
-      setStatus(key, 'idle');
       if (timers.current[key]) clearTimeout(timers.current[key]);
-      pendingSaves.current[key] = () => saveNilai(id, j, session);
+      if (cobaRef.current) {
+        // Mode Coba: tak ada yang dikirim — katakan terus terang di status.
+        setStatus(key, 'coba');
+        return;
+      }
+      kotor.current.add(key);
+      setStatus(key, 'pending');
       timers.current[key] = setTimeout(() => {
-        delete pendingSaves.current[key];
-        saveNilai(id, j, session);
+        delete timers.current[key];
+        void drain(key);
       }, 700);
     },
-    [saveNilai, setStatus]
+    [drain, setStatus]
   );
 
-  // Segera jalankan semua simpan tertunda (pindah peserta/sesi, tutup tab).
-  const flushSaves = useCallback(() => {
-    for (const key of Object.keys(pendingSaves.current)) {
-      if (timers.current[key]) clearTimeout(timers.current[key]);
-      const thunk = pendingSaves.current[key];
-      delete pendingSaves.current[key];
-      thunk?.();
+  /** Kirim satu isian sekarang juga (lewati debounce). */
+  const simpanSekarang = useCallback(
+    (key: string): Promise<void> => {
+      if (timers.current[key]) {
+        clearTimeout(timers.current[key]);
+        delete timers.current[key];
+      }
+      if (cobaRef.current) {
+        setStatus(key, 'coba');
+        return Promise.resolve();
+      }
+      kotor.current.add(key);
+      return drain(key);
+    },
+    [drain, setStatus]
+  );
+
+  /**
+   * Segera kirim semua yang tertunda (pindah peserta/sesi/layar, sebelum Kirim,
+   * tutup tab). Promise selesai setelah SEMUA permintaan yang sedang jalan
+   * tuntas — `await flushSaves()` sebelum Kirim benar-benar menunggu antrean.
+   *
+   * `keepalive` (pagehide / tab disembunyikan): permintaan tetap berangkat
+   * walau halaman dibuang. Isian yang sedang di jalan dilewati — mengirim kedua
+   * kalinya akan membawa versi lama dan ditolak sebagai konflik.
+   */
+  const flushSaves = useCallback(
+    (keepalive = false): Promise<void> => {
+      for (const key of Object.keys(timers.current)) {
+        clearTimeout(timers.current[key]);
+        delete timers.current[key];
+      }
+      if (keepalive) {
+        for (const key of Object.keys(timerUlang.current)) {
+          clearTimeout(timerUlang.current[key]);
+          delete timerUlang.current[key];
+        }
+      }
+      const tunggu = Array.from(kotor.current).map((k) => drain(k, keepalive));
+      tunggu.push(...Object.values(diJalan.current));
+      return Promise.all(tunggu).then(() => undefined);
+    },
+    [drain]
+  );
+
+  /** Ada isian yang belum aman di server? (dibaca penangan beforeunload) */
+  const adaBelumTersimpan = useCallback(
+    () =>
+      kotor.current.size > 0 ||
+      Object.keys(diJalan.current).length > 0 ||
+      Object.keys(gagalRef.current).length > 0,
+    []
+  );
+
+  /** Tombol "Coba lagi": kirim ulang semua isian yang gagal, hitungan ulang dari nol. */
+  const cobaLagiSemua = useCallback(() => {
+    for (const key of Object.keys(gagalRef.current)) {
+      hitungUlang.current[key] = 0;
+      if (timerUlang.current[key]) {
+        clearTimeout(timerUlang.current[key]);
+        delete timerUlang.current[key];
+      }
+      kotor.current.add(key);
+      setStatus(key, 'pending');
     }
-  }, []);
+    void flushSaves();
+  }, [flushSaves, setStatus]);
 
   useEffect(() => {
     const onHide = () => {
-      if (document.visibilityState === 'hidden') flushSaves();
+      if (document.visibilityState === 'hidden') void flushSaves(true);
     };
-    window.addEventListener('beforeunload', flushSaves);
+    const onPageHide = () => {
+      void flushSaves(true);
+    };
+    const onBeforeUnload = (e: BeforeUnloadEvent) => {
+      void flushSaves(true);
+      // Masih ada isian yang belum sampai server → minta konfirmasi peramban.
+      if (adaBelumTersimpan()) {
+        e.preventDefault();
+        e.returnValue = '';
+      }
+    };
+    const onOnline = () => cobaLagiSemua();
+    window.addEventListener('beforeunload', onBeforeUnload);
+    window.addEventListener('pagehide', onPageHide);
+    window.addEventListener('online', onOnline);
     document.addEventListener('visibilitychange', onHide);
     return () => {
-      window.removeEventListener('beforeunload', flushSaves);
+      window.removeEventListener('beforeunload', onBeforeUnload);
+      window.removeEventListener('pagehide', onPageHide);
+      window.removeEventListener('online', onOnline);
       document.removeEventListener('visibilitychange', onHide);
     };
-  }, [flushSaves]);
+  }, [flushSaves, adaBelumTersimpan, cobaLagiSemua]);
+
+  // Ingat halaqah yang sedang dibuka (termasuk lewat tautan ?halaqah=) supaya
+  // kunjungan berikutnya tanpa parameter mendarat di halaqah yang sama.
+  useEffect(() => {
+    try {
+      document.cookie = `${HALAQAH_COOKIE}=${encodeURIComponent(halaqah.id)}; path=/evaluasi; max-age=31536000; samesite=lax`;
+    } catch {
+      /* cookie diblokir — jatuh ke halaqah pertama, seperti dulu */
+    }
+  }, [halaqah.id]);
+
+  // Ukur pita atas yang menempel (Mode Coba / peringatan simpan). Elemennya
+  // selalu dirender (kosong = tinggi 0), jadi cukup dipasang sekali.
+  useIsoLayoutEffect(() => {
+    const el = pitaRef.current;
+    if (!el) return;
+    const ukur = () => setPitaTinggi(el.getBoundingClientRect().height);
+    ukur();
+    if (typeof ResizeObserver === 'undefined') return;
+    const ro = new ResizeObserver(ukur);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
 
   // Setelah overlay rapot rinci ter-render (dipicu tombol PDF), buka dialog cetak.
   // Tunggu font & gambar (logo) selesai dulu — kalau tidak, kop bisa tercetak kosong.
@@ -468,7 +837,10 @@ export function EvaluasiPengajarApp({ initial }: { initial: EvaluasiInitial }) {
       opts: { save?: boolean } = { save: true }
     ) => {
       const key = workKey(id, j, session);
-      setWork((prev) => {
+      // Sesi terkirim = hanya-baca. Server menolak penulisannya (409), jadi
+      // suntingan yang lolos di sini cuma akan "hilang" saat dimuat ulang.
+      if (sentSesiRef.current[`${j}|${session}`]) return;
+      ubahWork((prev) => {
         const sesi = initial.sesiList.find((s) => s.jenis === j && s.nomor_sesi === session);
         const existing = prev[key] ?? defaultWork(sesi?.ayat_mulai ?? ayatMulai);
         const p = typeof patch === 'function' ? patch(existing) : patch;
@@ -476,7 +848,7 @@ export function EvaluasiPengajarApp({ initial }: { initial: EvaluasiInitial }) {
       });
       if (opts.save !== false) scheduleSave(id, j, session);
     },
-    [initial.sesiList, ayatMulai, scheduleSave]
+    [initial.sesiList, ayatMulai, scheduleSave, ubahWork]
   );
 
   const bump = useCallback(
@@ -531,45 +903,84 @@ export function EvaluasiPengajarApp({ initial }: { initial: EvaluasiInitial }) {
   }
 
   // Toggle Mode Coba. ON → snapshot work bersih; OFF → buang eksperimen, kembalikan.
-  const toggleCoba = () => {
+  const toggleCoba = async () => {
     if (!coba) {
-      flushSaves(); // pastikan simpanan asli tuntas dulu
-      cobaSnapshot.current = { work: workRef.current, ujianDihapus: new Set(ujianDihapus) };
+      await flushSaves(); // pastikan simpanan asli tuntas dulu
+      cobaSnapshot.current = {
+        work: workRef.current,
+        ujianDihapus: new Set(ujianDihapus),
+        sentSesi: { ...sentSesi },
+      };
+      cobaRef.current = true;
       setCoba(true);
     } else {
-      if (cobaSnapshot.current) {
-        setWork(cobaSnapshot.current.work);
-        setUjianDihapus(cobaSnapshot.current.ujianDihapus);
+      const snap = cobaSnapshot.current;
+      if (snap) {
+        ubahWork(() => snap.work);
+        setUjianDihapus(snap.ujianDihapus);
+        // "Buka kunci"/reset di Mode Coba cuma lokal — kembalikan tanda terkirim.
+        setSentSesi(snap.sentSesi);
       }
       cobaSnapshot.current = null;
+      cobaRef.current = false;
       setStatuses({});
       setCoba(false);
+      // Isian asli yang tertahan selama Mode Coba (mis. gagal sebelum ON) dikirim lagi.
+      for (const key of Object.keys(gagalRef.current)) setStatus(key, 'error');
+      void flushSaves();
     }
   };
 
   // Buang simpanan tertunda milik satu sesi. Tanpa ini, timer debounce 700ms
   // yang masih antre akan menyala SESUDAH reset, membaca defaultWork, lalu
   // menulis ulang baris yang barusan dihapus di server (baris kosong hantu).
-  const batalkanSimpanTertunda = useCallback((j: Jenis, session: number) => {
-    const akhiran = `|${j}|${session}`;
-    for (const key of Object.keys(pendingSaves.current)) {
-      if (!key.endsWith(akhiran)) continue;
-      delete pendingSaves.current[key];
-    }
-    for (const key of Object.keys(timers.current)) {
-      if (!key.endsWith(akhiran)) continue;
-      clearTimeout(timers.current[key]);
-      delete timers.current[key];
-    }
-  }, []);
+  //
+  // `pesertaId` → hanya isian satu peserta. Promise selesai setelah permintaan
+  // simpan yang terlanjur di jalan untuk isian itu tuntas, supaya DELETE tidak
+  // disusul upsert yang menghidupkan barisnya lagi.
+  const batalkanSimpanTertunda = useCallback(
+    async (j: Jenis, session: number, pesertaId?: string): Promise<void> => {
+      const akhiran = `|${j}|${session}`;
+      const kena = (key: string) =>
+        pesertaId ? key === workKey(pesertaId, j, session) : key.endsWith(akhiran);
+      for (const key of Object.keys(timers.current)) {
+        if (!kena(key)) continue;
+        clearTimeout(timers.current[key]);
+        delete timers.current[key];
+      }
+      for (const key of Object.keys(timerUlang.current)) {
+        if (!kena(key)) continue;
+        clearTimeout(timerUlang.current[key]);
+        delete timerUlang.current[key];
+      }
+      for (const key of Array.from(kotor.current)) if (kena(key)) kotor.current.delete(key);
+      for (const key of Object.keys(gagalRef.current)) if (kena(key)) setGagalKey(key, null);
+      const jalan = Object.entries(diJalan.current)
+        .filter(([key]) => kena(key))
+        .map(([, p]) => p);
+      if (jalan.length) await Promise.all(jalan);
+      // Permintaan yang barusan tuntas bisa saja menandai kotor lagi (galat sementara).
+      for (const key of Array.from(kotor.current)) if (kena(key)) kotor.current.delete(key);
+      for (const key of Object.keys(timerUlang.current)) {
+        if (!kena(key)) continue;
+        clearTimeout(timerUlang.current[key]);
+        delete timerUlang.current[key];
+      }
+      for (const key of Object.keys(gagalRef.current)) if (kena(key)) setGagalKey(key, null);
+    },
+    [setGagalKey]
+  );
 
   /**
    * Bersihkan jejak satu sesi di sisi klien: nilai, simpanan tertunda, dan
    * penanda "sudah terkirim". Dipakai setelah server menghapus nilainya.
    */
   const bersihkanSesiLokal = (j: Jenis, nomor: number) => {
-    batalkanSimpanTertunda(j, nomor);
-    setWork((prev) => {
+    if (!cobaRef.current) {
+      void batalkanSimpanTertunda(j, nomor);
+      for (const p of peserta) delete versiRef.current[workKey(p.id, j, nomor)];
+    }
+    ubahWork((prev) => {
       const next = { ...prev };
       for (const p of peserta) delete next[workKey(p.id, j, nomor)];
       return next;
@@ -581,13 +992,48 @@ export function EvaluasiPengajarApp({ initial }: { initial: EvaluasiInitial }) {
     });
   };
 
+  /**
+   * Isian sesi (atau satu peserta) yang masih menunggu dikirim. Dicatat sebelum
+   * reset membatalkan antrean, supaya bila server MENOLAK reset (mis. rapot
+   * masih aktif) isian itu bisa diantrekan lagi — bukan ikut hilang diam-diam.
+   */
+  const antreanDari = (j: Jenis, session: number, pesertaId?: string): string[] => {
+    const akhiran = `|${j}|${session}`;
+    const kena = (key: string) =>
+      pesertaId ? key === workKey(pesertaId, j, session) : key.endsWith(akhiran);
+    const semua = new Set<string>([
+      ...Array.from(kotor.current),
+      ...Object.keys(timers.current),
+      ...Object.keys(diJalan.current),
+      ...Object.keys(gagalRef.current),
+    ]);
+    return Array.from(semua).filter(kena);
+  };
+  const antreLagi = (keys: string[]) => {
+    if (!keys.length) return;
+    for (const k of keys) {
+      kotor.current.add(k);
+      setStatus(k, 'pending');
+    }
+    void flushSaves();
+  };
+  /** Hapus status simpan milik satu sesi saja (status sesi lain tetap). */
+  const hapusStatusSesi = (j: Jenis, session: number) => {
+    const akhiran = `|${j}|${session}`;
+    setStatuses((prev) => {
+      const next: Record<string, SaveStatus> = {};
+      for (const [k, v] of Object.entries(prev)) if (!k.endsWith(akhiran)) next[k] = v;
+      return next;
+    });
+  };
+
   /** Kirim permintaan reset. `null` = berhasil, selain itu pesan galat siap tampil. */
-  const kirimReset = async (sesiId: string): Promise<string | null> => {
+  const kirimReset = async (sesiId: string, pesertaId?: string): Promise<string | null> => {
     try {
       const res = await fetch('/api/evaluasi/nilai/reset', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ sesi_id: sesiId }),
+        body: JSON.stringify(pesertaId ? { sesi_id: sesiId, peserta_id: pesertaId } : { sesi_id: sesiId }),
       });
       if (!res.ok) {
         const json = (await res.json().catch(() => null)) as { error?: string } | null;
@@ -610,7 +1056,7 @@ export function EvaluasiPengajarApp({ initial }: { initial: EvaluasiInitial }) {
 
     const bersihkanLokal = () => {
       bersihkanSesiLokal(jenis, activeSession);
-      setStatuses({});
+      hapusStatusSesi(jenis, activeSession);
       setActiveIdx(0);
       setKirimStatus('idle');
     };
@@ -630,10 +1076,13 @@ export function EvaluasiPengajarApp({ initial }: { initial: EvaluasiInitial }) {
     setResetBusy(true);
     // Batalkan simpanan tertunda SEBELUM permintaan berangkat, supaya tak ada
     // upsert yang menyusul di belakang DELETE dan menghidupkan baris lagi.
-    batalkanSimpanTertunda(jenis, activeSession);
+    const antre = antreanDari(jenis, activeSession);
+    await batalkanSimpanTertunda(jenis, activeSession);
     const galat = await kirimReset(sesiId);
-    if (galat) setResetError(galat);
-    else bersihkanLokal();
+    if (galat) {
+      setResetError(galat);
+      antreLagi(antre);
+    } else bersihkanLokal();
     setResetBusy(false);
   };
 
@@ -657,15 +1106,58 @@ export function EvaluasiPengajarApp({ initial }: { initial: EvaluasiInitial }) {
     }
 
     setResetBusyId(sesiId);
-    batalkanSimpanTertunda(j, nomor);
+    const antre = antreanDari(j, nomor);
+    await batalkanSimpanTertunda(j, nomor);
     const galat = await kirimReset(sesiId);
     if (galat) {
       setRiwayatError(galat);
+      antreLagi(antre);
     } else {
       bersihkanSesiLokal(j, nomor);
+      hapusStatusSesi(j, nomor);
       setResetKonfirmasi(null);
     }
     setResetBusyId(null);
+  };
+
+  /**
+   * Kosongkan nilai SATU peserta di sesi aktif — bawaan reset sekarang. Dulu
+   * satu-satunya Reset menghapus nilai seluruh peserta sesi, padahal hampir
+   * selalu yang dimaksud cuma membetulkan satu orang.
+   */
+  const resetPesertaAktif = async (pesertaId: string) => {
+    if (resetPesertaBusy) return;
+    setResetPesertaError(null);
+    const key = workKey(pesertaId, jenis, activeSession);
+    const bersihkanLokal = () => {
+      ubahWork((prev) => {
+        const next = { ...prev };
+        delete next[key];
+        return next;
+      });
+      delete versiRef.current[key];
+      setStatuses((prev) => {
+        const next = { ...prev };
+        delete next[key];
+        return next;
+      });
+    };
+    if (cobaRef.current) {
+      bersihkanLokal();
+      return;
+    }
+    setResetPesertaBusy(true);
+    const antre = antreanDari(jenis, activeSession, pesertaId);
+    await batalkanSimpanTertunda(jenis, activeSession, pesertaId);
+    const sesiId = sesiIdRef.current[`${jenis}|${activeSession}`];
+    const galat = sesiId ? await kirimReset(sesiId, pesertaId) : null;
+    if (galat) {
+      setResetPesertaError(galat);
+      antreLagi(antre);
+    } else {
+      bersihkanLokal();
+    }
+    setResetPesertaBusy(false);
   };
 
   // Buka kunci sesi terkirim dari kartu riwayat: status server kembali 'draft'
@@ -704,6 +1196,8 @@ export function EvaluasiPengajarApp({ initial }: { initial: EvaluasiInitial }) {
         return;
       }
       lepasKunciLokal();
+      // Isian yang tadi ditolak karena sesinya terkirim kini bisa masuk.
+      cobaLagiSemua();
     } catch {
       setRiwayatError('Gagal membuka kunci sesi — periksa koneksi lalu coba lagi.');
     } finally {
@@ -712,7 +1206,8 @@ export function EvaluasiPengajarApp({ initial }: { initial: EvaluasiInitial }) {
   };
 
   const nav = (s: Screen) => {
-    flushSaves();
+    void flushSaves();
+    setResetPesertaError(null);
     setResetError(null);
     setRiwayatError(null);
     setBukaKonfirmasi(null);
@@ -727,11 +1222,14 @@ export function EvaluasiPengajarApp({ initial }: { initial: EvaluasiInitial }) {
 
   // Mulai penilaian dari kartu home: set jenis+sesi, muat surat/ayat dari sesi bila ada.
   const startJenis = (j: Jenis) => {
-    flushSaves();
+    void flushSaves();
     const opts = sesiOptionsFor(j);
-    // Sesi awal: currentSession bila masih valid, selain itu opsi pertama.
+    // Sesi awal: sesi terkecil yang BELUM terkirim (sama dengan label kartu
+    // beranda). Dulu memakai currentSession dari server, yang bisa menunjuk
+    // sesi terkirim — pengajar lalu menyunting sesi terkunci tanpa sadar.
     const preferred = initial.currentSession[j];
-    const session = opts.includes(preferred) ? preferred : opts[0] ?? 1;
+    const firstUnsent = opts.find((n) => !sentSesi[`${j}|${n}`]);
+    const session = firstUnsent ?? (opts.includes(preferred) ? preferred : opts[0] ?? 1);
     const sesi = initial.sesiList.find((s) => s.jenis === j && s.nomor_sesi === session);
     setJenis(j);
     setActiveSession(session);
@@ -745,7 +1243,7 @@ export function EvaluasiPengajarApp({ initial }: { initial: EvaluasiInitial }) {
   };
 
   const pickSession = (n: number) => {
-    flushSaves();
+    void flushSaves();
     setResetError(null);
     const sesi = initial.sesiList.find((s) => s.jenis === jenis && s.nomor_sesi === n);
     setActiveSession(n);
@@ -816,6 +1314,28 @@ export function EvaluasiPengajarApp({ initial }: { initial: EvaluasiInitial }) {
 
   const activeP = peserta[activeIdx] ?? peserta[0];
 
+  // Sesi aktif sudah terkirim → layar daftar & nilai hanya-baca.
+  const currentSesiKey = `${jenis}|${activeSession}`;
+  const alreadySent = !!sentSesi[currentSesiKey];
+  const terkunci = alreadySent;
+
+  // Status simpan lintas SEMUA peserta & sesi — bukan cuma peserta yang sedang
+  // dibuka. `gagal` = belum tersimpan dan butuh perhatian; `proses` = sedang
+  // antre/dikirim.
+  const akhiranSesiAktif = `|${jenis}|${activeSession}`;
+  const kunciGagal = Object.keys(gagal);
+  const kunciProses = Object.entries(statuses)
+    .filter(([k, st]) => (st === 'pending' || st === 'saving') && !(k in gagal))
+    .map(([k]) => k);
+  const gagalSesiIni = kunciGagal.filter((k) => k.endsWith(akhiranSesiAktif)).length;
+  const belumTersimpanSesiIni =
+    gagalSesiIni + kunciProses.filter((k) => k.endsWith(akhiranSesiAktif)).length;
+  const ringkasGagal = kunciGagal.slice(0, 3).map((k) => {
+    const { id, j, session } = uraiKey(k);
+    return { key: k, teks: `${namaPeserta(id)} · ${sesiLabelPendek(j, session)}`, pesan: gagal[k] };
+  });
+  const multiHalaqah = initial.halaqahOptions.length > 1;
+
   const levelLabel = halaqah.level ?? (halaqah.mustawa != null ? `Mustawa ${halaqah.mustawa}` : '—');
   const headerMeta = `${halaqah.nama} · ${genderLabel(halaqah.gender)} · ${levelLabel} · ${halaqah.pesertaCount} peserta`;
 
@@ -861,7 +1381,10 @@ export function EvaluasiPengajarApp({ initial }: { initial: EvaluasiInitial }) {
         .filter((w) => w.done && w.hadir !== false);
       const scores = rows.map((w) => scoreOf(w.counts).skor);
       const avg = scores.length ? Math.round(scores.reduce((a, b) => a + b, 0) / scores.length) : null;
+      // Jumlah peserta yang punya isian — disebut di konfirmasi reset sesi.
+      const terisi = peserta.filter((p) => !!workRef.current[workKey(p.id, s.jenis, s.nomor_sesi)]).length;
       return {
+        terisi,
         key: s.id,
         jenis: s.jenis,
         nomor: s.nomor_sesi,
@@ -878,12 +1401,18 @@ export function EvaluasiPengajarApp({ initial }: { initial: EvaluasiInitial }) {
     const sc = scoreOf(rec.counts);
     const tier = tierOf(sc.skor);
     const inc = isIncluded(p.id);
+    const k = workKey(p.id, jenis, activeSession);
+    const simpan: 'gagal' | 'proses' | null =
+      k in gagal ? 'gagal' : belumAman(statuses[k]) ? 'proses' : null;
     return {
       key: p.id,
+      simpan,
       nama: p.nama,
       ketua: p.is_ketua ? ' 👑' : '',
       initial: initials(p.nama),
-      toggle: () => toggleIncluded(p.id),
+      toggle: () => {
+        if (!terkunci) toggleIncluded(p.id);
+      },
       checkMark: inc ? '✓' : '',
       checkBg: inc ? 'var(--accent)' : '#ffffff',
       checkBorder: inc ? 'var(--accent)' : 'var(--line-2)',
@@ -948,15 +1477,36 @@ export function EvaluasiPengajarApp({ initial }: { initial: EvaluasiInitial }) {
     ringkasanItems.map((x) => `• ${x.nama}: ${x.skor}`).join('\n') +
     `\n\nRata-rata: ${rataRata}`;
 
-  const currentSesiKey = `${jenis}|${activeSession}`;
-  const alreadySent = !!sentSesi[currentSesiKey];
+  // Jumlah peserta yang punya isian di sesi aktif — disebut di konfirmasi reset sesi.
+  const terisiSesiAktif = peserta.filter((p) => !!workRef.current[workKey(p.id, jenis, activeSession)]).length;
 
   const kirim = async () => {
     if (cobaRef.current) return; // Mode Coba: tak mengirim ke koordinator.
     setKirimStatus('saving');
+    setKirimPesan(null);
+    // Tunggu antrean simpan tuntas DULU. Dulu Kirim bisa berangkat selagi
+    // isian terakhir masih di jalan / gagal, lalu sesinya terkunci dan isian
+    // itu ditolak 409 tanpa jejak.
+    await flushSaves();
+    const akhiran = `|${jenis}|${activeSession}`;
+    const sisa = new Set<string>(
+      [
+        ...Array.from(kotor.current),
+        ...Object.keys(diJalan.current),
+        ...Object.keys(gagalRef.current),
+      ].filter((k) => k.endsWith(akhiran))
+    );
+    if (sisa.size) {
+      setKirimStatus('error');
+      setKirimPesan(
+        `${sisa.size} isian belum tersimpan — ketuk "Coba lagi" di pita merah atas, lalu kirim ulang.`
+      );
+      return;
+    }
     const sesiId = await ensureSesiId(jenis, activeSession);
     if (!sesiId) {
       setKirimStatus('error');
+      setKirimPesan('Sesi belum bisa dibuat di server — periksa koneksi lalu coba lagi.');
       return;
     }
     try {
@@ -965,13 +1515,30 @@ export function EvaluasiPengajarApp({ initial }: { initial: EvaluasiInitial }) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ sesi_id: sesiId }),
       });
-      if (!res.ok) throw new Error('kirim failed');
+      if (!res.ok) {
+        const json = (await res.json().catch(() => null)) as { error?: string } | null;
+        setKirimStatus('error');
+        setKirimPesan(json?.error || 'Gagal mengirim — coba lagi.');
+        return;
+      }
       setSentSesi((prev) => ({ ...prev, [currentSesiKey]: true }));
       setKirimStatus('saved');
       nav('p-home'); // terkirim → kembali ke awal
     } catch {
       setKirimStatus('error');
+      setKirimPesan('Gagal mengirim — periksa koneksi lalu coba lagi.');
     }
+  };
+
+  // Ganti halaqah: ingat pilihan, tuntaskan antrean simpan, baru pindah halaman.
+  const gantiHalaqah = async (id: string) => {
+    try {
+      document.cookie = `${HALAQAH_COOKIE}=${encodeURIComponent(id)}; path=/evaluasi; max-age=31536000; samesite=lax`;
+    } catch {
+      /* abaikan */
+    }
+    await flushSaves();
+    window.location.href = `/evaluasi/pengajar?halaqah=${encodeURIComponent(id)}`;
   };
 
   // Rapot (peserta terpilih) — payload dari builder murni (identik dgn snapshot server).
@@ -1251,25 +1818,90 @@ export function EvaluasiPengajarApp({ initial }: { initial: EvaluasiInitial }) {
         .ev-ghost:hover { background: var(--surface-2) !important; }
         .ev-num::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
       `}</style>
-      {coba && (
-        <div
-          style={{
-            position: 'sticky',
-            top: 0,
-            zIndex: 40,
-            background: 'oklch(0.95 0.05 85)',
-            borderBottom: '1px solid oklch(0.85 0.09 85)',
-            color: 'oklch(0.42 0.09 75)',
-            textAlign: 'center',
-            padding: '8px 12px',
-            fontSize: 12,
-            fontWeight: 800,
-            letterSpacing: '0.03em',
-          }}
-        >
-          🧪 MODE COBA — perubahan TIDAK disimpan
-        </div>
-      )}
+      {/* Pita atas yang menempel: Mode Coba + peringatan simpan. Selalu
+          dirender (kosong = tinggi 0) supaya tingginya bisa diukur, dan kepala
+          layar Nilai yang juga menempel diturunkan sebanyak itu. */}
+      <div ref={pitaRef} style={{ position: 'sticky', top: 0, zIndex: 40 }}>
+        {coba && (
+          <div
+            style={{
+              background: 'oklch(0.95 0.05 85)',
+              borderBottom: '1px solid oklch(0.85 0.09 85)',
+              color: 'oklch(0.42 0.09 75)',
+              textAlign: 'center',
+              padding: '8px 12px',
+              fontSize: 12,
+              fontWeight: 800,
+              letterSpacing: '0.03em',
+            }}
+          >
+            🧪 MODE COBA — perubahan TIDAK disimpan
+          </div>
+        )}
+        {kunciGagal.length > 0 && (
+          <div
+            role="alert"
+            style={{
+              background: 'oklch(0.96 0.03 25)',
+              borderBottom: '1px solid oklch(0.85 0.08 25)',
+              color: 'oklch(0.42 0.14 25)',
+              padding: '8px 12px',
+              fontSize: 12,
+              lineHeight: 1.4,
+            }}
+          >
+            <div style={{ maxWidth: 460, margin: '0 auto', display: 'flex', alignItems: 'flex-start', gap: 10 }}>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontWeight: 800 }}>
+                  ⚠ {kunciGagal.length} isian belum tersimpan
+                </div>
+                {ringkasGagal.map((g) => (
+                  <div key={g.key} style={{ fontSize: 11, marginTop: 2 }}>
+                    <b>{g.teks}</b> — {g.pesan}
+                  </div>
+                ))}
+                {kunciGagal.length > ringkasGagal.length && (
+                  <div style={{ fontSize: 11, marginTop: 2 }}>
+                    dan {kunciGagal.length - ringkasGagal.length} lainnya. Jangan tutup halaman ini dulu.
+                  </div>
+                )}
+              </div>
+              <button
+                type="button"
+                onClick={cobaLagiSemua}
+                style={{ flexShrink: 0, height: 30, padding: '0 12px', borderRadius: 8, border: 'none', background: 'oklch(0.55 0.16 25)', color: '#ffffff', font: 'inherit', fontSize: 12, fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap' }}
+              >
+                Coba lagi
+              </button>
+            </div>
+          </div>
+        )}
+        {konflik && (
+          <div
+            role="status"
+            style={{
+              background: 'oklch(0.96 0.04 85)',
+              borderBottom: '1px solid oklch(0.86 0.08 85)',
+              color: 'oklch(0.40 0.09 70)',
+              padding: '8px 12px',
+              fontSize: 12,
+              lineHeight: 1.4,
+            }}
+          >
+            <div style={{ maxWidth: 460, margin: '0 auto', display: 'flex', alignItems: 'flex-start', gap: 10 }}>
+              <div style={{ flex: 1, minWidth: 0 }}>{konflik}</div>
+              <button
+                type="button"
+                onClick={() => setKonflik(null)}
+                aria-label="Tutup pemberitahuan"
+                style={{ flexShrink: 0, height: 26, padding: '0 10px', borderRadius: 7, border: '1px solid oklch(0.84 0.08 85)', background: '#ffffff', color: 'inherit', font: 'inherit', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}
+              >
+                Mengerti
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
       <div className="ev-shell" style={shellStyle}>
         {screen === 'p-home' && (
           <>
@@ -1302,20 +1934,29 @@ export function EvaluasiPengajarApp({ initial }: { initial: EvaluasiInitial }) {
               </button>
             </div>
 
-            {initial.halaqahOptions.length > 1 && (
-              <div style={{ padding: '10px 16px 0' }}>
-                <label style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.04em', textTransform: 'uppercase', color: 'var(--muted)', display: 'block', marginBottom: 4 }}>
-                  Halaqah ({initial.halaqahOptions.length})
-                </label>
-                <select
-                  value={halaqah.id}
-                  onChange={(e) => { window.location.href = `/evaluasi/pengajar?halaqah=${encodeURIComponent(e.target.value)}`; }}
-                  style={{ width: '100%', padding: '10px 12px', borderRadius: 10, border: '1.5px solid var(--line)', background: '#ffffff', fontSize: 14, fontWeight: 600, color: 'var(--ink)', cursor: 'pointer' }}
-                >
-                  {initial.halaqahOptions.map((h) => (
-                    <option key={h.id} value={h.id}>{h.nama}</option>
-                  ))}
-                </select>
+            {/* Pengajar ber-halaqah >1: halaqah aktif harus terlihat jelas.
+                Dulu pemilih kecil di bawah kepala; pengajar menilai di halaqah
+                yang salah lalu mengira isian di halaqah lain "hilang". */}
+            {multiHalaqah && (
+              <div style={{ padding: '14px 16px 0' }}>
+                <div style={{ background: 'var(--accent-tint)', border: '1.5px solid var(--accent-line)', borderRadius: 14, padding: 14 }}>
+                  <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.04em', textTransform: 'uppercase', color: 'var(--muted)' }}>
+                    Halaqah aktif · {initial.halaqahOptions.findIndex((h) => h.id === halaqah.id) + 1} dari {initial.halaqahOptions.length}
+                  </div>
+                  <div style={{ fontSize: 17, fontWeight: 800, color: 'var(--ink)', marginTop: 2 }}>{halaqah.nama}</div>
+                  <label style={{ fontSize: 11, color: 'var(--muted)', display: 'block', marginTop: 10, marginBottom: 4 }}>
+                    Nilai tersimpan per halaqah. Ganti halaqah:
+                  </label>
+                  <select
+                    value={halaqah.id}
+                    onChange={(e) => void gantiHalaqah(e.target.value)}
+                    style={{ width: '100%', padding: '10px 12px', borderRadius: 10, border: '1.5px solid var(--line)', background: '#ffffff', fontSize: 14, fontWeight: 600, color: 'var(--ink)', cursor: 'pointer' }}
+                  >
+                    {initial.halaqahOptions.map((h) => (
+                      <option key={h.id} value={h.id}>{h.nama}</option>
+                    ))}
+                  </select>
+                </div>
               </div>
             )}
 
@@ -1467,16 +2108,16 @@ export function EvaluasiPengajarApp({ initial }: { initial: EvaluasiInitial }) {
                           {/* Mengosongkan tak bisa dibatalkan — sebut akibatnya, jangan
                               cuma "Ya". */}
                           <span style={{ fontSize: 10.5, color: 'oklch(0.46 0.14 25)', lineHeight: 1.3, textAlign: 'right' }}>
-                            Kosongkan
+                            Hapus nilai
                             <br />
-                            semua nilai?
+                            {r.terisi} peserta?
                           </span>
                           <button
                             disabled={resetBusyId === r.key}
                             onClick={() => resetSesiRiwayat(r.key, r.jenis, r.nomor)}
                             style={{ height: 28, padding: '0 10px', borderRadius: 7, border: 'none', background: 'oklch(0.55 0.16 25)', font: 'inherit', fontSize: 11, fontWeight: 700, color: '#fff', cursor: resetBusyId === r.key ? 'default' : 'pointer', opacity: resetBusyId === r.key ? 0.6 : 1, whiteSpace: 'nowrap' }}
                           >
-                            {resetBusyId === r.key ? 'Mereset…' : 'Ya, reset'}
+                            {resetBusyId === r.key ? 'Mereset…' : `Ya, hapus ${r.terisi}`}
                           </button>
                           <button
                             disabled={resetBusyId === r.key}
@@ -1524,7 +2165,8 @@ export function EvaluasiPengajarApp({ initial }: { initial: EvaluasiInitial }) {
               ) : (
                 <div style={{ marginTop: 8, fontSize: 11, color: 'var(--muted-2)', lineHeight: 1.4 }}>
                   <b>Buka</b> mengembalikan sesi jadi draft — nilai lama tetap ada, tinggal disunting.
-                  <b> Reset</b> mengosongkan seluruh nilainya dari nol, termasuk Ujian QN &amp; Ujian PB.
+                  <b> Reset</b> mengosongkan nilai SEMUA peserta sesi itu dari nol, termasuk Ujian QN &amp;
+                  Ujian PB. Untuk satu peserta saja: Buka dulu, lalu kosongkan dari layar nilai peserta itu.
                   Rapot yang sudah terbit harus dicabut lebih dulu.
                 </div>
               )}
@@ -1577,9 +2219,12 @@ export function EvaluasiPengajarApp({ initial }: { initial: EvaluasiInitial }) {
                 : undefined
             }
             onToggleSesi={isUjian ? toggleSesiUjian : undefined}
+            sesiTerkirim={sesiOptionsFor(jenis).filter((n) => !!sentSesi[`${jenis}|${n}`])}
+            terkunci={terkunci}
+            lanjutLabel={terkunci ? 'Lihat nilai (hanya-baca) →' : 'Lanjut ke daftar peserta →'}
             back={() => nav('p-home')}
             lanjut={async () => {
-              await ensureSesiId(jenis, activeSession);
+              if (!terkunci) await ensureSesiId(jenis, activeSession);
               nav('p-daftar');
             }}
           />
@@ -1589,16 +2234,18 @@ export function EvaluasiPengajarApp({ initial }: { initial: EvaluasiInitial }) {
           <Daftar
             judul={jl}
             sub={
-              isUjian
+              (isUjian
                 ? `${UJIAN_SESI_LABELS[activeSession - 1] ?? `Ujian ${activeSession}`}`
-                : `Sesi ${activeSession} dari ${maxSessions[jenis]}`
+                : `Sesi ${activeSession} dari ${maxSessions[jenis]}`) +
+              (multiHalaqah ? ` · ${halaqah.nama}` : '') +
+              (terkunci ? ' · terkirim' : '')
             }
             items={daftarItems}
             selesai={selesaiCount}
             total={includedPeserta.length}
             progressPct={includedPeserta.length ? Math.round((selesaiCount / includedPeserta.length) * 100) : 0}
             tombolLabel={
-              selesaiCount === includedPeserta.length && includedPeserta.length > 0
+              terkunci || (selesaiCount === includedPeserta.length && includedPeserta.length > 0)
                 ? 'Lihat ringkasan sesi'
                 : selesaiCount === 0
                 ? 'Mulai menilai'
@@ -1606,7 +2253,7 @@ export function EvaluasiPengajarApp({ initial }: { initial: EvaluasiInitial }) {
             }
             back={() => nav('p-home')}
             mulai={() => {
-              if (selesaiCount === includedPeserta.length && includedPeserta.length > 0) {
+              if (terkunci || (selesaiCount === includedPeserta.length && includedPeserta.length > 0)) {
                 nav('p-ringkasan');
                 return;
               }
@@ -1616,18 +2263,51 @@ export function EvaluasiPengajarApp({ initial }: { initial: EvaluasiInitial }) {
               setActiveIdx(nextIdx >= 0 ? nextIdx : 0);
               setScreen('p-nilai');
             }}
-            onReset={resetSesi}
+            onReset={terkunci ? undefined : resetSesi}
+            resetJumlah={terisiSesiAktif}
             resetBusy={resetBusy}
             resetError={resetError}
             onPdf={() => bukaPusatRapot(jenis, activeSession)}
+            belumTersimpan={gagalSesiIni}
+            terkunci={
+              terkunci
+                ? {
+                    konfirmasi: bukaKonfirmasi === sesiIdRef.current[currentSesiKey],
+                    busy: !!bukaBusy,
+                    error: riwayatError,
+                    minta: () => {
+                      setRiwayatError(null);
+                      setBukaKonfirmasi(sesiIdRef.current[currentSesiKey] ?? null);
+                    },
+                    batal: () => {
+                      setBukaKonfirmasi(null);
+                      setRiwayatError(null);
+                    },
+                    buka: () => {
+                      const id = sesiIdRef.current[currentSesiKey];
+                      if (id) void bukaKunciSesi(id, jenis, activeSession);
+                    },
+                  }
+                : null
+            }
           />
         )}
 
         {screen === 'p-nilai' && (
           <Nilai
+            key={workKey(activeP.id, jenis, activeSession)}
             nama={activeP.nama}
             pos={activeIdx + 1}
             totalPeserta={peserta.length}
+            halaqahNama={multiHalaqah ? halaqah.nama : null}
+            stickyTop={pitaTinggi}
+            terkunci={terkunci}
+            gagalLain={kunciGagal.filter((k) => k !== workKey(activeP.id, jenis, activeSession)).length}
+            onCobaLagi={cobaLagiSemua}
+            adaNilai={!!workRef.current[workKey(activeP.id, jenis, activeSession)]}
+            onResetPeserta={() => resetPesertaAktif(activeP.id)}
+            resetPesertaBusy={resetPesertaBusy}
+            resetPesertaError={resetPesertaError}
             ringGradient={`conic-gradient(${nilaiTier.color} ${nilaiSc.skor}%, var(--line) 0)`}
             skor={nilaiSc.skor}
             skorColor={nilaiTier.color}
@@ -1649,15 +2329,36 @@ export function EvaluasiPengajarApp({ initial }: { initial: EvaluasiInitial }) {
             setCatatan={(v) => updateWork(activeP.id, jenis, activeSession, { catatan: v })}
             isFirst={activeIdx === 0}
             prevPeserta={() => {
-              flushSaves();
+              void flushSaves();
+              setResetPesertaError(null);
               setActiveIdx(Math.max(0, activeIdx - 1));
             }}
-            simpanDisabled={isUjian && !nilaiRec.confirmed}
-            simpanLabel={activeIdx === peserta.length - 1 ? 'Simpan & selesai' : 'Simpan & peserta berikutnya →'}
+            simpanDisabled={!terkunci && isUjian && !nilaiRec.confirmed}
+            simpanLabel={
+              terkunci
+                ? activeIdx === peserta.length - 1
+                  ? 'Kembali ke daftar'
+                  : 'Peserta berikutnya →'
+                : activeIdx === peserta.length - 1
+                ? 'Simpan & selesai'
+                : 'Simpan & peserta berikutnya →'
+            }
             status={statuses[workKey(activeP.id, jenis, activeSession)] ?? 'idle'}
+            gagalPesan={gagal[workKey(activeP.id, jenis, activeSession)] ?? null}
             simpanLanjut={() => {
+              setResetPesertaError(null);
+              if (terkunci) {
+                // Hanya-baca: cuma pindah peserta, tak ada yang disimpan.
+                if (activeIdx < peserta.length - 1) setActiveIdx(activeIdx + 1);
+                else nav('p-daftar');
+                return;
+              }
+              // Tandai selesai lalu kirim SEKARANG (tanpa debounce). Kegagalan
+              // tak lagi senyap: status per peserta, pita merah di atas, dan
+              // penanda di daftar — plus coba ulang otomatis.
               updateWork(activeP.id, jenis, activeSession, { done: true }, { save: false });
-              void saveNilai(activeP.id, jenis, activeSession, { done: true });
+              void simpanSekarang(workKey(activeP.id, jenis, activeSession));
+              void flushSaves();
               let nextIdx = -1;
               for (let j = activeIdx + 1; j < peserta.length; j++) {
                 if (isIncluded(peserta[j].id)) {
@@ -1683,15 +2384,28 @@ export function EvaluasiPengajarApp({ initial }: { initial: EvaluasiInitial }) {
             closeWa={() => setWaOpen(false)}
             waText={waText}
             kirim={kirim}
-            kirimDisabled={selesaiCount < includedPeserta.length || alreadySent || kirimStatus === 'saving'}
+            kirimDisabled={
+              coba ||
+              selesaiCount < includedPeserta.length ||
+              alreadySent ||
+              kirimStatus === 'saving' ||
+              belumTersimpanSesiIni > 0
+            }
             kirimLabel={alreadySent || kirimStatus === 'saved' ? 'Terkirim ke sistem ✓' : kirimStatus === 'saving' ? 'Mengirim…' : 'Kirim semua ke sistem'}
             offlineNote={
-              kirimStatus === 'error'
-                ? 'Gagal mengirim — periksa koneksi lalu coba lagi.'
+              alreadySent
+                ? 'Sesi ini sudah dikirim — hanya-baca. Buka kunci dari daftar peserta bila perlu diperbaiki.'
+                : coba
+                ? 'Mode Coba menyala — tidak ada yang dikirim.'
+                : kirimStatus === 'error'
+                ? kirimPesan ?? 'Gagal mengirim — periksa koneksi lalu coba lagi.'
+                : belumTersimpanSesiIni > 0
+                ? `${belumTersimpanSesiIni} isian belum tersimpan di server — tunggu sebentar atau ketuk "Coba lagi".`
                 : selesaiCount < includedPeserta.length
                 ? 'Beberapa peserta belum dinilai — belum bisa dikirim.'
                 : 'Semua data tersimpan, siap dikirim.'
             }
+            offlineNoteError={kirimStatus === 'error' || belumTersimpanSesiIni > 0}
             back={() => nav('p-daftar')}
             onCetak={() => bukaPusatRapot(jenis, activeSession)}
             onRekap={() => {

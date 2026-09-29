@@ -1,4 +1,6 @@
+import { cookies } from 'next/headers';
 import { requirePengajar } from '@/lib/session';
+import { HALAQAH_COOKIE } from '@/lib/evaluasi-cookie';
 import { supabaseAdmin } from '@/lib/supabase-admin';
 import { evalPengajarIdFor } from '@/lib/evaluasi-pengajar';
 import { AMBANG_UJIAN_DEFAULT, columnsToCounts, JENIS, type Jenis, type Track } from '@/lib/evaluasi';
@@ -63,9 +65,23 @@ export default async function EvaluasiPengajarPage({
     : { data: null };
 
   const allHalaqah = halaqahRows ?? [];
-  // Pilih halaqah aktif via ?halaqah=<id>; fallback ke yang pertama.
+  // Halaqah aktif: ?halaqah=<id> → halaqah terakhir yang dipilih (cookie) →
+  // yang pertama. Tanpa cookie, pengajar ber-halaqah >1 selalu mendarat di
+  // halaqah pertama menurut abjad, dan isian di halaqah lainnya tampak
+  // "hilang". Cookie divalidasi: hanya dipakai bila halaqahnya masih milik
+  // pengajar ini.
+  let halaqahCookie: string | undefined;
+  try {
+    const mentah = cookies().get(HALAQAH_COOKIE)?.value;
+    halaqahCookie = mentah ? decodeURIComponent(mentah) : undefined;
+  } catch {
+    halaqahCookie = undefined;
+  }
   const halaqah =
-    allHalaqah.find((h) => h.id === searchParams.halaqah) ?? allHalaqah[0] ?? null;
+    allHalaqah.find((h) => h.id === searchParams.halaqah) ??
+    allHalaqah.find((h) => h.id === halaqahCookie) ??
+    allHalaqah[0] ??
+    null;
   const halaqahOptions = allHalaqah.map((h) => ({ id: h.id as string, nama: h.nama as string }));
 
   if (!halaqah) {
@@ -110,7 +126,7 @@ export default async function EvaluasiPengajarPage({
   const { data: nilaiRows } = await supabaseAdmin
     .from('evaluasi_nilai')
     .select(
-      'sesi_id, peserta_id, hadir, ayat_terakhir, catatan, confirmed, done, ' +
+      'sesi_id, peserta_id, hadir, ayat_terakhir, catatan, confirmed, done, updated_at, ' +
         'jk_huruf, jk_harakat, jk_mad, jk_tasydid, kh_izhar, kh_idgham_bighunnah, kh_idgham_bilaghunnah, kh_idgham_mimi, kh_iqlab, kh_ikhfa_hakiki, kh_ikhfa_syafawi'
     )
     .in('sesi_id', sesiIds.length ? sesiIds : noId);
@@ -181,6 +197,9 @@ export default async function EvaluasiPengajarPage({
   // Reconstruct work state keyed "<pesertaId>|<jenis>|<nomor_sesi>".
   const sesiById = new Map(sesiRows.map((s) => [s.id, s]));
   const work: Record<string, EvWork> = {};
+  // Versi tiap baris (updated_at) — dikirim balik saat menyimpan supaya server
+  // bisa menolak penulisan dari data basi (tab lama / perangkat lain).
+  const versi: Record<string, string> = {};
   for (const n of nilaiRows ?? []) {
     const sesi = sesiById.get(n.sesi_id as string);
     if (!sesi) continue;
@@ -193,6 +212,7 @@ export default async function EvaluasiPengajarPage({
       confirmed: !!n.confirmed,
       hadir: n.hadir !== false,
     };
+    if (n.updated_at) versi[key] = String(n.updated_at);
   }
 
   const currentSession = {} as Record<Jenis, number>;
@@ -229,6 +249,7 @@ export default async function EvaluasiPengajarPage({
       dihapus: !!s.dihapus,
     })),
     work,
+    versi,
     currentSession,
     rapotTerbit,
   };
