@@ -1,6 +1,7 @@
 'use server';
 
 import { headers } from 'next/headers';
+import { labelProgramHalaqah } from '@/lib/shakwa-program';
 import { supabaseAdmin } from '@/lib/supabase-admin';
 import { getAllAccesses } from '@/lib/session';
 import { logAudit } from '@/lib/audit';
@@ -10,7 +11,6 @@ import { buildWaMeUrl, tplShakwaKeTujuan } from '@/lib/whatsapp';
 import {
   kategoriDef,
   nomorTiket,
-  HALAQAH_OPTIONS,
   tujuanWa,
   tujuanDigilir,
   kategoriSetujuan,
@@ -165,10 +165,14 @@ export async function kirimShakwa(
   const nama = String(fd.get('nama') ?? '').trim();
   if (!nama) return { error: 'Nama lengkap wajib diisi.' };
 
-  const halaqahLabel = String(fd.get('halaqah_label') ?? '').trim();
-  if (!(HALAQAH_OPTIONS as readonly string[]).includes(halaqahLabel)) {
-    return { error: 'Halaqoh wajib dipilih.' };
-  }
+  // Program & halaqah dipilih dari data nyata; server memvalidasi keduanya dan
+  // menyusun label yang disimpan ("Program · Halaqah").
+  const pilihan = await labelProgramHalaqah(
+    String(fd.get('program_id') ?? '').trim(),
+    String(fd.get('halaqah_id') ?? '').trim()
+  );
+  if ('error' in pilihan) return { error: pilihan.error };
+  const halaqahLabel = pilihan.label;
 
   const isi = String(fd.get('isi') ?? '').trim();
   if (!isi) return { error: 'Isi laporan wajib diisi.' };
