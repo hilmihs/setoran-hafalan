@@ -127,7 +127,7 @@ export function ShakwaCard({
                 <IzinBadalForm
                   izinId={z.id}
                   badalPengajarId={z.badalPengajarId}
-                  calonBadal={calonBadal}
+                  calonBadal={calonBadal.filter((p) => p.id !== z.pengajarId)}
                 />
               )}
             </div>

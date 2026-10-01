@@ -25,6 +25,8 @@ export type ShakwaIzinItem = {
   jadwalGanti: string | null;
   halaqahName: string | null;
   sudahTerpakai: boolean;
+  /** Pengajar yang izin — disaring dari pilihan badalnya sendiri. */
+  pengajarId: string;
   /** Hanya izin BADAL. Id dipakai koordinator mengganti badal. */
   badalPengajarId: string | null;
   badalNama: string | null;
@@ -146,7 +148,7 @@ export async function getShakwaRekap(f: ShakwaFilter = {}): Promise<ShakwaRekap>
     shakwaIds.length
       ? supabaseAdmin
           .from('shakwa_izin')
-          .select('id, shakwa_id, tanggal, jenis, menit, jadwal_ganti, dipakai_tabayyun_id, badal_pengajar_id, halaqah:halaqah_id(name), badal:badal_pengajar_id(name)')
+          .select('id, shakwa_id, pengajar_id, tanggal, jenis, menit, jadwal_ganti, dipakai_tabayyun_id, badal_pengajar_id, halaqah:halaqah_id(name), badal:badal_pengajar_id(name)')
           .in('shakwa_id', shakwaIds)
       : Promise.resolve({ data: [] as unknown[] }),
   ]);
@@ -159,6 +161,7 @@ export async function getShakwaRekap(f: ShakwaFilter = {}): Promise<ShakwaRekap>
   for (const raw of (izinRows.data ?? []) as Array<{
     id: string;
     shakwa_id: string;
+    pengajar_id: string;
     tanggal: string;
     jenis: ShakwaIzinJenis;
     menit: number | null;
@@ -178,6 +181,7 @@ export async function getShakwaRekap(f: ShakwaFilter = {}): Promise<ShakwaRekap>
       jadwalGanti: raw.jadwal_ganti,
       halaqahName: (raw.halaqah as unknown as { name: string } | null)?.name ?? null,
       sudahTerpakai: !!raw.dipakai_tabayyun_id,
+      pengajarId: raw.pengajar_id,
       badalPengajarId: raw.badal_pengajar_id,
       badalNama: (raw.badal as unknown as { name: string } | null)?.name ?? null,
     });

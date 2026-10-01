@@ -388,6 +388,7 @@ export async function kirimShakwa(
           tplKabariBadal({
             namaBadal: b.name,
             namaPengajar: pengajar.name,
+            gender: pengajar.gender,
             tanggal: r.tanggal,
             halaqahNama: r.halaqahId ? (namaHalaqah.get(r.halaqahId) ?? null) : null,
             nomorTiket: simpan.nomorTiket,

@@ -960,6 +960,8 @@ export function tplShakwaKeTujuan(args: {
 export function tplKabariBadal(args: {
   namaBadal: string;
   namaPengajar: string;
+  /** Badal selalu segender dengan pengajar — menentukan sapaan antum/anti. */
+  gender: 'ikhwan' | 'akhwat';
   tanggal: string;
   halaqahNama: string | null;
   nomorTiket: string;
@@ -967,7 +969,7 @@ export function tplKabariBadal(args: {
   return [
     `Assalamu'alaikum ${args.namaBadal},`,
     ``,
-    `Saya *${args.namaPengajar}* berhalangan mengajar dan memohon kesediaan antum/anti menjadi badal:`,
+    `Saya *${args.namaPengajar}* berhalangan mengajar dan memohon kesediaan ${args.gender === 'akhwat' ? 'anti' : 'antum'} menjadi badal:`,
     ``,
     `Tanggal: *${args.tanggal}*`,
     `Halaqah: ${args.halaqahNama ?? 'semua halaqah saya hari itu'}`,
