@@ -300,7 +300,8 @@ unmerged branches too. It has already bitten twice on this branch: `0069` and
 kelayakan; `0086` cycle bulanan; `0087` program_kelas.presensi_via_halaqah_mulai;
 `0088` evaluasi skor maks 95 + ambang 65 (dibatalkan `0090`: kembali 100 + 70;
 `0089` dipakai branch lain)
-(next free: `0091` — note `scripts/sql/0084-*.sh` is a data fix, not a migration).
+`0091` shakwa izin badal
+(next free: `0092` — note `scripts/sql/0084-*.sh` is a data fix, not a migration).
 
 unmerged branches too. Ketersediaan (`docs/ketersediaan-mengajar-hits`) holds
 `0063`–`0067`, `0071`, `0072` — applied to prod but not yet on `main`.
