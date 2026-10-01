@@ -28,9 +28,10 @@ type RincianRow = {
   menit: string;
   jadwalGanti: string;
   halaqahId: string;
+  badalId: string;
 };
 
-const barisKosong: RincianRow = { tanggal: '', jenis: '', menit: '', jadwalGanti: '', halaqahId: '' };
+const barisKosong: RincianRow = { tanggal: '', jenis: '', menit: '', jadwalGanti: '', halaqahId: '', badalId: '' };
 
 const labelStyle: React.CSSProperties = {
   display: 'block',
@@ -46,6 +47,7 @@ export function ShakwaForm({
   halaqahPengajar,
   semuaProgram,
   programSaya,
+  calonBadal,
 }: {
   prefillNama: string;
   prefillGender: string;
@@ -55,6 +57,8 @@ export function ShakwaForm({
   semuaProgram: ProgramOpsi[];
   /** Program & halaqah yang diajar pengguna ini — kosong bila bukan pengajar. */
   programSaya: ProgramOpsi[];
+  /** Pengajar aktif segender (tanpa diri sendiri) — pilihan badal. */
+  calonBadal: Array<{ id: string; name: string }>;
 }) {
   const [gender, setGender] = useState(prefillGender);
   // Pengajar melihat program yang ia ajar dulu; "Program lain…" membuka daftar lengkap.
@@ -126,6 +130,27 @@ export function ShakwaForm({
           <p className="t-small" style={{ color: 'var(--muted-2)' }}>
             Laporan ini masuk ke rekap harian koordinator — tak perlu dikirim lewat WhatsApp.
           </p>
+        )}
+        {hasil.badalWa && hasil.badalWa.length > 0 && (
+          <div style={{ marginTop: 14 }}>
+            <div className="t-small" style={{ fontWeight: 600, marginBottom: 6 }}>
+              Kabari pengajar badal
+            </div>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              {hasil.badalWa.map((b, i) => (
+                <a
+                  key={`${b.url}-${i}`}
+                  href={b.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="btn"
+                  style={{ textDecoration: 'none' }}
+                >
+                  Kabari badal: {b.nama}
+                </a>
+              ))}
+            </div>
+          </div>
         )}
         <div style={{ marginTop: 16 }}>
           <button
@@ -451,7 +476,9 @@ export function ShakwaForm({
                       </div>
                       <div>
                         <label className="t-tiny" htmlFor={`izin-menit-${idx}`} style={{ color: 'var(--muted-2)' }}>
-                          {jenisDef?.butuhTanggalGanti
+                          {jenisDef?.butuhBadal
+                            ? 'Pengajar Badal'
+                            : jenisDef?.butuhTanggalGanti
                             ? 'Jadwal Kelas Pengganti'
                             : jenisDef?.value === 'KMT'
                               ? 'Lama Terlambat (menit)'
@@ -459,7 +486,24 @@ export function ShakwaForm({
                                 ? 'Lama KBLA (menit)'
                                 : 'Jumlah menit'}
                         </label>
-                        {jenisDef?.butuhTanggalGanti ? (
+                        {jenisDef?.butuhBadal ? (
+                          <select
+                            id={`izin-menit-${idx}`}
+                            name="izin_badal"
+                            required
+                            value={r.badalId}
+                            onChange={(e) => ubahRincian(idx, { badalId: e.target.value })}
+                            className="input"
+                            style={{ width: '100%' }}
+                          >
+                            <option value="">— pilih pengajar —</option>
+                            {calonBadal.map((p) => (
+                              <option key={p.id} value={p.id}>
+                                {p.name}
+                              </option>
+                            ))}
+                          </select>
+                        ) : jenisDef?.butuhTanggalGanti ? (
                           <input
                             id={`izin-menit-${idx}`}
                             type="date"
@@ -490,7 +534,10 @@ export function ShakwaForm({
                     {/* Field sejajar per indeks: yang tak dipakai tetap dikirim kosong
                         supaya urutan baris di server tak bergeser. */}
                     {!jenisDef?.butuhTanggalGanti && <input type="hidden" name="izin_jadwal_ganti" value="" />}
-                    {jenisDef?.butuhTanggalGanti && <input type="hidden" name="izin_menit" value="" />}
+                    {(jenisDef?.butuhTanggalGanti || jenisDef?.butuhBadal) && (
+                      <input type="hidden" name="izin_menit" value="" />
+                    )}
+                    {!jenisDef?.butuhBadal && <input type="hidden" name="izin_badal" value="" />}
                     {rincian.length > 1 && (
                       <button
                         type="button"
