@@ -519,9 +519,11 @@ export interface ShakwaIzin {
   pengajar_id: string;
   halaqah_id: string | null;
   tanggal: string; // YYYY-MM-DD
-  jenis: 'KMT' | 'KBLA' | 'JKG' | 'TIDAK_HADIR';
+  jenis: 'KMT' | 'KBLA' | 'JKG' | 'TIDAK_HADIR' | 'BADAL';
   menit: number | null;
   jadwal_ganti: string | null;
+  /** Wajib untuk jenis BADAL, null untuk jenis lain (CHECK di 0091). */
+  badal_pengajar_id: string | null;
   alasan: string;
   dipakai_tabayyun_id: string | null;
   created_at: string;
