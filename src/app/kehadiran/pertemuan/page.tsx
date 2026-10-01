@@ -6,26 +6,18 @@ import {
   gabungProgram,
   geserPeriode,
   hariIniWib,
-  hitungRingkasan,
   labelAlasan,
-  nadaRingkasan,
   periodePertemuanOptions,
   periodeValid,
-  ringkasTotal,
   statusItem,
-  type HalaqahPertemuan,
   type PertemuanItem,
-  type RingkasanPertemuan,
   type StatusPertemuan,
 } from '@/lib/rekap-pertemuan';
-import { periodePengajarLabel } from '@/lib/periode-pengajar';
-import { tanggalSedang } from '@/lib/tanggal-id';
-import { FiturHeader, ChipPeriode } from '@/components/FiturHeader';
+import { periodePengajarLabel, periodePengajarRange } from '@/lib/periode-pengajar';
+import { FiturHeader } from '@/components/FiturHeader';
 import { MonthNavSelect } from '@/components/MonthNavSelect';
-import { StatCard } from '@/components/ui/StatCard';
-import { SectionHeader } from '@/components/ui/SectionHeader';
-import { Icon } from '@/components/icons';
 import { TombolPerbarui } from './TombolPerbarui';
+import { RekapView, type BarisPertemuan, type SinkronInfo, type StatusTampil } from './RekapView';
 
 // Rekap jumlah pertemuan tiap program & halaqah yang diajar pengajar, per
 // periode 16–15. Sumber: snapshot Dashboard Edu (disinkron beberapa kali
@@ -34,35 +26,15 @@ import { TombolPerbarui } from './TombolPerbarui';
 
 export const dynamic = 'force-dynamic';
 
-const KELAS_NADA: Record<ReturnType<typeof nadaRingkasan>, string> = {
-  hijau: 'badge-hijau',
-  kuning: 'badge-kuning',
-  merah: 'badge-merah',
-  netral: 'badge-neutral',
-};
-
-const KELAS_STATUS: Record<StatusPertemuan, string> = {
-  selesai: 'badge-hijau',
-  dikonfirmasi: 'badge-neutral',
-  berhalangan: 'badge-kuning',
-  terlewat: 'badge-merah',
-  akan_datang: 'badge-neutral',
-};
-
-function labelStatus(it: PertemuanItem, status: StatusPertemuan): string {
-  switch (status) {
-    case 'selesai':
-      return 'Selesai';
-    case 'dikonfirmasi':
-      return 'Dikonfirmasi mengajar';
-    case 'berhalangan':
-      return `Berhalangan (${labelAlasan(it.alasan)})`;
-    case 'terlewat':
-      return 'Belum diinput';
-    case 'akan_datang':
-      return 'Akan datang';
-  }
-}
+// Warna penanda tiap halaqah (dipakai bergiliran).
+const WARNA_HALAQAH = [
+  'var(--accent)',
+  'oklch(0.72 0.11 80)',
+  'oklch(0.55 0.08 250)',
+  'oklch(0.62 0.12 20)',
+  'oklch(0.58 0.1 300)',
+  'oklch(0.62 0.09 200)',
+];
 
 /** '29 Sep, 11.30 WIB' dari ISO. */
 function waktuWib(iso: string): string {
@@ -78,78 +50,27 @@ function waktuWib(iso: string): string {
   return `${s} WIB`;
 }
 
-/** Rincian singkat di bawah nama halaqah: hanya angka yang bukan nol. */
-function rincianRingkas(r: RingkasanPertemuan): string {
-  const bagian: string[] = [];
-  if (r.dikonfirmasiMengajar > 0) bagian.push(`${r.dikonfirmasiMengajar} dikonfirmasi`);
-  if (r.berhalangan > 0) bagian.push(`${r.berhalangan} berhalangan`);
-  if (r.terlewat > 0) bagian.push(`${r.terlewat} belum diinput`);
-  if (r.akanDatang > 0) bagian.push(`${r.akanDatang} akan datang`);
-  return bagian.join(' · ');
-}
-
-function kunciHalaqah(h: HalaqahPertemuan): string {
-  return [h.sumber, h.programKey, h.halaqahNama, h.sebagaiBadal ? 'b' : 'u', h.guruUtama ?? ''].join('|');
+function statusTampil(it: PertemuanItem, hariIni: string): StatusTampil {
+  const st: StatusPertemuan = statusItem(it, hariIni);
+  switch (st) {
+    case 'selesai':
+      return 'selesai';
+    case 'dikonfirmasi':
+      return 'dikonfirmasi';
+    case 'berhalangan':
+      return 'berhalangan';
+    case 'terlewat':
+      return 'belum';
+    default:
+      return it.tanggal === hariIni ? 'hari_ini' : 'terjadwal';
+  }
 }
 
 function Catatan({ children }: { children: ReactNode }) {
   return (
-    <div className="card-flat" style={{ padding: '12px 14px', marginBottom: 12, borderRadius: 10 }}>
+    <div className="rp-kartu" style={{ padding: '12px 14px' }}>
       <div className="t-small">{children}</div>
     </div>
-  );
-}
-
-function BarisHalaqah({ h, hariIni }: { h: HalaqahPertemuan; hariIni: string }) {
-  const r = hitungRingkasan(h.pertemuan, hariIni);
-  const keterangan = [
-    h.sebagaiBadal ? `Badal untuk ${h.guruUtama ?? 'pengajar lain'}` : null,
-    h.cocokLewat === 'nama' ? 'dicocokkan lewat nama' : null,
-  ]
-    .filter(Boolean)
-    .join(' · ');
-  const rincian = rincianRingkas(r);
-
-  return (
-    <details className="list-details">
-      <summary className="list-row" style={{ cursor: 'pointer' }}>
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontSize: 14, fontWeight: 600 }}>{h.halaqahNama}</div>
-          {keterangan && <div className="sub">{keterangan}</div>}
-          {rincian && <div className="sub">{rincian}</div>}
-        </div>
-        <span className={`badge ${KELAS_NADA[nadaRingkasan(r)]}`}>
-          {r.selesai}/{r.terjadwal}
-        </span>
-        <span className="arrow chev">{Icon.arrow(14)}</span>
-      </summary>
-      {h.pertemuan.length === 0 ? (
-        <div className="list-row" style={{ background: 'var(--surface-2)' }}>
-          <div className="t-small" style={{ color: 'var(--muted-2)' }}>Belum ada pertemuan pada periode ini.</div>
-        </div>
-      ) : (
-        h.pertemuan.map((it) => {
-          const st = statusItem(it, hariIni);
-          return (
-            <div key={it.id} className="list-row" style={{ background: 'var(--surface-2)', padding: '9px 14px' }}>
-              <div style={{ flex: 1, minWidth: 0, fontSize: 13 }}>
-                {it.urutan != null ? `Pertemuan ke-${it.urutan} · ` : ''}
-                {tanggalSedang(it.tanggal)}
-              </div>
-              <span className={`badge ${KELAS_STATUS[st]}`} style={{ flexShrink: 0 }}>
-                {labelStatus(it, st)}
-              </span>
-            </div>
-          );
-        })
-      )}
-      {h.tautan && (
-        <a href={h.tautan} className="list-row" style={{ background: 'var(--surface-2)' }}>
-          <div style={{ flex: 1, fontSize: 13, fontWeight: 600 }}>Buka check-in Kelas Maahir</div>
-          <span className="arrow">{Icon.arrow(14)}</span>
-        </a>
-      )}
-    </details>
   );
 }
 
@@ -167,7 +88,56 @@ export default async function RekapPertemuanPage({
     getPertemuanMaahir(id.aksesMaahir, month, hariIni),
   ]);
   const programs = gabungProgram([...h.halaqah, ...m.halaqah]);
-  const total = ringkasTotal(programs, hariIni);
+  const { start, end } = periodePengajarRange(month);
+
+  // Satu baris per pertemuan, diurut tanggal — bahan tampilan Daftar & Kalender.
+  const baris: BarisPertemuan[] = [];
+  let iWarna = 0;
+  for (const p of programs) {
+    for (const x of p.halaqah) {
+      const warna = WARNA_HALAQAH[iWarna++ % WARNA_HALAQAH.length];
+      // "Dicocokkan lewat nama" disebut sekali di kartu sinkron, bukan per baris.
+      const keterangan = x.sebagaiBadal ? `badal untuk ${x.guruUtama ?? 'pengajar lain'}` : null;
+      for (const it of x.pertemuan) {
+        const status = statusTampil(it, hariIni);
+        baris.push({
+          id: `${x.sumber}|${x.programKey}|${x.halaqahNama}|${it.id}`,
+          tanggal: it.tanggal,
+          urutan: it.urutan,
+          status,
+          alasan: status === 'berhalangan' ? labelAlasan(it.alasan) : null,
+          halaqahNama: x.halaqahNama,
+          programNama: p.programNama,
+          warna,
+          keterangan,
+        });
+      }
+    }
+  }
+  baris.sort((a, b) => (a.tanggal !== b.tanggal ? (a.tanggal < b.tanggal ? -1 : 1) : (a.urutan ?? 0) - (b.urutan ?? 0)));
+
+  const hitung = (...st: StatusTampil[]) => baris.filter((b) => st.includes(b.status)).length;
+  const cSelesai = hitung('selesai', 'dikonfirmasi');
+  const cBelum = hitung('belum');
+  const cBerhalangan = hitung('berhalangan');
+  const cHariIni = hitung('hari_ini');
+  const cMendatang = hitung('terjadwal');
+  const total = baris.length;
+  const jumlahHalaqah = programs.reduce((n, p) => n + p.halaqah.length, 0);
+
+  const totalHari = Math.round((Date.parse(end) - Date.parse(start)) / 86_400_000) + 1;
+  const hariKe = Math.round((Date.parse(hariIni) - Date.parse(start)) / 86_400_000) + 1;
+  const keteranganHari =
+    hariKe < 1 ? 'Periode belum dimulai' : hariKe > totalHari ? 'Periode sudah selesai' : `Hari ke-${hariKe} dari ${totalHari}`;
+
+  const pct = (v: number) => (total ? `${((v / total) * 100).toFixed(2)}%` : '0%');
+  const bar = [
+    { l: 'Selesai', n: cSelesai, c: 'oklch(0.78 0.12 150)' },
+    { l: 'Belum diinput', n: cBelum, c: 'oklch(0.72 0.15 25)' },
+    ...(cBerhalangan > 0 ? [{ l: 'Berhalangan', n: cBerhalangan, c: 'oklch(0.75 0.08 250)' }] : []),
+    { l: 'Hari ini', n: cHariIni, c: 'var(--emas)' },
+    { l: 'Mendatang', n: cMendatang, c: 'rgba(255,255,255,0.38)' },
+  ];
 
   const options = periodePertemuanOptions(hariIni);
   const ada = new Set(options.map((o) => o.value));
@@ -176,17 +146,31 @@ export default async function RekapPertemuanPage({
 
   const hilmihsKosong = h.status === 'kosong';
   const adaHalaqahEdu = h.halaqah.length > 0;
+  const adaCocokNama = h.halaqah.some((x) => x.cocokLewat === 'nama');
+  const akunTakDitemukan = !hilmihsKosong && !h.dicocokkan && (!!id.pengajarId || !m.aktif);
+
+  const sinkron: SinkronInfo = h.gagalTerakhir
+    ? { nada: 'merah', label: 'Gagal terhubung', desc: `Menampilkan data terakhir${h.syncedAt ? ` (per ${waktuWib(h.syncedAt)})` : ''}.` }
+    : hilmihsKosong
+      ? { nada: 'kuning', label: 'Belum tersinkron', desc: 'Data Dashboard Edu belum tersedia. Coba tekan Perbarui.' }
+      : akunTakDitemukan
+        ? { nada: 'merah', label: 'Akun tidak ditemukan', desc: `Dicek ${h.syncedAt ? waktuWib(h.syncedAt) : '—'}.` }
+        : {
+            nada: h.status === 'basi' ? 'kuning' : 'hijau',
+            label: h.status === 'basi' ? 'Data lama' : 'Tersinkron',
+            desc: `Data per ${h.syncedAt ? waktuWib(h.syncedAt) : '—'} · otomatis beberapa kali sehari${m.aktif ? ' · Kelas Maahir langsung dari check-in' : ''}${adaCocokNama ? ' · sebagian halaqah dicocokkan lewat nama' : ''}`,
+          };
 
   function navPeriode(target: string, label: string, simbol: string) {
     if (!ada.has(target)) {
       return (
-        <span className="btn btn-sm btn-ghost" aria-disabled="true" style={{ opacity: 0.4, pointerEvents: 'none' }}>
+        <span className="rp-nav" aria-disabled="true" style={{ opacity: 0.35 }}>
           {simbol}
         </span>
       );
     }
     return (
-      <a href={`?month=${target}`} className="btn btn-sm btn-ghost" aria-label={label}>
+      <a href={`?month=${target}`} className="rp-nav" aria-label={label}>
         {simbol}
       </a>
     );
@@ -194,106 +178,101 @@ export default async function RekapPertemuanPage({
 
   return (
     <main style={{ minHeight: '100vh' }}>
-      <div style={{ maxWidth: 480, margin: '0 auto' }}>
-        <FiturHeader ikon="grafik" judul="Rekap Pertemuan" sub={id.nama} menumpang>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-            <div>
-              <ChipPeriode>{periodePengajarLabel(month)}</ChipPeriode>
-            </div>
+      <div className="rp-wadah">
+        <FiturHeader
+          ikon="grafik"
+          judul="Rekap Pertemuan"
+          sub={`${id.nama}${jumlahHalaqah ? ` · ${jumlahHalaqah} kelas` : ''}`}
+          menumpang
+          kanan={
             <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
               {navPeriode(sebelum, 'Periode sebelumnya', '‹')}
-              <div style={{ flex: 1, minWidth: 0 }}>
+              <span className="rp-periode">
                 <MonthNavSelect options={options} value={month} />
-              </div>
+              </span>
               {navPeriode(sesudah, 'Periode berikutnya', '›')}
+            </div>
+          }
+        >
+          <div className="rp-hero">
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 12, flexWrap: 'wrap' }}>
+              <div style={{ fontSize: 14, color: 'rgba(255,255,255,0.8)' }}>
+                <span className="rp-hero-besar">{total ? `${cSelesai}/${cSelesai + cBelum}` : '–'}</span>{' '}
+                {total ? 'pertemuan terlaksana s/d hari ini' : 'belum ada data pertemuan'}
+              </div>
+              <div style={{ fontSize: 12, color: 'var(--emas)', fontWeight: 600 }}>{keteranganHari}</div>
+            </div>
+            <div className="rp-bar" aria-hidden>
+              {bar.map((s) => (s.n > 0 ? <div key={s.l} style={{ width: pct(s.n), background: s.c }} /> : null))}
+            </div>
+            <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', fontSize: 12, color: 'rgba(255,255,255,0.78)' }}>
+              {bar.map((s) => (
+                <span key={s.l} style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                  <span style={{ width: 8, height: 8, borderRadius: 2, background: s.c }} />
+                  {s.l} <b style={{ color: '#fff' }}>{total ? s.n : '–'}</b>
+                </span>
+              ))}
             </div>
           </div>
         </FiturHeader>
 
-        <div className="page">
-          <div className="stat-grid-3 fh-tumpang" style={{ marginBottom: 12 }}>
-            <StatCard
-              value={`${total.selesai}/${total.jatuhTempo}`}
-              label="Terlaksana"
-              sub="s/d hari ini"
-              valueColor={total.jatuhTempo > 0 ? 'var(--hijau-ink)' : undefined}
-            />
-            <StatCard
-              value={total.terlewat}
-              label="Belum diinput"
-              valueColor={total.terlewat > 0 ? 'var(--merah-ink)' : undefined}
-            />
-            <StatCard value={total.terjadwal} label="Terjadwal periode ini" />
+        <div className="page rp-isi">
+          <div className="rp-stat fh-tumpang">
+            {[
+              { l: 'Terlaksana', v: total ? `${cSelesai}/${cSelesai + cBelum}` : '–', sub: 'pertemuan s/d hari ini', dot: 'var(--hijau)', merah: false },
+              { l: 'Belum diinput', v: total ? String(cBelum) : '–', sub: 'sudah lewat, belum ditandai', dot: 'var(--merah)', merah: cBelum > 0 },
+              { l: 'Mendatang', v: total ? String(cHariIni + cMendatang) : '–', sub: 'termasuk hari ini', dot: 'var(--emas)', merah: false },
+              { l: 'Terjadwal periode', v: total ? String(total) : '–', sub: `total jadwal ${periodePengajarLabel(month)}`, dot: 'var(--muted-2)', merah: false },
+            ].map((k) => (
+              <div key={k.l} className={`rp-statkartu${k.merah ? ' merah' : ''}`}>
+                <div className="rp-statlabel">
+                  <span style={{ width: 8, height: 8, borderRadius: 2, background: k.dot }} />
+                  {k.l}
+                </div>
+                <div className="rp-statnilai">{k.v}</div>
+                <div className="rp-redup" style={{ lineHeight: 1.35 }}>{k.sub}</div>
+              </div>
+            ))}
           </div>
 
-          {/* Status sumber data */}
-          <div className="card-flat" style={{ padding: '10px 14px', marginBottom: 16, borderRadius: 10 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', fontSize: 12 }}>
-              <span style={{ fontWeight: 600 }}>Dashboard Edu</span>
-              <span style={{ color: 'var(--muted-2)' }}>
-                · {h.syncedAt ? `data per ${waktuWib(h.syncedAt)}` : 'belum pernah disinkron'}
-              </span>
-              {h.status === 'basi' && <span className="badge badge-kuning">data lama</span>}
-            </div>
-            {h.gagalTerakhir && (
-              <div className="t-tiny" style={{ color: 'var(--kuning-ink)', marginTop: 4 }}>
-                Dashboard Edu sedang tidak bisa dihubungi; menampilkan data terakhir.
+          {akunTakDitemukan && (
+            <div className="rp-takditemukan">
+              <div className="rp-takditemukan-ikon" aria-hidden>!</div>
+              <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 6 }}>
+                <div style={{ fontSize: 15, fontWeight: 700 }}>Akun Anda belum ditemukan di Dashboard Edu</div>
+                <div style={{ fontSize: 13, lineHeight: 1.5, color: 'var(--ink-2)' }}>
+                  Rekap periode ini belum bisa ditampilkan. Penyebab paling umum:
+                </div>
+                <ul style={{ margin: 0, paddingLeft: 18, fontSize: 13, lineHeight: 1.6, color: 'var(--ink-2)', listStyle: 'disc' }}>
+                  <li>Nomor WhatsApp di Dashboard Edu berbeda dengan nomor akun Maahir</li>
+                  <li>Nama tercatat berbeda (ejaan atau gelar)</li>
+                </ul>
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', marginTop: 6 }}>
+                  <a href="/shakwa" className="btn btn-sm btn-wa" style={{ height: 40, textDecoration: 'none' }}>
+                    Sampaikan ke koordinator
+                  </a>
+                  <TombolPerbarui month={month} />
+                </div>
               </div>
-            )}
-            {m.aktif && (
-              <div style={{ fontSize: 12, marginTop: 4 }}>
-                <span style={{ fontWeight: 600 }}>Kelas Maahir</span>
-                <span style={{ color: 'var(--muted-2)' }}> · langsung dari check-in</span>
-              </div>
-            )}
-            <div style={{ marginTop: 8 }}>
-              <TombolPerbarui month={month} />
             </div>
-          </div>
-
-          {/* Keadaan kosong / belum cocok */}
+          )}
           {hilmihsKosong && !m.aktif && (
-            <Catatan>
-              Data Dashboard Edu belum tersedia. Coba tekan Perbarui beberapa saat lagi.
-            </Catatan>
+            <Catatan>Data Dashboard Edu belum tersedia. Coba tekan Perbarui beberapa saat lagi.</Catatan>
           )}
-          {/* Pengajar yang hanya mengampu Kelas Maahir (tanpa akun pengajar HITS) tak
-              perlu diberi tahu soal Dashboard Edu. */}
-          {!hilmihsKosong && !h.dicocokkan && (id.pengajarId || !m.aktif) && (
-            <Catatan>
-              Akun Anda belum ditemukan di Dashboard Edu untuk periode ini. Biasanya karena nomor
-              WhatsApp di Dashboard Edu berbeda dengan nomor akun Maahir, atau nama tercatat
-              berbeda. Mohon hubungi koordinator agar akun Anda dicocokkan.
-            </Catatan>
-          )}
-          {!hilmihsKosong && h.dicocokkan && !adaHalaqahEdu && (
+          {!hilmihsKosong && h.dicocokkan && !adaHalaqahEdu && !m.aktif && (
             <Catatan>Tidak ada jadwal halaqah pada periode ini.</Catatan>
           )}
-          {m.aktif && m.sebelumAnchor && (
-            <Catatan>Check-in Kelas Maahir baru dicatat sejak 16 Sep 2026.</Catatan>
-          )}
+          {m.aktif && m.sebelumAnchor && <Catatan>Check-in Kelas Maahir baru dicatat sejak 16 Sep 2026.</Catatan>}
 
-          {programs.map((p) => {
-            const semua = p.halaqah.flatMap((x) => x.pertemuan);
-            const r = hitungRingkasan(semua, hariIni);
-            return (
-              <section key={`${p.sumber}|${p.programKey}`} style={{ marginBottom: 16 }}>
-                <SectionHeader title={p.programNama} right={`${r.selesai}/${r.terjadwal}`} as="h2" />
-                <div className="card-flat" style={{ overflow: 'hidden' }}>
-                  {p.halaqah.map((x) => (
-                    <BarisHalaqah key={kunciHalaqah(x)} h={x} hariIni={hariIni} />
-                  ))}
-                </div>
-              </section>
-            );
-          })}
-
-          <p className="t-small" style={{ color: 'var(--muted)', marginTop: 16, lineHeight: 1.5 }}>
-            Periode 16 s/d 15. &ldquo;Terjadwal&rdquo; = jadwal pertemuan yang dibuat di Dashboard
-            Edu (atau jadwal Kelas Maahir), bukan target kontrak. &ldquo;Belum diinput&rdquo; =
-            jadwal yang sudah lewat tetapi belum ditandai selesai atau dikonfirmasi. Data Dashboard
-            Edu diperbarui otomatis beberapa kali sehari.
-          </p>
+          <RekapView
+            baris={baris}
+            hariIni={hariIni}
+            start={start}
+            end={end}
+            month={month}
+            sinkron={sinkron}
+            adaData={baris.length > 0}
+          />
         </div>
       </div>
     </main>

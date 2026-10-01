@@ -1407,3 +1407,113 @@ body:has([data-punya-beranda]) .home-fab { display: none; }
 /* Tombol ghost di mana pun di dalam header forest (mis. navigasi periode ‹ ›). */
 .fitur-header .btn-ghost { background: transparent; border-color: var(--forest-line); color: var(--forest-ink); }
 .fitur-header .btn-ghost:hover:not(:disabled) { background: rgba(247,244,236,0.08); }
+
+/* ========== Rekap Pertemuan (/kehadiran/pertemuan) ========== */
+.rp-wadah { max-width: 1080px; margin: 0 auto; }
+.rp-isi { display: flex; flex-direction: column; gap: 16px; }
+.rp-nav {
+  width: 34px; height: 34px; border-radius: 8px; flex-shrink: 0;
+  border: 1px solid var(--forest-line); color: var(--forest-ink);
+  display: inline-flex; align-items: center; justify-content: center;
+  font-size: 16px; text-decoration: none;
+}
+a.rp-nav:hover { background: rgba(247,244,236,0.08); }
+.rp-periode .chip-select {
+  height: 34px; border-radius: 8px; border: 0; background-color: #fff; color: var(--ink);
+  font-size: 13px; font-weight: 600; padding: 0 28px 0 12px;
+}
+.rp-hero { display: flex; flex-direction: column; gap: 10px; }
+.rp-hero-besar { font-size: 26px; font-weight: 800; color: #fff; letter-spacing: -0.02em; }
+.rp-bar {
+  display: flex; height: 10px; border-radius: 5px; overflow: hidden; gap: 2px;
+  background: rgba(255,255,255,0.12);
+}
+.rp-stat { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; }
+@media (max-width: 640px) { .rp-stat { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.rp-statkartu {
+  background: var(--surface); border: 1px solid var(--line); border-radius: 14px;
+  padding: 14px 16px; display: flex; flex-direction: column; gap: 6px;
+  box-shadow: 0 10px 24px -14px rgba(46,64,59,0.45);
+}
+.rp-statkartu.merah { background: var(--merah-tint); border-color: var(--merah-line); }
+.rp-statkartu.merah .rp-statnilai { color: var(--merah-ink); }
+.rp-statlabel { display: flex; align-items: center; gap: 7px; font-size: 12px; font-weight: 600; color: var(--ink-2); }
+.rp-statnilai { font-size: 30px; font-weight: 800; letter-spacing: -0.03em; line-height: 1; color: var(--ink); }
+.rp-redup { font-size: 12px; color: var(--muted); }
+.rp-kartu { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; }
+.rp-dua { display: flex; flex-wrap: wrap; gap: 16px; align-items: flex-start; }
+.rp-sinkron { padding: 14px 16px; display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+.rp-sinkron-ikon {
+  width: 36px; height: 36px; border-radius: 10px; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+}
+.rp-lencana {
+  display: inline-flex; align-items: center; gap: 6px; height: 22px; padding: 0 8px;
+  border-radius: 999px; border: 1px solid; font-size: 11px; font-weight: 600; white-space: nowrap;
+}
+.rp-dot { width: 6px; height: 6px; border-radius: 50%; display: inline-block; flex-shrink: 0; }
+.rp-kelas { width: 7px; height: 7px; border-radius: 2px; flex-shrink: 0; }
+.rp-cara > summary {
+  list-style: none; cursor: pointer;
+  display: flex; align-items: center; gap: 10px; padding: 14px 16px;
+}
+.rp-cara > summary::-webkit-details-marker { display: none; }
+.rp-cara-i {
+  width: 22px; height: 22px; border-radius: 50%; flex-shrink: 0;
+  background: var(--surface-3); color: var(--ink-2);
+  display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 800;
+}
+.rp-cara .rp-cara-buka::after { content: 'Buka'; }
+.rp-cara[open] .rp-cara-buka::after { content: 'Tutup'; }
+.rp-saring { display: flex; gap: 2px; padding: 3px; background: var(--surface-3); border-radius: 10px; flex-wrap: wrap; }
+.rp-saring button {
+  height: 30px; padding: 0 10px; border-radius: 7px; border: 0; background: transparent;
+  color: var(--muted); font: inherit; font-size: 12.5px; font-weight: 600; cursor: pointer;
+  display: inline-flex; gap: 6px; align-items: center;
+}
+.rp-saring button.on { background: var(--surface); color: var(--ink); box-shadow: 0 1px 2px rgba(20,18,14,0.08); }
+.rp-angka { font-size: 11px; color: var(--muted); font-family: var(--font-mono), ui-monospace, monospace; }
+.rp-baris { display: flex; gap: 14px; align-items: center; padding: 12px 14px; }
+.rp-baris + .rp-baris { border-top: 1px solid var(--line); }
+.rp-tgl {
+  width: 48px; flex-shrink: 0; padding: 6px 0; border-radius: 10px;
+  display: flex; flex-direction: column; align-items: center; gap: 1px;
+}
+.rp-tgl-h { font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; opacity: 0.8; }
+.rp-tgl-n { font-size: 18px; font-weight: 800; line-height: 1.05; letter-spacing: -0.02em; }
+.rp-tgl-b { font-size: 10.5px; font-weight: 600; opacity: 0.8; }
+.rp-kosong {
+  background: var(--surface); border: 1px dashed var(--line-2); border-radius: 14px;
+  padding: 32px 20px; text-align: center; display: flex; flex-direction: column; gap: 6px; align-items: center;
+}
+.rp-kal { padding: 16px; display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.rp-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; }
+.rp-grid-h { text-align: center; font-size: 11px; font-weight: 700; color: var(--muted); padding: 4px 0; }
+.rp-sel {
+  height: 52px; border-radius: 10px; border: 1.5px solid transparent; padding: 0;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 5px;
+  font: inherit; font-size: 13px; font-weight: 600;
+}
+@media (min-width: 900px) { .rp-sel { height: 64px; } }
+.rp-hari-kepala {
+  padding: 12px 16px; display: flex; justify-content: space-between; align-items: center; gap: 8px;
+  background: var(--surface-2); border-bottom: 1px solid var(--line);
+}
+.rp-perhatian {
+  background: var(--merah-tint); border: 1px solid var(--merah-line); border-radius: 14px;
+  padding: 14px 16px; display: flex; flex-direction: column; gap: 10px;
+}
+.rp-perhatian button {
+  display: flex; justify-content: space-between; gap: 10px; align-items: center;
+  padding: 9px 12px; border-radius: 8px; background: var(--surface); border: 1px solid var(--merah-line);
+  cursor: pointer; text-align: left; font: inherit;
+}
+.rp-takditemukan {
+  background: var(--merah-tint); border: 1px solid var(--merah-line); border-radius: 14px;
+  padding: 16px; display: flex; gap: 12px;
+}
+.rp-takditemukan-ikon {
+  width: 32px; height: 32px; border-radius: 50%; flex-shrink: 0;
+  background: var(--merah); color: #fff; font-weight: 800;
+  display: flex; align-items: center; justify-content: center;
+}
