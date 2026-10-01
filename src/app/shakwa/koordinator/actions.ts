@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache';
 import { supabaseAdmin } from '@/lib/supabase-admin';
 import { requireOneOfRoles } from '@/lib/session';
 import { logAudit } from '@/lib/audit';
+import { ambilCalonBadal, cekBadal } from '@/lib/shakwa-badal';
 
 export type UbahShakwaResult = { ok?: boolean; error?: string };
 
@@ -119,6 +120,68 @@ export async function ubahJadwalGantiIzin(
     // Nilai lama ikut dicatat — ini satu-satunya jejak tanggal sebelumnya,
     // karena barisnya ditimpa di tempat.
     detail: { dari: izin.jadwal_ganti, ke: tanggal, nomor_tiket: tiket.nomor_tiket },
+  });
+
+  revalidatePath('/shakwa/koordinator');
+  return { ok: true };
+}
+
+/**
+ * Ganti pengajar badal satu rincian izin BADAL.
+ *
+ * Seperti `jadwal_ganti`, badal tidak dipakai `cariIzinCocok` untuk mencocokkan
+ * izin, jadi aman diganti sesudah izin menempel ke tabayyun. Aturan siapa boleh
+ * jadi badal sama persis dengan formulir pengajar (cekBadal) — pembandingnya
+ * pengajar pemilik izin, bukan koordinator.
+ */
+export async function ubahBadalIzin(
+  _prev: UbahShakwaResult | undefined,
+  fd: FormData
+): Promise<UbahShakwaResult> {
+  const session = await requireOneOfRoles(['koordinator', 'koordinator_ketua_kelas']);
+
+  const id = String(fd.get('izin_id') ?? '');
+  const badalId = String(fd.get('badal_pengajar_id') ?? '').trim();
+  if (!id) return { error: 'Rincian izin tidak ditemukan.' };
+  if (!badalId) return { error: 'Pilih pengajar badal.' };
+
+  const { data: izin } = await supabaseAdmin
+    .from('shakwa_izin')
+    .select('id, shakwa_id, jenis, pengajar_id, badal_pengajar_id')
+    .eq('id', id)
+    .maybeSingle();
+  if (!izin || izin.jenis !== 'BADAL') return { error: 'Rincian izin tidak ditemukan.' };
+
+  // Syarat gender tiket — alasan sama dengan ubahJadwalGantiIzin.
+  const { data: tiket } = await supabaseAdmin
+    .from('shakwa')
+    .select('id, nomor_tiket')
+    .eq('id', izin.shakwa_id)
+    .eq('gender', session.gender)
+    .maybeSingle();
+  if (!tiket) return { error: 'Rincian izin tidak ditemukan.' };
+
+  if (izin.badal_pengajar_id === badalId) return { ok: true };
+
+  const calon = await ambilCalonBadal([badalId]);
+  const alasanTolak = cekBadal(calon.get(badalId) ?? null, {
+    id: izin.pengajar_id as string,
+    gender: session.gender,
+  });
+  if (alasanTolak) return { error: alasanTolak.charAt(0).toUpperCase() + alasanTolak.slice(1) };
+
+  const { error } = await supabaseAdmin
+    .from('shakwa_izin')
+    .update({ badal_pengajar_id: badalId })
+    .eq('id', id);
+  if (error) return { error: `Gagal menyimpan: ${error.message}` };
+
+  await logAudit({
+    actor: session,
+    action: 'shakwa.izin.badal',
+    targetTable: 'shakwa_izin',
+    targetId: id,
+    detail: { dari: izin.badal_pengajar_id, ke: badalId, nomor_tiket: tiket.nomor_tiket },
   });
 
   revalidatePath('/shakwa/koordinator');

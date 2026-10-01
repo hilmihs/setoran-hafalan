@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { requireOneOfRoles } from '@/lib/session';
 import { getShakwaRekap, countShakwaBelumDitangani, type ShakwaItem } from '@/lib/shakwa-rekap';
 import { signedLampiranUrls } from '@/lib/shakwa-storage';
+import { daftarCalonBadal } from '@/lib/shakwa-badal';
 import { KATEGORI } from '@/lib/shakwa';
 import type { ShakwaKategori, ShakwaStatus } from '@/lib/shakwa';
 import { buildWaMeUrl, tplShakwaBalasPelapor, tplShakwaRekapHarian } from '@/lib/whatsapp';
@@ -62,6 +63,10 @@ export default async function ShakwaKoordinatorPage({
     }),
     countShakwaBelumDitangani(gender),
   ]);
+
+  // Daftar calon badal hanya dimuat bila halaman ini memuat izin BADAL.
+  const adaBadal = rekap.items.some((i) => i.izin.some((z) => z.jenis === 'BADAL'));
+  const calonBadal = adaBadal ? await daftarCalonBadal(gender) : [];
 
   // Query saat ini (nilai tervalidasi) — untuk tautan filter/paginasi komponen.
   const current: ShakwaQuery = {
@@ -156,7 +161,13 @@ export default async function ShakwaKoordinatorPage({
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
               {rekap.items.map((i) => (
-                <ShakwaCard key={i.id} item={i} lampiran={lampiranByItem.get(i.id) ?? []} waUrl={balasUrl(i)} />
+                <ShakwaCard
+                  key={i.id}
+                  item={i}
+                  lampiran={lampiranByItem.get(i.id) ?? []}
+                  waUrl={balasUrl(i)}
+                  calonBadal={calonBadal}
+                />
               ))}
             </div>
           )}

@@ -3,6 +3,7 @@ import type { ShakwaItem } from '@/lib/shakwa-rekap';
 import { waktuRelatif } from './ui-helpers';
 import { ShakwaTindakForm } from './ShakwaTindakForm';
 import { IzinJadwalGantiForm } from './IzinJadwalGantiForm';
+import { IzinBadalForm } from './IzinBadalForm';
 
 const STATUS_WARNA: Record<ShakwaStatus, { bg: string; bd: string; ink: string }> = {
   submitted: { bg: 'var(--merah-tint)', bd: 'var(--merah-line)', ink: 'var(--merah-ink)' },
@@ -16,10 +17,13 @@ export function ShakwaCard({
   item,
   lampiran,
   waUrl,
+  calonBadal,
 }: {
   item: ShakwaItem;
   lampiran: Array<{ path: string; url: string | null }>;
   waUrl: string | null;
+  /** Pengajar aktif segender koordinator — pilihan ganti badal. */
+  calonBadal: Array<{ id: string; name: string }>;
 }) {
   const warna = STATUS_WARNA[item.status];
   const baru = item.status === 'submitted';
@@ -105,6 +109,7 @@ export function ShakwaCard({
                 {z.tanggal} · {z.jenisLabel}
                 {z.menit != null ? ` · ${z.menit} menit` : ''}
                 {z.jadwalGanti ? ` · diganti ${z.jadwalGanti}` : ''}
+                {z.badalNama ? ` · badal ${z.badalNama}` : ''}
                 {z.halaqahName ? ` · ${z.halaqahName}` : ' · semua halaqah'}
                 {z.sudahTerpakai ? ' · sudah menempel ke tabayyun' : ''}
               </div>
@@ -116,6 +121,13 @@ export function ShakwaCard({
                   izinId={z.id}
                   jadwalGanti={z.jadwalGanti}
                   sudahTerpakai={z.sudahTerpakai}
+                />
+              )}
+              {z.jenis === 'BADAL' && (
+                <IzinBadalForm
+                  izinId={z.id}
+                  badalPengajarId={z.badalPengajarId}
+                  calonBadal={calonBadal}
                 />
               )}
             </div>
