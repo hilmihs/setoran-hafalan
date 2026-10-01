@@ -187,10 +187,11 @@ export interface RapotPayloadTrack {
   v: 1;
   jenis_rapot: Track;
   identitas: RapotIdentitas;
-  ambang: number; // AMBANG_LULUS_AKHIR saat terbit (70 lalu 65 sejak 25 Sep 2026)
+  ambang: number; // AMBANG_LULUS_AKHIR saat terbit (70; 65 untuk terbitan 25 Sep – 1 Okt 2026)
   /**
-   * Skor tanpa kesalahan saat rapot terbit (`SKOR_MAKS`). Tidak ada di rapot yang
-   * terbit sebelum 25 Sep 2026 — baca lewat `skorMaksOf`, yang mengembalikan 100.
+   * Skor tanpa kesalahan saat rapot terbit (`SKOR_MAKS`: 100, atau 95 untuk
+   * terbitan 25 Sep – 1 Okt 2026). Tidak ada di rapot yang terbit sebelum
+   * 25 Sep 2026 — baca lewat `skorMaksOf`, yang mengembalikan 100.
    */
   skorMaks?: number;
   tanggal: string;
@@ -299,7 +300,7 @@ function ujianSnap(sesi: SesiNilaiInput[], nomor: number, label: string, ambang:
  *
  * `ambangUjianSesi` (= halaqah.ambang_ujian) hanya menentukan badge lulus di dalam
  * snap ujian, supaya cocok dengan layar Nilai pengajar. Ambang NILAI AKHIR tetap
- * fix `AMBANG_LULUS_AKHIR` (65) untuk kedua track.
+ * fix `AMBANG_LULUS_AKHIR` (70) untuk kedua track.
  */
 export function buildTrackRapotPayload(args: {
   track: Track;

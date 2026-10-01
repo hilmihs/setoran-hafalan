@@ -72,8 +72,8 @@ export default function SosialisasiPenilaianPage() {
             Skor = {SKOR_MAKS} − (Lahn Jaliy × 6) − (Lahn Khafiy × 2)
           </div>
           <div style={{ fontSize: 12, color: 'var(--ink-2)', marginBottom: 6 }}>
-            Tidak ada nilai 100: bacaan tanpa kesalahan sekalipun bernilai <b>{SKOR_MAKS}</b>, dan tiap kesalahan
-            mengurangi dari {SKOR_MAKS}. Skor ujian dan nilai akhir tidak dicetak di bawah <b>{NILAI_MINIMUM}</b>.
+            Bacaan tanpa kesalahan bernilai <b>{SKOR_MAKS}</b>, dan tiap kesalahan mengurangi dari {SKOR_MAKS}.
+            Skor ujian dan nilai akhir tidak dicetak di bawah <b>{NILAI_MINIMUM}</b>.
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginTop: 8 }}>
             <div>

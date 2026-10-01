@@ -74,7 +74,7 @@ export function mapHalaqah(slug: string, r: SrcHalaqah): MirrorHalaqah {
     pengajar_id: wa ? `wa:${wa}` : (r.pengajar ? `nm:${slug}:${r.pengajar}` : null),
     batch_id: slug,
     mustawa: null,
-    // ambang_ujian TIDAK dipetakan: kolom terkurasi lokal (default DB 65). Sumber
+    // ambang_ujian TIDAK dipetakan: kolom terkurasi lokal (default DB 70). Sumber
     // hilmihs tak menyediakannya — dulu dipaksa 70 & masuk COMPARE shg tiap sync
     // menimpa nilai kurasi. Kini dibiarkan agar setelan per-halaqah bertahan.
   };

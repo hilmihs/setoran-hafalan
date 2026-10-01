@@ -32,11 +32,11 @@ export const LAHN_BY_KEY: Record<string, LahnDef> =
 export const LAHN_BY_COLUMN: Record<string, LahnDef> =
   Object.fromEntries(ALL_LAHN.map((d) => [d.column, d]));
 
-// Kebijakan Majelis Pendidikan, 25 September 2026: ambang standar & lulus 65
-// (dulu 70). Rapot yang sudah terbit tidak ikut berubah — ambangnya tersimpan di
+// Ambang standar & lulus 70. Sempat 65 (25 Sep – 1 Okt 2026, lihat 0088/0090);
+// rapot yang terbit di jendela itu tidak ikut berubah — ambangnya tersimpan di
 // `payload.ambang` dan dicetak dari situ.
-export const AMBANG = 65;                // ambang standar global
-export const AMBANG_UJIAN_DEFAULT = 65;  // default lulus Ujian Akhir
+export const AMBANG = 70;                // ambang standar global
+export const AMBANG_UJIAN_DEFAULT = 70;  // default lulus Ujian Akhir (70%)
 export const JENIS = ['qn', 'pb', 'ujian'] as const;
 export type Jenis = (typeof JENIS)[number];
 
@@ -53,16 +53,15 @@ export function columnFor(key: string): string {
 }
 
 /**
- * Skor tertinggi yang bisa dicapai — tanpa kesalahan sama sekali pun skornya 95,
- * tidak ada nilai 100 (kebijakan Majelis Pendidikan, 25 September 2026). Berlaku
- * untuk SEMUA sesi, berkala maupun ujian, jadi nilai akhir juga paling tinggi 95.
+ * Skor tanpa kesalahan — 100, untuk semua sesi berkala maupun ujian.
  *
- * Rapot yang terbit sebelum aturan ini dihitung dari 100; angkanya tersimpan di
- * payload dan tidak dihitung ulang. Payload baru menyimpan `skorMaks` supaya
- * rumus yang dicetak di lembar rapot cocok dengan angkanya.
+ * Sempat 95 (kebijakan 25 Sep 2026, dibatalkan 1 Okt 2026). Rapot yang terbit
+ * di jendela itu menyimpan `skorMaks: 95` di payload dan tetap dicetak apa
+ * adanya; payload baru menyimpan `skorMaks` juga supaya rumus yang dicetak di
+ * lembar rapot selalu cocok dengan angkanya.
  */
-export const SKOR_MAKS = 95;
-/** Skor maksimum rapot terbit sebelum `SKOR_MAKS` berlaku (payload tanpa `skorMaks`). */
+export const SKOR_MAKS = 100;
+/** Skor maksimum rapot terbit sebelum payload menyimpan `skorMaks` (sebelum 25 Sep 2026). */
 export const SKOR_MAKS_LAMA = 100;
 
 export interface Score { skor: number; jaliyCount: number; khafiyCount: number; }
@@ -98,7 +97,7 @@ export function initials(nama: string): string {
 // dan hanya Ujian PB yang dihitung). Lihat `nilaiAkhirTrackOf` di bawah.
 export const BOBOT_BERKALA = 0.3;
 export const BOBOT_UJIAN_AKHIR = 0.7;
-export const AMBANG_LULUS_AKHIR = 65; // ambang lulus nilai akhir (fix; 70 sebelum 25 Sep 2026)
+export const AMBANG_LULUS_AKHIR = 70; // ambang lulus nilai akhir (fix; sempat 65 25 Sep – 1 Okt 2026)
 /** Ambang rapot era lama — `nilaiAkhirOf` dikunci di sini, bukan ikut aturan baru. */
 export const AMBANG_LULUS_LAMA = 70;
 export const UJIAN_QN_SESI = 1;
@@ -108,7 +107,7 @@ export const UJIAN_PB_SESI = 2;
  * Lantai nilai peserta (kebijakan Majelis Pendidikan, September 2026): skor ujian
  * dan nilai akhir tidak pernah dicetak di bawah 55, berapa pun lahn-nya.
  *
- * Ini BUKAN ambang kelulusan — ambang lulus tetap `AMBANG_LULUS_AKHIR` (65),
+ * Ini BUKAN ambang kelulusan — ambang lulus tetap `AMBANG_LULUS_AKHIR` (70),
  * jadi peserta bernilai 55 tetap dinyatakan MENGULANG. Lantai hanya menahan
  * angka yang dicetak; jumlah kesalahan di tabel rincian tetap apa adanya.
  *

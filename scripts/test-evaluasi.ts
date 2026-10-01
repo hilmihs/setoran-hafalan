@@ -30,19 +30,19 @@ eq(LAHN_BY_KEY.mad.group, 'jaliy', 'lookup group');
 eq(columnFor('idghammimi'), 'kh_idgham_mimi', 'column mapping');
 
 const c = { ...emptyCounts(), huruf: 1, idghambighunnah: 3, ikhfahakiki: 2, iqlab: 1, ikhfasyafawi: 2 };
-eq(scoreOf(c), { skor: 73, jaliyCount: 1, khafiyCount: 8 }, 'scoreOf sample: 95 − 6 − 16 = 73');
-eq(scoreOf(emptyCounts()), { skor: 95, jaliyCount: 0, khafiyCount: 0 }, 'perfect: tanpa kesalahan = 95, tak ada 100');
-eq(SKOR_MAKS, 95, 'skor maks const');
+eq(scoreOf(c), { skor: 78, jaliyCount: 1, khafiyCount: 8 }, 'scoreOf sample');
+eq(scoreOf(emptyCounts()), { skor: 100, jaliyCount: 0, khafiyCount: 0 }, 'perfect');
+eq(SKOR_MAKS, 100, 'skor maks const (kebijakan 95 dibatalkan 1 Okt 2026)');
 eq(scoreOf({ ...emptyCounts(), huruf: 17 }).skor, 0, 'floor at zero');
 
 eq(tierOf(95).label, 'Mumtaz', 'tier mumtaz');
-eq(tierOf(65).label, 'Standar', 'tier standar boundary');
-eq(tierOf(64).label, 'Di bawah standar', 'tier di bawah standar');
-// Rapot lama (payload.ambang 70) tak boleh berpredikat Standar di samping MENGULANG.
-eq(tierOf(68, 70).label, 'Di bawah standar', 'tier ikut ambang rapot lama');
+eq(tierOf(70).label, 'Standar', 'tier standar boundary');
+eq(tierOf(69).label, 'Di bawah standar', 'tier di bawah standar');
+// Rapot terbitan 25 Sep – 1 Okt (payload.ambang 65) tetap dicetak dengan ambangnya sendiri.
+eq(tierOf(67, 65).label, 'Standar', 'tier ikut ambang rapot terbitan era 65');
 eq(tierOf(10).label, 'Perlu pengulangan', 'tier ulang');
-eq(AMBANG, 65, 'ambang const');
-eq(AMBANG_LULUS_AKHIR, 65, 'ambang lulus akhir const');
+eq(AMBANG, 70, 'ambang const');
+eq(AMBANG_LULUS_AKHIR, 70, 'ambang lulus akhir const');
 
 // --- Rapor trend-chart geometry ---
 const empty = buildTrackGeometry([null, null, null, null]);
@@ -74,14 +74,13 @@ eq('error' in bersihkanNamaPeserta('x'.repeat(81)), true, 'tolak nama terlalu pa
 eq('error' in bersihkanNamaPeserta('x'.repeat(80)), false, 'terima nama tepat 80 huruf');
 
 // ── Nilai akhir per-track (rotasi sumbu rapot, migrasi 0062) ──
-// Bobot: 30% rata sesi berkala track itu + 70% ujian track itu; ambang lulus 65.
+// Bobot: 30% rata sesi berkala track itu + 70% ujian track itu; ambang lulus 70.
 {
-  const pb = nilaiAkhirTrackOf('pb', [60, 60, 60, 60], 66);
-  eq(pb.nilai, 64, 'track pb: 0.3*60 + 0.7*66 = 64.2 → 64');
-  eq(pb.lulus, false, 'track pb: 64 di bawah ambang 65 → tidak lulus');
-  eq(nilaiAkhirTrackOf('pb', [65, 65, 65, 65], 65).lulus, true, 'track pb: tepat 65 → lulus');
-  eq(pb.berkalaAvg, 60, 'track pb: berkalaAvg 60');
-  eq(pb.ujianSkor, 66, 'track pb: ujianSkor 66');
+  const pb = nilaiAkhirTrackOf('pb', [80, 80, 80, 80], 60);
+  eq(pb.nilai, 66, 'track pb: 0.3*80 + 0.7*60 = 66');
+  eq(pb.lulus, false, 'track pb: 66 di bawah ambang 70 → tidak lulus');
+  eq(pb.berkalaAvg, 80, 'track pb: berkalaAvg 80');
+  eq(pb.ujianSkor, 60, 'track pb: ujianSkor 60');
   eq(pb.lengkap, true, 'track pb: kedua komponen ada → lengkap');
   eq(pb.track, 'pb', 'track pb: track ikut dikembalikan');
 
@@ -167,23 +166,23 @@ eq(nilaiAkhirTrackOf('pb', [80, 81], 78).berkalaAvg, 81, 'bulat: rata 80.5 → 8
   const args = { identitas, penerbit: 'Ust. Fulan', tanggal: '2026-08-29T00:00:00.000Z', sesi: fixture };
 
   const rapotPb = buildTrackRapotPayload({ track: 'pb', ...args }).trackRapot;
-  eq(rapotPb.berkalaAvg, 89, 'isolasi pb: berkalaAvg 89 (murni sesi PB, bukan 81.5 gabungan)');
-  eq(rapotPb.berkala.history, [89, 89, 89, 89], 'isolasi pb: history hanya sesi PB');
+  eq(rapotPb.berkalaAvg, 94, 'isolasi pb: berkalaAvg 94 (murni sesi PB, bukan 86.5 gabungan)');
+  eq(rapotPb.berkala.history, [94, 94, 94, 94], 'isolasi pb: history hanya sesi PB');
   eq(rapotPb.akumulasi, [{ key: 'mad', label: 'JK. Mad', group: 'jaliy', count: 4 }],
     'isolasi pb: akumulasi tanpa satu pun JK Huruf dari sesi QN');
-  eq(rapotPb.ujianSkor, 93, 'isolasi pb: skor ujian dari sesi ujian nomor 2');
-  eq(rapotPb.nilaiAkhir, 92, 'isolasi pb: 0.3*89 + 0.7*93 = 91.8 → 92');
+  eq(rapotPb.ujianSkor, 98, 'isolasi pb: skor ujian dari sesi ujian nomor 2');
+  eq(rapotPb.nilaiAkhir, 97, 'isolasi pb: 0.3*94 + 0.7*98 = 96.8 → 97');
   eq(rapotPb.catatanPenguji, 'catatan penguji pb', 'isolasi pb: catatan penguji dari Ujian PB');
   eq(rapotPb.berkala.catatan, [], 'isolasi pb: tak menyerap catatan sesi QN');
   eq(rapotPb.peran, 'penentu', 'isolasi pb: PB menentukan kelulusan level');
 
   const rapotQn = buildTrackRapotPayload({ track: 'qn', ...args }).trackRapot;
-  eq(rapotQn.berkalaAvg, 74, 'isolasi qn: berkalaAvg 74 (murni sesi QN)');
-  eq(rapotQn.berkala.history, [65, 71, 77, 83], 'isolasi qn: history hanya sesi QN');
+  eq(rapotQn.berkalaAvg, 79, 'isolasi qn: berkalaAvg 79 (murni sesi QN)');
+  eq(rapotQn.berkala.history, [70, 76, 82, 88], 'isolasi qn: history hanya sesi QN');
   eq(rapotQn.akumulasi, [{ key: 'huruf', label: 'JK. Huruf', group: 'jaliy', count: 14 }],
     'isolasi qn: akumulasi tanpa satu pun JK Mad dari sesi PB');
-  eq(rapotQn.ujianSkor, 83, 'isolasi qn: skor ujian dari sesi ujian nomor 1');
-  eq(rapotQn.nilaiAkhir, 80, 'isolasi qn: 0.3*74 + 0.7*83 = 80.3 → 80');
+  eq(rapotQn.ujianSkor, 88, 'isolasi qn: skor ujian dari sesi ujian nomor 1');
+  eq(rapotQn.nilaiAkhir, 85, 'isolasi qn: 0.3*79 + 0.7*88 = 85.3 → 85');
   eq(rapotQn.catatanPenguji, 'catatan penguji qn', 'isolasi qn: catatan penguji dari Ujian QN');
   eq(rapotQn.berkala.catatan.map((x) => x.label), ['QN S1'], 'isolasi qn: catatan hanya dari sesi QN');
   eq(rapotQn.peran, 'prasyarat', 'isolasi qn: QN prasyarat, bukan penentu');
@@ -224,18 +223,18 @@ eq(nilaiAkhirTrackOf('pb', [80, 81], 78).berkalaAvg, 81, 'bulat: rata 80.5 → 8
   }).trackRapot;
   eq(alasanBelumTerbit(ujianSajaPb), [], 'syarat terbit: ujianSaja tak menuntut sesi berkala');
 
-  // Payload track: diskriminan + ambang nilai akhir fix 65 untuk kedua track.
+  // Payload track: diskriminan + ambang nilai akhir fix 70 untuk kedua track.
   const payloadPb = buildTrackRapotPayload({ track: 'pb', ...args });
   eq(payloadPb.v, 1, 'payload track: penanda versi 1');
   eq(payloadPb.jenis_rapot, 'pb', 'payload track: jenis_rapot = track');
-  eq(payloadPb.ambang, 65, 'payload track: ambang nilai akhir fix 65');
-  eq(payloadPb.skorMaks, 95, 'payload track: skorMaks 95 disimpan');
-  eq(skorMaksOf(payloadPb), 95, 'skorMaksOf: payload baru → 95');
+  eq(payloadPb.ambang, 70, 'payload track: ambang nilai akhir fix 70');
+  eq(payloadPb.skorMaks, 100, 'payload track: skorMaks 100 disimpan');
+  eq(skorMaksOf({ ...payloadPb, skorMaks: 95 }), 95, 'skorMaksOf: rapot terbitan era 95 tetap 95');
   eq(skorMaksOf({ ...payloadPb, skorMaks: undefined }), 100, 'skorMaksOf: rapot lama tanpa skorMaks → 100');
 
   // ujianSaja lewat builder: komponen berkala dibuang untuk KEDUA track.
   const saja = buildTrackRapotPayload({ track: 'qn', ...args, ujianSaja: true }).trackRapot;
-  eq(saja.nilaiAkhir, 83, 'ujianSaja builder qn: nilai murni skor Ujian QN');
+  eq(saja.nilaiAkhir, 88, 'ujianSaja builder qn: nilai murni skor Ujian QN');
   eq(saja.berkalaAvg, null, 'ujianSaja builder qn: berkalaAvg null');
   eq(saja.akumulasi, [], 'ujianSaja builder qn: akumulasi berkala dikosongkan');
 }
@@ -256,7 +255,7 @@ eq(nilaiAkhirTrackOf('pb', [80, 81], 78).berkalaAvg, 81, 'bulat: rata 80.5 → 8
   const bawah = nilaiAkhirTrackOf('pb', [], 20, { ujianSaja: true });
   eq(bawah.ujianSkor, 55, 'lantai ujianSaja: skor ujian 20 → 55');
   eq(bawah.nilai, 55, 'lantai ujianSaja: nilai akhir 55');
-  eq(bawah.lulus, false, 'lantai ujianSaja: 55 di bawah ambang 65 → MENGULANG');
+  eq(bawah.lulus, false, 'lantai ujianSaja: 55 di bawah ambang 70 → MENGULANG');
 
   // Mode 30/70: lantai dipasang di skor ujian dulu, lalu sekali lagi di hasil.
   eq(nilaiAkhirTrackOf('pb', [60, 60, 60, 60], 30).ujianSkor, 55, 'lantai 30/70: skor ujian 30 → 55');

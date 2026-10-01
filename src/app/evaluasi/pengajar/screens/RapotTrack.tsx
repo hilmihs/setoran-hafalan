@@ -3,7 +3,7 @@
 // Rapot SATU TRACK (0062) — pengganti gabungan layar RapotBerkala + RapotUjian.
 // Satu dokumen = satu track (QN atau PB): seluruh sesi evaluasi berkala track itu
 // PLUS ujian akhir track itu. Nilai akhir 30% berkala + 70% ujian (atau 100% ujian
-// pada batch `rapot_ujian_terpisah`), ambang lulus `payload.ambang` (70, lalu 65 sejak 25 Sep 2026).
+// pada batch `rapot_ujian_terpisah`), ambang lulus `payload.ambang` (70; 65 untuk terbitan 25 Sep – 1 Okt 2026).
 
 import { useState } from 'react';
 import { alasanBelumTerbit, type RapotPayloadTrack, type RapotUjianSnap } from '@/lib/rapot';
