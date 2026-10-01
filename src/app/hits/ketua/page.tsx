@@ -93,6 +93,33 @@ export default async function HitsKetuaPage({
     pelByKet.set(p.keterangan_id, arr);
   }
 
+  // Izin BADAL dari Shakwa untuk pertemuan yang belum diisi: dipakai mengisi
+  // awal form (BADAL tercentang + nama badal). Ketua tetap yang memutuskan —
+  // ini hanya prefill, tak ada yang tersimpan sebelum ketua menekan simpan.
+  const tanggalKosong = derived
+    .filter((d) => d.tanggal <= today && !ketByKey.has(`${d.level}-${d.pertemuan_no}`))
+    .map((d) => d.tanggal);
+  const badalByTanggal = new Map<string, { nama: string; nomorTiket: string }>();
+  if (halaqah.pengajar_id && tanggalKosong.length) {
+    const { data: izinBadal } = await supabaseAdmin
+      .from('shakwa_izin')
+      .select('tanggal, halaqah_id, badal:badal_pengajar_id(name), shakwa:shakwa_id(nomor_tiket)')
+      .eq('pengajar_id', halaqah.pengajar_id)
+      .eq('jenis', 'BADAL')
+      .in('tanggal', [...new Set(tanggalKosong)]);
+    for (const z of (izinBadal ?? []) as unknown as Array<{
+      tanggal: string;
+      halaqah_id: string | null;
+      badal: { name: string } | null;
+      shakwa: { nomor_tiket: string } | null;
+    }>) {
+      // Izin tanpa halaqah berlaku untuk semua halaqah pengajar hari itu.
+      if (z.halaqah_id && z.halaqah_id !== halaqah.id) continue;
+      if (!z.badal) continue;
+      badalByTanggal.set(z.tanggal, { nama: z.badal.name, nomorTiket: z.shakwa?.nomor_tiket ?? '—' });
+    }
+  }
+
   // Slot pertemuan s/d hari ini (paling baru di atas).
   const slots: PertemuanSlot[] = derived
     .filter((d) => d.tanggal <= today)
@@ -107,6 +134,7 @@ export default async function HitsKetuaPage({
         tanggal: d.tanggal,
         hari: dayNameOf(d.tanggal),
         isToday: d.tanggal === today,
+        badalIzin: k ? null : (badalByTanggal.get(d.tanggal) ?? null),
         keterangan: k
           ? {
               kondisi: k.kondisi,

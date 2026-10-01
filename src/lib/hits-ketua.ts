@@ -20,6 +20,7 @@ export type HalaqahLite = {
   jadwal_raw: string | null;
   jadwal_hari: string[];
   pengajar_nama_sheet: string | null;
+  pengajar_id: string | null;
   /** Nama pengajar otoritatif dari record pengajar (via pengajar_id), sama sumber Matrix. */
   pengajar_name: string | null;
   pengajar_wa: string | null;

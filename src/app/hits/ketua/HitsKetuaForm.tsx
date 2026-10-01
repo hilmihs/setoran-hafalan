@@ -37,6 +37,8 @@ export type PertemuanSlot = {
   tanggal: string;
   hari: string;
   isToday: boolean;
+  /** Izin BADAL dari Shakwa — hanya untuk slot yang belum diisi (prefill). */
+  badalIzin: { nama: string; nomorTiket: string } | null;
   keterangan: SlotKeterangan | null;
 };
 
@@ -170,6 +172,10 @@ export function HitsKetuaForm({ halaqahId, halaqahName, pengajarName, slots: ini
   function loadInto(slot: PertemuanSlot) {
     const k = slot.keterangan;
     const draft = pelFromSlot(k);
+    // Pengajar sudah lapor badal lewat Shakwa → isi awal, ketua tetap bisa ubah.
+    if (!k && slot.badalIzin) {
+      draft.BADAL = { on: true, badal_nama: slot.badalIzin.nama, badal_mulai: 'sesuai' };
+    }
     setLibur(k?.kondisi === 'LIBUR');
     setPel(draft);
     // latihan_diberikan default true bila belum diisi; false bila TIDAK_LATIHAN.
@@ -322,6 +328,8 @@ export function HitsKetuaForm({ halaqahId, halaqahName, pengajarName, slots: ini
     });
   }
 
+  const editingSlot = slots.find((s) => slotKey(s) === editingKey) ?? null;
+
   const checkboxRow = (
     j: 'KMT' | 'KBLA' | 'JKG' | 'BADAL',
     children?: ReactNode
@@ -457,6 +465,11 @@ export function HitsKetuaForm({ halaqahId, halaqahName, pengajarName, slots: ini
             {checkboxRow('BADAL', (
               <div>
                 <label className="t-tiny" style={{ display: 'block', marginBottom: 4 }}>Nama pengajar pengganti</label>
+                {editingSlot?.badalIzin && !editingSlot.keterangan && (
+                  <div className="t-tiny" style={{ color: 'var(--muted-2)', marginBottom: 4 }}>
+                    Diisi dari izin pengajar {editingSlot.badalIzin.nomorTiket} — ubah bila badal yang datang berbeda.
+                  </div>
+                )}
                 <input
                   type="text" className="input" style={{ marginBottom: 8 }}
                   value={pel.BADAL.badal_nama}
