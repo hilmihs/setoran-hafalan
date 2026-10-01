@@ -149,7 +149,7 @@ export default async function KoordinatorEvaluasiPage({
         ) : (
           <>
             {/* Kartu statistik */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12, marginBottom: 20 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 12, marginBottom: 20 }}>
               <div className="card-flat" style={{ padding: '14px 16px' }}>
                 <div style={{ fontSize: 26, fontWeight: 700, lineHeight: 1 }}>{d.total.halaqah}</div>
                 <div className="t-small" style={{ marginTop: 4 }}>Halaqah binaan</div>

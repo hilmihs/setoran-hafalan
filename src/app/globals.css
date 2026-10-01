@@ -1517,3 +1517,16 @@ a.rp-nav:hover { background: rgba(247,244,236,0.08); }
   background: var(--merah); color: #fff; font-weight: 800;
   display: flex; align-items: center; justify-content: center;
 }
+/* Baris atas header boleh turun baris di layar sempit (mis. Beranda + navigasi
+   periode di Rekap Pertemuan) alih-alih meluber ke samping. */
+.fh-atas { flex-wrap: wrap; row-gap: 8px; }
+.rp-periode { min-width: 0; }
+.rp-periode .chip-select { max-width: 100%; }
+
+/* Di layar sempit, judul + kontrol di .section-row (mis. hero Ranking Disiplin
+   HITS dengan pilihan bulan/batch/kelas) turun baris alih-alih meluber. Hanya
+   di ponsel: di desktop, wrap akan selalu menjatuhkan kontrol ke bawah karena
+   lebar max-content paragraf judulnya. */
+@media (max-width: 640px) {
+  .section-row { flex-wrap: wrap; row-gap: 8px; }
+}

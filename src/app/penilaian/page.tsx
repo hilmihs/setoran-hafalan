@@ -19,7 +19,11 @@ export default async function PenilaianPage({
   searchParams: { bulan?: string };
 }) {
   const s = await getSession();
-  const session = s.session;
+  // Pengguna multi-peran: peran utama sesi bisa saja pengajar, sementara menu
+  // Penilaian muncul karena ia juga koordinator/syaikh — ambil akses itu.
+  const session = [s.session, ...(s.accesses ?? [])].find(
+    (a) => a?.role === 'koordinator' || a?.role === 'syaikh'
+  );
   if (!session || (session.role !== 'koordinator' && session.role !== 'syaikh')) {
     redirect('/');
   }
