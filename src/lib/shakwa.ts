@@ -194,13 +194,21 @@ export const STATUS_LABEL: Record<ShakwaStatus, string> = {
 };
 
 
-export type ShakwaIzinJenis = 'KMT' | 'KBLA' | 'JKG' | 'TIDAK_HADIR';
+export type ShakwaIzinJenis = 'KMT' | 'KBLA' | 'JKG' | 'TIDAK_HADIR' | 'BADAL';
 
-export const IZIN_JENIS: Array<{ value: ShakwaIzinJenis; label: string; butuhMenit: boolean; butuhTanggalGanti: boolean }> = [
-  { value: 'KMT', label: 'Kelas mulai terlambat', butuhMenit: true, butuhTanggalGanti: false },
-  { value: 'KBLA', label: 'Kelas berakhir lebih awal', butuhMenit: true, butuhTanggalGanti: false },
-  { value: 'JKG', label: 'Jadwal kelas ganti', butuhMenit: false, butuhTanggalGanti: true },
-  { value: 'TIDAK_HADIR', label: 'Tidak mengajar sama sekali', butuhMenit: false, butuhTanggalGanti: false },
+export const IZIN_JENIS: Array<{
+  value: ShakwaIzinJenis;
+  label: string;
+  butuhMenit: boolean;
+  butuhTanggalGanti: boolean;
+  /** Wajib memilih pengajar pengganti (segender) — lihat lib/shakwa-badal.ts. */
+  butuhBadal: boolean;
+}> = [
+  { value: 'KMT', label: 'Kelas mulai terlambat', butuhMenit: true, butuhTanggalGanti: false, butuhBadal: false },
+  { value: 'KBLA', label: 'Kelas berakhir lebih awal', butuhMenit: true, butuhTanggalGanti: false, butuhBadal: false },
+  { value: 'JKG', label: 'Jadwal kelas ganti', butuhMenit: false, butuhTanggalGanti: true, butuhBadal: false },
+  { value: 'BADAL', label: 'Digantikan pengajar lain (badal)', butuhMenit: false, butuhTanggalGanti: false, butuhBadal: true },
+  { value: 'TIDAK_HADIR', label: 'Tidak mengajar sama sekali', butuhMenit: false, butuhTanggalGanti: false, butuhBadal: false },
 ];
 
 export const IZIN_JENIS_LABEL: Record<ShakwaIzinJenis, string> = Object.fromEntries(

@@ -25,6 +25,8 @@ export type IzinCocok = {
   pengajarId: string;
   /** Halaqah yang disebut izin; null = berlaku semua halaqah pengajar hari itu. */
   halaqahId: string | null;
+  /** Nama pengajar pengganti — hanya untuk izin BADAL. */
+  badalNama: string | null;
 };
 
 /** Penanda di awal alasan_pengajar; dipakai UI untuk menandai asal alasannya. */
@@ -34,6 +36,7 @@ export function alasanDariIzin(izin: IzinCocok): string {
   const rincian: string[] = [IZIN_JENIS_LABEL[izin.jenis]];
   if (izin.menit != null) rincian.push(`${izin.menit} menit`);
   if (izin.jadwalGanti) rincian.push(`diganti ${izin.jadwalGanti}`);
+  if (izin.badalNama) rincian.push(`badal: ${izin.badalNama}`);
   return [
     `${PENANDA_IZIN} ${izin.nomorTiket}] ${izin.alasan}`,
     `Rincian yang dilaporkan pengajar: ${rincian.join(' · ')}.`,
@@ -135,7 +138,7 @@ export async function cariIzinCocok(args: {
   const { data } = await supabaseAdmin
     .from('shakwa_izin')
     .select(
-      'id, shakwa_id, tanggal, jenis, menit, jadwal_ganti, alasan, halaqah_id, dipakai_tabayyun_id, shakwa:shakwa_id(nomor_tiket, created_at)'
+      'id, shakwa_id, tanggal, jenis, menit, jadwal_ganti, alasan, halaqah_id, dipakai_tabayyun_id, shakwa:shakwa_id(nomor_tiket, created_at), badal:badal_pengajar_id(name)'
     )
     .eq('pengajar_id', args.pengajarId)
     .eq('tanggal', args.tanggal);
@@ -151,6 +154,7 @@ export async function cariIzinCocok(args: {
     halaqah_id: string | null;
     dipakai_tabayyun_id: string | null;
     shakwa: { nomor_tiket: string; created_at: string } | null;
+    badal: { name: string } | null;
   }>;
 
   const relevan = rows.filter(
@@ -182,6 +186,7 @@ export async function cariIzinCocok(args: {
     dikirimAt: s?.created_at ?? new Date().toISOString(),
     pengajarId: args.pengajarId,
     halaqahId: cocok.halaqah_id,
+    badalNama: cocok.badal?.name ?? null,
   };
 }
 

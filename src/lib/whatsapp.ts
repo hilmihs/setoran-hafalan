@@ -953,6 +953,31 @@ export function tplShakwaKeTujuan(args: {
   ].join('\n');
 }
 
+/**
+ * Pengajar yang izin mengabari badalnya — dibuka dari layar sukses formulir
+ * Shakwa. Tak ada gateway WA; pengajar sendiri yang menekan kirim.
+ */
+export function tplKabariBadal(args: {
+  namaBadal: string;
+  namaPengajar: string;
+  tanggal: string;
+  halaqahNama: string | null;
+  nomorTiket: string;
+}): string {
+  return [
+    `Assalamu'alaikum ${args.namaBadal},`,
+    ``,
+    `Saya *${args.namaPengajar}* berhalangan mengajar dan memohon kesediaan antum/anti menjadi badal:`,
+    ``,
+    `Tanggal: *${args.tanggal}*`,
+    `Halaqah: ${args.halaqahNama ?? 'semua halaqah saya hari itu'}`,
+    ``,
+    `Izinnya sudah tercatat di Shakwa (tiket ${args.nomorTiket}).`,
+    ``,
+    `Jazakumullahu khairan.`,
+  ].join('\n');
+}
+
 /** Balasan koordinator ke pelapor Shakwa (dibuka dari dashboard). */
 export function tplShakwaBalasPelapor(args: {
   nama: string;

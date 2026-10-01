@@ -7,7 +7,7 @@ import { getAllAccesses } from '@/lib/session';
 import { logAudit } from '@/lib/audit';
 import { todayJakartaISO } from '@/lib/hits-observasi';
 import { checkRateLimit } from '@/lib/api-public/cache';
-import { buildWaMeUrl, tplShakwaKeTujuan } from '@/lib/whatsapp';
+import { buildWaMeUrl, tplKabariBadal, tplShakwaKeTujuan } from '@/lib/whatsapp';
 import {
   kategoriDef,
   nomorTiket,
@@ -23,6 +23,7 @@ import {
 import { uploadLampiran, validasiLampiran } from '@/lib/shakwa-storage';
 import { adalahBerkas } from '@/lib/haqibah-storage';
 import { backfillTabayyunDariIzin, type IzinCocok } from '@/lib/shakwa-izin';
+import { ambilCalonBadal, cekBadal } from '@/lib/shakwa-badal';
 import type { Gender, PengajarSession } from '@/types/db';
 
 export type KirimShakwaResult = {
@@ -31,6 +32,8 @@ export type KirimShakwaResult = {
   nomorTiket?: string;
   waUrl?: string | null;
   tujuanNama?: string | null;
+  /** Satu link wa.me per badal untuk dikabari pengajar sendiri. */
+  badalWa?: Array<{ nama: string; url: string }>;
 };
 
 /** Maks kiriman per menit per IP — penangkal spam formulir publik. */
@@ -50,6 +53,8 @@ type IzinRincian = {
   menit: number | null;
   jadwalGanti: string | null;
   halaqahId: string | null;
+  /** Diisi hanya untuk jenis yang butuhBadal; divalidasi cekBadal sesudahnya. */
+  badalId: string | null;
 };
 
 /** Baca baris rincian izin dari FormData (array sejajar per indeks). */
@@ -59,6 +64,7 @@ function bacaRincianIzin(fd: FormData): { rows: IzinRincian[]; error?: string } 
   const menit = fd.getAll('izin_menit').map(String);
   const ganti = fd.getAll('izin_jadwal_ganti').map(String);
   const halaqah = fd.getAll('izin_halaqah').map(String);
+  const badal = fd.getAll('izin_badal').map(String);
   const jenisValid = new Set(IZIN_JENIS.map((j) => j.value));
   const rows: IzinRincian[] = [];
 
@@ -83,12 +89,18 @@ function bacaRincianIzin(fd: FormData): { rows: IzinRincian[]; error?: string } 
     if (g && !DATE_RE.test(g)) {
       return { rows: [], error: `Rincian ke-${i + 1}: tanggal ganti tidak valid.` };
     }
+    let badalId: string | null = null;
+    if (def.butuhBadal) {
+      badalId = (badal[i] ?? '').trim() || null;
+      if (!badalId) return { rows: [], error: `Rincian ke-${i + 1}: pilih pengajar badal.` };
+    }
     rows.push({
       tanggal: t,
       jenis: j as ShakwaIzinJenis,
       menit: m,
       jadwalGanti: g || null,
       halaqahId: (halaqah[i] ?? '').trim() || null,
+      badalId,
     });
   }
   return { rows };
@@ -208,6 +220,22 @@ export async function kirimShakwa(
     rincianIzin = parsed.rows;
   }
 
+  // Badal divalidasi di server: id dari form bisa apa saja. Gender pembanding
+  // diambil dari sesi pengajar, bukan dari field `gender` formulir.
+  const calonBadal = await ambilCalonBadal(
+    rincianIzin.map((r) => r.badalId).filter((x): x is string => !!x)
+  );
+  for (let i = 0; i < rincianIzin.length; i++) {
+    const id = rincianIzin[i].badalId;
+    if (!id || !pengajar) continue;
+    const alasanTolak = cekBadal(calonBadal.get(id) ?? null, {
+      id: pengajar.pengajar_id,
+      gender: pengajar.gender,
+    });
+    if (alasanTolak) return { error: `Rincian ke-${i + 1}: ${alasanTolak}` };
+  }
+  const namaBadal = (id: string | null) => (id ? (calonBadal.get(id)?.name ?? null) : null);
+
   // Lampiran divalidasi SEBELUM baris disimpan supaya tak ada aduan setengah jadi.
   // `adalahBerkas` memeriksa bentuk, bukan `instanceof File`: global File tak ada
   // di runtime Node produksi, dan ekspresi `f instanceof File` di sana melempar
@@ -265,6 +293,7 @@ export async function kirimShakwa(
           jenis: r.jenis,
           menit: r.menit,
           jadwal_ganti: r.jadwalGanti,
+          badal_pengajar_id: r.badalId,
           alasan: isi,
         }))
       )
@@ -291,6 +320,7 @@ export async function kirimShakwa(
         dikirimAt,
         pengajarId: pengajar!.pengajar_id,
         halaqahId: r.halaqahId,
+        badalNama: namaBadal(r.badalId),
       };
       try {
         await backfillTabayyunDariIzin(izin);
@@ -331,7 +361,8 @@ export async function kirimShakwa(
                     ? `berakhir ${r.menit} menit lebih awal`
                     : `${r.menit} menit`;
             const gantiTxt = r.jadwalGanti ? `ganti ke ${r.jadwalGanti}` : null;
-            return [r.tanggal, IZIN_JENIS_LABEL[r.jenis], menitTxt, gantiTxt]
+            const badalTxt = r.badalId ? `badal ${namaBadal(r.badalId)}` : null;
+            return [r.tanggal, IZIN_JENIS_LABEL[r.jenis], menitTxt, gantiTxt, badalTxt]
               .filter(Boolean)
               .join(' · ');
           }
@@ -340,5 +371,37 @@ export async function kirimShakwa(
       )
     : null;
 
-  return { ok: true, nomorTiket: simpan.nomorTiket, waUrl, tujuanNama: tujuan?.nama ?? null };
+  const namaHalaqah = new Map<string, string>();
+  const halaqahIds = rincianIzin.filter((r) => r.badalId && r.halaqahId).map((r) => r.halaqahId!);
+  if (halaqahIds.length) {
+    const { data } = await supabaseAdmin.from('hits_halaqah').select('id, name').in('id', halaqahIds);
+    for (const h of (data ?? []) as Array<{ id: string; name: string }>) namaHalaqah.set(h.id, h.name);
+  }
+  const badalWa = rincianIzin.flatMap((r) => {
+    const b = r.badalId ? calonBadal.get(r.badalId) : null;
+    if (!b || !pengajar) return [];
+    return [
+      {
+        nama: b.name,
+        url: buildWaMeUrl(
+          b.whatsapp_number,
+          tplKabariBadal({
+            namaBadal: b.name,
+            namaPengajar: pengajar.name,
+            tanggal: r.tanggal,
+            halaqahNama: r.halaqahId ? (namaHalaqah.get(r.halaqahId) ?? null) : null,
+            nomorTiket: simpan.nomorTiket,
+          })
+        ),
+      },
+    ];
+  });
+
+  return {
+    ok: true,
+    nomorTiket: simpan.nomorTiket,
+    waUrl,
+    tujuanNama: tujuan?.nama ?? null,
+    badalWa,
+  };
 }

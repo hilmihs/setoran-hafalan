@@ -12,7 +12,9 @@ import {
   tujuanWa,
   tujuanDigilir,
   kategoriSetujuan,
+  IZIN_JENIS,
 } from '@/lib/shakwa';
+import { cekBadal } from '@/lib/shakwa-badal';
 import { alasanDariIzin, berasalDariIzin, izinCocokKondisi, dalamJendelaYatim, kebutuhanTabayyunIzin, PENANDA_IZIN } from '@/lib/shakwa-izin';
 import { rentangShakwa } from '@/lib/shakwa-rekap';
 import { periodeStartDate, periodeEndDate } from '@/lib/maahir-sp';
@@ -104,7 +106,7 @@ const izin = {
   id: 'x', shakwaId: 'y', nomorTiket: 'SKW-20260812-003', tanggal: '2026-08-12',
   jenis: 'KMT' as const, menit: 15, jadwalGanti: null, alasan: 'Sakit demam',
   dikirimAt: '2026-08-11T02:00:00.000Z',
-  pengajarId: 'p', halaqahId: null,
+  pengajarId: 'p', halaqahId: null, badalNama: null,
 };
 const teks = alasanDariIzin(izin);
 eq(teks.startsWith(`${PENANDA_IZIN} SKW-20260812-003]`), true, 'alasan diawali penanda + nomor tiket');
@@ -118,6 +120,22 @@ eq(
   true,
   'JKG mencantumkan tanggal ganti'
 );
+eq(
+  alasanDariIzin({ ...izin, jenis: 'BADAL', menit: null, badalNama: 'Ust. Badal' }).includes('badal: Ust. Badal'),
+  true,
+  'BADAL mencantumkan nama pengganti'
+);
+
+// --- Izin badal: siapa boleh jadi pengganti ---
+const pemilik = { id: 'p1', gender: 'ikhwan' as const };
+eq(cekBadal(null, pemilik), 'pengajar badal tidak ditemukan.', 'badal tak dikenal ditolak');
+eq(cekBadal({ id: 'p2', name: 'B', gender: 'ikhwan', active: false }, pemilik), 'pengajar badal sudah tidak aktif.', 'badal nonaktif ditolak');
+eq(cekBadal({ id: 'p2', name: 'B', gender: 'akhwat', active: true }, pemilik), 'pengajar badal harus sesama ikhwan.', 'badal beda gender ditolak');
+eq(cekBadal({ id: 'p1', name: 'A', gender: 'ikhwan', active: true }, pemilik), 'tidak bisa membadalkan diri sendiri.', 'badal diri sendiri ditolak');
+eq(cekBadal({ id: 'p2', name: 'B', gender: 'ikhwan', active: true }, pemilik), null, 'badal segender & aktif diterima');
+eq(IZIN_JENIS.filter((j) => j.butuhBadal).map((j) => j.value), ['BADAL'], 'hanya jenis BADAL yang butuh badal');
+eq(izinCocokKondisi('BADAL', 'BADAL'), true, 'izin BADAL cocok observasi BADAL');
+eq(izinCocokKondisi('BADAL', 'JKG'), false, 'izin BADAL tak menaungi JKG');
 
 // --- Periode SP per bulan (28 → 27) ---
 eq(periodeStartDate('2026-08'), '2026-07-28', 'awal periode Agustus');
