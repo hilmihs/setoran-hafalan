@@ -337,13 +337,19 @@ function keHalaqahPertemuan(h: HalaqahSnapshot, cocokLewat: HalaqahPertemuan['co
   };
 }
 
+/** Kunci banding nama: spasi diabaikan, supaya 'Nur Layla' = 'Nurlayla'. */
+const rapat = (namaNorm: string): string => namaNorm.replace(/ /g, '');
+
 /**
  * Pilih halaqah milik pengajar dari snapshot:
  *  1. guru yang salah satu kuncinya ada di `kunciHash` ⇒ SEMUA halaqahnya
  *     (termasuk baris tanpa nomor, mis. Mabni) — cocokLewat 'wa';
  *  2. guru yang namaNorm-nya disebut eksplisit (override 'nm:') ⇒ 'nama';
- *  3. hanya bila 1–2 nihil: guru tanpa kunci sama sekali, namaNorm sama dengan
- *     nama akun, dan nama itu unik di snapshot ⇒ 'nama'.
+ *  3. guru tanpa kunci sama sekali, namaNorm sama dengan nama akun, dan nama
+ *     itu unik di snapshot ⇒ 'nama'. Tetap dipakai walau 1–2 sudah cocok:
+ *     hulu mengelompokkan guru per NAMA, jadi program tanpa nomor (HKM, Mabni)
+ *     yang ejaan namanya beda dari baris HITS-nya muncul sebagai guru terpisah.
+ * Nama dibandingkan tanpa spasi (lihat `rapat`).
  */
 export function pilihHalaqahGuru(
   guru: GuruSnapshot[],
@@ -351,16 +357,19 @@ export function pilihHalaqahGuru(
   namaEksplisit: Set<string>,
   namaAkun: Set<string>,
 ): { halaqah: HalaqahPertemuan[]; dicocokkan: boolean } {
+  const eksplisit = new Set(Array.from(namaEksplisit, rapat));
+  const akun = new Set(Array.from(namaAkun, rapat));
   const cocok = new Map<GuruSnapshot, HalaqahPertemuan['cocokLewat']>();
   for (const g of guru) {
     if (g.kunci.some((k) => kunciHash.has(k))) cocok.set(g, 'wa');
-    else if (g.namaNorm && namaEksplisit.has(g.namaNorm)) cocok.set(g, 'nama');
+    else if (g.namaNorm && eksplisit.has(rapat(g.namaNorm))) cocok.set(g, 'nama');
   }
-  if (cocok.size === 0 && namaAkun.size > 0) {
+  if (akun.size > 0) {
     const hitung = new Map<string, number>();
-    for (const g of guru) hitung.set(g.namaNorm, (hitung.get(g.namaNorm) ?? 0) + 1);
+    for (const g of guru) hitung.set(rapat(g.namaNorm), (hitung.get(rapat(g.namaNorm)) ?? 0) + 1);
     for (const g of guru) {
-      if (g.namaNorm && namaAkun.has(g.namaNorm) && g.kunci.length === 0 && hitung.get(g.namaNorm) === 1) {
+      const n = rapat(g.namaNorm);
+      if (n && !cocok.has(g) && akun.has(n) && g.kunci.length === 0 && hitung.get(n) === 1) {
         cocok.set(g, 'nama');
       }
     }

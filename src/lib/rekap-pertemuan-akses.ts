@@ -110,6 +110,17 @@ export async function getIdentitasPertemuan(): Promise<IdentitasPertemuan | null
   };
 }
 
+/**
+ * Akun tercatat sebagai guru di Dashboard Edu (mirror `eval_pengajar`, id
+ * 'wa:<nomor>' / 'nm:<slug>:<nama>' — format yang sama dengan `kunciMentah`).
+ * Membedakan "akun tak ditemukan" dari "ada, tapi tak berjadwal periode ini".
+ */
+export async function terdaftarDiDashboardEdu(kunciMentah: string[]): Promise<boolean> {
+  if (kunciMentah.length === 0) return false;
+  const { data } = await supabaseAdmin.from('eval_pengajar').select('id').in('id', kunciMentah).limit(1);
+  return (data ?? []).length > 0;
+}
+
 /** Penjaga halaman (bukan server action): alihkan ke beranda bila tak berhak. */
 export async function jagaRekapPertemuan(): Promise<IdentitasPertemuan> {
   const id = await getIdentitasPertemuan();

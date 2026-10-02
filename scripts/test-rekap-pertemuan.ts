@@ -294,9 +294,14 @@ async function main() {
     const r = pilihHalaqahGuru(GURU, kosong, kosong, new Set(['dedi']));
     assert.equal(r.dicocokkan, false);
   });
-  await uji('nama cadangan tak dipakai bila hash sudah cocok', () => {
+  await uji('nama cadangan tetap dipakai walau hash sudah cocok (program tanpa nomor, ejaan beda)', () => {
     const r = pilihHalaqahGuru(GURU, new Set([K5]), kosong, new Set(['budi santoso']));
-    assert.deepEqual(r.halaqah.map((h) => h.halaqahNama), ['Tahsin G']);
+    assert.deepEqual(r.halaqah.map((h) => [h.halaqahNama, h.cocokLewat]), [['Tahsin G', 'wa'], ['Mabni D', 'nama']]);
+  });
+  await uji('nama dibandingkan tanpa spasi: "nur layla" = "nurlayla"', () => {
+    const g: GuruSnapshot[] = [{ nama: 'Nurlayla', namaNorm: 'nurlayla', kunci: [], halaqah: [hs('HKM', null, 'HKM 8', null)] }];
+    assert.equal(pilihHalaqahGuru(g, kosong, kosong, new Set(['nur layla'])).dicocokkan, true);
+    assert.equal(pilihHalaqahGuru(g, kosong, new Set(['nur layla']), kosong).dicocokkan, true);
   });
   await uji('tak ada yang cocok → dicocokkan=false', () => {
     const r = pilihHalaqahGuru(GURU, new Set([hashKunci('wa:6289999999999', SECRET)]), new Set(['tak ada']), new Set(['tak ada']));

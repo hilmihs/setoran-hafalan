@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { jagaRekapPertemuan } from '@/lib/rekap-pertemuan-akses';
+import { jagaRekapPertemuan, terdaftarDiDashboardEdu } from '@/lib/rekap-pertemuan-akses';
 import { getPertemuanMaahir } from '@/lib/rekap-pertemuan-maahir';
 import { getPertemuanHilmihsUntuk } from '@/lib/rekap-pertemuan-snapshot';
 import {
@@ -147,7 +147,11 @@ export default async function RekapPertemuanPage({
   const hilmihsKosong = h.status === 'kosong';
   const adaHalaqahEdu = h.halaqah.length > 0;
   const adaCocokNama = h.halaqah.some((x) => x.cocokLewat === 'nama');
-  const akunTakDitemukan = !hilmihsKosong && !h.dicocokkan && (!!id.pengajarId || !m.aktif);
+  // Tak cocok di laporan periode ini belum tentu akunnya tak dikenal: laporan
+  // hanya memuat guru yang berjadwal. Tercatat di Dashboard Edu ⇒ "tak ada jadwal".
+  const terdaftarEdu = !hilmihsKosong && !h.dicocokkan && (await terdaftarDiDashboardEdu(id.kunciMentah));
+  const akunTakDitemukan = !hilmihsKosong && !h.dicocokkan && !terdaftarEdu && (!!id.pengajarId || !m.aktif);
+  const tanpaJadwalEdu = !hilmihsKosong && (h.dicocokkan || terdaftarEdu) && !adaHalaqahEdu;
 
   const sinkron: SinkronInfo = h.gagalTerakhir
     ? { nada: 'merah', label: 'Gagal terhubung', desc: `Menampilkan data terakhir${h.syncedAt ? ` (per ${waktuWib(h.syncedAt)})` : ''}.` }
@@ -259,8 +263,8 @@ export default async function RekapPertemuanPage({
           {hilmihsKosong && !m.aktif && (
             <Catatan>Data Dashboard Edu belum tersedia. Coba tekan Perbarui beberapa saat lagi.</Catatan>
           )}
-          {!hilmihsKosong && h.dicocokkan && !adaHalaqahEdu && !m.aktif && (
-            <Catatan>Tidak ada jadwal halaqah pada periode ini.</Catatan>
+          {tanpaJadwalEdu && !m.aktif && (
+            <Catatan>Tidak ada jadwal halaqah Anda di Dashboard Edu pada periode ini.</Catatan>
           )}
           {m.aktif && m.sebelumAnchor && <Catatan>Check-in Kelas Maahir baru dicatat sejak 16 Sep 2026.</Catatan>}
 
